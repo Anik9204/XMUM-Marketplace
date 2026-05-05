@@ -8,6 +8,7 @@ import HomePage from "@/pages/HomePage";
 import SearchPage from "@/pages/SearchPage";
 import PostPage from "@/pages/PostPage";
 import ProfilePage from "@/pages/ProfilePage";
+import SettingsPage from "@/pages/SettingsPage";
 import ListingDetailPage from "@/pages/ListingDetailPage";
 import NotFound from "@/pages/not-found";
 
@@ -21,6 +22,7 @@ function Router() {
         <Route path="/search" component={SearchPage} />
         <Route path="/post" component={PostPage} />
         <Route path="/profile" component={ProfilePage} />
+        <Route path="/settings" component={SettingsPage} />
         <Route path="/listing/:id" component={ListingDetailPage} />
         <Route component={NotFound} />
       </Switch>

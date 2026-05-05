@@ -57,9 +57,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   {menuOpen && (
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-                      <div className="absolute right-0 top-9 bg-white rounded-xl shadow-xl border border-gray-100 min-w-40 z-50">
+                      <div className="absolute right-0 top-9 bg-white rounded-xl shadow-xl border border-gray-100 min-w-44 z-50">
                         <Link href="/profile" onClick={() => setMenuOpen(false)} className="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 rounded-t-xl">{t.myListings}</Link>
-                        <button onClick={() => { logOut(); setMenuOpen(false); }} className="block w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 rounded-b-xl">{t.signOut}</button>
+                        <Link href="/settings" onClick={() => setMenuOpen(false)} className="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 border-t border-gray-50">{t.accountSettings}</Link>
+                        <button onClick={() => { logOut(); setMenuOpen(false); }} className="block w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 rounded-b-xl border-t border-gray-50">{t.signOut}</button>
                       </div>
                     </>
                   )}

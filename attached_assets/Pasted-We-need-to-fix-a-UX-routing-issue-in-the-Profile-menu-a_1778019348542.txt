@@ -1,0 +1,36 @@
+We need to fix a UX routing issue in the Profile menu and implement a critical privacy feature: Account Deletion. This deletion must be a "Cascading Delete" that wipes all the user's associated data to prevent orphaned database records.
+
+Action 1: Fix Profile Dropdown & Routing
+
+Current Issue: The Settings page is nested awkwardly inside the "My Listings" view.
+
+Required Fix: Update the top navigation bar's Profile dropdown. It should have three distinct options: "My Listings", "Settings", and "Sign Out".
+
+Ensure the routing is clean (e.g., using wouter). If the user clicks "My Listings", they should only see their listings. If they click "Settings", they should be routed to a dedicated settings view.
+
+Action 2: Implement Secure Account Deletion (Cascading)
+
+Required Fix: At the bottom of the Settings page, create a "Danger Zone" section with a red "Delete Account" button.
+
+The Flow: Clicking this button MUST open a confirmation modal that requires the user to type in their password to confirm (re-authentication).
+
+The Order of Operations (CRITICAL): You must execute these deletions sequentially. If you delete the Auth user first, the security rules will block the rest.
+
+Re-authenticate the user using reauthenticateWithCredential (Email/Password).
+
+Query & Delete Listings: Query the listings collection for all documents where userId == uid.
+
+Loop through those listings. For each listing: delete its photos from Firebase Storage first, then delete the Firestore document.
+
+Delete Avatar: Delete the user's profile avatar from Firebase Storage (if it exists).
+
+Delete User Doc: Delete their user document from Firestore (users/{uid}).
+
+Delete Auth Account: Finally, call deleteUser() on the Firebase Auth user.
+
+Redirect: Route the user to the public home page and show a "Account deleted" toast/notification.
+
+Error Handling: Catch and display any errors (especially auth/wrong-password) clearly in the modal so it doesn't fail silently.
+
+Constraint Checklist:
+Do not skip the Storage deletion for the listing photos! Please acknowledge the order of operations and let me know when this is built and tested.
