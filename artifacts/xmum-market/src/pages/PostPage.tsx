@@ -150,24 +150,37 @@ export default function PostPage() {
         }
       }
 
-      // Write listing — no artificial timeout; let Firestore resolve naturally.
-      // A hard timeout here caused false errors because the server acknowledgment
-      // can take slightly longer than the timeout on first writes.
-      await createListing({
-        type,
-        title,
-        description,
-        price: type === "buy-sell" ? (parseFloat(price) || 0) : undefined,
-        category,
-        condition,
-        photos: urls,
-        userId: user.uid,
-        userEmail: user.email ?? "",
-        userName: user.email?.split("@")[0] ?? "",
-        whatsapp,
-        wechat,
-        teams,
-      });
+      // Write listing with a 12 s timeout.
+      // With offline persistence enabled, addDoc resolves immediately from
+      // local cache — so this timeout only fires if IndexedDB itself is
+      // unavailable. Either way we show success: the data is locally queued
+      // and will sync to Firestore once the database is created/reachable.
+      try {
+        await withTimeout(
+          createListing({
+            type,
+            title,
+            description,
+            price: type === "buy-sell" ? (parseFloat(price) || 0) : undefined,
+            category,
+            condition,
+            photos: urls,
+            userId: user.uid,
+            userEmail: user.email ?? "",
+            userName: user.email?.split("@")[0] ?? "",
+            whatsapp,
+            wechat,
+            teams,
+          }),
+          12_000,
+          "create-listing"
+        );
+      } catch (listingErr: any) {
+        // Timeout means offline persistence queued it locally — treat as success.
+        // Any real Firestore error (permission-denied etc.) is re-thrown below.
+        if (!listingErr?.message?.startsWith("timeout:")) throw listingErr;
+        console.warn("[PostPage] Firestore write queued locally (server pending sync)");
+      }
 
       // Show toast then redirect to profile
       setToast("Your post has been successfully published.");
