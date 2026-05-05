@@ -33,6 +33,8 @@ export default function ListingCard({ listing, onDelete, showDelete }: Props) {
               src={listing.photos[0]}
               alt={listing.title}
               className="w-full h-44 object-cover"
+              loading="lazy"
+              decoding="async"
             />
           ) : (
             <div className="w-full h-44 bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">

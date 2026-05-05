@@ -1,0 +1,32 @@
+The backend parallelization in listings.ts worked perfectly. The data and photos delete almost instantly now. However, you broke the frontend UI lifecycle. The delete modal still hangs indefinitely on ... and does not close. Furthermore, I have noticed severe performance issues—pages like "My Listings" take a long time to load.
+
+I need you to fix the UI state bug and perform a performance audit.
+
+Issue 1: The Dangling Frontend UI State
+
+Current Behavior: deleteListing succeeds, but the modal stays open forever.
+
+Required Fix: The bug is no longer in listings.ts; it is in the component holding the modal state (likely ProfilePage.tsx).
+
+Check the handleDelete function inside the component.
+
+Ensure that after await deleteListing() resolves successfully, you explicitly call setDeleteTarget(null) to close the modal.
+
+Ensure setDeleting(false) runs in a finally block so the button resets.
+
+Ensure the Success Toast fires after the modal closes.
+
+Issue 2: Page Load Performance Audit ("My Listings" & Feed)
+
+Current Behavior: The pages function correctly but take too long to load and render.
+
+Required Fix (Audit & Optimize): Please review the data fetching logic for the listings pages and implement the following standard Next.js optimizations:
+
+Loading States: Are we using a skeleton loader or a loading.tsx boundary? The user should see a UI immediately while Firebase fetches data. If not, implement skeleton loaders for the listing cards.
+
+Image Optimization: Are we rendering standard <img> tags for potentially 10MB Firebase images? If so, switch them to Next.js <Image> components with proper caching and sizing, or ensure we are rendering thumbnails if available.
+
+Query Optimization: Check the Firestore getDocs() calls. Are we fetching the entire database, or using limit() and orderBy()? (If we need a composite index, please generate the exact error string so I can create it in the Firebase Console).
+
+Action Required:
+First, patch the modal state in the profile component so it actually closes. Then, provide the code to implement skeleton loaders and optimized data fetching for the listings pages to fix the slow load times.

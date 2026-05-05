@@ -1,7 +1,6 @@
 import {
   collection,
   addDoc,
-  updateDoc,
   deleteDoc,
   doc,
   getDocs,
@@ -9,7 +8,7 @@ import {
   query,
   where,
   orderBy,
-  Timestamp,
+  limit,
 } from "firebase/firestore";
 import {
   ref,
@@ -44,7 +43,8 @@ export async function getListings(type: ListingType): Promise<Listing[]> {
       collection(db, "listings"),
       where("type", "==", type),
       where("isArchived", "==", false),
-      orderBy("createdAt", "desc")
+      orderBy("createdAt", "desc"),
+      limit(40)
     );
     const snap = await getDocs(q);
     return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Listing));
@@ -54,7 +54,8 @@ export async function getListings(type: ListingType): Promise<Listing[]> {
       const q2 = query(
         collection(db, "listings"),
         where("type", "==", type),
-        where("isArchived", "==", false)
+        where("isArchived", "==", false),
+        limit(40)
       );
       const snap = await getDocs(q2);
       const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Listing));
@@ -76,7 +77,8 @@ export async function getUserListings(userId: string): Promise<Listing[]> {
       collection(db, "listings"),
       where("userId", "==", userId),
       where("isArchived", "==", false),
-      orderBy("createdAt", "desc")
+      orderBy("createdAt", "desc"),
+      limit(40)
     );
     const snap = await getDocs(q);
     return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Listing));
@@ -85,7 +87,8 @@ export async function getUserListings(userId: string): Promise<Listing[]> {
       const q2 = query(
         collection(db, "listings"),
         where("userId", "==", userId),
-        where("isArchived", "==", false)
+        where("isArchived", "==", false),
+        limit(40)
       );
       const snap = await getDocs(q2);
       const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Listing));
@@ -96,13 +99,26 @@ export async function getUserListings(userId: string): Promise<Listing[]> {
 }
 
 export async function deleteListing(listing: Listing): Promise<void> {
-  await Promise.all([
-    ...listing.photos.map((url) =>
-      deleteObject(ref(storage, url)).catch((err) => {
-        if (err?.code !== "storage/object-not-found") throw err;
-      })
-    ),
+  // Step 1: delete all photos in parallel — each one resolves immediately on
+  // success or "object-not-found"; any other Storage error is re-thrown.
+  if (listing.photos.length > 0) {
+    await Promise.all(
+      listing.photos.map((url) =>
+        deleteObject(ref(storage, url)).catch((err) => {
+          if (err?.code !== "storage/object-not-found") throw err;
+        })
+      )
+    );
+  }
+
+  // Step 2: delete the Firestore document. With offline persistence the SDK
+  // writes to the local cache first and resolves immediately; on a slow or
+  // cold connection it can hang waiting for server ACK. We race against a
+  // 6-second resolve so the UI always unblocks — the SDK will continue
+  // syncing the delete to the server in the background.
+  await Promise.race([
     deleteDoc(doc(db, "listings", listing.id)),
+    new Promise<void>((resolve) => setTimeout(resolve, 6_000)),
   ]);
 }
 
