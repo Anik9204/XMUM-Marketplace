@@ -155,7 +155,7 @@ export default function PostPage() {
       const urls: string[] = [];
       for (const f of photos) {
         try {
-          const url = await withTimeout(uploadPhoto(f, user.uid), 15_000, "photo-upload");
+          const url = await withTimeout(uploadPhoto(f, user.uid), 30_000, "photo-upload");
           urls.push(url);
         } catch (photoErr: any) {
           console.warn("[PostPage] Photo upload skipped:", photoErr?.message);
