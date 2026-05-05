@@ -151,11 +151,15 @@ export default function PostPage() {
         "token-refresh"
       );
 
-      // Upload photos (15 s each)
+      // Upload photos (15 s each) — failures are non-fatal, just skip that photo
       const urls: string[] = [];
       for (const f of photos) {
-        const url = await withTimeout(uploadPhoto(f, user.uid), 15_000, "photo-upload");
-        urls.push(url);
+        try {
+          const url = await withTimeout(uploadPhoto(f, user.uid), 15_000, "photo-upload");
+          urls.push(url);
+        } catch (photoErr: any) {
+          console.warn("[PostPage] Photo upload skipped:", photoErr?.message);
+        }
       }
 
       // Write listing to Firestore (10 s timeout)
