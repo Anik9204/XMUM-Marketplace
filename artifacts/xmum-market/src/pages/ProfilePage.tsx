@@ -6,9 +6,30 @@ import { Listing } from "@/lib/types";
 import ListingCard from "@/components/ListingCard";
 import AuthModal from "@/components/AuthModal";
 import VerificationBanner from "@/components/VerificationBanner";
-import { User, CheckCircle, AlertCircle, LogOut } from "lucide-react";
+import { User, CheckCircle, AlertCircle, LogOut, CheckCircle2 } from "lucide-react";
 import { logOut } from "@/lib/auth";
 import { useLocation } from "wouter";
+
+function SuccessToast({ message, onDone }: { message: string; onDone: () => void }) {
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    const hide = setTimeout(() => setVisible(false), 3000);
+    const done = setTimeout(onDone, 3400);
+    return () => { clearTimeout(hide); clearTimeout(done); };
+  }, [onDone]);
+
+  return (
+    <div
+      className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 bg-[#003366] text-white text-sm font-medium px-5 py-3 rounded-2xl shadow-xl transition-all duration-400 ${
+        visible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-3"
+      }`}
+    >
+      <CheckCircle2 size={18} className="text-green-300 shrink-0" />
+      {message}
+    </div>
+  );
+}
 
 export default function ProfilePage() {
   const { t } = useLang();
@@ -19,6 +40,7 @@ export default function ProfilePage() {
   const [showAuth, setShowAuth] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Listing | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [successToast, setSuccessToast] = useState("");
 
   useEffect(() => {
     if (!user) return;
@@ -46,9 +68,12 @@ export default function ProfilePage() {
     try {
       await deleteListing(listing);
       setListings((prev) => prev.filter((l) => l.id !== listing.id));
+      setDeleteTarget(null);
+      setSuccessToast("Your post has been deleted successfully.");
+    } catch (err) {
+      console.error("[ProfilePage] Delete failed:", err);
     } finally {
       setDeleting(false);
-      setDeleteTarget(null);
     }
   };
 
@@ -59,6 +84,13 @@ export default function ProfilePage() {
 
   return (
     <>
+      {successToast && (
+        <SuccessToast
+          message={successToast}
+          onDone={() => navigate("/profile")}
+        />
+      )}
+
       {user && !user.emailVerified && <VerificationBanner />}
 
       <div className="max-w-5xl mx-auto px-4 py-5">
