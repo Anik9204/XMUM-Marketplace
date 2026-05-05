@@ -66,26 +66,26 @@ export default function ProfilePage() {
 
   const handleDelete = async (listing: Listing) => {
     setDeleting(true);
+    setDeleteError("");
     try {
-      await Promise.race([
-        deleteListing(listing),
-        new Promise<void>((_, reject) =>
-          setTimeout(() => reject(new Error("timeout:delete")), 10_000)
-        ),
-      ]);
+      await deleteListing(listing);
       setListings((prev) => prev.filter((l) => l.id !== listing.id));
       setDeleteTarget(null);
       setSuccessToast("Your post has been deleted successfully.");
     } catch (err: any) {
-      if (err?.message === "timeout:delete") {
-        // Firestore queued the delete locally and will sync when the server is reachable.
-        // Treat as success so the UI doesn't hang.
+      console.error("[ProfilePage] Delete failed:", err?.code, err?.message);
+      const code: string = err?.code ?? "";
+      if (code === "permission-denied" || code === "storage/unauthorized") {
+        setDeleteError("Permission denied. Make sure you are signed in with your XMUM email.");
+      } else if (code === "not-found" || code === "storage/object-not-found") {
+        // Document/file already gone — treat as success
         setListings((prev) => prev.filter((l) => l.id !== listing.id));
         setDeleteTarget(null);
         setSuccessToast("Your post has been deleted successfully.");
+      } else if (code === "unavailable" || code === "storage/retry-limit-exceeded") {
+        setDeleteError("No connection. Please check your internet and try again.");
       } else {
-        console.error("[ProfilePage] Delete failed:", err);
-        setDeleteError("Failed to delete. Please try again.");
+        setDeleteError(err?.message ?? "Something went wrong. Please try again.");
       }
     } finally {
       setDeleting(false);

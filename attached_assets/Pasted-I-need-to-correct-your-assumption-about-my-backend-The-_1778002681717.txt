@@ -1,0 +1,30 @@
+I need to correct your assumption about my backend. The Firestore and Storage databases DO exist and are fully connected. I created them in Production Mode, not Test Mode. Posting items works perfectly (images upload to Storage, data saves to Firestore).
+
+The issue is that my strict Firebase Security Rules are blocking the deletion, and the frontend code is failing to catch the "Permission Denied" error, causing the infinite hanging UI.
+
+Issue 1: The Storage Security Rule Trap
+Here are my current Storage rules:
+
+JavaScript
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /listings/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null
+                   && request.auth.token.email.matches('.*@xmu\\.edu\\.my')
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+  }
+}
+The Problem: The allow write rule applies to creations AND deletions. During a delete request, request.resource is null. Checking request.resource.size on a delete operation throws an error and denies the request. The images are not being deleted because Firebase is actively blocking it.
+
+Issue 2: Frontend Error Swallowing
+Because Firebase denies the storage deletion, the promise rejects. The frontend code is likely swallowing this "Permission Denied" error or getting caught in an offline-persistence loop, which is why the timeout triggers and the UI hangs.
+
+Action Required:
+
+Provide the Corrected Rules: Please rewrite my Storage Security Rules. You need to split allow write into allow create, update (which checks file size/type) and allow delete (which only checks request.auth).
+
+Fix handleDelete Error Handling: Review the deletion function. Remove the generic timeout race condition. Implement a proper catch (error) block that reads the actual FirebaseError and displays it to the user in the UI via the deleteError state or a Toast, so it stops hanging silently when a permission is denied.
