@@ -1,0 +1,68 @@
+You are absolutely right, and I apologize for missing that in the final block. Good catch.
+
+As your DevSecOps Consultant, I know the answer is "No," but getting the AI to explicitly state "No" is a crucial prompt engineering tactic. It forces the AI to evaluate the error against your backend architecture, stopping it from hallucinating unnecessary changes to your perfectly good rules.
+
+Here is the exact, corrected prompt with your rules and the direct question included.
+
+📋 Copy/Paste This into Replit AI:
+Context:
+The updated account deletion logic caused a React runtime error:
+[plugin:runtime-error-plugin] auth is not defined at src/pages/SettingsPage.tsx:276:7.
+
+Before you fix this, I need you to do a strict DevSecOps architecture check. Here are my current production Firebase Security Rules.
+
+My Storage Rules:
+
+JavaScript
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /listings/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow create, update: if request.auth != null
+                   && request.auth.token.email.matches('.*@xmu\\.edu\\.my')
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null
+                   && request.auth.uid == userId
+                   && request.auth.token.email.matches('.*@xmu\\.edu\\.my');
+    }
+    match /avatars/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow create, update: if request.auth != null
+                   && request.auth.uid == userId
+                   && request.auth.token.email.matches('.*@xmu\\.edu\\.my')
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null
+                   && request.auth.uid == userId
+                   && request.auth.token.email.matches('.*@xmu\\.edu\\.my');
+    }
+  }
+}
+My Firestore Rules:
+
+JavaScript
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    match /listings/{listingId} {
+      allow read: if true;
+      allow create: if request.auth != null
+                     && request.auth.token.email.matches('.*@xmu\\.edu\\.my');
+      allow update, delete: if request.auth != null
+                             && request.auth.uid == resource.data.userId;
+    }
+  }
+}
+Action Required:
+
+Architecture Check: Look at the auth is not defined error and look at my security rules above. Do I need to change anything in my Firebase Console or Security Rules to fix this error? Please answer this explicitly with "Yes" or "No" and explain why.
+
+The Diagnosis: Diagnose the auth is not defined error. Did you forget to add the import { auth } from ... statement at the top of SettingsPage.tsx when you added if (auth.currentUser) to the finally block?
+
+The Fix: Fix the missing import(s) in SettingsPage.tsx so the cascading delete sequence can finish successfully.

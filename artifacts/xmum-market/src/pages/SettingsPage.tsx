@@ -20,6 +20,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { useLocation } from "wouter";
+import { auth } from "@/lib/firebase";
 
 function SuccessToast({ message, onDone }: { message: string; onDone: () => void }) {
   const [visible, setVisible] = useState(true);
