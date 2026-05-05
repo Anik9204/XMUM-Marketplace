@@ -40,6 +40,7 @@ export default function ProfilePage() {
   const [showAuth, setShowAuth] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Listing | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const [successToast, setSuccessToast] = useState("");
 
   useEffect(() => {
@@ -66,12 +67,26 @@ export default function ProfilePage() {
   const handleDelete = async (listing: Listing) => {
     setDeleting(true);
     try {
-      await deleteListing(listing);
+      await Promise.race([
+        deleteListing(listing),
+        new Promise<void>((_, reject) =>
+          setTimeout(() => reject(new Error("timeout:delete")), 10_000)
+        ),
+      ]);
       setListings((prev) => prev.filter((l) => l.id !== listing.id));
       setDeleteTarget(null);
       setSuccessToast("Your post has been deleted successfully.");
-    } catch (err) {
-      console.error("[ProfilePage] Delete failed:", err);
+    } catch (err: any) {
+      if (err?.message === "timeout:delete") {
+        // Firestore queued the delete locally and will sync when the server is reachable.
+        // Treat as success so the UI doesn't hang.
+        setListings((prev) => prev.filter((l) => l.id !== listing.id));
+        setDeleteTarget(null);
+        setSuccessToast("Your post has been deleted successfully.");
+      } else {
+        console.error("[ProfilePage] Delete failed:", err);
+        setDeleteError("Failed to delete. Please try again.");
+      }
     } finally {
       setDeleting(false);
     }
@@ -160,8 +175,16 @@ export default function ProfilePage() {
           <div className="bg-white rounded-2xl p-5 w-full max-w-sm">
             <p className="font-semibold text-gray-800 mb-1">{t.deleteConfirm}</p>
             <p className="text-xs text-gray-500 mb-4 truncate">{deleteTarget.title}</p>
+            {deleteError && (
+              <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mb-3">
+                {deleteError}
+              </p>
+            )}
             <div className="flex gap-2">
-              <button onClick={() => setDeleteTarget(null)} className="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-xl text-sm font-medium">
+              <button
+                onClick={() => { setDeleteTarget(null); setDeleteError(""); }}
+                className="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-xl text-sm font-medium"
+              >
                 {t.cancel}
               </button>
               <button

@@ -1,0 +1,36 @@
+I am building the XMUM Market using Next.js 14 (App Router). The previous fix for the listing deletion modal failed. The modal button is still stuck on ... indefinitely. Furthermore, the previous logic only deleted the Firestore document, leaving the associated images permanently orphaned in Firebase Storage.
+
+Please carefully review the ProfilePage.tsx (or the relevant deletion component) and implement the following comprehensive fix.
+
+Issue 1: Orphaned Firebase Storage Files
+
+Current Behavior: Deleting a listing only removes the text document from Firestore. The uploaded images remain in the Storage bucket.
+
+Required Fix: Before calling deleteDoc() on the Firestore document, the handleDelete function MUST:
+
+Look at the listing document's data to find the array of uploaded image URLs.
+
+Import ref and deleteObject from firebase/storage.
+
+Loop through the image URLs, extract their Storage references, and await deleteObject(imageRef) for each one.
+
+Only after the images are successfully deleted from the bucket should you delete the Firestore document.
+
+Issue 2: UI Hang & Incorrect Router Usage
+
+Current Behavior: The modal button hangs on .... I noticed you previously tried to use navigate(). This is Next.js 14 App Router, so that will fail silently.
+
+Required Fix:
+
+Ensure you are importing useRouter from next/navigation (NOT next/router or react-router).
+
+Wrap the entire deletion process (Storage + Firestore) in a strict try/catch/finally block.
+
+In the try block (after all deletions succeed): close the modal (setDeleteTarget(null)), trigger the SuccessToast, and call router.push('/profile') or router.refresh() to update the page.
+
+In the catch block: log the error and show an ErrorToast or alert so it doesn't fail silently.
+
+In the finally block: strictly set setDeleting(false) so the button resets no matter what happens.
+
+Action:
+Rewrite the handleDelete function exactly as described above. Pay special attention to properly deleting the Storage objects using the Firebase SDK before deleting the Firestore document.
