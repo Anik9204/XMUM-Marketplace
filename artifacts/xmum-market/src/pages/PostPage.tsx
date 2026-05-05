@@ -125,55 +125,82 @@ export default function PostPage() {
     setCategory(newType === "buy-sell" ? "electronics" : "lostItem");
   };
 
+  // Wraps any promise with a hard timeout so Firebase hangs never freeze the UI
+  function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+    return Promise.race([
+      promise,
+      new Promise<T>((_, reject) =>
+        setTimeout(
+          () => reject(new Error(`timeout:${label}`)),
+          ms
+        )
+      ),
+    ]);
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
 
     try {
-      // Force-refresh the Firebase ID token so Firestore sees the latest
-      // emailVerified claim — without this, the token may still say false
-      // even after the user clicked the verification link.
-      await auth.currentUser?.getIdToken(true);
+      // Force-refresh the ID token (10 s timeout)
+      await withTimeout(
+        auth.currentUser?.getIdToken(true) ?? Promise.resolve(),
+        10_000,
+        "token-refresh"
+      );
 
+      // Upload photos (15 s each)
       const urls: string[] = [];
       for (const f of photos) {
-        const url = await uploadPhoto(f, user.uid);
+        const url = await withTimeout(uploadPhoto(f, user.uid), 15_000, "photo-upload");
         urls.push(url);
       }
 
-      await createListing({
-        type,
-        title,
-        description,
-        price: type === "buy-sell" ? (parseFloat(price) || 0) : undefined,
-        category,
-        condition,
-        photos: urls,
-        userId: user.uid,
-        userEmail: user.email ?? "",
-        userName: user.email?.split("@")[0] ?? "",
-        whatsapp,
-        wechat,
-        teams,
-      });
+      // Write listing to Firestore (10 s timeout)
+      await withTimeout(
+        createListing({
+          type,
+          title,
+          description,
+          price: type === "buy-sell" ? (parseFloat(price) || 0) : undefined,
+          category,
+          condition,
+          photos: urls,
+          userId: user.uid,
+          userEmail: user.email ?? "",
+          userName: user.email?.split("@")[0] ?? "",
+          whatsapp,
+          wechat,
+          teams,
+        }),
+        10_000,
+        "create-listing"
+      );
 
       setSubmitted(true);
     } catch (err: any) {
-      console.error("[PostPage] Firestore write failed:", err?.code, err?.message, err);
+      console.error("[PostPage] Submit failed:", err?.code, err?.message);
 
-      // Give a readable error based on the Firebase error code
       const code: string = err?.code ?? "";
-      if (code === "permission-denied") {
+      const msg: string = err?.message ?? "";
+
+      if (msg.startsWith("timeout:create-listing") || msg.startsWith("timeout:token-refresh")) {
         setError(
-          "Permission denied by the database. Make sure your email is verified, then refresh and try again. If this persists, the Firestore security rules need to be updated in the Firebase Console."
+          "Could not reach the database — it may not be set up yet. " +
+          "Please go to Firebase Console → Firestore Database → Create database, then try again."
+        );
+      } else if (msg.startsWith("timeout:photo-upload")) {
+        setError("Photo upload timed out. Try a smaller image or check your connection.");
+      } else if (code === "permission-denied") {
+        setError(
+          "Permission denied. Make sure your email is verified and the Firestore rules are published in Firebase Console."
         );
       } else if (code === "unauthenticated") {
         setError("Your session expired. Please sign out and sign back in.");
-      } else if (code.includes("storage")) {
-        setError(`Photo upload failed: ${err?.message ?? code}. Try a smaller image.`);
-      } else if (err?.message) {
-        setError(`Error: ${err.message}`);
+      } else if (msg) {
+        setError(`Error: ${msg}`);
       } else {
         setError(t.errorOccurred);
       }
