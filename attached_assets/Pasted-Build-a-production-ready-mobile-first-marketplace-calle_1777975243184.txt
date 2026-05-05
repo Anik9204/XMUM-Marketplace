@@ -1,0 +1,57 @@
+Build a production-ready, mobile-first marketplace called XMUM Market using Next.js 14 (App Router), Tailwind CSS, and Firebase. The architecture must be highly modular to allow for future feature expansions (Monetization, Ratings, and Maps).
+
+1. Foundation & Scalability:
+
+Tech Stack: Next.js 14, Firebase (Auth, Firestore, Storage), and Tailwind CSS.
+
+Structure: Create a clean folder hierarchy: /app for routes, /components for UI, and /lib for Firebase/Utility logic.
+
+PWA Ready: Include a manifest.json and meta tags so students can 'Add to Home Screen' on iOS/Android.
+
+GitHub/Vercel Ready: Ensure all API keys are pulled from process.env. Use Replit Secrets for development.
+
+2. Authentication & Verification (Traditional Method):
+
+Domain Restriction: Strictly allow registration ONLY for emails ending in @xmu.edu.my.
+
+Flow:
+
+Sign Up with Email and Password.
+
+Immediately trigger sendEmailVerification.
+
+Tiered Access: Allow guests to browse, but restrict 'Post Item' and 'Chat/Contact' buttons to users where emailVerified === true.
+
+UI: A sleek, tabbed Auth card with 'Sign In' and 'Sign Up'. Include a 'Forgot Password' reset link.
+
+3. UI/UX & Bilingual System:
+
+Aesthetic: Clean, modern, Apple-inspired 'University Pro' look. Color Palette: Deep Navy (#003366) and Clean White.
+
+Internationalization: Implement a global language toggle for English and Simplified Chinese (简体中文). Use a locales object for all UI text to ensure easy updates.
+
+Mobile-First Navigation: A sticky bottom navigation bar for mobile (Home, Search, Post, Profile) and a professional header for desktop.
+
+4. Core Marketplace Logic:
+
+Categories: Separate feeds for 'Buy & Sell' and 'Lost & Found'.
+
+Listing Form: Sellers can upload up to 3 photos to Firebase Storage, set a price (for Buy & Sell), select condition (New/Used), and add a description.
+
+Contact Shortcuts: On item detail pages, generate dynamic buttons for WhatsApp, WeChat, and MS Teams.
+
+Pre-fill messages: 'Hi, I saw your listing [Item Name] on XMUM Market...'
+
+Search & Filter: A robust search bar with filters for 'Price Range' and 'Item Condition'.
+
+5. Future-Proofing & Safety:
+
+Modular Firestore: Design the user schema to include future fields: isVerified (12-month), rating, isBlacklisted, and isFeatured.
+
+Auto-Archive: Add a createdAt timestamp to all listings for a future 30-day auto-archive logic.
+
+PDPA Disclaimer: A professional footer stating: 'XMUM Market is an independent student initiative. We handle data according to Malaysian PDPA laws.'
+
+Step 1: Initialize the project and connect Firebase using the keys in Replit Secrets.
+Step 2: Build the public landing page and bilingual system first.
+Step 3: Build the Email/Password Auth system with the @xmu.edu.my restriction.
