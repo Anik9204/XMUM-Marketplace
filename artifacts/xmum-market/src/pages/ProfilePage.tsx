@@ -111,6 +111,7 @@ export default function ProfilePage() {
   // ── Avatar ────────────────────────────────────────────────────────────────────
   const [avatarUrl, setAvatarUrl] = useState("");
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarError, setAvatarError] = useState("");
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   // ── Password ──────────────────────────────────────────────────────────────────
@@ -188,17 +189,48 @@ export default function ProfilePage() {
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    // Reset input so the same file can be re-selected after an error
+    e.target.value = "";
     if (!file) return;
-    const MAX = 5 * 1024 * 1024;
-    if (file.size > MAX) { alert(t.imageTooLarge); return; }
+
+    setAvatarError("");
+
+    // ── Client-side validation (mirrors backend Storage rules) ────────────────
+    if (!file.type.startsWith("image/")) {
+      setAvatarError("Only image files are allowed (JPG, PNG, WebP, etc.).");
+      return;
+    }
+    const MAX_BYTES = 5 * 1024 * 1024;
+    if (file.size > MAX_BYTES) {
+      setAvatarError(t.imageTooLarge);
+      return;
+    }
+
+    // Optimistic preview — keep the previous URL so we can revert on failure
+    const previousUrl = avatarUrl;
     setAvatarUrl(URL.createObjectURL(file));
     setUploadingAvatar(true);
+
     try {
       const url = await uploadAvatar(file, user.uid);
       await updateProfile(user.uid, { avatarUrl: url });
       setAvatarUrl(url);
-    } catch (err) {
-      console.error("[ProfilePage] Avatar upload failed:", err);
+    } catch (err: any) {
+      // Revert the optimistic preview
+      setAvatarUrl(previousUrl);
+
+      const code: string = err?.code ?? "";
+      console.error("[ProfilePage] Avatar upload failed:", code, err?.message);
+
+      if (code === "storage/unauthorized" || code === "permission-denied") {
+        setAvatarError("Upload blocked by server. Ensure your file is an image under 5 MB and you are signed in with your XMUM email.");
+      } else if (code === "storage/quota-exceeded") {
+        setAvatarError("Storage quota exceeded. Please contact support.");
+      } else if (code === "storage/retry-limit-exceeded" || code === "storage/canceled") {
+        setAvatarError("Upload failed due to a connection issue. Please check your internet and try again.");
+      } else {
+        setAvatarError("Upload failed. Please try again.");
+      }
     } finally {
       setUploadingAvatar(false);
     }
@@ -385,7 +417,7 @@ export default function ProfilePage() {
                 </div>
                 <div>
                   <button
-                    onClick={() => avatarInputRef.current?.click()}
+                    onClick={() => { setAvatarError(""); avatarInputRef.current?.click(); }}
                     disabled={uploadingAvatar}
                     className="flex items-center gap-1.5 text-sm text-[#003366] border border-[#003366]/30 px-3 py-2 rounded-lg hover:bg-blue-50 disabled:opacity-50 transition-colors"
                   >
@@ -393,6 +425,11 @@ export default function ProfilePage() {
                     {uploadingAvatar ? "Uploading…" : "Change Photo"}
                   </button>
                   <p className="text-[10px] text-gray-400 mt-1.5">JPG, PNG or WebP · Max 5 MB</p>
+                  {avatarError && (
+                    <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-2.5 py-1.5 mt-2 max-w-[220px] leading-snug">
+                      {avatarError}
+                    </p>
+                  )}
                 </div>
               </div>
               <input
