@@ -33,6 +33,9 @@ try {
     localCache: persistentLocalCache({
       tabManager: persistentSingleTabManager({ forceOwnership: true }),
     }),
+    // Force long polling so Firestore works through proxies (e.g. Replit)
+    // that block or drop WebSocket connections.
+    experimentalAutoDetectLongPolling: true,
   });
 } catch {
   db = getFirestore(app);

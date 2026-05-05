@@ -73,9 +73,16 @@ export async function deleteAccount(password: string): Promise<void> {
     const uid = user.uid;
 
     // ── Step 2: Fetch profile now so we have avatarUrl before we delete the doc ─
+    // Non-critical: if Firestore is offline the avatar simply won't be deleted
+    // from Storage, but the Auth account and all other data still will be.
     console.log("[deleteAccount] Step 2: Fetching profile...");
-    const profile = await getProfile(uid);
-    console.log("[deleteAccount] Step 2 Complete");
+    let profile: UserProfile | null = null;
+    try {
+      profile = await getProfile(uid);
+      console.log("[deleteAccount] Step 2 Complete");
+    } catch (err) {
+      console.warn("[deleteAccount] Step 2 Failed (continuing) — could not fetch profile:", err);
+    }
 
     // ── Step 3: Query ALL listings for this user (archived or not) ─────────────
     console.log("[deleteAccount] Step 3: Querying listings...");
@@ -114,10 +121,16 @@ export async function deleteAccount(password: string): Promise<void> {
     console.log("[deleteAccount] Step 5 Complete");
 
     // ── Step 6: Delete the Firestore user document ───────────────────────────
-    // Race against 6s timeout. Auth user is still valid here so rules allow it.
+    // Non-critical: if Firestore is offline this doc may linger, but the Auth
+    // account is still deleted in Step 7 so the user cannot log back in.
+    // Orphaned docs can be cleaned up server-side later.
     console.log("[deleteAccount] Step 6: Deleting Firestore user doc...");
-    await deleteDocWithTimeout(doc(db, "users", uid));
-    console.log("[deleteAccount] Step 6 Complete");
+    try {
+      await deleteDocWithTimeout(doc(db, "users", uid));
+      console.log("[deleteAccount] Step 6 Complete");
+    } catch (err) {
+      console.warn("[deleteAccount] Step 6 Failed (continuing) — could not delete user doc:", err);
+    }
 
     // ── Step 7: Delete the Firebase Auth account — MUST be last ──────────────
     // Deleting the Auth user fires onAuthStateChanged(null) which triggers a
