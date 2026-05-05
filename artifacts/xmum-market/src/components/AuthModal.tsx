@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLang } from "@/contexts/LanguageContext";
-import { signIn, signUp, resetPassword, isXmuEmail } from "@/lib/auth";
-import { X, Eye, EyeOff } from "lucide-react";
+import { signIn, signUp, resetPassword, isXmuEmail, resendVerification } from "@/lib/auth";
+import { X, Eye, EyeOff, MailCheck } from "lucide-react";
 
 type Mode = "signin" | "signup" | "forgot";
 
@@ -9,6 +9,8 @@ interface Props {
   onClose: () => void;
   defaultMode?: Mode;
 }
+
+const RESEND_COOLDOWN = 60;
 
 export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
   const { t } = useLang();
@@ -21,6 +23,45 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Verification pending state
+  const [verificationPending, setVerificationPending] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState("");
+  const [cooldown, setCooldown] = useState(0);
+  const [resending, setResending] = useState(false);
+  const [resendMsg, setResendMsg] = useState("");
+  const timerRef = useRef<ReturnType<typeof setInterval>>();
+
+  useEffect(() => {
+    return () => clearInterval(timerRef.current);
+  }, []);
+
+  const startCooldown = () => {
+    setCooldown(RESEND_COOLDOWN);
+    timerRef.current = setInterval(() => {
+      setCooldown((c) => {
+        if (c <= 1) {
+          clearInterval(timerRef.current);
+          return 0;
+        }
+        return c - 1;
+      });
+    }, 1000);
+  };
+
+  const handleResend = async () => {
+    setResending(true);
+    setResendMsg("");
+    try {
+      await resendVerification();
+      setResendMsg(t.emailSent);
+      startCooldown();
+    } catch {
+      setResendMsg(t.errorOccurred);
+    } finally {
+      setResending(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -32,12 +73,14 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
         await resetPassword(email);
         setSuccess(t.emailSent);
       } else if (mode === "signup") {
-        if (!isXmuEmail(email)) { setError(t.onlyXmuEmail); setLoading(false); return; }
-        if (password.length < 6) { setError(t.weakPassword); setLoading(false); return; }
-        if (password !== confirmPass) { setError(t.passwordsNoMatch); setLoading(false); return; }
+        if (!isXmuEmail(email)) { setError(t.onlyXmuEmail); return; }
+        if (password.length < 6) { setError(t.weakPassword); return; }
+        if (password !== confirmPass) { setError(t.passwordsNoMatch); return; }
         await signUp(email, password);
-        setSuccess(t.verifyEmailMsg);
-        setMode("signin");
+        // Switch to verification pending view
+        setPendingEmail(email);
+        setVerificationPending(true);
+        startCooldown();
       } else {
         await signIn(email, password);
         onClose();
@@ -47,17 +90,83 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
       if (code === "only_xmu_email" || code.includes("only_xmu")) setError(t.onlyXmuEmail);
       else if (code.includes("wrong-password") || code.includes("invalid-credential")) setError("Invalid email or password.");
       else if (code.includes("user-not-found")) setError("No account found with this email.");
-      else if (code.includes("email-already-in-use")) setError("An account already exists with this email.");
+      else if (code.includes("email-already-in-use")) setError("An account already exists with this email. Please sign in.");
       else setError(t.errorOccurred);
     } finally {
       setLoading(false);
     }
   };
 
+  // ── Verification Pending View ────────────────────────────────────────────────
+  if (verificationPending) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm relative overflow-hidden">
+          <div className="h-1.5 bg-gradient-to-r from-[#003366] to-[#0055aa]" />
+
+          <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+            <X size={20} />
+          </button>
+
+          <div className="p-6 text-center">
+            <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
+              <MailCheck size={32} className="text-[#003366]" />
+            </div>
+
+            <h2 className="text-lg font-bold text-gray-900 mb-1">Check your inbox</h2>
+            <p className="text-sm text-gray-500 mb-1">
+              A verification link was sent to:
+            </p>
+            <p className="text-sm font-semibold text-[#003366] mb-4 break-all">{pendingEmail}</p>
+
+            <div className="bg-blue-50 rounded-xl p-3 text-left mb-5">
+              <p className="text-xs text-blue-800 leading-relaxed">
+                Click the link in the email to verify your <strong>@xmu.edu.my</strong> address. Once verified, come back and sign in.
+              </p>
+            </div>
+
+            {resendMsg && (
+              <p className="text-xs text-green-600 bg-green-50 rounded-lg px-3 py-2 mb-3">{resendMsg}</p>
+            )}
+
+            <button
+              onClick={handleResend}
+              disabled={cooldown > 0 || resending}
+              className="w-full border border-[#003366] text-[#003366] rounded-xl py-2.5 text-sm font-semibold hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors mb-3"
+            >
+              {resending
+                ? "Sending..."
+                : cooldown > 0
+                ? `${t.resendVerification} (${cooldown}s)`
+                : t.resendVerification}
+            </button>
+
+            <button
+              onClick={() => {
+                setVerificationPending(false);
+                setMode("signin");
+                setPassword("");
+                setConfirmPass("");
+                setError("");
+              }}
+              className="w-full bg-[#003366] text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-[#002244] transition-colors"
+            >
+              {t.signIn} →
+            </button>
+
+            <p className="text-[10px] text-gray-400 mt-3">
+              Already verified? Click "Sign In" above.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Normal Auth View ─────────────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm relative overflow-hidden">
-        {/* Top accent */}
         <div className="h-1.5 bg-gradient-to-r from-[#003366] to-[#0055aa]" />
 
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
@@ -65,7 +174,6 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
         </button>
 
         <div className="p-6">
-          {/* Logo / Brand */}
           <div className="text-center mb-5">
             <h2 className="text-xl font-bold text-[#003366]">{t.appName}</h2>
             <p className="text-xs text-gray-500 mt-0.5">
@@ -73,7 +181,6 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
             </p>
           </div>
 
-          {/* Mode tabs — only for sign in / sign up */}
           {mode !== "forgot" && (
             <div className="flex bg-gray-100 rounded-xl p-1 mb-5">
               <button
@@ -143,18 +250,30 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
               disabled={loading}
               className="w-full bg-[#003366] text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-[#002244] disabled:opacity-50 transition-colors mt-1"
             >
-              {loading ? t.loading : mode === "forgot" ? t.sendResetEmail : mode === "signup" ? t.createAccount : t.signIn}
+              {loading
+                ? t.loading
+                : mode === "forgot"
+                ? t.sendResetEmail
+                : mode === "signup"
+                ? t.createAccount
+                : t.signIn}
             </button>
           </form>
 
           {mode === "signin" && (
-            <button onClick={() => { setMode("forgot"); setError(""); setSuccess(""); }} className="w-full text-center text-xs text-[#003366] hover:underline mt-3">
+            <button
+              onClick={() => { setMode("forgot"); setError(""); setSuccess(""); }}
+              className="w-full text-center text-xs text-[#003366] hover:underline mt-3"
+            >
               {t.forgotPassword}
             </button>
           )}
 
           {mode === "forgot" && (
-            <button onClick={() => { setMode("signin"); setError(""); setSuccess(""); }} className="w-full text-center text-xs text-[#003366] hover:underline mt-3">
+            <button
+              onClick={() => { setMode("signin"); setError(""); setSuccess(""); }}
+              className="w-full text-center text-xs text-[#003366] hover:underline mt-3"
+            >
               {t.backToSignIn}
             </button>
           )}

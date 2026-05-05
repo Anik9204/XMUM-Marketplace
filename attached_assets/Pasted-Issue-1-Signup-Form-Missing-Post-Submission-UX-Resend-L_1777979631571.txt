@@ -1,0 +1,31 @@
+Issue 1: Signup Form Missing Post-Submission UX & Resend Logic
+
+Location: The Signup Component.
+
+Actual Behavior: When a user submits the signup form, Firebase creates the account and sends the verification email perfectly. However, the local form UI stays permanently stuck on "loading". It never tells the user to check their email. (Note: If the user manually goes to their inbox and verifies the email, the app's global auth listener successfully catches it and redirects them to the landing page, but the initial signup screen's UX is broken).
+
+Expected Behavior:
+
+Immediately after sendEmailVerification succeeds, update the local component state (setIsLoading(false)).
+
+Replace the signup form with a clear success message: "Verification email sent. Please check your inbox and verify your @xmu.edu.my address to continue."
+
+Implement a "Resend Verification Email" button on this success screen, enforced by a 60-second cooldown timer.
+
+Hypothesis: The signup function lacks a post-resolution UI state update. It needs to transition from the "Form View" to a "Verification Pending View".
+
+Issue 2: Firestore Submission Silent Failure (Infinite Loading)
+
+Location: The Item Posting Form (Lost & Found / Buy & Sell components).
+
+Actual Behavior: After filling out a listing and hitting submit, the button shows "submitting..." indefinitely. The item is not saved to Firestore.
+
+Expected Behavior: The form should submit the data to Firestore, stop the loading state, and show a success message. If it fails, it MUST catch the error, stop the loading state, and display an alert to the user.
+
+Hypothesis: The Firestore write is failing (likely due to our strict Firestore Security Rules requiring verified emails). The await addDoc() call is being rejected, but the catch (error) block is either missing or failing to reset setIsSubmitting(false) and alert the user.
+
+Action Required:
+
+Refactor the Auth component to include the "Verification Pending View" state and the 60-second cooldown Resend button.
+
+Wrap the Listing Form submission in a strict try/catch/finally block. Console log the exact FirebaseError and display a readable alert to the user so we know why Firestore is rejecting the write.

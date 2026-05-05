@@ -3,9 +3,10 @@ import { useLocation } from "wouter";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { uploadPhoto, createListing } from "@/lib/listings";
+import { auth } from "@/lib/firebase";
 import { ListingType, Condition } from "@/lib/types";
 import AuthModal from "@/components/AuthModal";
-import { ImagePlus, X, AlertCircle } from "lucide-react";
+import { ImagePlus, X, AlertCircle, CheckCircle2 } from "lucide-react";
 
 const BUY_SELL_CATEGORIES = [
   "electronics", "books", "clothing", "furniture", "food", "services", "others",
@@ -30,15 +31,20 @@ export default function PostPage() {
   const [previews, setPreviews] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [submitted, setSubmitted] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // ── Auth / Verification gates ──────────────────────────────────────────────
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 text-center">
         <AlertCircle size={40} className="text-gray-300 mb-3" />
         <p className="text-gray-600 font-medium mb-1">{t.loginToPost}</p>
-        <button onClick={() => setShowAuth(true)} className="mt-3 bg-[#003366] text-white px-5 py-2.5 rounded-xl text-sm font-semibold">
+        <button
+          onClick={() => setShowAuth(true)}
+          className="mt-3 bg-[#003366] text-white px-5 py-2.5 rounded-xl text-sm font-semibold"
+        >
           {t.signIn}
         </button>
         {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
@@ -51,11 +57,50 @@ export default function PostPage() {
       <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 text-center">
         <AlertCircle size={40} className="text-amber-400 mb-3" />
         <p className="text-gray-600 font-medium">{t.verifyToPost}</p>
-        <p className="text-xs text-gray-400 mt-1">{t.verifyEmailMsg}</p>
+        <p className="text-xs text-gray-400 mt-1 max-w-xs">{t.verifyEmailMsg}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-4 text-xs text-[#003366] underline"
+        >
+          I've verified my email — refresh
+        </button>
       </div>
     );
   }
 
+  // ── Success view ───────────────────────────────────────────────────────────
+  if (submitted) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 text-center">
+        <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mb-4">
+          <CheckCircle2 size={36} className="text-green-500" />
+        </div>
+        <h2 className="text-lg font-bold text-gray-900 mb-1">{t.listingPosted}</h2>
+        <p className="text-sm text-gray-400 mb-6">Your item is now live on XMUM Market.</p>
+        <div className="flex gap-3">
+          <button
+            onClick={() => {
+              setSubmitted(false);
+              setTitle(""); setDescription(""); setPrice("");
+              setWhatsapp(""); setWechat(""); setTeams("");
+              setPhotos([]); setPreviews([]);
+            }}
+            className="px-5 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium"
+          >
+            Post another
+          </button>
+          <button
+            onClick={() => navigate("/profile")}
+            className="px-5 py-2.5 bg-[#003366] text-white rounded-xl text-sm font-semibold"
+          >
+            {t.myListings}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
   const categories = type === "buy-sell" ? BUY_SELL_CATEGORIES : LOST_FOUND_CATEGORIES;
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -64,10 +109,10 @@ export default function PostPage() {
     const oversized = files.find((f) => f.size > 5 * 1024 * 1024);
     if (oversized) { setError(t.imageTooLarge); return; }
     setError("");
-    const newFiles = [...photos, ...files];
-    setPhotos(newFiles);
-    const newPreviews = files.map((f) => URL.createObjectURL(f));
-    setPreviews([...previews, ...newPreviews]);
+    setPhotos([...photos, ...files]);
+    setPreviews([...previews, ...files.map((f) => URL.createObjectURL(f))]);
+    // Reset input so same file can be re-selected if removed
+    e.target.value = "";
   };
 
   const removePhoto = (i: number) => {
@@ -84,17 +129,24 @@ export default function PostPage() {
     e.preventDefault();
     setError("");
     setLoading(true);
+
     try {
+      // Force-refresh the Firebase ID token so Firestore sees the latest
+      // emailVerified claim — without this, the token may still say false
+      // even after the user clicked the verification link.
+      await auth.currentUser?.getIdToken(true);
+
       const urls: string[] = [];
       for (const f of photos) {
         const url = await uploadPhoto(f, user.uid);
         urls.push(url);
       }
+
       await createListing({
         type,
         title,
         description,
-        price: type === "buy-sell" ? parseFloat(price) || 0 : undefined,
+        price: type === "buy-sell" ? (parseFloat(price) || 0) : undefined,
         category,
         condition,
         photos: urls,
@@ -105,14 +157,32 @@ export default function PostPage() {
         wechat,
         teams,
       });
-      navigate("/profile");
-    } catch {
-      setError(t.errorOccurred);
+
+      setSubmitted(true);
+    } catch (err: any) {
+      console.error("[PostPage] Firestore write failed:", err?.code, err?.message, err);
+
+      // Give a readable error based on the Firebase error code
+      const code: string = err?.code ?? "";
+      if (code === "permission-denied") {
+        setError(
+          "Permission denied by the database. Make sure your email is verified, then refresh and try again. If this persists, the Firestore security rules need to be updated in the Firebase Console."
+        );
+      } else if (code === "unauthenticated") {
+        setError("Your session expired. Please sign out and sign back in.");
+      } else if (code.includes("storage")) {
+        setError(`Photo upload failed: ${err?.message ?? code}. Try a smaller image.`);
+      } else if (err?.message) {
+        setError(`Error: ${err.message}`);
+      } else {
+        setError(t.errorOccurred);
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  // ── Form ───────────────────────────────────────────────────────────────────
   return (
     <div className="max-w-lg mx-auto px-4 py-5">
       <h1 className="text-xl font-bold text-gray-900 mb-4">{t.postItem}</h1>
@@ -123,7 +193,9 @@ export default function PostPage() {
           <button
             key={tab}
             onClick={() => handleTypeChange(tab)}
-            className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${type === tab ? "bg-white shadow text-[#003366]" : "text-gray-500"}`}
+            className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${
+              type === tab ? "bg-white shadow text-[#003366]" : "text-gray-500"
+            }`}
           >
             {tab === "buy-sell" ? t.buySell : t.lostFound}
           </button>
@@ -133,10 +205,15 @@ export default function PostPage() {
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Photos */}
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">{t.photos}</label>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">
+            {t.photos}
+          </label>
           <div className="flex gap-2 flex-wrap">
             {previews.map((src, i) => (
-              <div key={i} className="relative w-24 h-24 rounded-xl overflow-hidden border border-gray-200">
+              <div
+                key={i}
+                className="relative w-24 h-24 rounded-xl overflow-hidden border border-gray-200"
+              >
                 <img src={src} alt="" className="w-full h-full object-cover" />
                 <button
                   type="button"
@@ -158,12 +235,21 @@ export default function PostPage() {
               </button>
             )}
           </div>
-          <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoChange} />
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={handlePhotoChange}
+          />
         </div>
 
         {/* Title */}
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-1">{t.title} *</label>
+          <label className="block text-sm font-semibold text-gray-700 mb-1">
+            {t.title} *
+          </label>
           <input
             type="text"
             value={title}
@@ -175,7 +261,9 @@ export default function PostPage() {
 
         {/* Description */}
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-1">{t.description}</label>
+          <label className="block text-sm font-semibold text-gray-700 mb-1">
+            {t.description}
+          </label>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -186,7 +274,9 @@ export default function PostPage() {
 
         {/* Category */}
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-1">{t.category}</label>
+          <label className="block text-sm font-semibold text-gray-700 mb-1">
+            {t.category}
+          </label>
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
@@ -202,14 +292,20 @@ export default function PostPage() {
 
         {/* Condition */}
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-1">{t.condition}</label>
+          <label className="block text-sm font-semibold text-gray-700 mb-1">
+            {t.condition}
+          </label>
           <div className="flex gap-2">
             {(["new", "used"] as Condition[]).map((c) => (
               <button
                 key={c}
                 type="button"
                 onClick={() => setCondition(c)}
-                className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-colors ${condition === c ? "bg-[#003366] text-white border-[#003366]" : "bg-white text-gray-600 border-gray-200"}`}
+                className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-colors ${
+                  condition === c
+                    ? "bg-[#003366] text-white border-[#003366]"
+                    : "bg-white text-gray-600 border-gray-200"
+                }`}
               >
                 {c === "new" ? t.conditionNew : t.conditionUsed}
               </button>
@@ -217,12 +313,16 @@ export default function PostPage() {
           </div>
         </div>
 
-        {/* Price — only for buy-sell */}
+        {/* Price — buy-sell only */}
         {type === "buy-sell" && (
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1">{t.price}</label>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">
+              {t.price}
+            </label>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">RM</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">
+                RM
+              </span>
               <input
                 type="number"
                 value={price}
@@ -271,14 +371,26 @@ export default function PostPage() {
           </div>
         </div>
 
-        {error && <p className="text-xs text-red-600 bg-red-50 rounded-xl px-3 py-2">{error}</p>}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+            <p className="text-xs text-red-700 leading-relaxed">{error}</p>
+          </div>
+        )}
 
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || !title}
           className="w-full bg-[#003366] text-white rounded-xl py-3 text-sm font-semibold hover:bg-[#002244] disabled:opacity-50 transition-colors"
         >
-          {loading ? t.submitting : t.submit}
+          {loading ? (
+            <span className="flex items-center justify-center gap-2">
+              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+              </svg>
+              {t.submitting}
+            </span>
+          ) : t.submit}
         </button>
       </form>
     </div>
