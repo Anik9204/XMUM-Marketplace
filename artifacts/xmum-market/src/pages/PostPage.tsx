@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -8,10 +8,34 @@ import { ListingType, Condition } from "@/lib/types";
 import AuthModal from "@/components/AuthModal";
 import { ImagePlus, X, AlertCircle, CheckCircle2 } from "lucide-react";
 
+const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
+
 const BUY_SELL_CATEGORIES = [
   "electronics", "books", "clothing", "furniture", "food", "services", "others",
 ];
 const LOST_FOUND_CATEGORIES = ["lostItem", "foundItem"];
+
+// ── Inline toast ───────────────────────────────────────────────────────────────
+function SuccessToast({ message, onDone }: { message: string; onDone: () => void }) {
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    const hide = setTimeout(() => setVisible(false), 3000);
+    const done = setTimeout(onDone, 3400);
+    return () => { clearTimeout(hide); clearTimeout(done); };
+  }, [onDone]);
+
+  return (
+    <div
+      className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 bg-[#003366] text-white text-sm font-medium px-5 py-3 rounded-2xl shadow-xl transition-all duration-400 ${
+        visible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-3"
+      }`}
+    >
+      <CheckCircle2 size={18} className="text-green-300 shrink-0" />
+      {message}
+    </div>
+  );
+}
 
 export default function PostPage() {
   const { t } = useLang();
@@ -31,7 +55,7 @@ export default function PostPage() {
   const [previews, setPreviews] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [submitted, setSubmitted] = useState(false);
+  const [toast, setToast] = useState("");
   const [showAuth, setShowAuth] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -68,50 +92,27 @@ export default function PostPage() {
     );
   }
 
-  // ── Success view ───────────────────────────────────────────────────────────
-  if (submitted) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 text-center">
-        <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mb-4">
-          <CheckCircle2 size={36} className="text-green-500" />
-        </div>
-        <h2 className="text-lg font-bold text-gray-900 mb-1">{t.listingPosted}</h2>
-        <p className="text-sm text-gray-400 mb-6">Your item is now live on XMUM Market.</p>
-        <div className="flex gap-3">
-          <button
-            onClick={() => {
-              setSubmitted(false);
-              setTitle(""); setDescription(""); setPrice("");
-              setWhatsapp(""); setWechat(""); setTeams("");
-              setPhotos([]); setPreviews([]);
-            }}
-            className="px-5 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium"
-          >
-            Post another
-          </button>
-          <button
-            onClick={() => navigate("/profile")}
-            className="px-5 py-2.5 bg-[#003366] text-white rounded-xl text-sm font-semibold"
-          >
-            {t.myListings}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   // ── Helpers ────────────────────────────────────────────────────────────────
   const categories = type === "buy-sell" ? BUY_SELL_CATEGORIES : LOST_FOUND_CATEGORIES;
+
+  // Timeout wrapper — only used for token refresh and photo uploads
+  function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+    return Promise.race([
+      promise,
+      new Promise<T>((_, reject) =>
+        setTimeout(() => reject(new Error(`timeout:${label}`)), ms)
+      ),
+    ]);
+  }
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     if (photos.length + files.length > 3) { setError(t.uploadLimit); return; }
-    const oversized = files.find((f) => f.size > 5 * 1024 * 1024);
+    const oversized = files.find((f) => f.size > MAX_FILE_BYTES);
     if (oversized) { setError(t.imageTooLarge); return; }
     setError("");
     setPhotos([...photos, ...files]);
     setPreviews([...previews, ...files.map((f) => URL.createObjectURL(f))]);
-    // Reset input so same file can be re-selected if removed
     e.target.value = "";
   };
 
@@ -125,78 +126,60 @@ export default function PostPage() {
     setCategory(newType === "buy-sell" ? "electronics" : "lostItem");
   };
 
-  // Wraps any promise with a hard timeout so Firebase hangs never freeze the UI
-  function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-    return Promise.race([
-      promise,
-      new Promise<T>((_, reject) =>
-        setTimeout(
-          () => reject(new Error(`timeout:${label}`)),
-          ms
-        )
-      ),
-    ]);
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
 
     try {
-      // Force-refresh the ID token (10 s timeout)
+      // Force-refresh ID token so Firestore sees latest emailVerified claim
       await withTimeout(
         auth.currentUser?.getIdToken(true) ?? Promise.resolve(),
         10_000,
         "token-refresh"
       );
 
-      // Upload photos (15 s each) — failures are non-fatal, just skip that photo
+      // Upload photos — failures are non-fatal, skipped individually
       const urls: string[] = [];
       for (const f of photos) {
         try {
           const url = await withTimeout(uploadPhoto(f, user.uid), 30_000, "photo-upload");
           urls.push(url);
         } catch (photoErr: any) {
-          console.warn("[PostPage] Photo upload skipped:", photoErr?.message);
+          console.warn("[PostPage] Photo skipped:", photoErr?.message);
         }
       }
 
-      // Write listing to Firestore (10 s timeout)
-      await withTimeout(
-        createListing({
-          type,
-          title,
-          description,
-          price: type === "buy-sell" ? (parseFloat(price) || 0) : undefined,
-          category,
-          condition,
-          photos: urls,
-          userId: user.uid,
-          userEmail: user.email ?? "",
-          userName: user.email?.split("@")[0] ?? "",
-          whatsapp,
-          wechat,
-          teams,
-        }),
-        10_000,
-        "create-listing"
-      );
+      // Write listing — no artificial timeout; let Firestore resolve naturally.
+      // A hard timeout here caused false errors because the server acknowledgment
+      // can take slightly longer than the timeout on first writes.
+      await createListing({
+        type,
+        title,
+        description,
+        price: type === "buy-sell" ? (parseFloat(price) || 0) : undefined,
+        category,
+        condition,
+        photos: urls,
+        userId: user.uid,
+        userEmail: user.email ?? "",
+        userName: user.email?.split("@")[0] ?? "",
+        whatsapp,
+        wechat,
+        teams,
+      });
 
-      setSubmitted(true);
+      // Show toast then redirect to profile
+      setToast("Your post has been successfully published.");
     } catch (err: any) {
       console.error("[PostPage] Submit failed:", err?.code, err?.message);
-
       const code: string = err?.code ?? "";
       const msg: string = err?.message ?? "";
 
-      if (msg.startsWith("timeout:create-listing") || msg.startsWith("timeout:token-refresh")) {
-        setError(
-          "Could not reach the database — it may not be set up yet. " +
-          "Please go to Firebase Console → Firestore Database → Create database, then try again."
-        );
+      if (msg.startsWith("timeout:token-refresh")) {
+        setError("Session refresh timed out. Please sign out and sign back in.");
       } else if (msg.startsWith("timeout:photo-upload")) {
-        setError("Photo upload timed out. Try a smaller image or check your connection.");
+        setError("A photo upload timed out. Try a smaller image or check your connection.");
       } else if (code === "permission-denied") {
         setError(
           "Permission denied. Make sure your email is verified and the Firestore rules are published in Firebase Console."
@@ -216,6 +199,13 @@ export default function PostPage() {
   // ── Form ───────────────────────────────────────────────────────────────────
   return (
     <div className="max-w-lg mx-auto px-4 py-5">
+      {toast && (
+        <SuccessToast
+          message={toast}
+          onDone={() => navigate("/profile")}
+        />
+      )}
+
       <h1 className="text-xl font-bold text-gray-900 mb-4">{t.postItem}</h1>
 
       {/* Type selector */}
@@ -266,6 +256,7 @@ export default function PostPage() {
               </button>
             )}
           </div>
+          <p className="text-[10px] text-gray-400 mt-1.5">Max 10 MB per photo · Up to 3 photos</p>
           <input
             ref={fileRef}
             type="file"
