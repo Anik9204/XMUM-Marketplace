@@ -21,9 +21,14 @@ export async function signUp(email: string, password: string): Promise<User> {
   if (!isXmuEmail(email)) {
     throw new Error("only_xmu_email");
   }
+  // Critical path: create account + send verification email
   const cred = await createUserWithEmailAndPassword(auth, email, password);
   await sendEmailVerification(cred.user);
-  await setDoc(doc(db, "users", cred.user.uid), {
+
+  // Non-blocking: write user profile to Firestore in the background.
+  // If Firestore isn't set up yet this must NOT block or throw — the auth
+  // flow has already succeeded and the verification email has been sent.
+  setDoc(doc(db, "users", cred.user.uid), {
     uid: cred.user.uid,
     email: cred.user.email,
     displayName: email.split("@")[0],
@@ -33,7 +38,10 @@ export async function signUp(email: string, password: string): Promise<User> {
     isBlacklisted: false,
     isFeatured: false,
     createdAt: Date.now(),
-  } as UserProfile);
+  } as UserProfile).catch((err) => {
+    console.warn("[signUp] Firestore user profile write failed (non-fatal):", err?.code, err?.message);
+  });
+
   return cred.user;
 }
 
