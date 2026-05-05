@@ -105,6 +105,12 @@ export default function SettingsPage() {
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [deleteError, setDeleteError] = useState("");
 
+  // Ref that persists through re-renders: when deleteUser() fires, React
+  // sets user=null and re-renders this component. Without this ref the !user
+  // guard would show the "sign in" prompt mid-deletion instead of a spinner,
+  // causing a rug-pull crash before navigate() is called.
+  const deletingAccountRef = useRef(false);
+
   useEffect(() => {
     if (!user) return;
     getProfile(user.uid).then((p) => {
@@ -120,7 +126,18 @@ export default function SettingsPage() {
     }).catch(() => {});
   }, [user]);
 
+  // ── Guard: not signed in ───────────────────────────────────────────────────
+  // If deletion is in progress and deleteUser() has already fired (user===null),
+  // show a spinner instead of the login prompt so the sequence can complete.
   if (!user) {
+    if (deletingAccountRef.current) {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
+          <div className="w-8 h-8 border-2 border-[#003366] border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-gray-500">Deleting your account…</p>
+        </div>
+      );
+    }
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 text-center">
         <User size={48} className="text-gray-200 mb-4" />
@@ -235,12 +252,15 @@ export default function SettingsPage() {
   const handleDeleteAccount = async () => {
     setDeleteError("");
     if (!deletePassword) { setDeleteError("Please enter your password to confirm."); return; }
+
+    deletingAccountRef.current = true;
     setDeletingAccount(true);
+
     try {
       await deleteAccount(deletePassword);
-      // Auth user is now gone — navigate home and show toast
+      // deleteUser() has fired — user is now null and onAuthStateChanged has
+      // already re-rendered this component showing the spinner (via deletingAccountRef).
       navigate("/");
-      setSuccessToast("Your account has been permanently deleted.");
     } catch (err: any) {
       const code = err?.code ?? "";
       if (code.includes("wrong-password") || code.includes("invalid-credential")) {
@@ -251,7 +271,12 @@ export default function SettingsPage() {
         setDeleteError(err?.message ?? "Failed to delete account. Please try again.");
       }
     } finally {
-      setDeletingAccount(false);
+      // Only reset if deletion didn't succeed (if it succeeded, user is null
+      // and this component is showing the spinner — don't flip it back).
+      if (auth.currentUser) {
+        deletingAccountRef.current = false;
+        setDeletingAccount(false);
+      }
     }
   };
 
@@ -474,7 +499,7 @@ export default function SettingsPage() {
               type="password"
               value={deletePassword}
               onChange={(e) => setDeletePassword(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleDeleteAccount()}
+              onKeyDown={(e) => e.key === "Enter" && !deletingAccount && handleDeleteAccount()}
               placeholder="Your current password"
               className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-400 transition mb-3"
               autoFocus
