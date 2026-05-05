@@ -1,0 +1,21 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Users can read any profile, but only write their own
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Listings: anyone can read, verified XMUM users can create, only owner can update/delete
+    match /listings/{listingId} {
+      allow read: if true;
+      allow create: if request.auth != null
+                    && request.auth.token.email_verified == true
+                    && request.auth.token.email.matches('.*@xmu\\.edu\\.my');
+      allow update, delete: if request.auth != null
+                             && request.auth.uid == resource.data.userId;
+    }
+  }
+}
