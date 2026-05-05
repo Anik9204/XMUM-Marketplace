@@ -2,6 +2,7 @@ import { Link, useLocation } from "wouter";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { logOut } from "@/lib/auth";
+import AuthModal from "@/components/AuthModal";
 import { Home, Search, PlusSquare, User, Globe } from "lucide-react";
 import { useState } from "react";
 
@@ -10,6 +11,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [location] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);
 
   const navItems = [
     { href: "/", icon: Home, label: t.home },
@@ -53,16 +55,34 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     {t.profile}
                   </button>
                   {menuOpen && (
-                    <div className="absolute right-0 top-9 bg-white rounded-xl shadow-xl border border-gray-100 min-w-40 z-50">
-                      <Link href="/profile" onClick={() => setMenuOpen(false)} className="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 rounded-t-xl">{t.myListings}</Link>
-                      <button onClick={() => { logOut(); setMenuOpen(false); }} className="block w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 rounded-b-xl">{t.signOut}</button>
-                    </div>
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+                      <div className="absolute right-0 top-9 bg-white rounded-xl shadow-xl border border-gray-100 min-w-40 z-50">
+                        <Link href="/profile" onClick={() => setMenuOpen(false)} className="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 rounded-t-xl">{t.myListings}</Link>
+                        <button onClick={() => { logOut(); setMenuOpen(false); }} className="block w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 rounded-b-xl">{t.signOut}</button>
+                      </div>
+                    </>
                   )}
                 </div>
               ) : (
-                <Link href="/auth" className="ml-1 px-4 py-1.5 bg-white text-[#003366] rounded-lg text-sm font-semibold hover:bg-gray-100 transition-colors">{t.signIn}</Link>
+                <button
+                  onClick={() => setShowAuth(true)}
+                  className="ml-1 px-4 py-1.5 bg-white text-[#003366] rounded-lg text-sm font-semibold hover:bg-gray-100 transition-colors"
+                >
+                  {t.signIn}
+                </button>
               )}
             </nav>
+
+            {/* Mobile: sign in button when not logged in */}
+            {!user && (
+              <button
+                onClick={() => setShowAuth(true)}
+                className="md:hidden px-3 py-1.5 bg-white text-[#003366] rounded-lg text-sm font-semibold hover:bg-gray-100 transition-colors"
+              >
+                {t.signIn}
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -72,7 +92,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         {children}
       </main>
 
-      {/* Footer */}
+      {/* Footer — desktop only */}
       <footer className="hidden md:block bg-[#003366] text-white/70 text-xs py-6 px-4">
         <div className="max-w-5xl mx-auto">
           <p className="font-semibold text-white/90 mb-1">{t.pdpaTitle}</p>
@@ -98,13 +118,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             );
           })}
         </div>
-        {/* Mobile footer */}
+        {/* Mobile PDPA footer */}
         <div className="bg-gray-50 border-t border-gray-100 px-4 py-2">
           <p className="text-[9px] text-gray-400 text-center leading-relaxed">
             {t.pdpaText}
           </p>
         </div>
       </nav>
+
+      {/* Auth modal — global, triggered from header */}
+      {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
     </div>
   );
 }
