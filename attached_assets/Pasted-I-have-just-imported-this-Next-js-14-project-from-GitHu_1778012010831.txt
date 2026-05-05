@@ -1,0 +1,70 @@
+I have just imported this Next.js 14 project from GitHub into a new Replit workspace. This is an ongoing marketplace build. Phase 1 (User Profiles, Avatar uploads, and Strict Validation) is already complete in this codebase. I need to sync your context with my exact production backend setup before we fix some lingering bugs and move to Phase 2.
+
+Action 1: Environment Setup
+My Firebase configuration is missing because environment variables do not transfer via GitHub. Please set up the firebase.ts (or firebase.js) initialization file to use standard environment variables (e.g., process.env.NEXT_PUBLIC_FIREBASE_API_KEY).
+
+Here are my project details. Please generate the .env.local key-value pairs for me to paste into Replit's Secrets manager:
+
+JavaScript
+const firebaseConfig = {
+  apiKey: "AIzaSyDbsioNuqvL8mLgNFSj4U-7gQatOGVvaqM",
+  authDomain: "xmum--market.firebaseapp.com",
+  projectId: "xmum--market",
+  storageBucket: "xmum--market.firebasestorage.app",
+  messagingSenderId: "265563320468",
+  appId: "1:265563320468:web:a55b8e90ab8927b9508481",
+  measurementId: "G-JMF8ZV5J5Z"
+};
+Action 2: Context Sync - Security Rules
+Do NOT suggest any frontend code that violates these backend rules.
+
+My Firebase Storage Rules strictly enforce 5MB limits, image-only uploads, and isolate access to /listings/ and /avatars/:
+
+JavaScript
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /listings/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow create, update: if request.auth != null
+                   && request.auth.token.email.matches('.*@xmu\\.edu\\.my')
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null
+                   && request.auth.uid == userId
+                   && request.auth.token.email.matches('.*@xmu\\.edu\\.my');
+    }
+    match /avatars/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow create, update: if request.auth != null
+                   && request.auth.uid == userId
+                   && request.auth.token.email.matches('.*@xmu\\.edu\\.my')
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null
+                   && request.auth.uid == userId
+                   && request.auth.token.email.matches('.*@xmu\\.edu\\.my');
+    }
+  }
+}
+My Firestore Rules strictly enforce the specific university domain registration and user-owned document editing:
+
+JavaScript
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    match /listings/{listingId} {
+      allow read: if true;
+      allow create: if request.auth != null
+                    && request.auth.token.email.matches('.*@xmu\\.edu\\.my');
+      allow update, delete: if request.auth != null
+                             && request.auth.uid == resource.data.userId;
+    }
+  }
+}
+Action 3: Acknowledge and Compile
+Please acknowledge you have read the architecture and rules, confirm the environment variable setup is complete, and ensure the app compiles cleanly. Once confirmed, I will provide the list of remaining bugs we need to fix.
