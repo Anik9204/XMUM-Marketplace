@@ -96,15 +96,14 @@ export async function getUserListings(userId: string): Promise<Listing[]> {
 }
 
 export async function deleteListing(listing: Listing): Promise<void> {
-  for (const url of listing.photos) {
-    try {
-      const photoRef = ref(storage, url);
-      await deleteObject(photoRef);
-    } catch {
-      // ignore if already deleted
-    }
-  }
-  await deleteDoc(doc(db, "listings", listing.id));
+  await Promise.all([
+    ...listing.photos.map((url) =>
+      deleteObject(ref(storage, url)).catch((err) => {
+        if (err?.code !== "storage/object-not-found") throw err;
+      })
+    ),
+    deleteDoc(doc(db, "listings", listing.id)),
+  ]);
 }
 
 export async function searchListings(
