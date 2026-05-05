@@ -9,28 +9,6 @@ args = ["pnpm", "store", "prune"]
 env = { "CI" = "true" }
 
 [workflows]
-runButton = "Project"
-
-[[workflows.workflow]]
-name = "Project"
-mode = "parallel"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Start application"
-
-[[workflows.workflow]]
-name = "Start application"
-author = "agent"
-
-[workflows.workflow.metadata]
-outputType = "webview"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pnpm --filter @workspace/xmum-market run dev"
-waitForPort = 5173
 
 [agent]
 stack = "PNPM_WORKSPACE"
@@ -65,5 +43,3 @@ VITE_FIREBASE_AUTH_DOMAIN = "xmum--market.firebaseapp.com"
 VITE_FIREBASE_MESSAGING_SENDER_ID = "265563320468"
 VITE_FIREBASE_PROJECT_ID = "xmum--market"
 VITE_FIREBASE_STORAGE_BUCKET = "xmum--market.firebasestorage.app"
-PORT = "5173"
-BASE_PATH = "/"
