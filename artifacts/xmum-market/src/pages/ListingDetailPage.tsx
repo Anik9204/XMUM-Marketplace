@@ -3,7 +3,8 @@ import { useRoute, useLocation } from "wouter";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { getListing } from "@/lib/listings";
-import { Listing } from "@/lib/types";
+import { getProfile } from "@/lib/userProfile";
+import { Listing, UserProfile } from "@/lib/types";
 import AuthModal from "@/components/AuthModal";
 import { ArrowLeft, MessageCircle, Clock, User, Tag } from "lucide-react";
 import { SiWhatsapp, SiWechat } from "react-icons/si";
@@ -20,10 +21,19 @@ export default function ListingDetailPage() {
   const [showAuth, setShowAuth] = useState(false);
   const [contactBlocked, setContactBlocked] = useState<string | null>(null);
 
+  // Seller profile — used for privacy toggle checks
+  const [sellerProfile, setSellerProfile] = useState<UserProfile | null>(null);
+
   useEffect(() => {
     if (!params?.id) return;
     getListing(params.id)
-      .then(setListing)
+      .then((l) => {
+        setListing(l);
+        // Fetch seller's privacy settings alongside the listing
+        if (l?.userId) {
+          getProfile(l.userId).then(setSellerProfile).catch(() => {});
+        }
+      })
       .finally(() => setLoading(false));
   }, [params?.id]);
 
@@ -64,6 +74,12 @@ export default function ListingDetailPage() {
     if (!user.emailVerified) { setContactBlocked("verify"); return; }
     action();
   };
+
+  // Privacy helpers — default to showing (true) if no profile document exists
+  // so that older listings and unregistered sellers still show contact info.
+  const canShowWhatsApp = listing.whatsapp && sellerProfile?.showWhatsApp !== false;
+  const canShowWeChat  = listing.wechat  && sellerProfile?.showWeChat  !== false;
+  const noContact = !canShowWhatsApp && !canShowWeChat && !listing.teams;
 
   return (
     <>
@@ -153,16 +169,26 @@ export default function ListingDetailPage() {
 
           {/* Seller */}
           <div className="flex items-center gap-3 bg-gray-50 rounded-xl p-3">
-            <div className="w-9 h-9 rounded-full bg-[#003366] flex items-center justify-center text-white font-semibold text-sm">
-              {listing.userEmail[0].toUpperCase()}
-            </div>
+            {sellerProfile?.avatarUrl ? (
+              <img
+                src={sellerProfile.avatarUrl}
+                alt="seller"
+                className="w-9 h-9 rounded-full object-cover border border-gray-200"
+              />
+            ) : (
+              <div className="w-9 h-9 rounded-full bg-[#003366] flex items-center justify-center text-white font-semibold text-sm">
+                {listing.userEmail[0].toUpperCase()}
+              </div>
+            )}
             <div>
               <p className="text-xs font-medium text-gray-700">{t.postedBy}</p>
-              <p className="text-sm font-semibold text-gray-900">{listing.userName}</p>
+              <p className="text-sm font-semibold text-gray-900">
+                {sellerProfile?.fullName || listing.userName}
+              </p>
             </div>
           </div>
 
-          {/* Contact buttons */}
+          {/* Contact blocked notice */}
           {contactBlocked && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 text-xs text-amber-800">
               {contactBlocked === "login" ? (
@@ -173,10 +199,11 @@ export default function ListingDetailPage() {
             </div>
           )}
 
+          {/* Contact buttons — respect seller privacy toggles */}
           <div>
             <p className="text-sm font-semibold text-gray-700 mb-2">{t.contactSeller}</p>
             <div className="grid grid-cols-3 gap-2">
-              {listing.whatsapp && (
+              {canShowWhatsApp && (
                 <button
                   onClick={() => handleContact(() => window.open(`https://wa.me/${listing.whatsapp?.replace(/\D/g, "")}?text=${pre}`, "_blank"))}
                   className="flex flex-col items-center gap-1.5 bg-[#25D366]/10 text-[#25D366] border border-[#25D366]/20 rounded-xl py-3 hover:bg-[#25D366]/20 transition-colors"
@@ -185,7 +212,7 @@ export default function ListingDetailPage() {
                   <span className="text-xs font-medium">{t.contactViaWhatsApp}</span>
                 </button>
               )}
-              {listing.wechat && (
+              {canShowWeChat && (
                 <button
                   onClick={() => handleContact(() => { navigator.clipboard.writeText(listing.wechat ?? ""); alert(`WeChat ID copied: ${listing.wechat}`); })}
                   className="flex flex-col items-center gap-1.5 bg-[#09B83E]/10 text-[#09B83E] border border-[#09B83E]/20 rounded-xl py-3 hover:bg-[#09B83E]/20 transition-colors"
@@ -203,7 +230,7 @@ export default function ListingDetailPage() {
                   <span className="text-xs font-medium">{t.contactViaTeams}</span>
                 </button>
               )}
-              {!listing.whatsapp && !listing.wechat && !listing.teams && (
+              {noContact && (
                 <p className="col-span-3 text-xs text-gray-400 text-center py-2">No contact info provided.</p>
               )}
             </div>

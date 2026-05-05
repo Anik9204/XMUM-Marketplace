@@ -17,7 +17,13 @@ export function isXmuEmail(email: string): boolean {
   return email.toLowerCase().endsWith(XMU_DOMAIN);
 }
 
-export async function signUp(email: string, password: string): Promise<User> {
+export async function signUp(
+  email: string,
+  password: string,
+  fullName: string,
+  whatsapp?: string,
+  wechat?: string
+): Promise<User> {
   if (!isXmuEmail(email)) {
     throw new Error("only_xmu_email");
   }
@@ -32,13 +38,20 @@ export async function signUp(email: string, password: string): Promise<User> {
     uid: cred.user.uid,
     email: cred.user.email,
     displayName: email.split("@")[0],
+    fullName: fullName.trim(),
+    avatarUrl: "",
+    whatsapp: whatsapp?.trim() ?? "",
+    wechat: wechat?.trim() ?? "",
     emailVerified: false,
     isVerified: false,
     rating: 0,
     isBlacklisted: false,
     isFeatured: false,
+    showEmail: true,
+    showWhatsApp: true,
+    showWeChat: true,
     createdAt: Date.now(),
-  } as UserProfile).catch((err) => {
+  } satisfies UserProfile).catch((err) => {
     console.warn("[signUp] Firestore user profile write failed (non-fatal):", err?.code, err?.message);
   });
 

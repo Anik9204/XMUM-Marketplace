@@ -18,6 +18,9 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPass, setConfirmPass] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [whatsapp, setWhatsapp] = useState("");
+  const [wechat, setWechat] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -74,10 +77,10 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
         setSuccess(t.emailSent);
       } else if (mode === "signup") {
         if (!isXmuEmail(email)) { setError(t.onlyXmuEmail); return; }
+        if (!fullName.trim()) { setError("Full name is required."); return; }
         if (password.length < 6) { setError(t.weakPassword); return; }
         if (password !== confirmPass) { setError(t.passwordsNoMatch); return; }
-        await signUp(email, password);
-        // Switch to verification pending view
+        await signUp(email, password, fullName.trim(), whatsapp.trim(), wechat.trim());
         setPendingEmail(email);
         setVerificationPending(true);
         startCooldown();
@@ -147,6 +150,9 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
                 setMode("signin");
                 setPassword("");
                 setConfirmPass("");
+                setFullName("");
+                setWhatsapp("");
+                setWechat("");
                 setError("");
               }}
               className="w-full bg-[#003366] text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-[#002244] transition-colors"
@@ -166,10 +172,10 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
   // ── Normal Auth View ─────────────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm relative overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm relative overflow-hidden max-h-[90vh] overflow-y-auto">
         <div className="h-1.5 bg-gradient-to-r from-[#003366] to-[#0055aa]" />
 
-        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 z-10">
           <X size={20} />
         </button>
 
@@ -199,6 +205,23 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-3">
+            {/* Full Name — signup only, required */}
+            {mode === "signup" && (
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Full Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="e.g. Ahmad bin Razak"
+                  required
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#003366]/30 focus:border-[#003366] transition"
+                />
+              </div>
+            )}
+
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">{t.email}</label>
               <input
@@ -239,6 +262,35 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
                   required
                   className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#003366]/30 focus:border-[#003366] transition"
                 />
+              </div>
+            )}
+
+            {/* Optional contact fields — signup only */}
+            {mode === "signup" && (
+              <div className="border-t border-gray-100 pt-3 space-y-3">
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">
+                  Contact Info <span className="font-normal normal-case">(optional — can be set later)</span>
+                </p>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{t.whatsapp}</label>
+                  <input
+                    type="text"
+                    value={whatsapp}
+                    onChange={(e) => setWhatsapp(e.target.value)}
+                    placeholder="+60 12-345 6789"
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#003366]/30 focus:border-[#003366] transition"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{t.wechat}</label>
+                  <input
+                    type="text"
+                    value={wechat}
+                    onChange={(e) => setWechat(e.target.value)}
+                    placeholder="WeChat ID"
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#003366]/30 focus:border-[#003366] transition"
+                  />
+                </div>
               </div>
             )}
 
