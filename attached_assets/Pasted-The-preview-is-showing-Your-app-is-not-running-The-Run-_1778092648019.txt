@@ -1,0 +1,71 @@
+The preview is showing "Your app is not running". 
+The Run button needs to be clicked or the workflow needs 
+to be started. Do the following in order:
+
+STEP 1 — Check what workflow/run command is configured.
+Read these files:
+  - .replit         (the [run] command and [[ports]] section)
+  - artifacts/xmum-market/vite.config.ts
+
+STEP 2 — Check if the dev server is actually running.
+Run this command in the Shell:
+  ps aux | grep vite
+
+If vite is NOT in the output, the server is not running.
+
+STEP 3 — Start the server manually via Shell to see 
+any errors:
+  cd artifacts/xmum-market && pnpm install && pnpm dev
+
+Watch the output carefully. Copy and paste the full 
+output here so we can see exactly what error is occurring.
+
+STEP 4 — Fix the .replit run command if wrong.
+The .replit file's run command must be exactly:
+
+  run = "cd artifacts/xmum-market && pnpm install && pnpm dev"
+
+And the ports section must be:
+
+  [[ports]]
+  localPort = 5000
+  externalPort = 80
+
+  (or whatever port vite.config.ts is using — confirm 
+  they match. If vite.config.ts uses port 5173, then 
+  localPort must also be 5173.)
+
+STEP 5 — Confirm vite.config.ts has these exact settings:
+
+  server: {
+    host: '0.0.0.0',
+    port: parseInt(process.env.PORT ?? '5000'),
+    strictPort: false,
+    allowedHosts: 'all',
+  }
+
+The host MUST be '0.0.0.0' — not 'localhost'.
+If it says 'localhost' the preview will always be blank 
+even if the server is running, because Replit's proxy 
+cannot reach a localhost-bound server.
+
+STEP 6 — After confirming the server starts cleanly in 
+the Shell, click the green Run button at the top of 
+Replit to start the official workflow. Then click the 
+webview/preview tab (not the Canvas tab) to see the app.
+
+IMPORTANT — DO NOT TOUCH FIREBASE:
+The Firestore database (xmum--market project, default 
+database) is already set up and working correctly in 
+Firebase Console. Do NOT try to re-create it or change 
+any Firebase settings. The "Just add data" message in 
+Firebase Console is normal — it means the database exists 
+and is empty, which is expected for a fresh deployment. 
+Data will appear once users sign up and create listings.
+
+STEP 7 — Once the app is visible in the webview, take 
+a screenshot and confirm these things are working:
+  [ ] The home page loads (even with empty listing grid)
+  [ ] The Sign In / Sign Up buttons are visible
+  [ ] No console errors about Firebase connection
+  [ ] The URL in the webview bar ends in .replit.dev
