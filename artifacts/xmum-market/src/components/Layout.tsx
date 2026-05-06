@@ -2,14 +2,16 @@ import { Link, useLocation } from "wouter";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { logOut } from "@/lib/auth";
+import { useDarkMode } from "@/hooks/use-dark-mode";
 import AuthModal from "@/components/AuthModal";
 import VerificationBanner from "@/components/VerificationBanner";
-import { Home, Search, PlusSquare, User, Globe } from "lucide-react";
+import { Home, Search, PlusSquare, User, Globe, Sun, Moon } from "lucide-react";
 import { useState } from "react";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { t, toggleLang, lang } = useLang();
   const { user } = useAuth();
+  const { dark, toggle: toggleDark } = useDarkMode();
   const [location] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
@@ -22,7 +24,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-[#003366] shadow-md">
         <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
@@ -32,7 +34,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </span>
           </Link>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            {/* Dark mode toggle */}
+            <button
+              onClick={toggleDark}
+              className="p-1.5 text-white/70 hover:text-white transition-colors rounded-lg hover:bg-white/10"
+              aria-label="Toggle dark mode"
+            >
+              {dark ? <Sun size={17} /> : <Moon size={17} />}
+            </button>
+
             {/* Language Toggle */}
             <button
               onClick={toggleLang}
@@ -58,10 +69,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   {menuOpen && (
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-                      <div className="absolute right-0 top-9 bg-white rounded-xl shadow-xl border border-gray-100 min-w-44 z-50">
-                        <Link href="/profile" onClick={() => setMenuOpen(false)} className="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 rounded-t-xl">{t.myListings}</Link>
-                        <Link href="/settings" onClick={() => setMenuOpen(false)} className="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 border-t border-gray-50">{t.accountSettings}</Link>
-                        <button onClick={() => { logOut(); setMenuOpen(false); }} className="block w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 rounded-b-xl border-t border-gray-50">{t.signOut}</button>
+                      <div className="absolute right-0 top-9 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 min-w-44 z-50">
+                        <Link href="/profile" onClick={() => setMenuOpen(false)} className="block px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-t-xl">{t.myListings}</Link>
+                        <Link href="/settings" onClick={() => setMenuOpen(false)} className="block px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 border-t border-gray-50 dark:border-gray-700">{t.accountSettings}</Link>
+                        <button onClick={() => { logOut(); setMenuOpen(false); }} className="block w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-b-xl border-t border-gray-50 dark:border-gray-700">{t.signOut}</button>
                       </div>
                     </>
                   )}
@@ -89,7 +100,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      {/* Verification banner — shown only when signed in but email not yet verified */}
+      {/* Verification banner */}
       {user && !user.emailVerified && <VerificationBanner />}
 
       {/* Main content */}
@@ -107,7 +118,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </footer>
 
       {/* Mobile bottom nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 safe-bottom">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 z-50 safe-bottom">
         <div className="flex">
           {navItems.map(({ href, icon: Icon, label }) => {
             const active = location === href;
@@ -115,7 +126,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <Link
                 key={href}
                 href={href}
-                className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 transition-colors ${active ? "text-[#003366]" : "text-gray-400"}`}
+                className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 transition-colors ${active ? "text-[#003366] dark:text-blue-400" : "text-gray-400 dark:text-gray-500"}`}
               >
                 <Icon size={22} strokeWidth={active ? 2.5 : 1.8} />
                 <span className="text-[10px] font-medium">{label}</span>
@@ -123,9 +134,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             );
           })}
         </div>
-        {/* Mobile PDPA footer */}
-        <div className="bg-gray-50 border-t border-gray-100 px-4 py-2">
-          <p className="text-[9px] text-gray-400 text-center leading-relaxed">
+        <div className="bg-gray-50 dark:bg-gray-800 border-t border-gray-100 dark:border-gray-700 px-4 py-2">
+          <p className="text-[9px] text-gray-400 dark:text-gray-500 text-center leading-relaxed">
             {t.pdpaText}
           </p>
         </div>

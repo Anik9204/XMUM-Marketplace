@@ -53,21 +53,22 @@ Source of truth: `types.ts` for data shapes, `i18n.ts` for all UI strings.
 
 ## Product
 
-1. **Auth**: @xmu.edu.my only, email verification required; signup now captures Full Name + optional WhatsApp/WeChat
+1. **Auth**: @xmu.edu.my only, email verification required; signup captures Full Name + optional WhatsApp/WeChat
 2. **Buy & Sell / Lost & Found**: dual feed with photo uploads (up to 3), categories, condition
-3. **Profile Settings tab**: avatar upload, name/contact edit, password change, privacy toggles
-4. **Privacy-respecting contact**: WhatsApp/WeChat buttons hidden on listing detail if seller toggled them off
-5. **Search**: keyword + price range + condition filters
-6. **Bilingual**: EN / ZH toggle
+3. **Mark as Sold/Resolved**: owners see button in ListingCard (Profile) and ListingDetailPage; sold items get badge overlay; contact buttons hidden when sold
+4. **Paginated feed**: `getListingsPage()` with Firestore cursor; 12 items per page; "Load More" button; fallback to client-side filter if index is missing
+5. **Dark mode**: `useDarkMode` hook (localStorage key `xmum-theme` + `prefers-color-scheme` fallback); Sun/Moon toggle in header; full `dark:` variant coverage across all pages
+6. **Profile Settings**: avatar upload, name/contact edit, password change, privacy toggles
+7. **Privacy-respecting contact**: WhatsApp/WeChat hidden if seller toggled off; hidden entirely when listing is sold
+8. **Search**: keyword + price range + condition filters (only shows available listings)
+9. **Bilingual**: EN / ZH toggle
 
 ## Firebase Console setup required
 
 1. **Auth** → enable Email/Password
 2. **Firestore** → create `(default)` database; deploy `firestore.rules`
-3. **Storage** → create bucket; rules must allow:
-   - `listings/{userId}/{allPaths=**}` — authenticated write where `uid == userId`
-   - `avatars/{userId}/{allPaths=**}` — authenticated write where `uid == userId`
-4. **Firestore `users` collection rules**: `allow read: if true; allow write: if request.auth.uid == uid;`
+3. **Storage** → rules: `listings/{userId}/{allPaths=**}` and `avatars/{userId}/{allPaths=**}` — authenticated write where `uid == userId`
+4. **Firestore indexes** → create composite index: `listings` collection on `type ASC + isArchived ASC + status ASC + createdAt DESC` (for paginated feed). Fallback to existing `type+isArchived+createdAt` index with client-side status filter if missing.
 
 ## User preferences
 
@@ -77,6 +78,7 @@ Source of truth: `types.ts` for data shapes, `i18n.ts` for all UI strings.
 
 ## Gotchas
 
-- "Firestore not found" console warnings = Firestore database not yet created in Firebase Console — not a code error
-- Queries use `limit(40)` — add composite indexes for `type+isArchived+createdAt` if you see `failed-precondition` errors
-- `satisfies UserProfile` in auth.ts enforces type-completeness on the signup Firestore write
+- "Firestore not found" console warnings = expected false positive in dev (offline persistence) — not a code error
+- `markAsSold` and `deleteDoc` always race against a 6s resolve-timeout (offline persistence can block indefinitely)
+- `getUserListings` intentionally has NO status filter — owners see all listings including sold in My Profile
+- Dark mode uses class strategy: `useDarkMode` toggles `.dark` on `<html>`; Tailwind v4 `@custom-variant dark (&:is(.dark *))` in `index.css`

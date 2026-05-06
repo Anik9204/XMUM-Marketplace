@@ -2,6 +2,7 @@ import {
   collection,
   addDoc,
   deleteDoc,
+  updateDoc,
   doc,
   getDocs,
   getDoc,
@@ -9,6 +10,8 @@ import {
   where,
   orderBy,
   limit,
+  startAfter,
+  QueryDocumentSnapshot,
 } from "firebase/firestore";
 import {
   ref,
@@ -19,6 +22,8 @@ import {
 import { db, storage } from "./firebase";
 import { Listing, ListingType } from "./types";
 
+const PAGE_SIZE = 12;
+
 export async function uploadPhoto(file: File, userId: string): Promise<string> {
   const ext = file.name.split(".").pop();
   const storageRef = ref(storage, `listings/${userId}/${Date.now()}.${ext}`);
@@ -27,29 +32,81 @@ export async function uploadPhoto(file: File, userId: string): Promise<string> {
 }
 
 export async function createListing(
-  data: Omit<Listing, "id" | "createdAt" | "isArchived">
+  data: Omit<Listing, "id" | "createdAt" | "isArchived" | "status">
 ): Promise<string> {
   const docRef = await addDoc(collection(db, "listings"), {
     ...data,
     createdAt: Date.now(),
     isArchived: false,
+    status: "available",
   });
   return docRef.id;
 }
 
+export async function markAsSold(id: string): Promise<void> {
+  await Promise.race([
+    updateDoc(doc(db, "listings", id), { status: "sold" }),
+    new Promise<void>((resolve) => setTimeout(resolve, 6_000)),
+  ]);
+}
+
+// ── Paginated feed for home page ───────────────────────────────────────────────
+export async function getListingsPage(
+  type: ListingType,
+  cursor?: QueryDocumentSnapshot | null
+): Promise<{ listings: Listing[]; cursor: QueryDocumentSnapshot | null; hasMore: boolean }> {
+  try {
+    const constraints = [
+      where("type", "==", type),
+      where("isArchived", "==", false),
+      where("status", "==", "available"),
+      orderBy("createdAt", "desc"),
+      ...(cursor ? [startAfter(cursor)] : []),
+      limit(PAGE_SIZE + 1),
+    ];
+    const snap = await getDocs(query(collection(db, "listings"), ...constraints));
+    const hasMore = snap.docs.length > PAGE_SIZE;
+    const pageDocs = snap.docs.slice(0, PAGE_SIZE);
+    const listings = pageDocs.map((d) => ({ id: d.id, ...d.data() } as Listing));
+    const nextCursor = pageDocs.length > 0 ? pageDocs[pageDocs.length - 1] : null;
+    return { listings, cursor: nextCursor, hasMore };
+  } catch (err: any) {
+    if (err?.code === "failed-precondition" || err?.message?.includes("index")) {
+      // Fallback: existing type+isArchived+createdAt index, client-side status filter
+      const fallback = [
+        where("type", "==", type),
+        where("isArchived", "==", false),
+        orderBy("createdAt", "desc"),
+        ...(cursor ? [startAfter(cursor)] : []),
+        limit(PAGE_SIZE + 1),
+      ];
+      const snap = await getDocs(query(collection(db, "listings"), ...fallback));
+      const hasMore = snap.docs.length > PAGE_SIZE;
+      const pageDocs = snap.docs.slice(0, PAGE_SIZE);
+      const listings = pageDocs
+        .map((d) => ({ id: d.id, ...d.data() } as Listing))
+        .filter((l) => l.status !== "sold");
+      const nextCursor = pageDocs.length > 0 ? pageDocs[pageDocs.length - 1] : null;
+      return { listings, cursor: nextCursor, hasMore };
+    }
+    throw err;
+  }
+}
+
+// ── Full list for search (used by searchListings) ──────────────────────────────
 export async function getListings(type: ListingType): Promise<Listing[]> {
   try {
     const q = query(
       collection(db, "listings"),
       where("type", "==", type),
       where("isArchived", "==", false),
+      where("status", "==", "available"),
       orderBy("createdAt", "desc"),
       limit(40)
     );
     const snap = await getDocs(q);
     return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Listing));
   } catch (err: any) {
-    // If index not yet built, fall back to unordered query
     if (err?.code === "failed-precondition" || err?.message?.includes("index")) {
       const q2 = query(
         collection(db, "listings"),
@@ -59,7 +116,9 @@ export async function getListings(type: ListingType): Promise<Listing[]> {
       );
       const snap = await getDocs(q2);
       const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Listing));
-      return docs.sort((a, b) => b.createdAt - a.createdAt);
+      return docs
+        .filter((l) => l.status !== "sold")
+        .sort((a, b) => b.createdAt - a.createdAt);
     }
     throw err;
   }
@@ -71,6 +130,7 @@ export async function getListing(id: string): Promise<Listing | null> {
   return { id: snap.id, ...snap.data() } as Listing;
 }
 
+// Owners see ALL their listings including sold (no status filter)
 export async function getUserListings(userId: string): Promise<Listing[]> {
   try {
     const q = query(
@@ -99,8 +159,6 @@ export async function getUserListings(userId: string): Promise<Listing[]> {
 }
 
 export async function deleteListing(listing: Listing): Promise<void> {
-  // Step 1: delete all photos in parallel — each one resolves immediately on
-  // success or "object-not-found"; any other Storage error is re-thrown.
   if (listing.photos.length > 0) {
     await Promise.all(
       listing.photos.map((url) =>
@@ -111,11 +169,6 @@ export async function deleteListing(listing: Listing): Promise<void> {
     );
   }
 
-  // Step 2: delete the Firestore document. With offline persistence the SDK
-  // writes to the local cache first and resolves immediately; on a slow or
-  // cold connection it can hang waiting for server ACK. We race against a
-  // 6-second resolve so the UI always unblocks — the SDK will continue
-  // syncing the delete to the server in the background.
   await Promise.race([
     deleteDoc(doc(db, "listings", listing.id)),
     new Promise<void>((resolve) => setTimeout(resolve, 6_000)),

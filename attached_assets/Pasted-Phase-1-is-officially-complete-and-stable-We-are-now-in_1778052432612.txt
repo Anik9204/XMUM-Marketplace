@@ -1,0 +1,32 @@
+Phase 1 is officially complete and stable. We are now initiating Phase 2: Marketplace Scaling & UX. We need to implement "Mark as Sold", Pagination, and Dark Mode.
+
+Action 1: "Mark as Sold / Resolved" Lifecycle
+
+Database Update: Add a status field to the listing documents (default: 'available').
+
+The UI: On the ListingDetailPage and the ProfilePage (My Listings view), add a "Mark as Sold" button visible only to the listing owner.
+
+The Logic: Clicking this updates the Firestore document to status: 'sold'.
+
+Visuals: If a listing is 'sold', display a prominent "SOLD" badge over the image on the listing cards. On the detail page, disable/hide the contact buttons (WhatsApp, WeChat, Teams) since the item is no longer available.
+
+Feed Filtering: Update the home page and search queries to ONLY fetch listings where("status", "==", "available"). (Owners should still see their sold items in their "My Listings" tab).
+
+Action 2: Firestore Pagination ("Load More")
+
+The Issue: The home page currently fetches all active listings at once, which will drain Firebase reads as the app scales.
+
+The Fix: Update the home page feed query to use limit(12).
+
+The UX: Add a "Load More" button at the bottom of the feed. When clicked, use Firestore's startAfter(lastVisible) cursor to fetch the next 12 listings and append them to the UI. Hide the button if there are no more listings to fetch.
+
+Action 3: Dark Mode Implementation
+
+The Setup: Ensure Tailwind CSS is configured for class based dark mode (darkMode: 'class' in tailwind.config.js).
+
+The Toggle: Add a Sun/Moon toggle icon in the top navigation bar.
+
+The State: Use a library like next-themes (if compatible with Vite/React) or a custom useEffect to save the user's preference to localStorage and apply the dark class to the HTML root. Ensure the background and text colors invert cleanly.
+
+Constraint Checklist:
+Do not change any Firebase Security Rules (the existing update rule allows the owner to change the status). Please execute Action 1 and 2 first, confirm they work, and then implement Action 3.

@@ -1,12 +1,11 @@
 import { useState, useEffect } from "react";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { getUserListings, deleteListing } from "@/lib/listings";
+import { getUserListings, deleteListing, markAsSold } from "@/lib/listings";
 import { getProfile } from "@/lib/userProfile";
 import { Listing } from "@/lib/types";
 import ListingCard from "@/components/ListingCard";
 import AuthModal from "@/components/AuthModal";
-import VerificationBanner from "@/components/VerificationBanner";
 import { User, CheckCircle, AlertCircle, LogOut, CheckCircle2 } from "lucide-react";
 import { logOut } from "@/lib/auth";
 import { useLocation } from "wouter";
@@ -59,8 +58,8 @@ export default function ProfilePage() {
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 text-center">
-        <User size={48} className="text-gray-200 mb-4" />
-        <p className="text-gray-600 font-medium mb-1">{t.loginToPost}</p>
+        <User size={48} className="text-gray-200 dark:text-gray-600 mb-4" />
+        <p className="text-gray-600 dark:text-gray-300 font-medium mb-1">{t.loginToPost}</p>
         <button
           onClick={() => setShowAuth(true)}
           className="mt-3 bg-[#003366] text-white px-5 py-2.5 rounded-xl text-sm font-semibold"
@@ -98,6 +97,18 @@ export default function ProfilePage() {
     }
   };
 
+  const handleMarkAsSold = async (listing: Listing) => {
+    try {
+      await markAsSold(listing.id);
+      setListings((prev) =>
+        prev.map((l) => l.id === listing.id ? { ...l, status: "sold" as const } : l)
+      );
+      setSuccessToast(t.markedAsSold);
+    } catch {
+      // silently ignore — Firestore write will sync in background
+    }
+  };
+
   const handleSignOut = async () => {
     await logOut();
     navigate("/");
@@ -105,7 +116,7 @@ export default function ProfilePage() {
 
   const AvatarDisplay = () =>
     avatarUrl ? (
-      <img src={avatarUrl} alt="avatar" className="w-14 h-14 rounded-full object-cover border-2 border-white shadow" />
+      <img src={avatarUrl} alt="avatar" className="w-14 h-14 rounded-full object-cover border-2 border-white dark:border-gray-700 shadow" />
     ) : (
       <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#003366] to-[#0055aa] flex items-center justify-center text-white font-bold text-xl shadow">
         {(user.email ?? "?")[0].toUpperCase()}
@@ -115,18 +126,17 @@ export default function ProfilePage() {
   return (
     <>
       {successToast && <SuccessToast message={successToast} onDone={() => setSuccessToast("")} />}
-      {!user.emailVerified && <VerificationBanner />}
 
       <div className="max-w-5xl mx-auto px-4 py-5">
         {/* Profile card */}
-        <div className="bg-white rounded-2xl border border-gray-100 p-5 mb-5 flex items-center gap-4">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-5 mb-5 flex items-center gap-4">
           <AvatarDisplay />
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-gray-900 truncate">
+            <p className="font-semibold text-gray-900 dark:text-gray-100 truncate">
               {fullName || user.email?.split("@")[0]}
             </p>
-            <p className="text-xs text-gray-400 truncate">{user.email}</p>
-            <span className={`inline-flex items-center gap-1 text-xs font-medium mt-1 px-2 py-0.5 rounded-full ${user.emailVerified ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"}`}>
+            <p className="text-xs text-gray-400 dark:text-gray-500 truncate">{user.email}</p>
+            <span className={`inline-flex items-center gap-1 text-xs font-medium mt-1 px-2 py-0.5 rounded-full ${user.emailVerified ? "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"}`}>
               {user.emailVerified
                 ? <><CheckCircle size={10} />{t.verifiedBadge}</>
                 : <><AlertCircle size={10} />{t.unverifiedBadge}</>}
@@ -134,7 +144,7 @@ export default function ProfilePage() {
           </div>
           <button
             onClick={handleSignOut}
-            className="flex items-center gap-1.5 text-xs text-red-500 border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors shrink-0"
+            className="flex items-center gap-1.5 text-xs text-red-500 border border-red-200 dark:border-red-800 px-3 py-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors shrink-0"
           >
             <LogOut size={14} />
             {t.signOut}
@@ -145,17 +155,17 @@ export default function ProfilePage() {
         {loading ? (
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             {[...Array(3)].map((_, i) => (
-              <div key={i} className="bg-white rounded-2xl border border-gray-100 overflow-hidden animate-pulse">
-                <div className="h-44 bg-gray-100" />
+              <div key={i} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden animate-pulse">
+                <div className="h-44 bg-gray-100 dark:bg-gray-700" />
                 <div className="p-3 space-y-2">
-                  <div className="h-3 bg-gray-100 rounded w-3/4" />
-                  <div className="h-2 bg-gray-100 rounded w-1/2" />
+                  <div className="h-3 bg-gray-100 dark:bg-gray-700 rounded w-3/4" />
+                  <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded w-1/2" />
                 </div>
               </div>
             ))}
           </div>
         ) : listings.length === 0 ? (
-          <div className="text-center py-12 text-gray-400">
+          <div className="text-center py-12 text-gray-400 dark:text-gray-500">
             <p className="text-sm">{t.noListings}</p>
           </div>
         ) : (
@@ -165,7 +175,9 @@ export default function ProfilePage() {
                 key={l.id}
                 listing={l}
                 showDelete
+                showMarkSold
                 onDelete={() => setDeleteTarget(l)}
+                onMarkSold={() => handleMarkAsSold(l)}
               />
             ))}
           </div>
@@ -175,18 +187,18 @@ export default function ProfilePage() {
       {/* Delete listing confirmation modal */}
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl p-5 w-full max-w-sm">
-            <p className="font-semibold text-gray-800 mb-1">{t.deleteConfirm}</p>
-            <p className="text-xs text-gray-500 mb-4 truncate">{deleteTarget.title}</p>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 w-full max-w-sm">
+            <p className="font-semibold text-gray-800 dark:text-gray-100 mb-1">{t.deleteConfirm}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4 truncate">{deleteTarget.title}</p>
             {deleteError && (
-              <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mb-3">
+              <p className="text-xs text-red-600 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl px-3 py-2 mb-3">
                 {deleteError}
               </p>
             )}
             <div className="flex gap-2">
               <button
                 onClick={() => { setDeleteTarget(null); setDeleteError(""); }}
-                className="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-xl text-sm font-medium"
+                className="flex-1 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 py-2.5 rounded-xl text-sm font-medium"
               >
                 {t.cancel}
               </button>
