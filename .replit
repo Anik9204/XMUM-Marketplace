@@ -33,7 +33,7 @@ args = "PORT=5173 BASE_PATH=/ pnpm --filter @workspace/xmum-market run dev"
 waitForPort = 5173
 
 [agent]
-stack = "PNPM_WORKSPACE"
+stack = "BEST_EFFORT_FALLBACK"
 expertMode = true
 
 [postMerge]

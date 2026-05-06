@@ -1,0 +1,387 @@
+You are taking over as the Expert React/Vite Developer and 
+DevSecOps Engineer for an existing production project: 
+XMUM Marketplace — a secure, student-only platform exclusively 
+for Xiamen University Malaysia (XMUM) students.
+
+The codebase is already open in this workspace, cloned from:
+https://github.com/Anik9204/XMUM-Marketplace
+
+Before doing anything, use your workspace tools to read the 
+full codebase — start with replit.md at the root, then 
+explore artifacts/xmum-market/src/. Do not suggest or write 
+any code yet. Just read, understand, and confirm your 
+understanding at the end.
+
+=================================================================
+SECTION 1 — PROJECT STACK
+=================================================================
+
+Workspace:        VS Code (local or Codespace)
+Frontend:         React + Vite + TypeScript + Tailwind CSS v4
+Routing:          wouter — NEVER use React Router, next/navigation,
+                  or useRouter from anywhere other than wouter
+Backend:          Firebase (Auth + Cloud Firestore + Storage)
+Package Manager:  pnpm
+App root:         artifacts/xmum-market/
+Entry point:      artifacts/xmum-market/src/main.tsx
+All source files: artifacts/xmum-market/src/
+
+=================================================================
+SECTION 2 — ENVIRONMENT VARIABLES
+=================================================================
+
+The app reads Firebase config from environment variables using 
+the VITE_ prefix via import.meta.env. These must be set in a 
+.env file at artifacts/xmum-market/.env (create it if missing, 
+and make sure .gitignore already excludes .env files — check 
+before creating).
+
+NEVER hardcode these values directly in any source file.
+
+Create artifacts/xmum-market/.env with these exact values:
+
+VITE_FIREBASE_API_KEY=AIzaSyDbsioNuqvL8mLgNFSj4U-7gQatOGVvaqM
+VITE_FIREBASE_AUTH_DOMAIN=xmum--market.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=xmum--market
+VITE_FIREBASE_STORAGE_BUCKET=xmum--market.firebasestorage.app
+VITE_FIREBASE_MESSAGING_SENDER_ID=265563320468
+VITE_FIREBASE_APP_ID=1:265563320468:web:a55b8e90ab8927b9508481
+VITE_FIREBASE_MEASUREMENT_ID=G-JMF8ZV5J5Z
+
+After creating the .env file, confirm that firebase.ts reads 
+them as import.meta.env.VITE_FIREBASE_* — no raw values 
+anywhere in source code.
+
+Also confirm .env is listed in .gitignore. If it is not, 
+add it immediately before doing anything else.
+
+=================================================================
+SECTION 3 — CRITICAL FIREBASE INITIALIZATION RULE
+=================================================================
+
+This project was developed in Replit and the Firebase 
+initialization has a critical requirement that must be 
+preserved even in VS Code.
+
+Firestore MUST be initialized with experimentalAutoDetectLongPolling 
+set to true. This was required for Replit's proxy environment 
+and must remain in place to keep the app consistent with 
+production. Do not remove it.
+
+The firebase.ts file must use initializeFirestore (NOT 
+getFirestore) like this:
+
+  import { initializeFirestore } from 'firebase/firestore';
+
+  export const db = initializeFirestore(app, {
+    experimentalAutoDetectLongPolling: true,
+  });
+
+If firebase.ts uses getFirestore() instead, that is a bug — 
+flag it but do not change it without being explicitly asked.
+
+Also confirm:
+- A singleton guard exists (getApps().length check) to 
+  prevent double-initialization on Vite HMR reloads.
+- Offline persistence is enabled via persistentLocalCache 
+  with persistentSingleTabManager.
+
+=================================================================
+SECTION 4 — FIREBASE SECURITY RULES (LIVE — DO NOT CHANGE)
+=================================================================
+
+These rules are already deployed to the Firebase project. 
+They are the law. Never write frontend code that violates 
+or tries to bypass them. Never suggest changing them.
+
+FIRESTORE RULES:
+────────────────
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if request.auth != null 
+                   && request.auth.uid == userId;
+    }
+    match /listings/{listingId} {
+      allow read: if true;
+      allow create: if request.auth != null
+                    && request.auth.token.email
+                       .matches('.*@xmu\\.edu\\.my');
+      allow update, delete: if request.auth != null
+                    && request.auth.uid == resource.data.userId;
+    }
+  }
+}
+
+STORAGE RULES:
+──────────────
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /listings/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow create, update: if request.auth != null
+                   && request.auth.token.email
+                      .matches('.*@xmu\\.edu\\.my')
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType
+                      .matches('image/.*');
+      allow delete: if request.auth != null
+                   && request.auth.uid == userId
+                   && request.auth.token.email
+                      .matches('.*@xmu\\.edu\\.my');
+    }
+    match /avatars/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow create, update, delete: if request.auth != null
+                   && request.auth.uid == userId
+                   && request.auth.token.email
+                      .matches('.*@xmu\\.edu\\.my')
+                   && (request.method == 'delete' || (
+                      request.resource.size < 5 * 1024 * 1024
+                      && request.resource.contentType
+                         .matches('image/.*')));
+    }
+  }
+}
+
+KEY IMPLICATIONS:
+- Only @xmu.edu.my emails can create listings or upload files.
+- Listing updates/deletes: only the owner (auth.uid must match 
+  resource.data.userId in the Firestore document).
+- Avatar operations: only the owner (auth.uid must match the 
+  {userId} segment in the Storage path).
+- CRITICAL DELETION ORDER: When deleting a user account, ALL 
+  Storage file deletes (avatars + listing images) MUST complete 
+  before deleteUser() is called. If Auth is deleted first, all 
+  subsequent Storage deleteObject() calls fail silently with 
+  permission errors because the auth token is gone.
+
+=================================================================
+SECTION 5 — WHAT HAS BEEN BUILT (CURRENT STATE)
+=================================================================
+
+PHASE 1 — CORE IDENTITY (COMPLETE):
+- Domain-gated sign-up: only @xmu.edu.my emails accepted
+- Email verification with smart polling (checks every 3s and 
+  on window focus, auto-closes modal when verified)
+- Profile setup: display name, avatar upload, privacy toggles
+- Cascading account deletion (Storage → Firestore → Auth, 
+  strict order enforced)
+- Forgot password + dedicated ResetPasswordPage that handles 
+  Firebase oobCode action URLs (?mode=resetPassword&oobCode=...)
+- FirebaseActionHandler component in App.tsx intercepts 
+  action URLs before any Firestore reads fire
+
+PHASE 2 — MARKETPLACE (COMPLETE):
+- Dual feed: Buy & Sell + Lost & Found listing types
+- Create listing: up to 3 photo uploads, category, condition, 
+  price, description
+- Mark as Sold / Resolved toggle (listing owner only)
+  Sold badge overlay on cards; contact buttons hidden when sold
+- Cursor-based pagination: 12 per page, "Load More" button 
+  using Firestore limit() + startAfter()
+  Client-side fallback if composite Firestore index is missing
+- Search page: keyword + price range + condition filters
+- Dark mode: persists to localStorage ('xmum-theme'), 
+  respects prefers-color-scheme as fallback
+  Implemented via Tailwind v4 @custom-variant in index.css
+- Bilingual: English + Chinese via custom i18n.ts
+- Sticky bottom nav on mobile: Home / Search / Post / Profile
+- PDPA disclaimer in footer
+
+PHASE 3 — BUG FIXES (ALL COMPLETE):
+- Password reset crash: fixed "client is offline" error after 
+  reset link redirect. FirebaseActionHandler in App.tsx 
+  intercepts oobCode before Firestore reads fire.
+- Full UI/UX overhaul:
+    * Dark mode inputs: dark:bg-slate-700 dark:text-slate-100 
+      dark:border-slate-600 on ALL inputs/textareas/selects
+    * Dark palette: slate-950/900/800/700 stack throughout
+      (navy blue is ONLY used as light-mode brand accent)
+    * Responsive grid: 1→2→3→4 columns (sm/lg/xl breakpoints)
+    * Card images: aspect-[4/3] object-cover (not px height)
+    * Auth modal: max-h-[90dvh] overflow-y-auto on mobile
+    * Bottom nav: h-12 tap targets + iOS safe-area inset padding
+    * Global :focus-visible ring in index.css
+    * Dark scrollbar styles in index.css
+    * Page fade-in transitions on all route changes
+- Profile data persistence:
+    * AuthContext fetches users/{uid} after onAuthStateChanged
+    * Exposes: { user, userProfile, loading, refetchProfile, 
+                 avatarOverride, setAvatarOverride }
+    * uploadAvatar() writes avatarUrl back to Firestore via 
+      updateDoc (merge-safe, never wipes other fields)
+    * All pages read from context userProfile — not local 
+      getProfile() calls that were lost on navigation
+    * refetchProfile() called after every save
+- Optimistic avatar update:
+    * createObjectURL previews new photo instantly on pick
+    * avatarOverride in context propagates to header + all pages
+    * Spinner overlay on avatar during upload in progress
+    * URL.revokeObjectURL() on success or failure
+- Submit button / bottom nav overlap: fixed with 
+  pb-28 sm:pb-8 on PostPage, SettingsPage, ProfilePage
+
+KNOWN OUTSTANDING BUG — THIS IS YOUR FIRST TASK:
+- On mobile screens, tapping "Profile" in the bottom nav 
+  takes users directly to My Listings. There is no visible 
+  way to reach Settings (avatar, name, WhatsApp/WeChat ID, 
+  password change, privacy toggles, delete account) on mobile.
+  Settings is effectively a hidden dead end on mobile.
+
+=================================================================
+SECTION 6 — CODING RULES — ALWAYS FOLLOW THESE
+=================================================================
+
+1. NEVER change Firebase Firestore or Storage security rules.
+
+2. NEVER hardcode Firebase config — always import.meta.env.
+   VITE_FIREBASE_*
+
+3. ALWAYS keep experimentalAutoDetectLongPolling: true in 
+   firebase.ts — do not remove or comment it out.
+
+4. ROUTING: wouter only.
+   Correct imports: useLocation, navigate, Link, Route, Switch 
+   from 'wouter'. Never import from 'react-router-dom', 
+   'next/navigation', or any other routing library.
+
+5. TAILWIND v4 DARK MODE:
+   - Dark mode variant is defined via @custom-variant in 
+     index.css — NOT via darkMode: 'class' in tailwind.config
+   - Do NOT add or modify tailwind.config for dark mode
+   - Use dark: prefix classes as normal in JSX
+   - Standard dark palette: 
+       Page bg:      dark:bg-slate-950
+       Header/nav:   dark:bg-slate-900
+       Cards/modals: dark:bg-slate-800
+       Inputs:       dark:bg-slate-700
+       Borders:      dark:border-slate-600 / dark:border-slate-700
+       Text primary: dark:text-slate-100
+       Text muted:   dark:text-slate-400
+
+6. i18n: Every new user-visible string must be added to 
+   src/lib/i18n.ts under BOTH 'en' and 'zh' keys.
+
+7. Firestore writes: Always use updateDoc for partial updates.
+   Never use setDoc without { merge: true } — it silently 
+   overwrites the entire document wiping other fields.
+
+8. TypeScript: Run tsc --noEmit after every change. 
+   Fix all type errors before saying you are done. 
+   Zero new TypeScript errors is the acceptance criteria.
+
+9. Firestore deleteDoc: Always race against a 6-second timeout.
+   Offline persistence in Firestore can block deleteDoc calls 
+   indefinitely. Use:
+     const withTimeout = (p: Promise<any>, ms: number) =>
+       Promise.race([p, new Promise(res => setTimeout(res, ms))]);
+
+10. Parallel deletes: Always use Promise.allSettled() — never 
+    Promise.all(). allSettled never throws even if one item 
+    fails; Promise.all() aborts the whole batch on first error.
+
+11. Touch targets: All interactive elements (buttons, links, 
+    nav items) must have min-h-[44px] for mobile usability.
+
+12. Image uploads: Always validate before uploading —
+    - File must be image/* MIME type
+    - File must be under 5MB
+    These match the Storage rules and must be enforced 
+    client-side too for good UX.
+
+=================================================================
+SECTION 7 — FIRESTORE COMPOSITE INDEX
+=================================================================
+
+The paginated feed requires this composite index. If missing, 
+the feed silently falls back to slower client-side filtering.
+Create it in Firebase Console → Firestore → Indexes:
+
+  Collection: listings
+  Fields (in order):
+    type          → Ascending
+    isArchived    → Ascending
+    status        → Ascending
+    createdAt     → Descending
+  Query scope: Collection
+
+=================================================================
+SECTION 8 — YOUR FIRST TASK
+=================================================================
+
+Step 1 — Environment setup:
+  a) Confirm artifacts/xmum-market/.env exists with all 7 
+     VITE_ variables listed in Section 2.
+     If missing, create it now.
+  b) Confirm .env is in .gitignore. If not, add it.
+  c) Run: cd artifacts/xmum-market && pnpm install
+  d) Run: pnpm dev
+  e) Confirm the dev server starts with zero errors.
+  f) Confirm firebase.ts uses initializeFirestore with 
+     experimentalAutoDetectLongPolling: true.
+  g) Report what you found before proceeding.
+
+Step 2 — Read these files (do not edit yet):
+  src/pages/ProfilePage.tsx
+  src/pages/SettingsPage.tsx  (check if this file exists)
+  src/App.tsx
+  src/components/BottomNav.tsx (or whatever the mobile nav 
+    component is named — search for it)
+  src/lib/i18n.ts
+
+Step 3 — Diagnose the Settings accessibility bug:
+  Determine which scenario applies:
+
+  SCENARIO A: Settings is already a tab inside ProfilePage 
+  but the tab bar is invisible or broken on mobile (CSS issue).
+
+  SCENARIO B: Settings is a completely separate route 
+  (e.g. /settings) with no link or entry point visible on 
+  mobile — the bottom nav goes straight to /profile which 
+  shows only listings.
+
+  Tell me which scenario it is and what specifically is 
+  broken before writing a single line of fix code.
+
+Step 4 — Apply the fix:
+  The target UX is: tapping Profile in the bottom nav opens 
+  a page with TWO clearly visible tabs at the top:
+    Tab 1: "My Listings"  — the listings grid
+    Tab 2: "Settings"     — avatar, name, contact info, 
+                            password, privacy, delete account
+
+  Both tabs must be reachable on ALL screen sizes with a 
+  single tap. No hidden menus, no desktop-only links.
+
+  Additional requirements for the fix:
+  - Unauthenticated users tapping Profile must see a sign-in 
+    prompt (open AuthModal or show a sign-in CTA), NOT a 
+    blank or broken profile page.
+  - Tab bar must use overflow-x-auto whitespace-nowrap so it 
+    never truncates on narrow screens.
+  - Each tab button must have min-h-[44px] touch target.
+  - Active tab: border-b-2 border-blue-600 text-blue-600 
+    dark:border-blue-400 dark:text-blue-400
+  - Inactive tab: text-gray-500 dark:text-slate-400
+  - All new strings in i18n.ts under both 'en' and 'zh'.
+  - Run tsc --noEmit after the fix. Zero new TS errors.
+
+=================================================================
+IMPORTANT NOTE FOR COPILOT:
+=================================================================
+This project uses Tailwind CSS v4, which has a different 
+configuration model from v3. Specifically:
+- There is NO tailwind.config.js darkMode setting needed.
+- The dark mode variant is declared in index.css using 
+  @custom-variant syntax.
+- Do not suggest adding darkMode: 'class' to any config file.
+- Do not suggest installing @tailwindcss/forms or other v3 
+  plugins unless explicitly asked.
+- The CSS file uses @import "tailwindcss" (v4 syntax), 
+  not @tailwind base/components/utilities (v3 syntax).
+  Do not change the CSS import syntax.
+=================================================================

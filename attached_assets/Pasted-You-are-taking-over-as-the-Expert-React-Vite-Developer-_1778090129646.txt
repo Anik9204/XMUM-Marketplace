@@ -1,0 +1,297 @@
+You are taking over as the Expert React/Vite Developer and 
+DevSecOps Engineer for an existing production project: 
+XMUM Marketplace — a secure, student-only platform exclusively 
+for Xiamen University Malaysia (XMUM) students.
+
+The codebase has been imported from this GitHub repository:
+https://github.com/Anik9204/XMUM-Marketplace
+
+Read the full codebase (especially replit.md) before doing 
+anything. Do not write any code yet. Just read, set up, and 
+confirm everything is working.
+
+=================================================================
+SECTION 1 — PROJECT STACK
+=================================================================
+
+Workspace:        Replit (cloud container — NOT localhost)
+Frontend:         React + Vite + TypeScript + Tailwind CSS v4
+Routing:          wouter (NEVER use next/navigation or useRouter)
+Backend:          Firebase (Auth + Cloud Firestore + Storage)
+Package Manager:  pnpm
+App directory:    artifacts/xmum-market/
+
+=================================================================
+SECTION 2 — REPLIT SECRETS (Environment Variables)
+=================================================================
+
+The app uses Replit Secrets with the VITE_ prefix. You MUST 
+set up the following secrets in the Replit Secrets panel 
+(Tools → Secrets) before running the app. Never hardcode 
+these values in source files.
+
+Secret key name              → Value
+─────────────────────────────────────────────────────────────
+VITE_FIREBASE_API_KEY        → AIzaSyDbsioNuqvL8mLgNFSj4U-7gQatOGVvaqM
+VITE_FIREBASE_AUTH_DOMAIN    → xmum--market.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID     → xmum--market
+VITE_FIREBASE_STORAGE_BUCKET → xmum--market.firebasestorage.app
+VITE_FIREBASE_MESSAGING_SENDER_ID → 265563320468
+VITE_FIREBASE_APP_ID         → 1:265563320468:web:a55b8e90ab8927b9508481
+VITE_FIREBASE_MEASUREMENT_ID → G-JMF8ZV5J5Z
+
+After adding all secrets, confirm that firebase.ts (inside 
+artifacts/xmum-market/src/lib/firebase.ts or equivalent) 
+reads them as import.meta.env.VITE_FIREBASE_* — no raw 
+values in source code.
+
+=================================================================
+SECTION 3 — CRITICAL FIREBASE INITIALIZATION RULE
+=================================================================
+
+Because this app runs inside Replit's cloud proxy environment, 
+Firestore MUST be initialized with long-polling. The firebase.ts 
+file must use initializeFirestore (NOT getFirestore) with this 
+exact option:
+
+  import { initializeFirestore } from 'firebase/firestore';
+
+  export const db = initializeFirestore(app, {
+    experimentalAutoDetectLongPolling: true,
+  });
+
+If firebase.ts uses getFirestore() instead, replace it with 
+the above. This is non-negotiable — without it, ALL Firestore 
+reads and writes will silently fail or hang in Replit.
+
+Also confirm:
+- A singleton guard is in place (getApps().length check) to 
+  prevent double-initialization on Vite HMR hot reloads.
+- Offline persistence is enabled using persistentLocalCache 
+  with persistentSingleTabManager.
+
+=================================================================
+SECTION 4 — FIREBASE SECURITY RULES (ALREADY DEPLOYED — DO NOT CHANGE)
+=================================================================
+
+These rules are live on the Firebase server. Never suggest 
+frontend code that bypasses them, and never attempt to 
+modify them.
+
+FIRESTORE RULES:
+───────────────
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if request.auth != null 
+                   && request.auth.uid == userId;
+    }
+    match /listings/{listingId} {
+      allow read: if true;
+      allow create: if request.auth != null
+                    && request.auth.token.email
+                       .matches('.*@xmu\\.edu\\.my');
+      allow update, delete: if request.auth != null
+                    && request.auth.uid == resource.data.userId;
+    }
+  }
+}
+
+STORAGE RULES:
+──────────────
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /listings/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow create, update: if request.auth != null
+                   && request.auth.token.email
+                      .matches('.*@xmu\\.edu\\.my')
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType
+                      .matches('image/.*');
+      allow delete: if request.auth != null
+                   && request.auth.uid == userId
+                   && request.auth.token.email
+                      .matches('.*@xmu\\.edu\\.my');
+    }
+    match /avatars/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow create, update, delete: if request.auth != null
+                   && request.auth.uid == userId
+                   && request.auth.token.email
+                      .matches('.*@xmu\\.edu\\.my')
+                   && (request.method == 'delete' || (
+                      request.resource.size < 5 * 1024 * 1024
+                      && request.resource.contentType
+                         .matches('image/.*')));
+    }
+  }
+}
+
+KEY IMPLICATIONS OF THESE RULES:
+- Only @xmu.edu.my email addresses can create listings or 
+  upload files. The frontend must never try to bypass this.
+- Listing updates and deletes are owner-only (auth.uid must 
+  match resource.data.userId).
+- Avatar deletes and uploads are owner-only (auth.uid must 
+  match the {userId} path segment).
+- ALL Storage deletes for a user's files MUST happen while 
+  the user is still authenticated — before deleteUser() is 
+  called. If deleteUser() fires first, all subsequent 
+  deleteObject() calls will fail with permission errors.
+
+=================================================================
+SECTION 5 — WHAT HAS BEEN BUILT (CURRENT STATE)
+=================================================================
+
+PHASE 1 — CORE IDENTITY (COMPLETE):
+- Domain-gated sign-up: only @xmu.edu.my emails accepted
+- Email verification with smart polling (checks every 3s + 
+  on window focus, auto-closes modal when verified)
+- Profile setup: display name, avatar upload, privacy toggles
+- Cascading account deletion (Storage → Firestore → Auth, 
+  in that strict order)
+- Forgot password flow with dedicated ResetPasswordPage that 
+  handles Firebase oobCode action URLs
+- Firebase action URL interceptor in App.tsx that catches 
+  ?mode=resetPassword&oobCode=... and redirects cleanly
+
+PHASE 2 — MARKETPLACE (COMPLETE):
+- Dual feed: Buy & Sell listings + Lost & Found listings
+- Create listing: up to 3 photo uploads, category, condition, 
+  price, description fields
+- Mark as Sold / Mark as Resolved toggle (owner only)
+  Sold listings show a badge overlay; contact buttons hidden
+- Cursor-based feed pagination: 12 items per page, 
+  "Load More" button using Firestore limit() + startAfter()
+  Fallback to client-side filtering if composite index missing
+- Keyword search + price range + condition filters (SearchPage)
+- Dark mode: sun/moon toggle, persists to localStorage key 
+  'xmum-theme', uses prefers-color-scheme as fallback
+  Tailwind v4 dark mode via @custom-variant in index.css
+- Bilingual UI: English and Chinese via custom i18n.ts
+- Sticky bottom nav on mobile (Home / Search / Post / Profile)
+- PDPA disclaimer in footer
+
+PHASE 3 — BUG FIXES APPLIED (ALL COMPLETE):
+- Password reset crash fix: app no longer crashes with 
+  "client is offline" after clicking a password reset email 
+  link. FirebaseActionHandler in App.tsx intercepts the 
+  oobCode before Firestore reads fire.
+- UI/UX overhaul:
+    * Dark mode input visibility: all inputs use 
+      dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600
+    * Dark mode palette: slate-950/900/800/700 stack (not navy)
+    * Responsive grid: 1→2→3→4 columns across breakpoints
+    * Card images: aspect-[4/3] object-cover (not fixed height)
+    * Auth modal: max-h-[90dvh] overflow-y-auto on mobile
+    * Bottom nav: h-12 tap targets + iOS safe area inset
+    * Focus rings: global :focus-visible in index.css
+    * Dark scrollbar styles in index.css
+    * Page fade-in transitions
+- Profile data persistence fix:
+    * AuthContext now fetches users/{uid} from Firestore after 
+      onAuthStateChanged and exposes { user, userProfile, 
+      loading, refetchProfile, avatarOverride, setAvatarOverride }
+    * uploadAvatar() writes avatarUrl back to Firestore using 
+      updateDoc (never setDoc — never overwrites other fields)
+    * SettingsPage/ProfilePage/PostPage all read from context 
+      userProfile instead of local getProfile() calls
+    * refetchProfile() called after every save so all 
+      consumers update instantly
+- Optimistic avatar update:
+    * createObjectURL shows new photo instantly on file pick
+    * avatarOverride in AuthContext propagates preview to 
+      header and all pages during upload
+    * Spinner overlay on avatar during upload
+    * URL.revokeObjectURL() called after upload completes
+- Submit button obscured by bottom nav: fixed with 
+  pb-28 sm:pb-8 on PostPage, SettingsPage, ProfilePage
+
+KNOWN OUTSTANDING BUG (your first task):
+- On mobile, tapping "Profile" in the bottom nav takes users 
+  directly to "My Listings" with no visible path to Settings 
+  (avatar, name, contact info, password, account deletion).
+  Settings appears to be unreachable on mobile screens.
+
+=================================================================
+SECTION 6 — STRICT RULES YOU MUST ALWAYS FOLLOW
+=================================================================
+
+1. NEVER change Firebase security rules (Firestore or Storage)
+2. NEVER hardcode Firebase config values — always use 
+   import.meta.env.VITE_FIREBASE_* 
+3. ALWAYS keep experimentalAutoDetectLongPolling: true in 
+   firebase.ts — removing it breaks ALL Firestore in Replit
+4. ALWAYS use wouter for navigation (useLocation, navigate, 
+   Link, Route, Switch from 'wouter') — never React Router, 
+   never next/navigation
+5. ALWAYS use Tailwind v4 patterns:
+   - Dark mode via @custom-variant in index.css ONLY
+   - Do NOT add darkMode: 'class' to tailwind.config
+   - Dark classes: dark:bg-slate-900/800/700, dark:text-slate-100
+6. ALWAYS add new UI strings to i18n.ts in BOTH 'en' and 'zh'
+7. ALWAYS use updateDoc (never setDoc without merge:true) 
+   when writing partial updates to Firestore documents
+8. ALWAYS run TypeScript typecheck after changes and fix all 
+   errors before reporting done — zero new TS errors required
+9. For Firestore deleteDoc calls, always wrap in a 6-second 
+   race-timeout — offline persistence can block indefinitely:
+     const withTimeout = (p: Promise<any>, ms: number) =>
+       Promise.race([p, 
+         new Promise(res => setTimeout(res, ms))]);
+10. Use Promise.allSettled() for parallel deletes — NEVER 
+    Promise.all() which aborts on first error
+
+=================================================================
+SECTION 7 — FIRESTORE INDEX REQUIRED
+=================================================================
+
+The paginated feed query requires a composite index in 
+Firebase Console. If it is not present, the feed silently 
+falls back to client-side filtering (slower, more reads).
+
+Index to create in Firebase Console → Firestore → Indexes:
+  Collection: listings
+  Fields:     type (Ascending) 
+              isArchived (Ascending) 
+              status (Ascending) 
+              createdAt (Descending)
+  Query scope: Collection
+
+=================================================================
+SECTION 8 — YOUR FIRST TASK
+=================================================================
+
+Once you have confirmed the dev server runs cleanly with zero 
+errors, your first task is to fix this bug:
+
+BUG: On mobile, the "Profile" tab in the bottom nav takes 
+users directly to the My Listings view. There is no visible 
+way to reach Settings (avatar upload, name, WhatsApp/WeChat, 
+password change, privacy toggles, delete account) on a 
+mobile screen.
+
+Before writing any code, read:
+  - src/pages/ProfilePage.tsx
+  - src/pages/SettingsPage.tsx (if it exists as a separate page)
+  - src/App.tsx (all registered routes)
+  - src/components/BottomNav.tsx (mobile nav component)
+  - src/lib/i18n.ts
+
+Diagnose whether Settings is:
+  A) A tab inside ProfilePage that is broken/hidden on mobile, OR
+  B) A completely separate route (/settings) with no mobile 
+     entry point
+
+Then apply the correct fix. The preferred solution is to have 
+ProfilePage show two clearly visible tabs — "My Listings" and 
+"Settings" — both reachable with one tap from the bottom nav 
+Profile icon, on all screen sizes.
+
+Do not start the fix until you confirm the dev server is 
+running cleanly and all secrets are set.
+=================================================================
