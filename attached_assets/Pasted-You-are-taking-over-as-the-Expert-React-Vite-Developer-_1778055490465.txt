@@ -1,0 +1,102 @@
+You are taking over as the Expert React/Vite Developer and DevSecOps Engineer for this repository. This project is XMUM Marketplace, a secure, student-only platform exclusively for Xiamen University Malaysia students. I have migrated this codebase from a previous workspace.
+
+Project Environment & Stack:
+
+Workspace: Replit (You are operating inside a Replit container. Do not assume a local localhost environment).
+
+Frontend: React, Vite, TypeScript, Tailwind CSS, wouter.
+
+Backend: Firebase (Authentication, Cloud Firestore, Cloud Storage).
+
+Environment Variables: I have already set up the Replit Secrets using the VITE_ prefix (e.g., VITE_FIREBASE_API_KEY, VITE_FIREBASE_PROJECT_ID).
+
+Firebase Configuration SDK:
+Here is the base initialization code for the project that was brought over:
+
+JavaScript
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyDbsioNuqvL8mLgNFSj4U-7gQatOGVvaqM",
+  authDomain: "xmum--market.firebaseapp.com",
+  projectId: "xmum--market",
+  storageBucket: "xmum--market.firebasestorage.app",
+  messagingSenderId: "265563320468",
+  appId: "1:265563320468:web:a55b8e90ab8927b9508481",
+  measurementId: "G-JMF8ZV5J5Z"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app); 
+Crucial Architecture Note: While the keys are listed above for your context, you MUST ensure the actual codebase maps these to the Replit environment variables (e.g., import.meta.env.VITE_FIREBASE_API_KEY) to keep secrets out of source control. Furthermore, because we are in Replit, you must initialize Firestore with experimentalAutoDetectLongPolling: true to bypass Replit's proxy WebSocket blocking.
+
+Current Codebase State:
+We have successfully completed Phase 1 (Core Identity) and Phase 2 (Marketplace Scaling). The codebase currently includes:
+
+Strict Auth: Domain-gated signups (@xmu.edu.my), smart-polling email verification, and resilient cascading account deletion.
+
+Phase 2 Features: "Mark as Sold/Resolved" lifecycle routing, cursor-based pagination ("Load More"), and a Tailwind class-based Dark Mode toggle.
+
+DevSecOps Architecture (Strict Rules):
+You MUST adhere to the backend security rules currently deployed to my Firebase servers. Do NOT suggest frontend code that violates these constraints, and do NOT attempt to bypass them.
+
+Firestore Rules:
+
+JavaScript
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    match /listings/{listingId} {
+      allow read: if true;
+      allow create: if request.auth != null
+                     && request.auth.token.email.matches('.*@xmu\\.edu\\.my');
+      allow update, delete: if request.auth != null
+                             && request.auth.uid == resource.data.userId;
+    }
+  }
+}
+Storage Rules:
+
+JavaScript
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /listings/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow create, update: if request.auth != null
+                   && request.auth.token.email.matches('.*@xmu\\.edu\\.my')
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null
+                   && request.auth.uid == userId
+                   && request.auth.token.email.matches('.*@xmu\\.edu\\.my');
+    }
+    match /avatars/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow create, update, delete: if request.auth != null 
+                   && request.auth.uid == userId
+                   && request.auth.token.email.matches('.*@xmu\\.edu\\.my')
+                   && (request.method == 'delete' || (request.resource.size < 5 * 1024 * 1024 && request.resource.contentType.matches('image/.*')));
+    }
+  }
+}
+Your Immediate Task:
+
+Read the codebase to understand the current architecture and ensure the firebase.ts (or equivalent) file is correctly mapped to our environment variables and using long-polling.
+
+Start the Vite development server and confirm it runs cleanly.
+
+Acknowledge that you understand the DevSecOps rules above.
+
+Tell me when you are ready to receive my list of bugs from the Phase 2 deployment. Do not write any new features yet
