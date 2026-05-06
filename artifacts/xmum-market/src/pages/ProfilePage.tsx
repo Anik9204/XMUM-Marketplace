@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { getUserListings, deleteListing, markAsSold } from "@/lib/listings";
-import { getProfile } from "@/lib/userProfile";
 import { Listing } from "@/lib/types";
 import ListingCard from "@/components/ListingCard";
 import AuthModal from "@/components/AuthModal";
@@ -27,7 +26,9 @@ function SuccessToast({ message, onDone }: { message: string; onDone: () => void
 
 export default function ProfilePage() {
   const { t } = useLang();
-  const { user } = useAuth();
+  // userProfile comes from shared context — populated by AuthContext on auth state change.
+  // Reading it here means avatar/name survive tab navigation without additional fetches.
+  const { user, userProfile } = useAuth();
   const [, navigate] = useLocation();
 
   const [showAuth, setShowAuth] = useState(false);
@@ -37,22 +38,11 @@ export default function ProfilePage() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   const [successToast, setSuccessToast] = useState("");
-  const [avatarUrl, setAvatarUrl] = useState("");
-  const [fullName, setFullName] = useState("");
 
   useEffect(() => {
     if (!user) return;
     setLoading(true);
     getUserListings(user.uid).then(setListings).finally(() => setLoading(false));
-  }, [user]);
-
-  useEffect(() => {
-    if (!user) return;
-    getProfile(user.uid).then((p) => {
-      if (!p) return;
-      setFullName(p.fullName ?? "");
-      setAvatarUrl(p.avatarUrl ?? "");
-    }).catch(() => {});
   }, [user]);
 
   if (!user) {
@@ -114,6 +104,10 @@ export default function ProfilePage() {
     navigate("/");
   };
 
+  // Read avatar and name from shared userProfile context (survives tab navigation)
+  const avatarUrl = userProfile?.avatarUrl ?? "";
+  const displayName = userProfile?.fullName || user.email?.split("@")[0] || "";
+
   const AvatarDisplay = () =>
     avatarUrl ? (
       <img src={avatarUrl} alt="avatar" className="w-14 h-14 rounded-full object-cover border-2 border-white dark:border-slate-700 shadow" />
@@ -127,14 +121,13 @@ export default function ProfilePage() {
     <>
       {successToast && <SuccessToast message={successToast} onDone={() => setSuccessToast("")} />}
 
-      <div className="max-w-5xl mx-auto px-4 py-5 animate-in fade-in duration-200">
+      {/* pb-24 clears mobile bottom nav; resets on sm+ */}
+      <div className="max-w-5xl mx-auto px-4 py-5 pb-24 sm:pb-8 animate-in fade-in duration-200">
         {/* Profile card */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-5 mb-5 flex items-center gap-4">
           <AvatarDisplay />
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-gray-900 dark:text-slate-100 truncate">
-              {fullName || user.email?.split("@")[0]}
-            </p>
+            <p className="font-semibold text-gray-900 dark:text-slate-100 truncate">{displayName}</p>
             <p className="text-xs text-gray-400 dark:text-slate-500 truncate">{user.email}</p>
             <span className={`inline-flex items-center gap-1 text-xs font-medium mt-1 px-2 py-0.5 rounded-full ${user.emailVerified ? "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"}`}>
               {user.emailVerified

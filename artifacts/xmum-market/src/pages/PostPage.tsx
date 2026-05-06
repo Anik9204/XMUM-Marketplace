@@ -3,7 +3,6 @@ import { useLocation } from "wouter";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { uploadPhoto, createListing } from "@/lib/listings";
-import { getProfile } from "@/lib/userProfile";
 import { auth } from "@/lib/firebase";
 import { ListingType, Condition } from "@/lib/types";
 import AuthModal from "@/components/AuthModal";
@@ -41,7 +40,8 @@ function SuccessToast({ message, onDone }: { message: string; onDone: () => void
 
 export default function PostPage() {
   const { t } = useLang();
-  const { user } = useAuth();
+  // userProfile from context — pre-populated by AuthContext, survives navigation
+  const { user, userProfile } = useAuth();
   const [, navigate] = useLocation();
 
   const [type, setType] = useState<ListingType>("buy-sell");
@@ -61,20 +61,17 @@ export default function PostPage() {
   const [showAuth, setShowAuth] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Pre-fill contact info from shared context userProfile (no extra Firestore fetch needed)
+  useEffect(() => {
+    if (!userProfile) return;
+    if (userProfile.whatsapp && !whatsapp) setWhatsapp(userProfile.whatsapp);
+    if (userProfile.wechat && !wechat) setWechat(userProfile.wechat);
+  }, [userProfile]);
+
+  // Pre-fill MS Teams email once user is available
   useEffect(() => {
     if (user?.email && !teams) setTeams(user.email);
   }, [user?.email]);
-
-  useEffect(() => {
-    if (!user?.uid) return;
-    getProfile(user.uid)
-      .then((p) => {
-        if (!p) return;
-        if (p.whatsapp && !whatsapp) setWhatsapp(p.whatsapp);
-        if (p.wechat && !wechat) setWechat(p.wechat);
-      })
-      .catch((err) => console.warn("[PostPage] Profile fetch failed:", err));
-  }, [user?.uid]);
 
   if (!user) {
     return (
@@ -183,7 +180,9 @@ export default function PostPage() {
   };
 
   return (
-    <div className="max-w-lg mx-auto px-4 py-5 animate-in fade-in duration-200">
+    // pb-28 ensures the submit button clears the 48px mobile bottom nav with breathing room.
+    // sm:pb-8 resets it on tablet/desktop where the bottom nav is not shown.
+    <div className="max-w-lg mx-auto px-4 py-5 pb-28 sm:pb-8 animate-in fade-in duration-200">
       {toast && <SuccessToast message={toast} onDone={() => navigate("/profile")} />}
 
       <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-4">{t.postItem}</h1>
@@ -319,10 +318,11 @@ export default function PostPage() {
           </div>
         )}
 
+        {/* mb-6 ensures the button doesn't sit at the very bottom edge on small screens */}
         <button
           type="submit"
           disabled={loading || !title}
-          className="w-full sticky bottom-4 bg-[#003366] dark:bg-blue-600 text-white rounded-xl py-3 min-h-[48px] text-sm font-semibold hover:bg-[#002244] dark:hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-lg"
+          className="w-full mb-6 bg-[#003366] dark:bg-blue-600 text-white rounded-xl py-3 min-h-[48px] text-sm font-semibold hover:bg-[#002244] dark:hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-lg"
         >
           {loading ? (
             <span className="flex items-center justify-center gap-2">

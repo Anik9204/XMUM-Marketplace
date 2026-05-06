@@ -2,13 +2,11 @@ import { useState, useEffect, useRef } from "react";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import {
-  getProfile,
   updateProfile,
   uploadAvatar,
   changePassword as doChangePassword,
   deleteAccount,
 } from "@/lib/userProfile";
-import { UserProfile } from "@/lib/types";
 import AuthModal from "@/components/AuthModal";
 import VerificationBanner from "@/components/VerificationBanner";
 import { User, Camera, CheckCircle2, Trash2 } from "lucide-react";
@@ -68,14 +66,12 @@ function SkeletonCard({ rows = 3 }: { rows?: number }) {
 
 export default function SettingsPage() {
   const { t } = useLang();
-  const { user } = useAuth();
+  const { user, userProfile, loading: authLoading, refetchProfile } = useAuth();
   const [, navigate] = useLocation();
 
   const [showAuth, setShowAuth] = useState(false);
   const [successToast, setSuccessToast] = useState("");
-  const [profileLoading, setProfileLoading] = useState(true);
 
-  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [fullName, setFullName] = useState("");
   const [settingsWhatsapp, setSettingsWhatsapp] = useState("");
   const [settingsWechat, setSettingsWechat] = useState("");
@@ -104,24 +100,18 @@ export default function SettingsPage() {
   const [deleteError, setDeleteError] = useState("");
   const deletingAccountRef = useRef(false);
 
+  // Populate form state from context userProfile whenever it changes.
+  // This handles initial load, tab navigation back, and post-save refresh.
   useEffect(() => {
-    if (!user) return;
-    setProfileLoading(true);
-    getProfile(user.uid)
-      .then((p) => {
-        if (!p) return;
-        setProfile(p);
-        setFullName(p.fullName ?? "");
-        setSettingsWhatsapp(p.whatsapp ?? "");
-        setSettingsWechat(p.wechat ?? "");
-        setShowEmail(p.showEmail ?? true);
-        setShowWhatsApp(p.showWhatsApp ?? true);
-        setShowWeChat(p.showWeChat ?? true);
-        setAvatarUrl(p.avatarUrl ?? "");
-      })
-      .catch(() => {})
-      .finally(() => setProfileLoading(false));
-  }, [user]);
+    if (!userProfile) return;
+    setFullName(userProfile.fullName ?? "");
+    setSettingsWhatsapp(userProfile.whatsapp ?? "");
+    setSettingsWechat(userProfile.wechat ?? "");
+    setAvatarUrl(userProfile.avatarUrl ?? "");
+    setShowEmail(userProfile.showEmail ?? true);
+    setShowWhatsApp(userProfile.showWhatsApp ?? true);
+    setShowWeChat(userProfile.showWeChat ?? true);
+  }, [userProfile]);
 
   if (!user) {
     if (deletingAccountRef.current) {
@@ -144,7 +134,7 @@ export default function SettingsPage() {
     );
   }
 
-  if (profileLoading) {
+  if (authLoading) {
     return (
       <div className="max-w-5xl mx-auto px-4 py-5">
         <div className="h-5 bg-gray-200 dark:bg-slate-700 rounded w-40 mb-5 animate-pulse" />
@@ -178,21 +168,20 @@ export default function SettingsPage() {
     setAvatarUrl(URL.createObjectURL(file));
     setUploadingAvatar(true);
     try {
+      // uploadAvatar now writes avatarUrl to Firestore internally (Fix E)
       const url = await uploadAvatar(file, user.uid);
       setAvatarUrl(url);
-      setUploadingAvatar(false);
-      Promise.race([
-        updateProfile(user.uid, { avatarUrl: url }),
-        new Promise<void>((resolve) => setTimeout(resolve, 8_000)),
-      ]).catch(() => {});
+      // Refresh context so all consumers (header, profile page) see new avatar
+      await refetchProfile();
     } catch (err: any) {
       setAvatarUrl(previousUrl);
-      setUploadingAvatar(false);
       const code: string = err?.code ?? "";
       if (code === "storage/unauthorized" || code === "permission-denied") setAvatarError("Upload blocked. Ensure your file is an image under 5 MB and you are signed in with your XMUM email.");
       else if (code === "storage/quota-exceeded") setAvatarError("Storage quota exceeded. Please contact support.");
       else if (code === "storage/retry-limit-exceeded" || code === "storage/canceled") setAvatarError("Upload failed due to a connection issue. Please try again.");
       else setAvatarError("Upload failed. Please try again.");
+    } finally {
+      setUploadingAvatar(false);
     }
   };
 
@@ -206,10 +195,14 @@ export default function SettingsPage() {
         updateProfile(user.uid, { fullName: fullName.trim(), whatsapp: settingsWhatsapp.trim(), wechat: settingsWechat.trim() }),
         new Promise<void>((_, reject) => setTimeout(() => reject(new Error("timeout")), 8_000)),
       ]);
+      // Refresh context so all consumers see updated name immediately
+      await refetchProfile();
       setProfileSaved(true);
       setTimeout(() => setProfileSaved(false), 3000);
     } catch (err: any) {
       if (err?.message === "timeout") {
+        // Firestore will sync when back online — optimistically show success
+        await refetchProfile().catch(() => {});
         setProfileSaved(true);
         setTimeout(() => setProfileSaved(false), 3000);
       } else {
@@ -226,6 +219,7 @@ export default function SettingsPage() {
     else setShowWeChat(value);
     try {
       await updateProfile(user.uid, { [field]: value });
+      await refetchProfile().catch(() => {});
     } catch {
       if (field === "showEmail") setShowEmail(!value);
       else if (field === "showWhatsApp") setShowWhatsApp(!value);
@@ -285,7 +279,8 @@ export default function SettingsPage() {
       {successToast && <SuccessToast message={successToast} onDone={() => setSuccessToast("")} />}
       {!user.emailVerified && <VerificationBanner />}
 
-      <div className="max-w-5xl mx-auto px-4 py-5 animate-in fade-in duration-200">
+      {/* pb-24 clears the 48px mobile bottom nav + breathing room; resets on sm+ */}
+      <div className="max-w-5xl mx-auto px-4 py-5 pb-24 sm:pb-8 animate-in fade-in duration-200">
         <h2 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-5">{t.accountSettings}</h2>
 
         <div className="space-y-4 max-w-lg">

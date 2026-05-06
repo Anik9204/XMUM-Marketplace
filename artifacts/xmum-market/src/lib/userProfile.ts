@@ -45,7 +45,11 @@ export async function uploadAvatar(file: File, uid: string): Promise<string> {
   const ext = file.name.split(".").pop() ?? "jpg";
   const avatarRef = ref(storage, `avatars/${uid}/avatar.${ext}`);
   await uploadBytes(avatarRef, file);
-  return getDownloadURL(avatarRef);
+  const url = await getDownloadURL(avatarRef);
+  // Write the download URL back to Firestore immediately using updateDoc
+  // (merge-safe — does NOT overwrite other fields like whatsapp, wechat, etc.)
+  await updateDoc(doc(db, "users", uid), { avatarUrl: url });
+  return url;
 }
 
 export async function changePassword(

@@ -1,0 +1,143 @@
+Read every file mentioned before writing any code. Clone or re-read 
+the full repo if needed. Fix both bugs described below precisely.
+Do NOT change Firebase security rules. Do NOT change firebase.ts 
+config or env var mappings.
+
+=================================================================
+BUG 1 — PROFILE DATA (avatar, WhatsApp, WeChat) DISAPPEARS ON 
+REFRESH OR TAB NAVIGATION
+=================================================================
+
+SYMPTOMS:
+- User updates avatar, WhatsApp number, or WeChat ID in Settings.
+- Save confirms success. Data IS correctly written to Firestore 
+  (users/{uid}) and Storage (avatars/{uid}/avatar.*).
+- On page refresh OR navigating away and back, the fields in 
+  SettingsPage are empty again, and the avatar reverts to default.
+- The data still exists in Firebase — the problem is purely a 
+  READ/STATE issue on the frontend.
+
+ROOT CAUSE TO INVESTIGATE (read these files first):
+1. AuthContext.tsx — Check if it fetches the Firestore user profile 
+   doc on auth state change. It likely only stores the Firebase Auth 
+   User object (which has displayName/photoURL) but does NOT fetch 
+   the extended profile from users/{uid} (whatsapp, wechat, etc.)
+2. userProfile.ts — Check the getProfile() function and confirm it 
+   reads from users/{uid} in Firestore correctly.
+3. SettingsPage.tsx (or ProfilePage.tsx) — Check if the component 
+   initializes its local state (name, whatsapp, wechat, avatarUrl) 
+   from a profile fetch on mount, or if it only reads from React 
+   context which hasn't been populated yet.
+
+REQUIRED FIX:
+
+Fix A — AuthContext.tsx:
+After onAuthStateChanged fires with a non-null user, immediately 
+fetch the Firestore document at users/{uid} using getProfile(uid). 
+Store the result in context as a separate piece of state 
+(e.g., `userProfile`). Expose it from the context hook. 
+Handle the case where the Firestore doc doesn't exist yet 
+(new users before profile setup) gracefully — return null, 
+don't crash.
+
+The context shape should be:
+  {
+    user: FirebaseUser | null,        // Firebase Auth user
+    userProfile: UserProfile | null,  // Firestore users/{uid} doc
+    loading: boolean,
+    refetchProfile: () => Promise<void>  // call this after save
+  }
+
+Fix B — SettingsPage.tsx (and any other page reading profile data):
+Initialize ALL local form state (displayName, whatsapp, wechat, 
+avatarUrl, privacy toggles) from `userProfile` out of AuthContext, 
+NOT from `user.displayName` or `user.photoURL` alone. 
+Use a useEffect that runs when `userProfile` changes to 
+re-populate the form fields:
+
+  useEffect(() => {
+    if (userProfile) {
+      setName(userProfile.displayName ?? '');
+      setWhatsapp(userProfile.whatsapp ?? '');
+      setWechat(userProfile.wechat ?? '');
+      setAvatarUrl(userProfile.avatarUrl ?? '');
+      setShowWhatsApp(userProfile.showWhatsApp ?? true);
+      setShowWeChat(userProfile.showWeChat ?? true);
+    }
+  }, [userProfile]);
+
+Fix C — After a successful save in SettingsPage:
+Call `refetchProfile()` from context so the context state is 
+refreshed immediately without requiring a full page reload.
+
+Fix D — ProfilePage.tsx (My Listings tab + header avatar):
+Ensure the avatar shown in the header/nav and on the Profile page 
+reads from `userProfile.avatarUrl` (Firestore), NOT from 
+`user.photoURL` (Firebase Auth). These are separate — we store 
+the Storage download URL in Firestore, not in the Auth profile.
+
+Fix E — uploadAvatar() in userProfile.ts:
+After uploading the image to Storage and getting the download URL, 
+confirm it writes BOTH:
+  1. To Storage at avatars/{uid}/avatar.{ext}  ✓ (already working)
+  2. To Firestore users/{uid} doc as { avatarUrl: downloadURL }
+If step 2 is missing or uses setDoc without merge:true, the 
+existing profile fields (whatsapp, wechat, etc.) will be wiped 
+on avatar upload. Use:
+  updateDoc(doc(db, 'users', uid), { avatarUrl: downloadURL })
+  NOT setDoc(...) without merge: true.
+
+=================================================================
+BUG 2 — "SUBMIT LISTING" BUTTON OBSCURED BY BOTTOM NAV ON MOBILE
+=================================================================
+
+SYMPTOM:
+On mobile/tablet screens, the Submit Listing button at the bottom 
+of PostPage (or CreateListingPage/modal) is partially or fully 
+hidden behind the sticky bottom navigation bar, as visible in 
+the attached screenshot.
+
+FILES TO FIX: PostPage.tsx (or wherever the listing creation form 
+and its submit button live).
+
+REQUIRED FIX:
+
+Fix A — Add bottom padding to the page scroll container so content 
+clears the bottom nav. The bottom nav is h-16 (64px). Add safe 
+area inset on top of that for iOS:
+
+  On the outermost scrollable div of PostPage, add:
+  pb-24 sm:pb-8
+  (pb-24 = 96px covers the 64px nav + breathing room on mobile; 
+  sm:pb-8 resets it on tablet/desktop where the bottom nav may 
+  not appear)
+
+Fix B — The Submit button itself should also have bottom margin:
+  mb-6 (or mb-8 on mobile)
+
+Fix C — Check if the bottom nav is conditionally rendered only on 
+mobile (it should be: hidden sm:flex or similar). If it shows on 
+tablet/desktop too, ensure PostPage has appropriate padding on 
+those breakpoints as well.
+
+Fix D — Apply the same pb-24 sm:pb-8 fix to ANY other page that 
+has a form with a submit/action button near the bottom:
+  - SettingsPage.tsx (Save Changes button)
+  - ProfilePage.tsx (if it has bottom actions)
+  - SearchPage.tsx (if filter panel has an Apply button)
+
+=================================================================
+IMPORTANT CONSTRAINTS — DO NOT VIOLATE
+=================================================================
+- Tailwind v4 — dark mode uses @custom-variant in index.css. 
+  Do NOT add darkMode to tailwind.config.
+- Wouter for routing only. No next/navigation or useRouter.
+- Keep experimentalAutoDetectLongPolling: true in firebase.ts.
+- Keep all VITE_ env var mappings. No hardcoded Firebase config.
+- All new UI strings must be added to i18n.ts in BOTH en and zh.
+- Do not modify Firebase Firestore or Storage security rules.
+- Firestore writes to users/{uid} must use updateDoc with 
+  merge-safe field updates, never setDoc that overwrites the 
+  whole document.
+- After all changes, run TypeScript typecheck and confirm 
+  zero new errors.
