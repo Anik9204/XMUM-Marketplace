@@ -1,0 +1,196 @@
+STOP. Do not touch listings.ts or HomePage.tsx again.
+The real root cause has been identified and it is none 
+of the things fixed so far.
+
+The browser console shows:
+"Firestore (12.12.0): Database '(default)' not found."
+
+This means Firestore cannot connect at all. No query 
+will ever return data until this is resolved. The index 
+and the fallback fixes were irrelevant because the 
+database connection itself is failing.
+
+=================================================================
+STEP 1 — DIAGNOSE: VERIFY ENVIRONMENT VARIABLES ARE LOADED
+=================================================================
+
+Run this in the Replit Shell:
+  cd artifacts/xmum-market && node -e "
+    console.log('API KEY:', process.env.VITE_FIREBASE_API_KEY ? 
+      'SET' : 'MISSING');
+    console.log('PROJECT ID:', process.env.VITE_FIREBASE_PROJECT_ID ? 
+      'SET' : 'MISSING');
+    console.log('AUTH DOMAIN:', process.env.VITE_FIREBASE_AUTH_DOMAIN ? 
+      'SET' : 'MISSING');
+  "
+
+Then also run this to see what Vite actually injects at 
+build time — add a temporary console.log to firebase.ts:
+
+At the TOP of firebase.ts, add this one line temporarily:
+  console.log('Firebase config check:', {
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY ? 
+      'present' : 'MISSING'
+  });
+
+Restart the dev server and check the BROWSER console 
+(not the shell). Report exactly what it prints.
+
+If projectId is undefined or empty string — the Replit 
+Secrets are not being injected into Vite at build time. 
+That is the root cause.
+
+=================================================================
+STEP 2 — THE MOST LIKELY ROOT CAUSE
+=================================================================
+
+The "Database not found" error happens in ONE of these 
+scenarios:
+
+SCENARIO A — Replit Secrets are not set or not loading:
+Vite reads VITE_ prefixed env vars at BUILD time from 
+the environment. If the Replit Secrets panel does not 
+have the correct values, import.meta.env.VITE_FIREBASE_* 
+will be undefined, and firebase.ts will initialize with 
+undefined values — which causes "Database not found".
+
+FIX FOR SCENARIO A:
+Go to Replit → Tools → Secrets and verify ALL of these 
+exist with EXACTLY these values (copy-paste carefully,
+no extra spaces):
+
+  VITE_FIREBASE_API_KEY        
+  = AIzaSyDbsioNuqvL8mLgNFSj4U-7gQatOGVvaqM
+
+  VITE_FIREBASE_AUTH_DOMAIN    
+  = xmum--market.firebaseapp.com
+
+  VITE_FIREBASE_PROJECT_ID     
+  = xmum--market
+
+  VITE_FIREBASE_STORAGE_BUCKET 
+  = xmum--market.firebasestorage.app
+
+  VITE_FIREBASE_MESSAGING_SENDER_ID 
+  = 265563320468
+
+  VITE_FIREBASE_APP_ID         
+  = 1:265563320468:web:a55b8e90ab8927b9508481
+
+  VITE_FIREBASE_MEASUREMENT_ID 
+  = G-JMF8ZV5J5Z
+
+After verifying/adding all secrets, you MUST restart 
+the dev server completely (stop and start, not just 
+hot reload) because Vite only reads env vars at startup.
+
+SCENARIO B — firebase.ts is not reading from env vars:
+Check firebase.ts right now. The firebaseConfig object 
+must look like this:
+
+  const firebaseConfig = {
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    appId: import.meta.env.VITE_FIREBASE_APP_ID,
+    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
+  };
+
+If ANY of these values are hardcoded strings or missing, 
+that is the bug. Fix them to use import.meta.env.
+
+SCENARIO C — Firestore database not created in Firebase Console:
+The Firebase project exists but the Firestore database 
+has never been created. Go to:
+  Firebase Console → xmum--market project 
+  → Build → Firestore Database
+  
+If it says "Create database" — click it. Choose:
+  - Production mode (not test mode)
+  - Location: asia-southeast1 (Singapore, closest to Malaysia)
+  
+Then click Create. This is a one-time setup step.
+
+SCENARIO D — Wrong Firebase project being connected to:
+Confirm in Firebase Console that the project ID is 
+exactly "xmum--market" (with two dashes). If the project 
+ID in the console does not match VITE_FIREBASE_PROJECT_ID 
+exactly, the connection will fail.
+
+=================================================================
+STEP 3 — AFTER IDENTIFYING THE CAUSE, APPLY THE FIX
+=================================================================
+
+Once the console.log from Step 1 shows all values are 
+defined and correct:
+
+1. Remove the temporary console.log from firebase.ts
+2. Do a FULL restart of the dev server (not hot reload):
+     Stop the current workflow
+     Run: cd artifacts/xmum-market && pnpm dev
+3. Open the published app URL in an incognito window
+4. Open browser DevTools → Console
+5. Confirm "Database not found" is GONE from the console
+6. Confirm listings appear in the feed
+
+=================================================================
+STEP 4 — VERIFY THE FIX WITH TWO ACCOUNTS
+=================================================================
+
+Test 1: Open app in incognito — no sign in — listings 
+must be visible to anonymous users.
+
+Test 2: Sign in as Account A, post a new listing.
+Sign out. Sign in as Account B.
+Account B must see Account A's listing in the feed.
+
+Test 3: Check browser console — must show ZERO Firebase 
+errors. No "Database not found", no "permission denied", 
+no "failed-precondition".
+
+=================================================================
+STEP 5 — REPLIT PREVIEW NOT WORKING
+=================================================================
+
+Separately, for the Replit preview not showing the app:
+
+Read .replit file and check the [[ports]] section.
+It must have exactly ONE port mapping:
+
+  [[ports]]
+  localPort = 5000
+  externalPort = 80
+
+If there are TWO entries both mapped to externalPort = 80 
+(e.g. both 5000→80 and 8081→80), delete the duplicate. 
+Replit's proxy gets confused when two local ports both 
+map to external port 80 and shows "app not running" in 
+the preview pane even when the server is running.
+
+Also confirm vite.config.ts server settings:
+  server: {
+    host: '0.0.0.0',
+    port: 5000,
+    strictPort: false,
+    allowedHosts: 'all',
+  }
+
+After fixing .replit, click Stop then Run in Replit.
+The preview pane should now load the app directly.
+
+=================================================================
+CONSTRAINTS — DO NOT VIOLATE
+=================================================================
+- Do NOT change Firebase security rules
+- Do NOT remove experimentalAutoDetectLongPolling: true
+- Keep wouter for all routing
+- Tailwind v4 dark mode via @custom-variant in index.css
+- Zero new TypeScript errors after any changes
+- After all fixes, push to GitHub:
+    git add .
+    git commit -m "Fix Firebase connection and Replit preview"
+    git push origin main
