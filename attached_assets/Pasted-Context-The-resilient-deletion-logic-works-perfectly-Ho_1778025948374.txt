@@ -1,0 +1,33 @@
+Context:
+The resilient deletion logic works perfectly. However, integrating the new User Profile system has exposed three UX and state management bugs across the app. Please fix them.
+
+Bug 1: Missing Auto-Fill on Listing Form
+
+Location: The "Post Item" / Create Listing page.
+
+Issue: When a user signs up and provides their WhatsApp and WeChat IDs, that data is saved to their users/{uid} profile. However, when they go to create a listing, the contact fields in the form are blank.
+
+Required Fix: Update the listing creation component. On mount, fetch the current user's profile from Firestore (or read it from the global context if it's already there) and automatically pre-fill the WhatsApp and WeChat input fields with their saved data. Ensure the user can still edit these fields before posting.
+
+Bug 2: Infinite "Saving" State in Settings
+
+Location: SettingsPage.tsx (Profile Update/Avatar Upload).
+
+Issue: When a user updates their profile details or uploads a new avatar and clicks "Save", the button gets stuck in an infinite loading state. The data does save to Firebase successfully in the background, but the UI never updates, forcing the user to manually refresh the page to see their new avatar.
+
+Required Fix: Audit the handleSave (or equivalent) function.
+
+Ensure the loading state (setIsSaving(false)) is strictly placed inside a finally block so the button resets when the Firebase promise resolves.
+
+Implement an Optimistic UI Update: Once the Firebase update succeeds, immediately update the local React state with the new avatar URL and profile details so the user sees the changes instantly without refreshing.
+
+Bug 3: Slow Initial Load UX in Settings
+
+Location: SettingsPage.tsx.
+
+Issue: Because of the longPolling fallback, fetching the profile data when the user first navigates to the Settings page takes a moment. Currently, the UI handles this poorly, making it look broken or empty before the data pops in.
+
+Required Fix: Implement a proper loading state. While the profile data is being fetched from Firestore, display a clean loading spinner or skeleton UI instead of a blank or partially-rendered form. Only render the form inputs once the profile object is fully loaded.
+
+Action:
+Please read the relevant files, fix these three specific state/UX issues, and confirm when I can test them.

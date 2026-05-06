@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { uploadPhoto, createListing } from "@/lib/listings";
+import { getProfile } from "@/lib/userProfile";
 import { auth } from "@/lib/firebase";
 import { ListingType, Condition } from "@/lib/types";
 import AuthModal from "@/components/AuthModal";
@@ -58,6 +59,16 @@ export default function PostPage() {
   const [toast, setToast] = useState("");
   const [showAuth, setShowAuth] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Bug 1 fix: pre-fill contact fields from the user's saved profile
+  useEffect(() => {
+    if (!user) return;
+    getProfile(user.uid).then((p) => {
+      if (!p) return;
+      if (p.whatsapp) setWhatsapp(p.whatsapp);
+      if (p.wechat) setWechat(p.wechat);
+    }).catch(() => {});
+  }, [user]);
 
   // ── Auth / Verification gates ──────────────────────────────────────────────
   if (!user) {

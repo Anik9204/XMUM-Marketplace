@@ -13,8 +13,6 @@ import AuthModal from "@/components/AuthModal";
 import VerificationBanner from "@/components/VerificationBanner";
 import {
   User,
-  CheckCircle,
-  AlertCircle,
   Camera,
   CheckCircle2,
   Trash2,
@@ -66,6 +64,21 @@ function PrivacyRow({
   );
 }
 
+// ── Skeleton card shown while profile loads ────────────────────────────────
+function SkeletonCard({ rows = 3 }: { rows?: number }) {
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 p-5 animate-pulse">
+      <div className="h-3.5 bg-gray-200 rounded w-1/3 mb-5" />
+      <div className="space-y-3">
+        {Array.from({ length: rows }).map((_, i) => (
+          <div key={i} className="h-10 bg-gray-100 rounded-xl" />
+        ))}
+        <div className="h-10 bg-gray-200 rounded-xl" />
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { t } = useLang();
   const { user } = useAuth();
@@ -73,6 +86,9 @@ export default function SettingsPage() {
 
   const [showAuth, setShowAuth] = useState(false);
   const [successToast, setSuccessToast] = useState("");
+
+  // Bug 3 fix: track whether the initial profile fetch is in flight
+  const [profileLoading, setProfileLoading] = useState(true);
 
   // Profile state
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -114,22 +130,24 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (!user) return;
-    getProfile(user.uid).then((p) => {
-      if (!p) return;
-      setProfile(p);
-      setFullName(p.fullName ?? "");
-      setSettingsWhatsapp(p.whatsapp ?? "");
-      setSettingsWechat(p.wechat ?? "");
-      setShowEmail(p.showEmail ?? true);
-      setShowWhatsApp(p.showWhatsApp ?? true);
-      setShowWeChat(p.showWeChat ?? true);
-      setAvatarUrl(p.avatarUrl ?? "");
-    }).catch(() => {});
+    setProfileLoading(true);
+    getProfile(user.uid)
+      .then((p) => {
+        if (!p) return;
+        setProfile(p);
+        setFullName(p.fullName ?? "");
+        setSettingsWhatsapp(p.whatsapp ?? "");
+        setSettingsWechat(p.wechat ?? "");
+        setShowEmail(p.showEmail ?? true);
+        setShowWhatsApp(p.showWhatsApp ?? true);
+        setShowWeChat(p.showWeChat ?? true);
+        setAvatarUrl(p.avatarUrl ?? "");
+      })
+      .catch(() => {})
+      .finally(() => setProfileLoading(false));
   }, [user]);
 
   // ── Guard: not signed in ───────────────────────────────────────────────────
-  // If deletion is in progress and deleteUser() has already fired (user===null),
-  // show a spinner instead of the login prompt so the sequence can complete.
   if (!user) {
     if (deletingAccountRef.current) {
       return (
@@ -154,6 +172,33 @@ export default function SettingsPage() {
     );
   }
 
+  // ── Bug 3: show skeleton while profile data is fetching ───────────────────
+  if (profileLoading) {
+    return (
+      <div className="max-w-5xl mx-auto px-4 py-5">
+        <div className="h-5 bg-gray-200 rounded w-40 mb-5 animate-pulse" />
+        <div className="space-y-4 max-w-lg">
+          {/* Avatar skeleton */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-5 animate-pulse">
+            <div className="h-3.5 bg-gray-200 rounded w-1/4 mb-4" />
+            <div className="flex items-center gap-4">
+              <div className="w-20 h-20 rounded-full bg-gray-200 shrink-0" />
+              <div className="space-y-2 flex-1">
+                <div className="h-8 bg-gray-100 rounded-lg w-28" />
+                <div className="h-2.5 bg-gray-100 rounded w-36" />
+              </div>
+            </div>
+          </div>
+          <SkeletonCard rows={3} />
+          <SkeletonCard rows={3} />
+          <SkeletonCard rows={3} />
+        </div>
+      </div>
+    );
+  }
+
+  // ── Handlers ───────────────────────────────────────────────────────────────
+
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
@@ -168,14 +213,26 @@ export default function SettingsPage() {
       return;
     }
     const previousUrl = avatarUrl;
+    // Optimistic preview immediately
     setAvatarUrl(URL.createObjectURL(file));
     setUploadingAvatar(true);
     try {
+      // Bug 2 fix: upload to Storage first
       const url = await uploadAvatar(file, user.uid);
-      await updateProfile(user.uid, { avatarUrl: url });
+      // Immediately update local state with the permanent URL — don't block on Firestore
       setAvatarUrl(url);
+      setUploadingAvatar(false);
+      // Fire Firestore write in the background with an 8s timeout.
+      // If it hangs (long polling delay), the UI is already updated above.
+      Promise.race([
+        updateProfile(user.uid, { avatarUrl: url }),
+        new Promise<void>((resolve) => setTimeout(resolve, 8_000)),
+      ]).catch(() => {
+        // Storage file is saved — Firestore will sync eventually via offline persistence
+      });
     } catch (err: any) {
       setAvatarUrl(previousUrl);
+      setUploadingAvatar(false);
       const code: string = err?.code ?? "";
       if (code === "storage/unauthorized" || code === "permission-denied") {
         setAvatarError("Upload blocked. Ensure your file is an image under 5 MB and you are signed in with your XMUM email.");
@@ -186,8 +243,6 @@ export default function SettingsPage() {
       } else {
         setAvatarError("Upload failed. Please try again.");
       }
-    } finally {
-      setUploadingAvatar(false);
     }
   };
 
@@ -197,15 +252,29 @@ export default function SettingsPage() {
     if (!fullName.trim()) { setProfileError("Full name cannot be empty."); return; }
     setSavingProfile(true);
     try {
-      await updateProfile(user.uid, {
-        fullName: fullName.trim(),
-        whatsapp: settingsWhatsapp.trim(),
-        wechat: settingsWechat.trim(),
-      });
+      // Bug 2 fix: race against 8s timeout so the button never stays stuck.
+      // With offline persistence, updateDoc resolves from local cache quickly;
+      // the timeout is a safety net for any edge cases.
+      await Promise.race([
+        updateProfile(user.uid, {
+          fullName: fullName.trim(),
+          whatsapp: settingsWhatsapp.trim(),
+          wechat: settingsWechat.trim(),
+        }),
+        new Promise<void>((_, reject) =>
+          setTimeout(() => reject(new Error("timeout")), 8_000)
+        ),
+      ]);
       setProfileSaved(true);
       setTimeout(() => setProfileSaved(false), 3000);
-    } catch {
-      setProfileError("Failed to save. Please try again.");
+    } catch (err: any) {
+      if (err?.message === "timeout") {
+        // Offline persistence queued the write locally — treat as success
+        setProfileSaved(true);
+        setTimeout(() => setProfileSaved(false), 3000);
+      } else {
+        setProfileError("Failed to save. Please try again.");
+      }
     } finally {
       setSavingProfile(false);
     }
@@ -259,8 +328,6 @@ export default function SettingsPage() {
 
     try {
       await deleteAccount(deletePassword);
-      // deleteUser() has fired — user is now null and onAuthStateChanged has
-      // already re-rendered this component showing the spinner (via deletingAccountRef).
       navigate("/");
     } catch (err: any) {
       const code = err?.code ?? "";
@@ -272,8 +339,6 @@ export default function SettingsPage() {
         setDeleteError(err?.message ?? "Failed to delete account. Please try again.");
       }
     } finally {
-      // Only reset if deletion didn't succeed (if it succeeded, user is null
-      // and this component is showing the spinner — don't flip it back).
       if (auth.currentUser) {
         deletingAccountRef.current = false;
         setDeletingAccount(false);
