@@ -29,14 +29,14 @@ export default function ResetPasswordPage() {
   if (!oobCode) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center px-4">
-        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 w-full max-w-sm p-8 text-center">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 w-full max-w-sm p-8 text-center">
           <div className="w-16 h-16 bg-red-50 dark:bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
             <AlertCircle size={32} className="text-red-500" />
           </div>
-          <h1 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
+          <h1 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-2">
             {t.expiredResetLink}
           </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+          <p className="text-sm text-gray-500 dark:text-slate-400 mb-6">
             {t.requestNewLink}
           </p>
           <button
@@ -54,14 +54,14 @@ export default function ResetPasswordPage() {
   if (success) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center px-4">
-        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 w-full max-w-sm p-8 text-center">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 w-full max-w-sm p-8 text-center">
           <div className="w-16 h-16 bg-green-50 dark:bg-green-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
             <CheckCircle2 size={32} className="text-green-600" />
           </div>
-          <h1 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
+          <h1 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-2">
             {t.resetPassword}
           </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+          <p className="text-sm text-gray-500 dark:text-slate-400 mb-6">
             {t.passwordResetSuccess}
           </p>
           <button
@@ -111,7 +111,7 @@ export default function ResetPasswordPage() {
 
   return (
     <div className="min-h-[60vh] flex items-center justify-center px-4">
-      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 w-full max-w-sm overflow-hidden">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 w-full max-w-sm overflow-hidden">
         <div className="h-1.5 bg-gradient-to-r from-[#003366] to-[#0055aa]" />
 
         <div className="p-8">
@@ -140,12 +140,12 @@ export default function ResetPasswordPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   autoFocus
-                  className="w-full border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-white rounded-xl px-3 py-2.5 text-sm pr-10 focus:outline-none focus:ring-2 focus:ring-[#003366]/30 focus:border-[#003366] transition"
+                  className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600 rounded-xl px-3 py-2.5 text-sm pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 transition min-h-[44px]"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPass((v) => !v)}
-                  className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-400"
                 >
                   {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
@@ -153,7 +153,7 @@ export default function ResetPasswordPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">
+              <label className="block text-xs font-medium text-gray-600 dark:text-slate-300 mb-1">
                 {t.confirmPassword}
               </label>
               <div className="relative">
@@ -162,7 +162,7 @@ export default function ResetPasswordPage() {
                   value={confirm}
                   onChange={(e) => setConfirm(e.target.value)}
                   required
-                  className="w-full border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-white rounded-xl px-3 py-2.5 text-sm pr-10 focus:outline-none focus:ring-2 focus:ring-[#003366]/30 focus:border-[#003366] transition"
+                  className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600 rounded-xl px-3 py-2.5 text-sm pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 transition min-h-[44px]"
                 />
                 <button
                   type="button"

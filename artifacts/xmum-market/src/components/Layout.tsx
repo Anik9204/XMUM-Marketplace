@@ -24,36 +24,37 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-[#003366] shadow-md">
-        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 flex flex-col">
+      {/* ── Header ────────────────────────────────────────────────────────── */}
+      <header className="sticky top-0 z-50 bg-[#003366] dark:bg-slate-900 shadow-md">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between">
+          {/* Logo */}
+          <Link href="/" className="flex items-center gap-2 shrink-0">
             <span className="text-white font-bold text-lg tracking-tight">
               {t.appName}
             </span>
           </Link>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
             {/* Dark mode toggle */}
             <button
               onClick={toggleDark}
-              className="p-1.5 text-white/70 hover:text-white transition-colors rounded-lg hover:bg-white/10"
+              className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-white/70 hover:text-white transition-colors rounded-lg hover:bg-white/10"
               aria-label="Toggle dark mode"
             >
               {dark ? <Sun size={17} /> : <Moon size={17} />}
             </button>
 
-            {/* Language Toggle */}
+            {/* Language Toggle — icon only on xs, text on sm+ */}
             <button
               onClick={toggleLang}
-              className="flex items-center gap-1 text-white/80 hover:text-white text-sm font-medium transition-colors"
+              className="flex items-center gap-1 text-white/80 hover:text-white text-sm font-medium transition-colors p-2 min-h-[44px] min-w-[44px] justify-center rounded-lg hover:bg-white/10"
             >
               <Globe size={16} />
-              <span>{lang === "en" ? "中文" : "EN"}</span>
+              <span className="hidden sm:inline">{lang === "en" ? "中文" : "EN"}</span>
             </button>
 
-            {/* Desktop nav */}
+            {/* Desktop nav — md and above */}
             <nav className="hidden md:flex items-center gap-1">
               <Link href="/" className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${location === "/" ? "text-white bg-white/20" : "text-white/70 hover:text-white hover:bg-white/10"}`}>{t.home}</Link>
               <Link href="/search" className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${location === "/search" ? "text-white bg-white/20" : "text-white/70 hover:text-white hover:bg-white/10"}`}>{t.search}</Link>
@@ -69,10 +70,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   {menuOpen && (
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-                      <div className="absolute right-0 top-9 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 min-w-44 z-50">
-                        <Link href="/profile" onClick={() => setMenuOpen(false)} className="block px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-t-xl">{t.myListings}</Link>
-                        <Link href="/settings" onClick={() => setMenuOpen(false)} className="block px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 border-t border-gray-50 dark:border-gray-700">{t.accountSettings}</Link>
-                        <button onClick={() => { logOut(); setMenuOpen(false); }} className="block w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-b-xl border-t border-gray-50 dark:border-gray-700">{t.signOut}</button>
+                      <div className="absolute right-0 top-9 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-gray-100 dark:border-slate-700 min-w-44 z-50">
+                        <Link href="/profile" onClick={() => setMenuOpen(false)} className="block px-4 py-2.5 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-t-xl">{t.myListings}</Link>
+                        <Link href="/settings" onClick={() => setMenuOpen(false)} className="block px-4 py-2.5 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700 border-t border-gray-100 dark:border-slate-700">{t.accountSettings}</Link>
+                        <button onClick={() => { logOut(); setMenuOpen(false); }} className="block w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-b-xl border-t border-gray-100 dark:border-slate-700">{t.signOut}</button>
                       </div>
                     </>
                   )}
@@ -80,18 +81,18 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               ) : (
                 <button
                   onClick={() => setShowAuth(true)}
-                  className="ml-1 px-4 py-1.5 bg-white text-[#003366] rounded-lg text-sm font-semibold hover:bg-gray-100 transition-colors"
+                  className="ml-1 px-4 py-1.5 min-h-[36px] bg-white text-[#003366] rounded-lg text-sm font-semibold hover:bg-gray-100 transition-colors"
                 >
                   {t.signIn}
                 </button>
               )}
             </nav>
 
-            {/* Mobile: sign in button when not logged in */}
+            {/* Mobile: sign-in button when not logged in */}
             {!user && (
               <button
                 onClick={() => setShowAuth(true)}
-                className="md:hidden px-3 py-1.5 bg-white text-[#003366] rounded-lg text-sm font-semibold hover:bg-gray-100 transition-colors"
+                className="md:hidden px-3 py-1.5 min-h-[44px] bg-white text-[#003366] rounded-lg text-sm font-semibold hover:bg-gray-100 transition-colors"
               >
                 {t.signIn}
               </button>
@@ -109,7 +110,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </main>
 
       {/* Footer — desktop only */}
-      <footer className="hidden md:block bg-[#003366] text-white/70 text-xs py-6 px-4">
+      <footer className="hidden md:block bg-[#003366] dark:bg-slate-900 dark:border-t dark:border-slate-700 text-white/70 text-xs py-6 px-4">
         <div className="max-w-5xl mx-auto">
           <p className="font-semibold text-white/90 mb-1">{t.pdpaTitle}</p>
           <p className="mb-3">{t.pdpaText}</p>
@@ -117,16 +118,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </footer>
 
-      {/* Mobile bottom nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 z-50 safe-bottom">
-        <div className="flex">
+      {/* Mobile bottom nav — min 48px tap targets, safe area inset */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-700 z-50">
+        <div className="flex pb-[env(safe-area-inset-bottom)]">
           {navItems.map(({ href, icon: Icon, label }) => {
             const active = location === href;
             return (
               <Link
                 key={href}
                 href={href}
-                className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 transition-colors ${active ? "text-[#003366] dark:text-blue-400" : "text-gray-400 dark:text-gray-500"}`}
+                className={`flex-1 flex flex-col items-center justify-center h-12 gap-0.5 transition-colors ${active ? "text-[#003366] dark:text-blue-400" : "text-gray-400 dark:text-slate-500"}`}
               >
                 <Icon size={22} strokeWidth={active ? 2.5 : 1.8} />
                 <span className="text-[10px] font-medium">{label}</span>
@@ -134,8 +135,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             );
           })}
         </div>
-        <div className="bg-gray-50 dark:bg-gray-800 border-t border-gray-100 dark:border-gray-700 px-4 py-2">
-          <p className="text-[9px] text-gray-400 dark:text-gray-500 text-center leading-relaxed">
+        <div className="bg-gray-50 dark:bg-slate-800 border-t border-gray-100 dark:border-slate-700 px-4 py-2">
+          <p className="text-[9px] text-gray-400 dark:text-slate-500 text-center leading-relaxed">
             {t.pdpaText}
           </p>
         </div>

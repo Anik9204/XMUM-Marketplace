@@ -18,7 +18,7 @@ function SuccessToast({ message, onDone }: { message: string; onDone: () => void
     return () => { clearTimeout(hide); clearTimeout(done); };
   }, [onDone]);
   return (
-    <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 bg-[#003366] text-white text-sm font-medium px-5 py-3 rounded-2xl shadow-xl transition-all duration-400 ${visible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-3"}`}>
+    <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 bg-[#003366] dark:bg-blue-700 text-white text-sm font-medium px-5 py-3 rounded-2xl shadow-xl transition-all duration-400 ${visible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-3"}`}>
       <CheckCircle2 size={18} className="text-green-300 shrink-0" />
       {message}
     </div>
@@ -58,11 +58,11 @@ export default function ProfilePage() {
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 text-center">
-        <User size={48} className="text-gray-200 dark:text-gray-600 mb-4" />
-        <p className="text-gray-600 dark:text-gray-300 font-medium mb-1">{t.loginToPost}</p>
+        <User size={48} className="text-gray-200 dark:text-slate-600 mb-4" />
+        <p className="text-gray-600 dark:text-slate-300 font-medium mb-1">{t.loginToPost}</p>
         <button
           onClick={() => setShowAuth(true)}
-          className="mt-3 bg-[#003366] text-white px-5 py-2.5 rounded-xl text-sm font-semibold"
+          className="mt-3 bg-[#003366] dark:bg-blue-600 text-white px-5 min-h-[44px] py-2.5 rounded-xl text-sm font-semibold"
         >
           {t.signIn}
         </button>
@@ -116,7 +116,7 @@ export default function ProfilePage() {
 
   const AvatarDisplay = () =>
     avatarUrl ? (
-      <img src={avatarUrl} alt="avatar" className="w-14 h-14 rounded-full object-cover border-2 border-white dark:border-gray-700 shadow" />
+      <img src={avatarUrl} alt="avatar" className="w-14 h-14 rounded-full object-cover border-2 border-white dark:border-slate-700 shadow" />
     ) : (
       <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#003366] to-[#0055aa] flex items-center justify-center text-white font-bold text-xl shadow">
         {(user.email ?? "?")[0].toUpperCase()}
@@ -127,15 +127,15 @@ export default function ProfilePage() {
     <>
       {successToast && <SuccessToast message={successToast} onDone={() => setSuccessToast("")} />}
 
-      <div className="max-w-5xl mx-auto px-4 py-5">
+      <div className="max-w-5xl mx-auto px-4 py-5 animate-in fade-in duration-200">
         {/* Profile card */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-5 mb-5 flex items-center gap-4">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-5 mb-5 flex items-center gap-4">
           <AvatarDisplay />
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-gray-900 dark:text-gray-100 truncate">
+            <p className="font-semibold text-gray-900 dark:text-slate-100 truncate">
               {fullName || user.email?.split("@")[0]}
             </p>
-            <p className="text-xs text-gray-400 dark:text-gray-500 truncate">{user.email}</p>
+            <p className="text-xs text-gray-400 dark:text-slate-500 truncate">{user.email}</p>
             <span className={`inline-flex items-center gap-1 text-xs font-medium mt-1 px-2 py-0.5 rounded-full ${user.emailVerified ? "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"}`}>
               {user.emailVerified
                 ? <><CheckCircle size={10} />{t.verifiedBadge}</>
@@ -144,7 +144,7 @@ export default function ProfilePage() {
           </div>
           <button
             onClick={handleSignOut}
-            className="flex items-center gap-1.5 text-xs text-red-500 border border-red-200 dark:border-red-800 px-3 py-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors shrink-0"
+            className="flex items-center gap-1.5 text-xs text-red-500 border border-red-200 dark:border-red-800 px-3 min-h-[44px] py-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors shrink-0"
           >
             <LogOut size={14} />
             {t.signOut}
@@ -153,23 +153,23 @@ export default function ProfilePage() {
 
         {/* Listings grid */}
         {loading ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[...Array(3)].map((_, i) => (
-              <div key={i} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden animate-pulse">
-                <div className="h-44 bg-gray-100 dark:bg-gray-700" />
+              <div key={i} className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden animate-pulse">
+                <div className="aspect-[4/3] bg-gray-100 dark:bg-slate-700" />
                 <div className="p-3 space-y-2">
-                  <div className="h-3 bg-gray-100 dark:bg-gray-700 rounded w-3/4" />
-                  <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded w-1/2" />
+                  <div className="h-3 bg-gray-100 dark:bg-slate-700 rounded w-3/4" />
+                  <div className="h-2 bg-gray-100 dark:bg-slate-700 rounded w-1/2" />
                 </div>
               </div>
             ))}
           </div>
         ) : listings.length === 0 ? (
-          <div className="text-center py-12 text-gray-400 dark:text-gray-500">
+          <div className="text-center py-12 text-gray-400 dark:text-slate-400">
             <p className="text-sm">{t.noListings}</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {listings.map((l) => (
               <ListingCard
                 key={l.id}
@@ -186,26 +186,26 @@ export default function ProfilePage() {
 
       {/* Delete listing confirmation modal */}
       {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 w-full max-w-sm">
-            <p className="font-semibold text-gray-800 dark:text-gray-100 mb-1">{t.deleteConfirm}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4 truncate">{deleteTarget.title}</p>
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 w-full max-w-sm">
+            <p className="font-semibold text-gray-800 dark:text-slate-100 mb-1">{t.deleteConfirm}</p>
+            <p className="text-xs text-gray-500 dark:text-slate-400 mb-4 truncate">{deleteTarget.title}</p>
             {deleteError && (
-              <p className="text-xs text-red-600 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl px-3 py-2 mb-3">
+              <p className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl px-3 py-2 mb-3">
                 {deleteError}
               </p>
             )}
             <div className="flex gap-2">
               <button
                 onClick={() => { setDeleteTarget(null); setDeleteError(""); }}
-                className="flex-1 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 py-2.5 rounded-xl text-sm font-medium"
+                className="flex-1 min-h-[44px] border border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300 py-2.5 rounded-xl text-sm font-medium"
               >
                 {t.cancel}
               </button>
               <button
                 onClick={() => handleDelete(deleteTarget)}
                 disabled={deleting}
-                className="flex-1 bg-red-500 text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50"
+                className="flex-1 min-h-[44px] bg-red-500 text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50"
               >
                 {deleting ? "…" : t.delete}
               </button>

@@ -32,9 +32,6 @@ export default function HomePage() {
       setCursor(result.cursor);
       setHasMore(result.hasMore);
     } catch (err: any) {
-      // Firestore may be temporarily offline while long-polling connects
-      // (especially after a Firebase Auth redirect). These are transient and
-      // non-fatal — show an empty feed silently rather than crashing.
       const code: string = err?.code ?? err?.message ?? "";
       const isOffline =
         code.includes("unavailable") ||
@@ -43,7 +40,6 @@ export default function HomePage() {
       if (!isOffline) {
         console.error("[HomePage] Failed to load listings:", err);
       }
-      // Listings remain empty; the user can switch tabs or reload to retry.
     } finally {
       setLoading(false);
     }
@@ -61,19 +57,21 @@ export default function HomePage() {
       setListings((prev) => [...prev, ...result.listings]);
       setCursor(result.cursor);
       setHasMore(result.hasMore);
+    } catch (err: any) {
+      console.error("[HomePage] Load more failed:", err);
     } finally {
       setLoadingMore(false);
     }
   };
 
   const SkeletonGrid = () => (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
       {[...Array(8)].map((_, i) => (
-        <div key={i} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden animate-pulse">
-          <div className="h-44 bg-gray-100 dark:bg-gray-700" />
+        <div key={i} className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden animate-pulse">
+          <div className="aspect-[4/3] bg-gray-100 dark:bg-slate-700" />
           <div className="p-3 space-y-2">
-            <div className="h-3 bg-gray-100 dark:bg-gray-700 rounded w-3/4" />
-            <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded w-1/2" />
+            <div className="h-3 bg-gray-100 dark:bg-slate-700 rounded w-3/4" />
+            <div className="h-2 bg-gray-100 dark:bg-slate-700 rounded w-1/2" />
           </div>
         </div>
       ))}
@@ -81,7 +79,7 @@ export default function HomePage() {
   );
 
   return (
-    <>
+    <div className="animate-in fade-in duration-200">
       {/* Hero */}
       <div className="bg-gradient-to-br from-[#003366] via-[#004488] to-[#0055aa] text-white px-4 pt-8 pb-10">
         <div className="max-w-5xl mx-auto">
@@ -89,7 +87,7 @@ export default function HomePage() {
             <MapPin size={10} />
             Xiamen University Malaysia
           </div>
-          <h1 className="text-2xl md:text-3xl font-bold mt-2 leading-tight">
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold mt-2 leading-tight">
             {t.hero1}<br />{t.hero2}
           </h1>
           <p className="text-white/70 text-sm mt-2 max-w-sm">{t.heroSub}</p>
@@ -126,7 +124,7 @@ export default function HomePage() {
       </div>
 
       {/* Tab bar */}
-      <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-700 sticky top-14 z-30">
+      <div className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 sticky top-14 sm:top-16 z-30">
         <div className="max-w-5xl mx-auto px-4 flex">
           {(["buy-sell", "lost-found"] as const).map((tab) => (
             <button
@@ -135,7 +133,7 @@ export default function HomePage() {
               className={`flex-1 md:flex-none md:px-6 py-3 text-sm font-semibold border-b-2 transition-colors ${
                 activeTab === tab
                   ? "border-[#003366] dark:border-blue-400 text-[#003366] dark:text-blue-400"
-                  : "border-transparent text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+                  : "border-transparent text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300"
               }`}
             >
               {tab === "buy-sell" ? t.buySell : t.lostFound}
@@ -149,17 +147,17 @@ export default function HomePage() {
         {loading ? (
           <SkeletonGrid />
         ) : listings.length === 0 ? (
-          <div className="text-center py-16 text-gray-400 dark:text-gray-500">
+          <div className="text-center py-16 text-gray-400 dark:text-slate-400">
             <ShoppingBag size={40} className="mx-auto mb-3 opacity-30" />
             <p className="text-sm font-medium">{t.noListings}</p>
             <p className="text-xs mt-1">{t.beFirstToPost}</p>
-            <Link href="/post" className="mt-4 inline-block bg-[#003366] text-white px-5 py-2 rounded-xl text-sm font-semibold">
+            <Link href="/post" className="mt-4 inline-block bg-[#003366] dark:bg-blue-600 text-white px-5 py-2 rounded-xl text-sm font-semibold">
               {t.postItem}
             </Link>
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {listings.map((listing) => (
                 <ListingCard key={listing.id} listing={listing} />
               ))}
@@ -174,13 +172,13 @@ export default function HomePage() {
                   className="flex items-center gap-2 px-6 py-2.5 bg-[#003366] dark:bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-[#002244] dark:hover:bg-blue-700 disabled:opacity-50 transition-colors"
                 >
                   {loadingMore ? (
-                    <><Loader2 size={15} className="animate-spin" /> Loading...</>
+                    <><Loader2 size={15} className="animate-spin" /> {t.loading}</>
                   ) : (
                     t.loadMore
                   )}
                 </button>
               ) : listings.length > 0 ? (
-                <p className="text-xs text-gray-400 dark:text-gray-500">{t.noMoreListings}</p>
+                <p className="text-xs text-gray-400 dark:text-slate-500">{t.noMoreListings}</p>
               ) : null}
             </div>
           </>
@@ -188,6 +186,6 @@ export default function HomePage() {
       </div>
 
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
-    </>
+    </div>
   );
 }

@@ -28,19 +28,19 @@ export default function ListingCard({ listing, onDelete, showDelete, showMarkSol
   const catLabel = t.categories[catKey] ?? listing.category;
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden hover:shadow-md transition-shadow">
+    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden hover:shadow-md transition-shadow">
       <Link href={`/listing/${listing.id}`}>
         <div className="relative">
           {listing.photos.length > 0 ? (
             <img
               src={listing.photos[0]}
               alt={listing.title}
-              className={`w-full h-44 object-cover ${isSold ? "opacity-50" : ""}`}
+              className={`w-full aspect-[4/3] object-cover ${isSold ? "opacity-50" : ""}`}
               loading="lazy"
               decoding="async"
             />
           ) : (
-            <div className={`w-full h-44 bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-700 dark:to-gray-600 flex items-center justify-center ${isSold ? "opacity-50" : ""}`}>
+            <div className={`w-full aspect-[4/3] bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-slate-700 dark:to-slate-600 flex items-center justify-center ${isSold ? "opacity-50" : ""}`}>
               <span className="text-4xl">📦</span>
             </div>
           )}
@@ -67,16 +67,16 @@ export default function ListingCard({ listing, onDelete, showDelete, showMarkSol
         </div>
 
         <div className="p-3">
-          <h3 className={`font-semibold text-sm line-clamp-1 ${isSold ? "text-gray-400 dark:text-gray-500" : "text-gray-900 dark:text-gray-100"}`}>{listing.title}</h3>
-          <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mt-0.5">{listing.description}</p>
+          <h3 className={`font-semibold text-sm line-clamp-1 ${isSold ? "text-gray-400 dark:text-slate-500" : "text-gray-900 dark:text-slate-100"}`}>{listing.title}</h3>
+          <p className="text-xs text-gray-500 dark:text-slate-400 line-clamp-2 mt-0.5">{listing.description}</p>
 
           {listing.type === "buy-sell" && (
-            <p className={`mt-2 text-base font-bold ${isSold ? "text-gray-400 dark:text-gray-500 line-through" : "text-[#003366] dark:text-blue-400"}`}>
+            <p className={`mt-2 text-base font-semibold ${isSold ? "text-gray-400 dark:text-slate-500 line-through" : "text-[#003366] dark:text-blue-400"}`}>
               {listing.price === 0 ? t.free : `${t.rmPrefix} ${listing.price?.toFixed(2)}`}
             </p>
           )}
 
-          <div className="mt-2 flex items-center justify-between text-[10px] text-gray-400 dark:text-gray-500">
+          <div className="mt-2 flex items-center justify-between text-[10px] text-gray-400 dark:text-slate-500">
             <span className="flex items-center gap-1">
               <MapPin size={10} />
               {listing.type === "buy-sell" ? catLabel : listing.userEmail.split("@")[0]}
@@ -95,20 +95,20 @@ export default function ListingCard({ listing, onDelete, showDelete, showMarkSol
           {showMarkSold && onMarkSold && !isSold && (
             <button
               onClick={(e) => { e.stopPropagation(); onMarkSold(); }}
-              className="w-full text-xs text-[#003366] dark:text-blue-400 border border-[#003366]/30 dark:border-blue-500/30 rounded-lg py-1.5 hover:bg-[#003366]/5 dark:hover:bg-blue-500/10 transition-colors font-medium"
+              className="w-full min-h-[44px] text-xs text-[#003366] dark:text-blue-400 border border-[#003366]/30 dark:border-blue-500/30 rounded-lg py-1.5 hover:bg-[#003366]/5 dark:hover:bg-blue-500/10 transition-colors font-medium"
             >
               {listing.type === "lost-found" ? t.markAsResolved : t.markAsSold}
             </button>
           )}
           {isSold && showMarkSold && (
-            <p className="text-xs text-center text-gray-400 dark:text-gray-500 py-1">
+            <p className="text-xs text-center text-gray-400 dark:text-slate-500 py-1">
               {listing.type === "lost-found" ? t.resolvedBadge : t.soldBadge}
             </p>
           )}
           {showDelete && onDelete && (
             <button
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              className="w-full text-xs text-red-500 border border-red-200 dark:border-red-800 rounded-lg py-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+              className="w-full min-h-[44px] text-xs text-red-500 border border-red-200 dark:border-red-800 rounded-lg py-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
             >
               {t.delete}
             </button>

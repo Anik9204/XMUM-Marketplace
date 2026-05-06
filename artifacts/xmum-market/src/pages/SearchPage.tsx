@@ -5,6 +5,9 @@ import { Listing, ListingType } from "@/lib/types";
 import ListingCard from "@/components/ListingCard";
 import { Search, SlidersHorizontal, X } from "lucide-react";
 
+const inputCls =
+  "w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 transition";
+
 export default function SearchPage() {
   const { t } = useLang();
   const [type, setType] = useState<ListingType>("buy-sell");
@@ -50,35 +53,33 @@ export default function SearchPage() {
   const hasFilters = minPrice || maxPrice || condition !== "all";
 
   return (
-    <div className="max-w-5xl mx-auto">
+    <div className="max-w-5xl mx-auto animate-in fade-in duration-200">
       {/* Search header */}
-      <div className="bg-white border-b border-gray-100 px-4 py-3 sticky top-14 z-30">
+      <div className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 px-4 py-3 sticky top-14 sm:top-16 z-30">
         <div className="flex gap-2 items-center">
           <div className="relative flex-1">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-400" />
             <input
               type="text"
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
               placeholder={t.searchPlaceholder}
-              className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#003366]/30 focus:border-[#003366]"
+              className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl pl-9 pr-9 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 transition"
               autoFocus
             />
             {keyword && (
-              <button onClick={() => setKeyword("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+              <button onClick={() => setKeyword("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-400">
                 <X size={14} />
               </button>
             )}
           </div>
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className={`relative p-2.5 rounded-xl border transition-colors ${showFilters || hasFilters ? "bg-[#003366] border-[#003366] text-white" : "border-gray-200 text-gray-500"}`}
+            className={`relative p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl border transition-colors ${showFilters || hasFilters ? "bg-[#003366] dark:bg-blue-600 border-[#003366] dark:border-blue-600 text-white" : "border-gray-300 dark:border-slate-600 text-gray-500 dark:text-slate-400 dark:bg-slate-700"}`}
           >
             <SlidersHorizontal size={18} />
             {hasFilters && (
-              <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full text-[8px] text-white flex items-center justify-center">
-                !
-              </span>
+              <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full text-[8px] text-white flex items-center justify-center">!</span>
             )}
           </button>
         </div>
@@ -89,7 +90,7 @@ export default function SearchPage() {
             <button
               key={tab}
               onClick={() => setType(tab)}
-              className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${type === tab ? "bg-[#003366] text-white" : "bg-gray-100 text-gray-500"}`}
+              className={`flex-1 py-1.5 min-h-[36px] rounded-lg text-xs font-semibold transition-colors ${type === tab ? "bg-[#003366] dark:bg-blue-600 text-white" : "bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400"}`}
             >
               {tab === "buy-sell" ? t.buySell : t.lostFound}
             </button>
@@ -98,40 +99,40 @@ export default function SearchPage() {
 
         {/* Filters panel */}
         {showFilters && (
-          <div className="mt-3 p-3 bg-gray-50 rounded-xl border border-gray-100 space-y-3">
+          <div className="mt-3 p-3 bg-gray-50 dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 space-y-3">
             {type === "buy-sell" && (
               <div>
-                <p className="text-xs font-medium text-gray-600 mb-1.5">{t.filterPrice}</p>
-                <div className="flex gap-2">
+                <p className="text-xs font-medium text-gray-600 dark:text-slate-300 mb-1.5">{t.filterPrice}</p>
+                <div className="flex gap-2 items-center">
                   <input
                     type="number"
                     placeholder={t.minPrice}
                     value={minPrice}
                     onChange={(e) => setMinPrice(e.target.value)}
                     min={0}
-                    className="flex-1 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-[#003366]"
+                    className={inputCls}
                   />
-                  <span className="text-gray-400 self-center">—</span>
+                  <span className="text-gray-400 dark:text-slate-500 shrink-0">—</span>
                   <input
                     type="number"
                     placeholder={t.maxPrice}
                     value={maxPrice}
                     onChange={(e) => setMaxPrice(e.target.value)}
                     min={0}
-                    className="flex-1 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-[#003366]"
+                    className={inputCls}
                   />
                 </div>
               </div>
             )}
 
             <div>
-              <p className="text-xs font-medium text-gray-600 mb-1.5">{t.filterCondition}</p>
+              <p className="text-xs font-medium text-gray-600 dark:text-slate-300 mb-1.5">{t.filterCondition}</p>
               <div className="flex gap-2">
                 {["all", "new", "used"].map((c) => (
                   <button
                     key={c}
                     onClick={() => setCondition(c)}
-                    className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${condition === c ? "bg-[#003366] text-white" : "bg-white border border-gray-200 text-gray-600"}`}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${condition === c ? "bg-[#003366] dark:bg-blue-600 text-white" : "bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 text-gray-600 dark:text-slate-300"}`}
                   >
                     {c === "all" ? t.allConditions : c === "new" ? t.conditionNew : t.conditionUsed}
                   </button>
@@ -140,7 +141,7 @@ export default function SearchPage() {
             </div>
 
             {hasFilters && (
-              <button onClick={clearFilters} className="w-full text-xs text-red-500 border border-red-200 rounded-lg py-1.5 hover:bg-red-50 transition-colors">
+              <button onClick={clearFilters} className="w-full text-xs text-red-500 border border-red-200 dark:border-red-800 rounded-lg py-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
                 {t.clearFilters}
               </button>
             )}
@@ -151,24 +152,24 @@ export default function SearchPage() {
       {/* Results */}
       <div className="px-4 py-4">
         {loading ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="bg-white rounded-2xl border border-gray-100 overflow-hidden animate-pulse">
-                <div className="h-44 bg-gray-100" />
+              <div key={i} className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden animate-pulse">
+                <div className="aspect-[4/3] bg-gray-100 dark:bg-slate-700" />
                 <div className="p-3 space-y-2">
-                  <div className="h-3 bg-gray-100 rounded w-3/4" />
-                  <div className="h-2 bg-gray-100 rounded w-1/2" />
+                  <div className="h-3 bg-gray-100 dark:bg-slate-700 rounded w-3/4" />
+                  <div className="h-2 bg-gray-100 dark:bg-slate-700 rounded w-1/2" />
                 </div>
               </div>
             ))}
           </div>
         ) : searched && results.length === 0 ? (
-          <div className="text-center py-16 text-gray-400">
+          <div className="text-center py-16 text-gray-400 dark:text-slate-400">
             <Search size={36} className="mx-auto mb-3 opacity-30" />
             <p className="text-sm font-medium">{t.noResults}</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {results.map((listing) => (
               <ListingCard key={listing.id} listing={listing} />
             ))}

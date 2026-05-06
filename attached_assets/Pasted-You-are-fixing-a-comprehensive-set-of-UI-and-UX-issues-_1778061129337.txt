@@ -1,0 +1,199 @@
+You are fixing a comprehensive set of UI and UX issues in this codebase. 
+Read every file mentioned below before writing a single line of code.
+Do NOT change any Firebase security rules. Do NOT change firebase.ts. 
+Do NOT hardcode any env vars. Apply all fixes in one pass.
+
+=================================================================
+CATEGORY 1 — DARK MODE: INPUT FIELD VISIBILITY (CRITICAL)
+=================================================================
+
+In AuthModal.tsx (and any other file with <input> fields — 
+ProfilePage.tsx, ResetPasswordPage.tsx, ListingDetailPage.tsx, 
+CreateListingPage/modal), all text inputs are invisible or unreadable 
+in dark mode. 
+
+FIX: Every <input>, <textarea>, and <select> element across the entire 
+codebase must have these Tailwind classes applied consistently:
+
+  bg-white text-gray-900 placeholder-gray-400 border border-gray-300
+  dark:bg-gray-800 dark:text-white dark:placeholder-gray-400 
+  dark:border-gray-600 focus:outline-none focus:ring-2 
+  focus:ring-blue-500 dark:focus:ring-blue-400
+
+Do a global search for every <input and <textarea in the codebase and 
+apply these classes. Do not miss any.
+
+=================================================================
+CATEGORY 2 — DARK MODE: COLOR PALETTE (Navy + Black is wrong)
+=================================================================
+
+The current dark mode uses deep navy (#003366) backgrounds against 
+near-black elements, creating a low-contrast, muddy look.
+
+FIX: Replace the dark mode color system with a proper layered slate 
+palette. In index.css, define the following CSS custom properties 
+under the .dark selector (or as Tailwind v4 @custom-variant):
+
+  Dark background (page):      #0f172a  (slate-900)
+  Dark surface (cards/modals): #1e293b  (slate-800)
+  Dark surface raised (inputs):  #334155 (slate-700)
+  Dark border:                 #475569  (slate-600)
+  Dark text primary:           #f1f5f9  (slate-100)
+  Dark text secondary:         #94a3b8  (slate-400)
+  Dark accent (buttons/links): #3b82f6  (blue-500) — keep brand feel
+
+Update ALL components to use these semantic dark: classes:
+- Page/layout backgrounds: dark:bg-slate-900
+- Cards (ListingCard, modals): dark:bg-slate-800
+- Input fields: dark:bg-slate-700
+- Borders: dark:border-slate-600
+- Primary text: dark:text-slate-100
+- Secondary/muted text: dark:text-slate-400
+- Header/NavBar: dark:bg-slate-900 dark:border-slate-700
+
+The navy blue (#003366) should ONLY be used as the light-mode primary 
+brand color (buttons, accents), NOT as a dark mode background.
+
+=================================================================
+CATEGORY 3 — RESPONSIVE SCALING (Mobile / Tablet)
+=================================================================
+
+The app claims to be mobile-first but has multiple breakpoint issues.
+
+FIX the following specific problems:
+
+3a. HEADER / NAVBAR
+- The logo + nav items + dark mode toggle + sign-in button all collapse 
+  poorly on screens < 380px. 
+- Fix: On xs/sm screens, hide the full text nav labels. The sticky 
+  bottom nav should handle mobile navigation — the top header on mobile 
+  should only show: logo on left, dark mode toggle + avatar/sign-in on 
+  right.
+- Ensure header has: px-4 sm:px-6 lg:px-8 and h-14 sm:h-16
+
+3b. LISTING CARDS GRID (HomePage.tsx)
+- The card grid should use:
+  grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4
+- Cards must not overflow their container on small screens.
+- Card images must have a fixed aspect ratio: aspect-[4/3] object-cover 
+  w-full, not a fixed pixel height.
+
+3c. AUTH MODAL (AuthModal.tsx)
+- On screens < 480px (most phones), the modal overflows vertically and 
+  users cannot scroll to the submit button.
+- Fix: The modal container must use:
+  max-h-[90dvh] overflow-y-auto overscroll-contain
+  on mobile, and be centered using a flex overlay.
+- Modal width: w-full max-w-md mx-4 sm:mx-auto
+- Inputs inside the modal must have min-h-[44px] for touch targets.
+
+3d. LISTING DETAIL PAGE (ListingDetailPage.tsx)
+- On mobile, the image gallery and contact buttons stack incorrectly.
+- Fix: Use flex flex-col on mobile, lg:flex-row for the main layout.
+- Contact buttons (WhatsApp/WeChat) must be full-width on mobile:
+  w-full sm:w-auto
+
+3e. PROFILE PAGE (ProfilePage.tsx)
+- Tabs ("My Listings" | "Settings") must be full-width scrollable on 
+  mobile, not truncated.
+- Fix: Tab bar should use: flex overflow-x-auto whitespace-nowrap 
+  scrollbar-hide border-b dark:border-slate-700
+- Avatar upload button must have min touch target: min-h-[44px] 
+  min-w-[44px]
+
+3f. BOTTOM NAV (mobile sticky nav)
+- Icons in the bottom nav must have adequate tap targets: each item 
+  should be at least 48px tall (h-12 or py-3).
+- Active state must be clearly visible in both light and dark mode.
+- Add safe area inset padding for iPhone notch/home bar:
+  pb-[env(safe-area-inset-bottom)]
+
+3g. TYPOGRAPHY SCALING
+- Body text should not be smaller than 14px (text-sm) on mobile.
+- Headings on the home page should scale: text-xl sm:text-2xl lg:text-3xl
+- Price tags on ListingCard must be legible: text-base font-semibold, 
+  not text-xs.
+
+3h. CREATE LISTING / FORM PAGES
+- Multi-photo upload UI must not overflow on small screens. Use a 
+  responsive grid: grid grid-cols-3 gap-2 for photo thumbnails.
+- All form labels must be visible in dark mode: 
+  text-gray-700 dark:text-slate-300
+- Submit button must be sticky or clearly visible without scrolling 
+  past the fold on mobile. Use: sticky bottom-4 w-full
+
+=================================================================
+CATEGORY 4 — DARK MODE: MODAL OVERLAYS & CARDS
+=================================================================
+
+4a. Modal backdrop: The overlay behind modals must use 
+    bg-black/60 backdrop-blur-sm (not a solid color).
+
+4b. Modal container in dark mode must use dark:bg-slate-800, 
+    dark:text-slate-100 — not dark navy.
+
+4c. ListingCard in dark mode: Cards must use 
+    dark:bg-slate-800 dark:border-slate-700 
+    The "SOLD" badge overlay must remain visible: use 
+    bg-black/70 text-white in all modes.
+
+4d. Dropdown menus and <select> elements: In dark mode, 
+    native <select> dropdowns become unreadable. Replace any 
+    native <select> elements in filter/search UI with styled 
+    divs or use: 
+    dark:bg-slate-700 dark:text-slate-100 dark:[color-scheme:dark]
+    The last class forces the browser's native dropdown to respect 
+    dark mode.
+
+=================================================================
+CATEGORY 5 — FOCUS & ACCESSIBILITY
+=================================================================
+
+5a. All interactive elements (buttons, links, inputs) must have a 
+    visible focus ring. Add to global styles in index.css:
+    
+    :focus-visible {
+      outline: 2px solid #3b82f6;
+      outline-offset: 2px;
+    }
+
+5b. Buttons must have minimum touch targets of 44x44px. 
+    Apply min-h-[44px] to all <button> elements that currently 
+    use only py-1 or py-2.
+
+5c. Images in ListingCard must have descriptive alt attributes — 
+    use the listing title as the alt text, not empty or "image".
+
+=================================================================
+CATEGORY 6 — MINOR POLISH
+=================================================================
+
+6a. Scrollbar in dark mode is harsh white. Add to index.css:
+    .dark ::-webkit-scrollbar { background: #1e293b; }
+    .dark ::-webkit-scrollbar-thumb { background: #475569; 
+      border-radius: 4px; }
+
+6b. Page transitions: Add a simple fade-in on route change.
+    Wrap page content in a div with: 
+    animate-in fade-in duration-200  
+    (Tailwind v4 supports this natively.)
+
+6c. The "Load More" button on the feed should show a spinner 
+    while loading, not just be disabled. Use the existing loading 
+    state to show a small spinner icon inside the button.
+
+6d. Empty state on the feed (no listings): Ensure the empty state 
+    message is visible in dark mode — text must use 
+    dark:text-slate-400, not a color that blends into the background.
+
+=================================================================
+IMPORTANT CONSTRAINTS — DO NOT VIOLATE
+=================================================================
+- Tailwind version is v4. Dark mode uses @custom-variant in index.css 
+  (NOT darkMode: 'class' in tailwind.config). 
+  Do NOT add a tailwind.config.js darkMode setting.
+- Keep using wouter for routing. No next/navigation.
+- Keep experimentalAutoDetectLongPolling: true in firebase.ts.
+- Keep all VITE_ env var mappings. No hardcoded Firebase config values.
+- All UI strings must be added to i18n.ts in BOTH 'en' and 'zh' keys.
+- Do not change Firebase security rules.
