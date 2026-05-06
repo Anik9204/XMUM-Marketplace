@@ -42,6 +42,12 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
     return () => clearInterval(timerRef.current);
   }, []);
 
+  // Lock body scroll while modal is open
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = ""; };
+  }, []);
+
   useEffect(() => {
     if (verificationPending && user?.emailVerified) {
       onClose();
@@ -109,8 +115,8 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
   // ── Verification Pending View ────────────────────────────────────────────────
   if (verificationPending) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md mx-4 sm:mx-auto relative overflow-hidden">
+      <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="bg-white dark:bg-slate-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md sm:mx-4 relative max-h-[90dvh] overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)] sm:pb-0">
           <div className="h-1.5 bg-gradient-to-r from-[#003366] to-[#0055aa]" />
           <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-slate-200">
             <X size={20} />
@@ -154,8 +160,8 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
 
   // ── Normal Auth View ─────────────────────────────────────────────────────────
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md mx-4 sm:mx-auto relative overflow-hidden max-h-[90dvh] overflow-y-auto overscroll-contain">
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="bg-white dark:bg-slate-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md sm:mx-4 relative max-h-[90dvh] overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)] sm:pb-0">
         <div className="h-1.5 bg-gradient-to-r from-[#003366] to-[#0055aa]" />
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-slate-200 z-10">
           <X size={20} />

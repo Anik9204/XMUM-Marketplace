@@ -1,0 +1,218 @@
+Read ALL files listed before writing a single line of code.
+Two bugs to fix. Do not combine them — fix and verify each one.
+
+Files to read first:
+  - src/components/AuthModal.tsx
+  - src/components/Layout.tsx  (or wherever the bottom nav 
+    and modal are rendered together)
+  - src/components/BottomNav.tsx
+  - src/index.css
+  - vite.config.ts
+  - .replit (check the run command and port config)
+
+=================================================================
+BUG 1 — AUTH MODAL SUBMIT BUTTON HIDDEN BEHIND BOTTOM NAV
+=================================================================
+
+SYMPTOM:
+When users open the Sign Up or Sign In modal on mobile, the 
+bottom of the modal (including the Submit/Sign Up button) is 
+hidden behind the fixed bottom navigation bar. Users cannot 
+tap the submit button. This is confirmed on real devices.
+
+ROOT CAUSE:
+The bottom nav uses position: fixed at the bottom of the 
+screen (z-index ~40 or 50). The AuthModal is a full-screen 
+overlay but its inner scrollable container does not account 
+for the height of the fixed bottom nav, so content at the 
+bottom of the modal is obscured.
+
+REQUIRED FIXES:
+
+Fix 1A — Modal overlay must render ABOVE the bottom nav.
+The AuthModal backdrop/overlay div must have a z-index 
+higher than the bottom nav. 
+
+Check the z-index values currently in use:
+  - Bottom nav is likely: z-40 or z-50
+  - Modal overlay must be: z-50 or z-60 (one step higher)
+
+Set the AuthModal's outermost overlay div to:
+  className="fixed inset-0 z-[60] flex items-end sm:items-center 
+             justify-center bg-black/60 backdrop-blur-sm"
+
+Note: items-end on mobile makes the modal slide up from the 
+bottom like a native mobile sheet, which is better UX. 
+items-center centers it on tablet/desktop.
+
+Fix 1B — The modal container itself must clear the bottom nav.
+Even with correct z-index, if the modal panel doesn't account 
+for the bottom nav height, users still can't scroll to the 
+button on short screens.
+
+The modal panel (the white/dark card) must use:
+  className="w-full sm:max-w-md bg-white dark:bg-slate-800 
+             rounded-t-2xl sm:rounded-2xl 
+             max-h-[90dvh] overflow-y-auto overscroll-contain
+             pb-[env(safe-area-inset-bottom)]
+             sm:pb-6 sm:mx-4"
+
+The rounded-t-2xl (rounded top corners only) on mobile gives 
+it the native bottom-sheet appearance. On sm+ screens it 
+becomes a centered card with rounded-2xl.
+
+Fix 1C — Body scroll lock when modal is open.
+When the AuthModal is open, the page behind it must not scroll.
+Add this effect inside AuthModal:
+
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => { document.body.style.overflow = '' }
+  }, [isOpen])
+
+  (Check what prop controls visibility — isOpen, show, open, 
+  or similar. Use whatever is already in the component.)
+
+Fix 1D — Apply the same fix to ALL other modals in the app.
+Search the codebase for any other modal/dialog components 
+(email verification modal, listing detail modal if any, 
+confirmation dialogs). Every modal overlay must have:
+  - z-[60] or higher (above the bottom nav)
+  - overflow-y-auto overscroll-contain on the panel
+  - Body scroll lock while open
+
+Fix 1E — Bottom nav must sit BELOW all modals in z-index.
+In BottomNav.tsx, confirm the nav container uses at most z-50.
+If it currently uses z-50, change it to z-40.
+The rule is: bottom nav z-40, modals z-[60].
+This gives a clear hierarchy:
+  page content   → z-0
+  sticky header  → z-30  
+  bottom nav     → z-40
+  modals/drawers → z-[60]
+
+=================================================================
+BUG 2 — APP NOT RUNNING / NOT PREVIEWING ON REPLIT
+=================================================================
+
+SYMPTOM:
+The Replit deployment is not showing the app. The preview 
+is blank or shows a connection error.
+
+DIAGNOSE by reading these files in order:
+  1. .replit          — check the [run] command and 
+                        [[ports]] configuration
+  2. vite.config.ts   — check server.port, server.host, 
+                        and server.allowedHosts settings
+  3. package.json     (root level) — check scripts
+  4. artifacts/xmum-market/package.json — check dev script
+
+COMMON CAUSES AND FIXES:
+
+Cause A — Wrong port configuration.
+Replit expects the app to run on port 5173 (Vite default) 
+OR on the PORT environment variable it injects.
+In vite.config.ts, the server config must be:
+
+  server: {
+    host: '0.0.0.0',  // CRITICAL — must bind to all 
+                       // interfaces, not just localhost
+    port: parseInt(process.env.PORT ?? '5173'),
+    strictPort: false,
+    allowedHosts: 'all',  // allow Replit's proxy domain
+  }
+
+If host is 'localhost' or '127.0.0.1', Replit's proxy 
+cannot reach it and the preview will be blank.
+
+Cause B — Wrong run command in .replit.
+The [run] command in .replit must navigate to the correct 
+directory and run the dev server. It should be:
+
+  run = "cd artifacts/xmum-market && pnpm install && pnpm dev"
+
+Or if using a workflow, confirm the workflow task points to 
+the correct directory. If the run command points to the 
+root package.json and there is no dev script there that 
+delegates to the app, the server won't start.
+
+Cause C — allowedHosts missing or wrong.
+Vite 5+ requires explicit allowedHosts configuration for 
+non-localhost domains. Replit's preview URL is a subdomain 
+like *.replit.dev or *.repl.co. Without allowedHosts: 'all' 
+(or the specific Replit domain), Vite will refuse connections 
+from the preview iframe and show a blank page or 
+"Invalid Host header" error.
+
+Set in vite.config.ts:
+  server: {
+    host: '0.0.0.0',
+    port: parseInt(process.env.PORT ?? '5173'),
+    strictPort: false,
+    allowedHosts: 'all',
+  }
+
+Cause D — HMR websocket broken (expected, not blocking).
+In Replit, Vite HMR websocket connections often fail due to 
+the proxy. This shows as a warning in the console but does 
+NOT prevent the app from loading. Add this to vite.config.ts 
+to suppress it and prevent blank screens caused by HMR 
+errors:
+
+  server: {
+    host: '0.0.0.0',
+    port: parseInt(process.env.PORT ?? '5173'),
+    strictPort: false,
+    allowedHosts: 'all',
+    hmr: {
+      clientPort: 443,  // Replit proxies on 443
+      protocol: 'wss',
+    },
+  }
+
+Cause E — pnpm not installed or packages missing.
+The run command must include pnpm install before pnpm dev.
+If packages are missing the server won't start.
+
+ACTION REQUIRED:
+After diagnosing which cause applies, apply the fix and 
+then confirm the preview URL loads the app by checking 
+the Replit webview or running the dev server and watching 
+the console output. The server MUST show:
+  "Local:   http://0.0.0.0:5173/" 
+  or similar — NOT "localhost only".
+
+=================================================================
+VERIFICATION CHECKLIST (do all of these before reporting done)
+=================================================================
+
+After applying both fixes:
+
+[ ] Open the app on a mobile screen (use Replit's mobile 
+    preview or browser DevTools device simulation at 375px 
+    width — iPhone SE size, the hardest case)
+[ ] Tap "Sign In" or "Sign Up" — the modal must slide up 
+    from the bottom
+[ ] Scroll inside the modal — the submit button must be 
+    fully visible and tappable above the bottom nav
+[ ] The bottom nav must NOT appear on top of the modal
+[ ] The page behind the modal must not scroll while modal 
+    is open
+[ ] The Replit preview URL must load the app without a 
+    blank screen or connection error
+[ ] Run TypeScript typecheck: zero new errors
+
+=================================================================
+CONSTRAINTS — DO NOT VIOLATE
+=================================================================
+- Do NOT change Firebase security rules or firebase.ts config
+- Do NOT remove experimentalAutoDetectLongPolling: true
+- Do NOT change routing — wouter only
+- Tailwind v4: dark mode via @custom-variant in index.css only
+  Do NOT add darkMode to tailwind.config
+- All new UI strings in i18n.ts in BOTH 'en' and 'zh'
+- Zero new TypeScript errors after all changes

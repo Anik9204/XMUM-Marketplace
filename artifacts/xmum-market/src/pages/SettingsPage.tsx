@@ -425,7 +425,7 @@ export default function SettingsPage() {
 
       {/* Account deletion modal */}
       {showDeleteModal && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[60] flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 w-full max-w-sm">
             <div className="flex items-center gap-2 mb-2">
               <div className="w-8 h-8 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center shrink-0">

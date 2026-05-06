@@ -119,7 +119,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </footer>
 
       {/* Mobile bottom nav — min 48px tap targets, safe area inset */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-700 z-50">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-700 z-40">
         <div className="flex pb-[env(safe-area-inset-bottom)]">
           {navItems.map(({ href, icon: Icon, label, activeFor }) => {
             const active = activeFor ? activeFor.includes(location) : location === href;

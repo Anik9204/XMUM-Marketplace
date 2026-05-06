@@ -195,7 +195,7 @@ export default function ProfilePage() {
 
       {/* Delete listing confirmation modal */}
       {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[60] flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 w-full max-w-sm">
             <p className="font-semibold text-gray-800 dark:text-slate-100 mb-1">{t.deleteConfirm}</p>
             <p className="text-xs text-gray-500 dark:text-slate-400 mb-4 truncate">{deleteTarget.title}</p>
