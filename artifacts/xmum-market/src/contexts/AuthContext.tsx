@@ -10,6 +10,11 @@ interface AuthContextValue {
   userProfile: UserProfile | null;
   loading: boolean;
   refetchProfile: () => Promise<void>;
+  /** Temporary local object URL shown while an avatar upload is in flight.
+   *  Set to a createObjectURL() result before uploading; clear to null after
+   *  refetchProfile() completes so the real Firestore URL takes over. */
+  avatarOverride: string | null;
+  setAvatarOverride: (url: string | null) => void;
 }
 
 const AuthContext = createContext<AuthContextValue>({
@@ -17,12 +22,15 @@ const AuthContext = createContext<AuthContextValue>({
   userProfile: null,
   loading: true,
   refetchProfile: async () => {},
+  avatarOverride: null,
+  setAvatarOverride: () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [avatarOverride, setAvatarOverride] = useState<string | null>(null);
   // Tick forces a re-render after reload() mutates the User object in-place.
   // Firebase does NOT create a new User reference on reload(), so React won't
   // detect the emailVerified change without this nudge.
@@ -50,6 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await fetchProfile(u.uid);
       } else {
         setUserProfile(null);
+        setAvatarOverride(null); // clear any in-flight preview on sign-out
       }
       setLoading(false);
     });
@@ -83,7 +92,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user, user?.emailVerified]);
 
   return (
-    <AuthContext.Provider value={{ user, userProfile, loading, refetchProfile }}>
+    <AuthContext.Provider value={{ user, userProfile, loading, refetchProfile, avatarOverride, setAvatarOverride }}>
       {children}
     </AuthContext.Provider>
   );

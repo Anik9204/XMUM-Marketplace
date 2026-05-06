@@ -66,7 +66,7 @@ function SkeletonCard({ rows = 3 }: { rows?: number }) {
 
 export default function SettingsPage() {
   const { t } = useLang();
-  const { user, userProfile, loading: authLoading, refetchProfile } = useAuth();
+  const { user, userProfile, loading: authLoading, refetchProfile, setAvatarOverride } = useAuth();
   const [, navigate] = useLocation();
 
   const [showAuth, setShowAuth] = useState(false);
@@ -82,7 +82,9 @@ export default function SettingsPage() {
   const [profileSaved, setProfileSaved] = useState(false);
   const [profileError, setProfileError] = useState("");
 
-  const [avatarUrl, setAvatarUrl] = useState("");
+  // Local preview URL (object URL) shown instantly before Storage upload completes.
+  // When null, falls back to userProfile.avatarUrl from context.
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [avatarError, setAvatarError] = useState("");
   const avatarInputRef = useRef<HTMLInputElement>(null);
@@ -107,10 +109,13 @@ export default function SettingsPage() {
     setFullName(userProfile.fullName ?? "");
     setSettingsWhatsapp(userProfile.whatsapp ?? "");
     setSettingsWechat(userProfile.wechat ?? "");
-    setAvatarUrl(userProfile.avatarUrl ?? "");
     setShowEmail(userProfile.showEmail ?? true);
     setShowWhatsApp(userProfile.showWhatsApp ?? true);
     setShowWeChat(userProfile.showWeChat ?? true);
+    // Only reset avatarPreview when NOT mid-upload (don't flash old photo during upload)
+    if (!uploadingAvatar) {
+      setAvatarPreview(null);
+    }
   }, [userProfile]);
 
   if (!user) {
@@ -164,17 +169,30 @@ export default function SettingsPage() {
     setAvatarError("");
     if (!file.type.startsWith("image/")) { setAvatarError("Only image files are allowed (JPG, PNG, WebP, etc.)."); return; }
     if (file.size > 5 * 1024 * 1024) { setAvatarError(t.imageTooLarge); return; }
-    const previousUrl = avatarUrl;
-    setAvatarUrl(URL.createObjectURL(file));
+
+    // Fix A — instant local preview: show the new image the moment the user picks it,
+    // before any network call. No network delay; the object URL reads directly from memory.
+    const localPreviewUrl = URL.createObjectURL(file);
+    setAvatarPreview(localPreviewUrl);
+    // Fix C — propagate to context so ProfilePage and any other consumer also
+    // shows the new photo instantly during the upload window.
+    setAvatarOverride(localPreviewUrl);
     setUploadingAvatar(true);
+
     try {
-      // uploadAvatar now writes avatarUrl to Firestore internally (Fix E)
-      const url = await uploadAvatar(file, user.uid);
-      setAvatarUrl(url);
-      // Refresh context so all consumers (header, profile page) see new avatar
+      // uploadAvatar: uploads to Storage, gets download URL, writes to Firestore users/{uid}
+      await uploadAvatar(file, user.uid);
+      // Refresh context so userProfile.avatarUrl becomes the real Firebase Storage URL
       await refetchProfile();
+      // Fix B — clean up: the real URL is now in context; revoke the object URL to free memory
+      setAvatarOverride(null);
+      URL.revokeObjectURL(localPreviewUrl);
+      setAvatarPreview(null);
     } catch (err: any) {
-      setAvatarUrl(previousUrl);
+      // On failure: revert the optimistic preview and clear the override
+      setAvatarPreview(null);
+      setAvatarOverride(null);
+      URL.revokeObjectURL(localPreviewUrl);
       const code: string = err?.code ?? "";
       if (code === "storage/unauthorized" || code === "permission-denied") setAvatarError("Upload blocked. Ensure your file is an image under 5 MB and you are signed in with your XMUM email.");
       else if (code === "storage/quota-exceeded") setAvatarError("Storage quota exceeded. Please contact support.");
@@ -195,13 +213,11 @@ export default function SettingsPage() {
         updateProfile(user.uid, { fullName: fullName.trim(), whatsapp: settingsWhatsapp.trim(), wechat: settingsWechat.trim() }),
         new Promise<void>((_, reject) => setTimeout(() => reject(new Error("timeout")), 8_000)),
       ]);
-      // Refresh context so all consumers see updated name immediately
       await refetchProfile();
       setProfileSaved(true);
       setTimeout(() => setProfileSaved(false), 3000);
     } catch (err: any) {
       if (err?.message === "timeout") {
-        // Firestore will sync when back online — optimistically show success
         await refetchProfile().catch(() => {});
         setProfileSaved(true);
         setTimeout(() => setProfileSaved(false), 3000);
@@ -265,9 +281,13 @@ export default function SettingsPage() {
     }
   };
 
+  // Fix A — avatar display: use local object URL preview (instant) → fall back to
+  // Firestore URL from context → fall back to initials placeholder.
+  const avatarSrc = avatarPreview ?? userProfile?.avatarUrl;
+
   const AvatarDisplay = () =>
-    avatarUrl ? (
-      <img src={avatarUrl} alt="avatar" className="w-20 h-20 rounded-full object-cover border-2 border-white dark:border-slate-700 shadow" />
+    avatarSrc ? (
+      <img src={avatarSrc} alt="avatar" className="w-20 h-20 rounded-full object-cover border-2 border-white dark:border-slate-700 shadow" />
     ) : (
       <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#003366] to-[#0055aa] flex items-center justify-center text-white font-bold text-2xl shadow">
         {(user.email ?? "?")[0].toUpperCase()}
@@ -289,11 +309,12 @@ export default function SettingsPage() {
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-5">
             <h3 className="text-sm font-bold text-gray-800 dark:text-slate-200 mb-4">Profile Photo</h3>
             <div className="flex items-center gap-4">
+              {/* Fix D — spinner overlay during upload, visible in both light and dark */}
               <div className="relative shrink-0">
                 <AvatarDisplay />
                 {uploadingAvatar && (
                   <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center">
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   </div>
                 )}
               </div>

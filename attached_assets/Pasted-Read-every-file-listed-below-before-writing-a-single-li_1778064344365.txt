@@ -1,0 +1,191 @@
+Read every file listed below before writing a single line of code.
+Fix the account deletion cascade bug described. Do NOT change any 
+Firebase security rules. Do NOT change firebase.ts env var mappings 
+or the experimentalAutoDetectLongPolling setting.
+
+=================================================================
+BUG — ACCOUNT DELETION DOES NOT CLEAN UP STORAGE FILES
+=================================================================
+
+SYMPTOM:
+When a user deletes their account, only their Firebase Auth 
+credentials (and possibly their Firestore users/{uid} doc) are 
+removed. The following Storage files are left behind as orphans:
+
+  1. avatars/{uid}/avatar.*          — their profile photo
+  2. listings/{uid}/{listingId}/*    — ALL images for every listing 
+     they ever posted (up to 3 photos per listing)
+
+This is both a storage cost leak and a privacy violation — deleted 
+users' photos remain publicly accessible via their download URLs.
+
+FILES TO READ FIRST (read all of these before writing anything):
+  - src/lib/auth.ts          (contains the deleteAccount function)
+  - src/lib/userProfile.ts   (contains uploadAvatar, getProfile)
+  - src/lib/listings.ts      (contains getUserListings, deleteListing,
+                               and any existing deleteObject calls)
+  - src/lib/types.ts         (Listing and UserProfile interfaces — 
+                               need to know imageUrls/photoURLs field 
+                               names on a Listing document)
+  - src/pages/SettingsPage.tsx (where deleteAccount is called from 
+                               the UI — need to see loading/error 
+                               state handling)
+
+=================================================================
+REQUIRED FIX — CASCADING DELETION SEQUENCE
+=================================================================
+
+The deletion must follow this strict ORDER to avoid permission 
+errors. Firebase Storage delete rules require auth.uid == userId, 
+so ALL storage deletes MUST happen while the user is still 
+authenticated — before deleteUser() is called.
+
+Step 1 — Fetch all user's listings from Firestore FIRST
+  Call getUserListings(uid) to get every listing document 
+  belonging to this user. We need the imageUrls (or photos, 
+  or whatever the field is named in types.ts — check it) 
+  from each listing to build the Storage delete list.
+
+Step 2 — Delete all listing Storage files IN PARALLEL
+  For each listing, for each image URL in its imageUrls array:
+  - Parse the Storage path from the download URL, OR
+  - Reconstruct the path as: listings/{uid}/{listingId}/{filename}
+  
+  IMPORTANT: Use Firebase Storage's ref(storage, path) + 
+  deleteObject(ref) — NOT fetch() on the URL directly.
+  
+  If a listing's imageUrls field stores full download URLs 
+  (https://firebasestorage.googleapis.com/...), extract the 
+  path using decodeURIComponent on the URL's path segment 
+  between "/o/" and "?alt=". Example helper:
+  
+    function storagePathFromUrl(url: string): string {
+      const match = url.match(/\/o\/(.+?)\?/);
+      if (!match) throw new Error('Invalid storage URL');
+      return decodeURIComponent(match[1]);
+    }
+  
+  Wrap each deleteObject in try/catch — if a file is already 
+  gone (storage/object-not-found), swallow the error silently 
+  and continue. Never let a missing file abort the whole 
+  deletion sequence.
+  
+  Run all listing image deletes with Promise.allSettled() 
+  (NOT Promise.all — allSettled never throws even if one fails).
+
+Step 3 — Delete all listing Firestore DOCUMENTS in parallel
+  For each listing from Step 1, call deleteDoc on 
+  listings/{listingId}. 
+  Use the same 6-second race-timeout pattern already used 
+  elsewhere in the codebase (offline persistence can block):
+  
+    const withTimeout = (p: Promise<any>, ms: number) =>
+      Promise.race([p, new Promise(res => setTimeout(res, ms))]);
+  
+  Run all deleteDoc calls with Promise.allSettled().
+
+Step 4 — Delete the avatar from Storage
+  Delete the file at: avatars/{uid}/avatar.{ext}
+  
+  The extension may vary (jpg, png, webp). The safest approach 
+  is to read userProfile.avatarUrl from Firestore BEFORE deleting 
+  the users/{uid} doc, then use storagePathFromUrl() to get the 
+  exact path. If avatarUrl is null/empty, skip this step silently.
+  
+  Wrap in try/catch — swallow storage/object-not-found.
+
+Step 5 — Delete the Firestore users/{uid} document
+  deleteDoc(doc(db, 'users', uid))
+  Wrap in the 6s race-timeout. Swallow errors.
+
+Step 6 — Delete the Firebase Auth account
+  THIS MUST BE LAST.
+  Call user.delete() (or deleteUser(user) from firebase/auth).
+  
+  IMPORTANT: Firebase Auth requires recent sign-in for account 
+  deletion. If this throws an auth/requires-recent-login error, 
+  catch it specifically and:
+    a) Do NOT proceed with deletion
+    b) Return a specific error code the UI can detect
+    c) The UI should then prompt the user to re-enter their 
+       password, call reauthenticateWithCredential(), then 
+       retry the entire deleteAccount() flow from Step 1.
+
+=================================================================
+FUNCTION SIGNATURE TO IMPLEMENT IN auth.ts
+=================================================================
+
+Replace or rewrite the existing deleteAccount function with:
+
+  export async function deleteAccount(
+    user: FirebaseUser,
+    password: string  // needed for re-auth if required
+  ): Promise<{ success: boolean; requiresReauth: boolean; error?: string }>
+
+Internal flow:
+  try {
+    // Steps 1-6 as described above
+    return { success: true, requiresReauth: false };
+  } catch (err: any) {
+    if (err.code === 'auth/requires-recent-login') {
+      // Attempt silent re-auth with provided password
+      try {
+        const credential = EmailAuthProvider.credential(
+          user.email!, password
+        );
+        await reauthenticateWithCredential(user, credential);
+        // Retry steps 1-6 after successful re-auth
+        // ... (run full cascade again)
+        return { success: true, requiresReauth: false };
+      } catch {
+        return { success: false, requiresReauth: true, 
+                 error: 'Please sign out and sign in again before deleting your account.' };
+      }
+    }
+    return { success: false, requiresReauth: false, 
+             error: err.message ?? 'Deletion failed' };
+  }
+
+=================================================================
+UI FIX IN SettingsPage.tsx
+=================================================================
+
+The "Delete Account" confirmation UI must:
+
+1. Show a confirmation dialog/modal before proceeding — with 
+   text warning the user this is permanent and all their listings 
+   and photos will be deleted. Add i18n strings for this in 
+   BOTH en and zh keys in i18n.ts.
+
+2. Include a password input field in the confirmation dialog 
+   so the password can be passed directly to deleteAccount(). 
+   This avoids the requires-recent-login error entirely for 
+   most cases.
+   Style the input with: dark:bg-slate-700 dark:text-slate-100 
+   dark:border-slate-600 (consistent with existing dark mode).
+
+3. Show a loading spinner/state during deletion — the cascade 
+   can take 2-5 seconds with many listings. Disable the confirm 
+   button during loading.
+
+4. If deleteAccount returns requiresReauth: true, show an 
+   error toast/message with the error string — do not crash.
+
+5. On success, the user is already signed out (Auth account 
+   deleted). Navigate to '/' and clear any local state.
+
+=================================================================
+IMPORTANT CONSTRAINTS — DO NOT VIOLATE
+=================================================================
+- Do NOT change Firebase Firestore or Storage security rules.
+- Do NOT change firebase.ts, env vars, or long-polling config.
+- Keep the 6-second timeout pattern for all deleteDoc calls 
+  (offline persistence can block indefinitely in Replit).
+- Use Promise.allSettled() for all parallel deletes — never 
+  Promise.all() which would abort on first error.
+- All Storage deletes MUST happen before deleteUser() — 
+  order is non-negotiable due to auth rules.
+- Keep wouter for navigation. No next/navigation.
+- All new UI strings must be in i18n.ts under both 'en' and 'zh'.
+- Run TypeScript typecheck after all changes and fix any errors 
+  before reporting done. Zero new TS errors required.

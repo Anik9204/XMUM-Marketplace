@@ -1,0 +1,140 @@
+Read src/lib/userProfile.ts, src/contexts/AuthContext.tsx, and 
+src/pages/SettingsPage.tsx (or ProfilePage.tsx — wherever the 
+avatar upload UI lives) before writing any code.
+
+=================================================================
+BUG — AVATAR UPDATE IS SLOW TO APPEAR IN THE UI
+=================================================================
+
+SYMPTOM:
+When a user selects a new profile picture, the image uploads to 
+Firebase Storage quickly, but the new photo takes a long time 
+to visibly update in the app (header avatar, settings page, 
+profile page). The user sees the old photo for several seconds 
+after the upload completes.
+
+ROOT CAUSE:
+The current flow is fully sequential and waits for the entire 
+round-trip before updating the UI:
+  upload to Storage → get download URL → write to Firestore 
+  → refetchProfile() → context updates → component re-renders
+
+The UI only updates at the very end of this chain. The fix is 
+to show the new image IMMEDIATELY using a local object URL as 
+soon as the user picks the file, before any network call happens.
+
+=================================================================
+REQUIRED FIX — OPTIMISTIC UI UPDATE FOR AVATAR
+=================================================================
+
+In the component that handles avatar upload 
+(SettingsPage.tsx or ProfilePage.tsx):
+
+Fix A — Instant local preview on file selection:
+When the user selects a file via the file input's onChange 
+handler, BEFORE calling uploadAvatar():
+  1. Create a local object URL from the selected File:
+       const localPreviewUrl = URL.createObjectURL(file)
+  2. Immediately set this as the displayed avatar in local 
+     component state:
+       setAvatarPreview(localPreviewUrl)
+  3. This renders instantly — zero network delay.
+
+The component should have a local state for the preview:
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+
+When rendering the avatar image, use:
+  src={avatarPreview ?? userProfile?.avatarUrl ?? defaultAvatar}
+
+This means:
+  - While uploading: shows the instant local preview
+  - After refetchProfile() completes: userProfile.avatarUrl 
+    is the real Firebase URL, avatarPreview can be cleared
+  - If upload fails: revert avatarPreview back to null
+
+Fix B — Clean up the object URL after upload completes:
+Object URLs hold a reference to memory. After the upload 
+succeeds and refetchProfile() has been called, release it:
+  URL.revokeObjectURL(localPreviewUrl)
+  setAvatarPreview(null)
+  // Now userProfile.avatarUrl (from context) takes over
+
+If the upload fails, also revoke and clear avatarPreview:
+  URL.revokeObjectURL(localPreviewUrl)
+  setAvatarPreview(null)
+  // Show error toast
+
+Fix C — Propagate the preview to the Header/NavBar avatar:
+The header avatar likely reads from userProfile.avatarUrl 
+(from AuthContext). During the upload window, it will still 
+show the old photo because the context hasn't been refetched yet.
+
+Fix: Pass the local preview URL into AuthContext as a temporary 
+override, OR (simpler) lift the avatarPreview state up and pass 
+it as a prop/context value.
+
+Simplest approach — add an optional avatarOverride to AuthContext:
+
+In AuthContext.tsx, add:
+  const [avatarOverride, setAvatarOverride] = useState<string | null>(null)
+
+Expose it from context:
+  { user, userProfile, loading, refetchProfile, 
+    avatarOverride, setAvatarOverride }
+
+In the Header/NavBar component, render avatar as:
+  src={avatarOverride ?? userProfile?.avatarUrl ?? defaultAvatar}
+
+In SettingsPage/ProfilePage, during upload:
+  setAvatarOverride(localPreviewUrl)   // called before upload
+  await uploadAvatar(...)
+  await refetchProfile()
+  setAvatarOverride(null)              // called after refetch, 
+  URL.revokeObjectURL(localPreviewUrl) // context takes over
+
+Fix D — Show a subtle upload progress indicator:
+While the upload is in progress (after file selected, before 
+refetchProfile completes), show a small loading ring overlaid 
+on the avatar image so the user knows something is happening:
+
+  {isUploadingAvatar && (
+    <div className="absolute inset-0 flex items-center 
+                    justify-center rounded-full 
+                    bg-black/40">
+      <div className="w-6 h-6 border-2 border-white 
+                      border-t-transparent rounded-full 
+                      animate-spin" />
+    </div>
+  )}
+
+The avatar container needs: relative overflow-hidden 
+The spinner overlay needs: absolute inset-0
+
+=================================================================
+SUMMARY OF THE FULL UPLOAD FLOW AFTER THIS FIX
+=================================================================
+
+1. User picks file → createObjectURL → setAvatarPreview() 
+   + setAvatarOverride() → avatar updates INSTANTLY everywhere
+2. setIsUploadingAvatar(true) → spinner appears on avatar
+3. uploadAvatar() runs in background (Storage upload)
+4. On success: await refetchProfile() → context gets real URL
+5. setAvatarOverride(null) + URL.revokeObjectURL() + 
+   setIsUploadingAvatar(false) → spinner gone, real URL renders
+6. On failure: revert preview, clear override, show error toast
+
+The user sees their new photo the moment they pick it.
+Upload happens silently in the background.
+
+=================================================================
+CONSTRAINTS — DO NOT VIOLATE
+=================================================================
+- Do NOT change firebase.ts, security rules, or env vars.
+- Do NOT change the uploadAvatar() function's upload logic — 
+  only add the Firestore avatarUrl write-back if it is missing 
+  (it should already be there from the previous fix).
+- Keep experimentalAutoDetectLongPolling: true.
+- Keep wouter. No next/navigation.
+- Dark mode: avatar overlay spinner must be visible in both 
+  light and dark mode (bg-black/40 works for both).
+- Run TypeScript typecheck after changes. Zero new errors.

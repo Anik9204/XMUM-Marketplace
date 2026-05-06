@@ -26,9 +26,9 @@ function SuccessToast({ message, onDone }: { message: string; onDone: () => void
 
 export default function ProfilePage() {
   const { t } = useLang();
-  // userProfile comes from shared context — populated by AuthContext on auth state change.
-  // Reading it here means avatar/name survive tab navigation without additional fetches.
-  const { user, userProfile } = useAuth();
+  // avatarOverride is a temporary object URL set by SettingsPage during an upload.
+  // It propagates here via context so this page also shows the new photo instantly.
+  const { user, userProfile, avatarOverride } = useAuth();
   const [, navigate] = useLocation();
 
   const [showAuth, setShowAuth] = useState(false);
@@ -104,13 +104,13 @@ export default function ProfilePage() {
     navigate("/");
   };
 
-  // Read avatar and name from shared userProfile context (survives tab navigation)
-  const avatarUrl = userProfile?.avatarUrl ?? "";
+  // Priority: avatarOverride (instant object URL during upload) → Firestore URL from context
+  const avatarSrc = avatarOverride ?? userProfile?.avatarUrl ?? "";
   const displayName = userProfile?.fullName || user.email?.split("@")[0] || "";
 
   const AvatarDisplay = () =>
-    avatarUrl ? (
-      <img src={avatarUrl} alt="avatar" className="w-14 h-14 rounded-full object-cover border-2 border-white dark:border-slate-700 shadow" />
+    avatarSrc ? (
+      <img src={avatarSrc} alt="avatar" className="w-14 h-14 rounded-full object-cover border-2 border-white dark:border-slate-700 shadow" />
     ) : (
       <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#003366] to-[#0055aa] flex items-center justify-center text-white font-bold text-xl shadow">
         {(user.email ?? "?")[0].toUpperCase()}
