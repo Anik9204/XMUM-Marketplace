@@ -36,7 +36,7 @@ export async function signUp(
   // flow has already succeeded and the verification email has been sent.
   setDoc(doc(db, "users", cred.user.uid), {
     uid: cred.user.uid,
-    email: cred.user.email,
+    email: cred.user.email ?? "",
     displayName: email.split("@")[0],
     fullName: fullName.trim(),
     avatarUrl: "",

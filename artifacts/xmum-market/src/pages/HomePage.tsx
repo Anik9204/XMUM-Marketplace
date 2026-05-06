@@ -31,6 +31,19 @@ export default function HomePage() {
       setListings(result.listings);
       setCursor(result.cursor);
       setHasMore(result.hasMore);
+    } catch (err: any) {
+      // Firestore may be temporarily offline while long-polling connects
+      // (especially after a Firebase Auth redirect). These are transient and
+      // non-fatal — show an empty feed silently rather than crashing.
+      const code: string = err?.code ?? err?.message ?? "";
+      const isOffline =
+        code.includes("unavailable") ||
+        code.includes("offline") ||
+        code.includes("failed-precondition");
+      if (!isOffline) {
+        console.error("[HomePage] Failed to load listings:", err);
+      }
+      // Listings remain empty; the user can switch tabs or reload to retry.
     } finally {
       setLoading(false);
     }

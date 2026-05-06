@@ -1,0 +1,16 @@
+Failed to get document because the client is offline" after password reset link redirect
+When a user clicks the password reset link in their email, Firebase redirects them back to the app with an oobCode action code in the URL. At this point, a Vite HMR runtime error overlay appears with the message: Failed to get document because the client is offline.
+The root cause is that our app is not handling Firebase Auth action URLs (the mode=resetPassword&oobCode=... query parameters) at all. When Firebase redirects back, the app lands on the home page which immediately tries to read Firestore documents before the long-polling connection is ready — and since we have offline persistence enabled, that throws instead of waiting.
+Fix required — two parts:
+Part 1 — Add a dedicated route to handle Firebase Auth action URLs.
+In App.tsx (or wherever wouter routes are defined), detect the ?mode=resetPassword&oobCode=... query parameters on mount. If mode === 'resetPassword' and an oobCode is present, redirect the user to a dedicated reset password confirmation page/modal instead of the main feed.
+Part 2 — Create a ResetPasswordPage (or modal) that:
+
+Reads oobCode from the URL search params using new URLSearchParams(window.location.search)
+Calls Firebase Auth's confirmPasswordReset(auth, oobCode, newPassword) from firebase/auth
+Shows a form with a new password + confirm password input
+On success, shows a success message and redirects to sign-in (clear the query params from the URL using window.history.replaceState({}, '', '/'))
+On error (expired/invalid code), shows a clear error message with a "Request new reset link" option
+
+Part 3 — Wrap any early Firestore reads that run on app mount in a try/catch that gracefully handles the failed-precondition / offline error code, so even if the action URL handler isn't matched, the app doesn't crash with an unhandled error overlay. Firestore offline errors during initial load should be caught and retried silently, not thrown to the HMR overlay.
+Do not change the Firebase security rules. Do not hardcode any Firebase config values — keep using import.meta.env.VITE_FIREBASE_*. Keep using experimentalAutoDetectLongPolling: true on the Firestore initializer.

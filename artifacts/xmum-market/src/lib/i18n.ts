@@ -116,6 +116,12 @@ export const translations = {
     itemResolved: "This item has been resolved.",
     loadMore: "Load More",
     noMoreListings: "You've seen everything!",
+    resetPasswordConfirm: "Set a New Password",
+    newPassword: "New Password",
+    passwordResetSuccess: "Your password has been reset successfully. You can now sign in with your new password.",
+    signInNow: "Sign In Now",
+    expiredResetLink: "This reset link has expired or is invalid.",
+    requestNewLink: "Request a new reset link",
   },
   zh: {
     appName: "厦大市集",
@@ -232,6 +238,12 @@ export const translations = {
     itemResolved: "该物品已找到。",
     loadMore: "加载更多",
     noMoreListings: "已显示全部！",
+    resetPasswordConfirm: "设置新密码",
+    newPassword: "新密码",
+    passwordResetSuccess: "密码已成功重置，您现在可以使用新密码登录。",
+    signInNow: "立即登录",
+    expiredResetLink: "此重置链接已过期或无效。",
+    requestNewLink: "重新申请重置链接",
   },
 };
 

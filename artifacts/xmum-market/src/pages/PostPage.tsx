@@ -166,7 +166,7 @@ export default function PostPage() {
     try {
       // Force-refresh ID token so Firestore sees latest emailVerified claim
       await withTimeout(
-        auth.currentUser?.getIdToken(true) ?? Promise.resolve(),
+        auth.currentUser?.getIdToken(true) ?? Promise.resolve(""),
         10_000,
         "token-refresh"
       );

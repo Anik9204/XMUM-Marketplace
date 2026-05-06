@@ -34,7 +34,7 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
   const [cooldown, setCooldown] = useState(0);
   const [resending, setResending] = useState(false);
   const [resendMsg, setResendMsg] = useState("");
-  const timerRef = useRef<ReturnType<typeof setInterval>>();
+  const timerRef = useRef<ReturnType<typeof setInterval>>(undefined);
 
   useEffect(() => {
     return () => clearInterval(timerRef.current);
