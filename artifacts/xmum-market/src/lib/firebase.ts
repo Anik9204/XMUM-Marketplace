@@ -3,8 +3,6 @@ import { getAuth } from "firebase/auth";
 import {
   initializeFirestore,
   getFirestore,
-  persistentLocalCache,
-  persistentSingleTabManager,
   doc,
   getDoc,
   Firestore,
@@ -26,18 +24,14 @@ const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
 
-// Offline persistence: addDoc resolves immediately from local IndexedDB cache
-// and syncs to the server in the background, preventing UI hangs.
-// initializeFirestore can only be called once per app; getFirestore is the
-// safe fallback when HMR re-executes this module.
+// Firestore with long-polling only (no offline persistence).
+// Long-polling is required so Firestore works through Replit's proxy.
+// Offline persistence is intentionally omitted so that writes either
+// succeed on the server immediately or throw a real, visible error —
+// this prevents the "queued locally, never synced" silent failure mode.
 let db: Firestore;
 try {
   db = initializeFirestore(app, {
-    localCache: persistentLocalCache({
-      tabManager: persistentSingleTabManager({}),
-    }),
-    // Force long polling so Firestore works through proxies (e.g. Replit)
-    // that block or drop WebSocket connections.
     experimentalAutoDetectLongPolling: true,
   });
 } catch {
@@ -48,7 +42,9 @@ export { db };
 // Connection test — runs once on app start to surface DB issues early
 getDoc(doc(db, "_health", "ping"))
   .then(() => console.log("Firestore connected ✅"))
-  .catch((err) => console.error("Firestore connection FAILED:", err.code, err.message));
+  .catch((err) =>
+    console.error("Firestore connection test:", err.code, err.message)
+  );
 
 export const storage = getStorage(app);
 export default app;

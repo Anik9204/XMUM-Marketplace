@@ -1,0 +1,19 @@
+index-CLaAyLn4.js:9 [2026-05-06T21:58:15.614Z]  @firebase/firestore: Firestore (12.12.0): Database '(default)' not found. Please check your project configuration.
+index-CLaAyLn4.js:9 [2026-05-06T21:58:17.797Z]  @firebase/firestore: Firestore (12.12.0): Database '(default)' not found. Please check your project configuration.
+index-CLaAyLn4.js:9 [2026-05-06T21:58:22.230Z]  @firebase/firestore: Firestore (12.12.0): Database '(default)' not found. Please check your project configuration.
+index-CLaAyLn4.js:39 [PostPage] Firestore write queued locally (server pending sync)
+index-CLaAyLn4.js:9 [2026-05-06T21:58:26.540Z]  @firebase/firestore: Firestore (12.12.0): Database '(default)' not found. Please check your project configuration.
+index-CLaAyLn4.js:9 [2026-05-06T21:58:26.864Z]  @firebase/firestore: Firestore (12.12.0): Database '(default)' not found. Please check your project configuration.
+index-CLaAyLn4.js:9 [2026-05-06T21:58:27.431Z]  @firebase/firestore: Firestore (12.12.0): Database '(default)' not found. Please check your project configuration.
+index-CLaAyLn4.js:9 [2026-05-06T21:58:27.440Z]  @firebase/firestore: Firestore (12.12.0): Database '(default)' not found. Please check your project configuration.
+index-CLaAyLn4.js:9 [2026-05-06T21:58:28.655Z]  @firebase/firestore: Firestore (12.12.0): Database '(default)' not found. Please check your project configuration.
+index-CLaAyLn4.js:9 [2026-05-06T21:58:31.162Z]  @firebase/firestore: Firestore (12.12.0): Database '(default)' not found. Please check your project configuration.
+index-CLaAyLn4.js:9 [2026-05-06T21:58:33.825Z]  @firebase/firestore: Firestore (12.12.0): Database '(default)' not found. Please check your project configuration.
+index-CLaAyLn4.js:9 [2026-05-06T21:58:40.733Z]  @firebase/firestore: Firestore (12.12.0): Database '(default)' not found. Please check your project configuration.
+index-CLaAyLn4.js:9 [2026-05-06T21:58:44.347Z]  @firebase/firestore: Firestore (12.12.0): Database '(default)' not found. Please check your project configuration.
+index-CLaAyLn4.js:9 [2026-05-06T21:58:49.733Z]  @firebase/firestore: Firestore (12.12.0): Database '(default)' not found. Please check your project configuration.
+index-CLaAyLn4.js:9 [2026-05-06T21:58:55.912Z]  @firebase/firestore: Firestore (12.12.0): Database '(default)' not found. Please check your project configuration.
+index-CLaAyLn4.js:9 [2026-05-06T21:59:08.893Z]  @firebase/firestore: Firestore (12.12.0): Database '(default)' not found. Please check your project configuration.
+index-CLaAyLn4.js:9 [2026-05-06T21:59:23.989Z]  @firebase/firestore: Firestore (12.12.0): Database '(default)' not found. Please check your project configuration.
+index-CLaAyLn4.js:9 [2026-05-06T21:59:52.057Z]  @firebase/firestore: Firestore (12.12.0): Database '(default)' not found. Please check your project configuration.
+index-CLaAyLn4.js:9 [2026-05-06T22:01:12.157Z]  @firebase/firestore: Firestore (12.12.0): Database '(default)' not found. Please check your project configuration.
