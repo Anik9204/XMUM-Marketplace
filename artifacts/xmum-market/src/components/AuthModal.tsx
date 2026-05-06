@@ -124,7 +124,7 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
 
             <div className="bg-blue-50 rounded-xl p-3 text-left mb-5">
               <p className="text-xs text-blue-800 leading-relaxed">
-                Click the link in the email to verify your <strong>@xmu.edu.my</strong> address. Once verified, come back and sign in.
+                Click the link in the email to verify your <strong>@xmu.edu.my</strong> address. Once verified, the app will update automatically — no need to sign in again.
               </p>
             </div>
 
@@ -145,23 +145,14 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
             </button>
 
             <button
-              onClick={() => {
-                setVerificationPending(false);
-                setMode("signin");
-                setPassword("");
-                setConfirmPass("");
-                setFullName("");
-                setWhatsapp("");
-                setWechat("");
-                setError("");
-              }}
+              onClick={onClose}
               className="w-full bg-[#003366] text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-[#002244] transition-colors"
             >
-              {t.signIn} →
+              Continue Browsing →
             </button>
 
             <p className="text-[10px] text-gray-400 mt-3">
-              Already verified? Click "Sign In" above.
+              You're already signed in. The app will detect verification automatically.
             </p>
           </div>
         </div>

@@ -3,6 +3,7 @@ import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { logOut } from "@/lib/auth";
 import AuthModal from "@/components/AuthModal";
+import VerificationBanner from "@/components/VerificationBanner";
 import { Home, Search, PlusSquare, User, Globe } from "lucide-react";
 import { useState } from "react";
 
@@ -87,6 +88,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </header>
+
+      {/* Verification banner — shown only when signed in but email not yet verified */}
+      {user && !user.emailVerified && <VerificationBanner />}
 
       {/* Main content */}
       <main className="flex-1 pb-20 md:pb-0">

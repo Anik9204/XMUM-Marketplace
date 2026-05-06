@@ -1,0 +1,34 @@
+The backend and forms are working, but the Auth UX has two friction points related to email verification. First, after signing up, the app forces the user to manually sign in again. Second, even after verifying in another tab, the original tab still shows the "unverified" banner until the user manually refreshes the page. This is due to Firebase's cached emailVerified state.
+
+Action 1: Stop the Premature Sign-Out
+
+Location: Check the signUp function (likely in auth.ts, userProfile.ts, or AuthModal.tsx).
+
+Issue: After calling createUserWithEmailAndPassword and sendEmailVerification, the code might be explicitly calling signOut(auth) or forcing the UI into a "logged out" state.
+
+Required Fix: Remove any signOut() call during the registration flow. The user should remain authenticated immediately after signup, just with emailVerified === false. The AuthModal should close, and they should be able to browse the site while the verification banner displays.
+
+Action 2: Auto-Detect Verification (Smart Polling & Focus)
+
+Location: Inside your AuthContext provider (or wherever global user state is managed).
+
+Issue: The app does not know when the user verifies their email in another tab because Firebase caches the token.
+
+Required Fix: We need to aggressively refresh the token only when an unverified user is active. Add this logic:
+
+If user exists but !user.emailVerified, set up a setInterval that runs every 3 seconds.
+
+Inside the interval, call await auth.currentUser?.reload().
+
+After reloading, check auth.currentUser?.emailVerified. If it is now true, clear the interval, and forcefully update the React user state with a shallow clone (e.g., setUser({ ...auth.currentUser })) so the UI instantly re-renders.
+
+Also, attach this same reload logic to a window.addEventListener('focus', ...) event, so the moment the user tabs back to the app from their email, it instantly checks their status.
+
+Action 3: Banner & Post Page Cleanup
+
+Location: The Global Warning Banner and the PostPage restricted view.
+
+Required Fix: Ensure these components are strictly reading the user.emailVerified property from the global Auth Context (which is now being dynamically refreshed by Action 2). Once the context updates, the banner should vanish instantly without a manual page reload.
+
+Constraint Checklist:
+Do not poll Firebase if the user is already verified (to save reads/network calls). Ensure the React state updates properly so the banners disappear automatically. Let me know when this is implemented!
