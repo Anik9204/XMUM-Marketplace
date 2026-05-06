@@ -1,6 +1,6 @@
 export type ListingType = "buy-sell" | "lost-found";
 export type Condition = "new" | "used";
-export type ListingStatus = "available" | "sold";
+export type ListingStatus = "active" | "sold";
 
 export interface Listing {
   id: string;

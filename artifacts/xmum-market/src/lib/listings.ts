@@ -11,6 +11,7 @@ import {
   orderBy,
   limit,
   startAfter,
+  serverTimestamp,
   QueryDocumentSnapshot,
 } from "firebase/firestore";
 import {
@@ -19,10 +20,24 @@ import {
   getDownloadURL,
   deleteObject,
 } from "firebase/storage";
-import { db, storage, auth } from "./firebase";
+import { db, storage } from "./firebase";
 import { Listing, ListingType } from "./types";
 
 const PAGE_SIZE = 12;
+
+// Convert a Firestore Timestamp (or plain number) to milliseconds.
+// serverTimestamp() returns a Timestamp object on read; Date.now() returns a number.
+// This normalises both so the UI always gets a plain number.
+function toMillis(val: unknown): number {
+  if (typeof val === "number") return val;
+  if (val && typeof (val as any).toMillis === "function") return (val as any).toMillis();
+  return Date.now();
+}
+
+function mapDoc(d: QueryDocumentSnapshot): Listing {
+  const data = d.data();
+  return { id: d.id, ...data, createdAt: toMillis(data.createdAt) } as Listing;
+}
 
 export async function uploadPhoto(file: File, userId: string): Promise<string> {
   const ext = file.name.split(".").pop();
@@ -34,29 +49,13 @@ export async function uploadPhoto(file: File, userId: string): Promise<string> {
 export async function createListing(
   data: Omit<Listing, "id" | "createdAt" | "isArchived" | "status">
 ): Promise<string> {
-  console.log('Step 1: createListing called');
-  console.log('Step 2: Auth user:', auth.currentUser?.uid);
-  console.log('Step 3: Auth email:', auth.currentUser?.email);
-  console.log('Step 4: Email verified:', auth.currentUser?.emailVerified);
-
-  const listingData = {
+  const docRef = await addDoc(collection(db, "listings"), {
     ...data,
-    createdAt: Date.now(),
+    createdAt: serverTimestamp(),
     isArchived: false,
-    status: "available",
-  };
-
-  console.log('Step 5: About to write to Firestore...');
-  console.log('Step 6: Data:', JSON.stringify(listingData, null, 2));
-
-  try {
-    const docRef = await addDoc(collection(db, "listings"), listingData);
-    console.log('Step 7: SUCCESS - doc ID:', docRef.id);
-    return docRef.id;
-  } catch (err: any) {
-    console.error('Step 7: FAILED -', err.code, err.message);
-    throw err;
-  }
+    status: "active",
+  });
+  return docRef.id;
 }
 
 export async function markAsSold(id: string): Promise<void> {
@@ -75,7 +74,7 @@ export async function getListingsPage(
     const constraints = [
       where("type", "==", type),
       where("isArchived", "==", false),
-      where("status", "==", "available"),
+      where("status", "==", "active"),
       orderBy("createdAt", "desc"),
       ...(cursor ? [startAfter(cursor)] : []),
       limit(PAGE_SIZE + 1),
@@ -83,7 +82,7 @@ export async function getListingsPage(
     const snap = await getDocs(query(collection(db, "listings"), ...constraints));
     const hasMore = snap.docs.length > PAGE_SIZE;
     const pageDocs = snap.docs.slice(0, PAGE_SIZE);
-    const listings = pageDocs.map((d) => ({ id: d.id, ...d.data() } as Listing));
+    const listings = pageDocs.map(mapDoc);
     const nextCursor = pageDocs.length > 0 ? pageDocs[pageDocs.length - 1] : null;
     return { listings, cursor: nextCursor, hasMore };
   } catch (err: any) {
@@ -99,11 +98,9 @@ export async function getListingsPage(
           limit(PAGE_SIZE * 4)
         )
       );
-      const allDocs = fallbackSnap.docs.map(
-        (d) => ({ id: d.id, ...d.data() } as Listing)
-      );
+      const allDocs = fallbackSnap.docs.map(mapDoc);
       const filtered = allDocs.filter(
-        (l) => l.type === type && l.isArchived === false && l.status === "available"
+        (l) => l.type === type && l.isArchived === false && l.status === "active"
       );
       const page = filtered.slice(0, PAGE_SIZE);
       return { listings: page, cursor: null, hasMore: filtered.length > PAGE_SIZE };
@@ -119,12 +116,12 @@ export async function getListings(type: ListingType): Promise<Listing[]> {
       collection(db, "listings"),
       where("type", "==", type),
       where("isArchived", "==", false),
-      where("status", "==", "available"),
+      where("status", "==", "active"),
       orderBy("createdAt", "desc"),
       limit(40)
     );
     const snap = await getDocs(q);
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Listing));
+    return snap.docs.map(mapDoc);
   } catch (err: any) {
     if (err?.code === "failed-precondition" || err?.message?.includes("index")) {
       // True index-free fallback: single-field orderBy, filter client-side
@@ -136,9 +133,9 @@ export async function getListings(type: ListingType): Promise<Listing[]> {
           limit(160)
         )
       );
-      const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Listing));
+      const docs = snap.docs.map(mapDoc);
       return docs.filter(
-        (l) => l.type === type && l.isArchived === false && l.status === "available"
+        (l) => l.type === type && l.isArchived === false && l.status === "active"
       );
     }
     throw err;
@@ -148,7 +145,8 @@ export async function getListings(type: ListingType): Promise<Listing[]> {
 export async function getListing(id: string): Promise<Listing | null> {
   const snap = await getDoc(doc(db, "listings", id));
   if (!snap.exists()) return null;
-  return { id: snap.id, ...snap.data() } as Listing;
+  const data = snap.data();
+  return { id: snap.id, ...data, createdAt: toMillis(data.createdAt) } as Listing;
 }
 
 // Owners see ALL their listings including sold (no status filter)
@@ -162,7 +160,7 @@ export async function getUserListings(userId: string): Promise<Listing[]> {
       limit(40)
     );
     const snap = await getDocs(q);
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Listing));
+    return snap.docs.map(mapDoc);
   } catch (err: any) {
     if (err?.code === "failed-precondition" || err?.message?.includes("index")) {
       const q2 = query(
@@ -172,7 +170,7 @@ export async function getUserListings(userId: string): Promise<Listing[]> {
         limit(40)
       );
       const snap = await getDocs(q2);
-      const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Listing));
+      const docs = snap.docs.map(mapDoc);
       return docs.sort((a, b) => b.createdAt - a.createdAt);
     }
     throw err;
@@ -181,7 +179,7 @@ export async function getUserListings(userId: string): Promise<Listing[]> {
 
 export async function deleteListing(listing: Listing): Promise<void> {
   if (listing.photos.length > 0) {
-    await Promise.all(
+    await Promise.allSettled(
       listing.photos.map((url) =>
         deleteObject(ref(storage, url)).catch((err) => {
           if (err?.code !== "storage/object-not-found") throw err;

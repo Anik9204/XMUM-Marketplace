@@ -1,0 +1,211 @@
+The browser console diagnostic output has been analyzed.
+Three bugs found in the data object written to Firestore,
+plus one remaining connection issue to resolve.
+
+Read src/lib/listings.ts and src/lib/types.ts before 
+writing any code.
+
+=================================================================
+BUG REPORT FROM CONSOLE OUTPUT
+=================================================================
+
+The console shows Steps 1-6 completed successfully:
+- Auth user: pfl0OOCOLaeC4dmRhd8BAcgAF7v2 ✅
+- Auth email: cys2209204@xmu.edu.my ✅
+- Email verified: true ✅
+- About to write to Firestore ✅
+
+BUT the data object has 3 critical field errors:
+
+ERROR 1 — status field has wrong value:
+  Written:  "status": "available"
+  Required: "status": "active"
+  
+  The feed query in getListingsPage filters with:
+    where('status', '==', 'active')
+  A document with status "available" will NEVER appear 
+  in the feed. Fix the createListing function to write:
+    status: 'active'
+
+ERROR 2 — createdAt is a plain number not serverTimestamp:
+  Written:  "createdAt": 1778103373522  (JS Date.now())
+  Required: createdAt: serverTimestamp()
+  
+  Firestore's orderBy('createdAt', 'desc') works correctly 
+  with Firestore Timestamps (from serverTimestamp()) but 
+  behaves unpredictably with plain numbers. More critically,
+  the pagination cursor (startAfter) breaks completely 
+  with mixed timestamp types.
+  
+  Fix: Replace whatever generates the current timestamp 
+  with serverTimestamp() from firebase/firestore:
+    import { serverTimestamp } from 'firebase/firestore'
+    ...
+    createdAt: serverTimestamp()
+
+ERROR 3 — Image URLs field is named wrong:
+  Written:  "photos": ["https://firebasestorage..."]
+  Required: "imageUrls": ["https://firebasestorage..."]
+  
+  Check the Listing type in types.ts and the feed 
+  components (ListingCard.tsx, ListingDetailPage.tsx).
+  Whatever field name the UI reads images from, the 
+  createListing function must write to that same field.
+  If types.ts defines imageUrls, rename photos to 
+  imageUrls in the createListing data object.
+  If types.ts defines photos, update all components 
+  to read from photos consistently.
+  Pick ONE name and use it everywhere.
+
+=================================================================
+STILL UNKNOWN — DID STEP 7 PRINT SUCCESS OR FAILED?
+=================================================================
+
+The console output provided only shows Steps 1-6.
+Step 7 (the addDoc result) was not reported.
+
+Before fixing the data bugs, first check:
+Did the console show either of these after Step 6?
+  "Step 7: SUCCESS - doc ID: [some ID]"
+  OR
+  "Step 7: FAILED - [error code] [error message]"
+
+IF Step 7 showed FAILED with error code 
+"not-found" or message containing "Database":
+  This confirms the "Database not found" connection 
+  error. In this case, read firebase.ts carefully.
+  
+  The current firebase.ts uses:
+    persistentSingleTabManager({ forceOwnership: true })
+  
+  Change this to:
+    persistentSingleTabManager({})
+  
+  The forceOwnership: true flag can cause issues in 
+  some Replit environments. Remove it.
+  
+  Also add this check right after db is initialized 
+  to verify the connection on startup:
+  
+    import { doc, getDoc } from 'firebase/firestore'
+    
+    // Connection test — runs once on app start
+    getDoc(doc(db, '_health', 'ping'))
+      .then(() => console.log('Firestore connected ✅'))
+      .catch((err) => console.error(
+        'Firestore connection FAILED:', err.code, err.message
+      ))
+
+IF Step 7 showed SUCCESS with a doc ID:
+  The document IS being written but not appearing in 
+  the feed because of the 3 field errors above.
+  Go straight to applying the 3 fixes below.
+
+=================================================================
+FIXES TO APPLY IN listings.ts createListing FUNCTION
+=================================================================
+
+Find the data object built inside createListing and 
+change these fields:
+
+BEFORE:
+  status: 'available',        // ← WRONG
+  createdAt: Date.now(),      // ← WRONG (or similar)
+  photos: imageUrlsArray,     // ← WRONG field name
+
+AFTER:
+  status: 'active',           // ← matches feed query
+  createdAt: serverTimestamp(), // ← proper Firestore type
+  imageUrls: imageUrlsArray,  // ← matches UI components
+
+Make sure serverTimestamp is imported:
+  import { 
+    collection, 
+    addDoc, 
+    serverTimestamp,
+    // ... other imports
+  } from 'firebase/firestore'
+
+=================================================================
+ALSO FIX — EXISTING DOCUMENTS IN FIRESTORE
+=================================================================
+
+If Step 7 showed SUCCESS meaning documents WERE written 
+with the wrong fields, those old documents have:
+  status: "available" (not "active")
+  photos: [...] (not imageUrls)
+  createdAt: number (not Timestamp)
+
+These old documents will STILL not appear in the feed 
+even after fixing the code, because they have wrong 
+field values.
+
+To fix old documents: go to Firebase Console → 
+Firestore → Data tab. If you see any documents in 
+the listings collection, delete them manually. 
+They are test documents with wrong field values and 
+should be discarded. After the code fix, new listings 
+will be written correctly.
+
+=================================================================
+ALSO FIX — MARK AS SOLD TOGGLE
+=================================================================
+
+While fixing the status field, also check the 
+markAsSold / markAsResolved function in listings.ts.
+It likely sets status to 'sold' or 'resolved'.
+
+Confirm the feed query filters correctly:
+  Active listings:  status === 'active'   → show in feed
+  Sold listings:    status === 'sold'     → hide from feed
+  
+Make sure the mark as sold toggle sets 
+status: 'sold' (not 'unavailable' or other values).
+
+=================================================================
+VERIFICATION AFTER ALL FIXES
+=================================================================
+
+After applying all fixes:
+
+1. Remove ALL the Step 1-7 diagnostic console.logs 
+   from createListing — they are no longer needed
+
+2. Restart the dev server completely (stop + start)
+
+3. Sign in with @xmu.edu.my account
+
+4. Create a new test listing
+
+5. Immediately check Firebase Console → Firestore → 
+   Data tab. You must see:
+   - A 'listings' collection
+   - A document with these exact fields:
+       status: "active"  ← not "available"
+       imageUrls: [...]  ← not "photos"
+       createdAt: Timestamp ← not a number
+
+6. Sign out → open incognito window → open app URL
+   The listing must be visible in the feed
+
+7. Sign in as a different @xmu.edu.my account
+   The listing must still be visible
+
+8. Run TypeScript typecheck — zero new errors
+
+9. Push to GitHub:
+   git add .
+   git commit -m "Fix: listing status, createdAt, 
+     imageUrls field names in createListing"
+   git push origin main
+
+=================================================================
+CONSTRAINTS — DO NOT VIOLATE
+=================================================================
+- Do NOT change Firebase security rules
+- Do NOT recreate the Firestore database
+- Do NOT remove experimentalAutoDetectLongPolling: true
+- Keep wouter for all routing
+- Tailwind v4: @custom-variant dark mode in index.css only
+- All strings in i18n.ts in both en and zh
+- Zero new TypeScript errors required

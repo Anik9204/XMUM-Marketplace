@@ -5,6 +5,8 @@ import {
   getFirestore,
   persistentLocalCache,
   persistentSingleTabManager,
+  doc,
+  getDoc,
   Firestore,
 } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
@@ -16,6 +18,7 @@ const firebaseConfig = {
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
 // Singleton: reuse the app if HMR already initialised it
@@ -31,7 +34,7 @@ let db: Firestore;
 try {
   db = initializeFirestore(app, {
     localCache: persistentLocalCache({
-      tabManager: persistentSingleTabManager({ forceOwnership: true }),
+      tabManager: persistentSingleTabManager({}),
     }),
     // Force long polling so Firestore works through proxies (e.g. Replit)
     // that block or drop WebSocket connections.
@@ -41,6 +44,11 @@ try {
   db = getFirestore(app);
 }
 export { db };
+
+// Connection test — runs once on app start to surface DB issues early
+getDoc(doc(db, "_health", "ping"))
+  .then(() => console.log("Firestore connected ✅"))
+  .catch((err) => console.error("Firestore connection FAILED:", err.code, err.message));
 
 export const storage = getStorage(app);
 export default app;
