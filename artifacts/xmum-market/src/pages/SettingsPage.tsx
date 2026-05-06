@@ -9,7 +9,7 @@ import {
 } from "@/lib/userProfile";
 import AuthModal from "@/components/AuthModal";
 import VerificationBanner from "@/components/VerificationBanner";
-import { User, Camera, CheckCircle2, Trash2 } from "lucide-react";
+import { User, Camera, CheckCircle2, Trash2, Settings } from "lucide-react";
 import { useLocation } from "wouter";
 import { auth } from "@/lib/firebase";
 
@@ -301,10 +301,23 @@ export default function SettingsPage() {
 
       {/* pb-24 clears the 48px mobile bottom nav + breathing room; resets on sm+ */}
       <div className="max-w-5xl mx-auto px-4 py-5 pb-24 sm:pb-8 animate-in fade-in duration-200">
-        <h2 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-5">{t.accountSettings}</h2>
+        {/* Tab bar — My Listings / Settings */}
+        <div className="flex border-b border-gray-200 dark:border-slate-700 mb-5">
+          <button
+            onClick={() => navigate("/profile")}
+            className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300 transition-colors -mb-px"
+          >
+            {t.myListings}
+          </button>
+          <button
+            className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold border-b-2 border-[#003366] dark:border-blue-400 text-[#003366] dark:text-blue-400 -mb-px"
+          >
+            <Settings size={14} />
+            {t.accountSettings}
+          </button>
+        </div>
 
         <div className="space-y-4 max-w-lg">
-
           {/* Avatar */}
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-5">
             <h3 className="text-sm font-bold text-gray-800 dark:text-slate-200 mb-4">Profile Photo</h3>

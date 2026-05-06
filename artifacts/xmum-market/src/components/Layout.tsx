@@ -20,7 +20,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { href: "/", icon: Home, label: t.home },
     { href: "/search", icon: Search, label: t.search },
     { href: "/post", icon: PlusSquare, label: t.post },
-    { href: "/profile", icon: User, label: t.profile },
+    { href: "/profile", icon: User, label: t.profile, activeFor: ["/profile", "/settings"] },
   ];
 
   return (
@@ -121,8 +121,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* Mobile bottom nav — min 48px tap targets, safe area inset */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-700 z-50">
         <div className="flex pb-[env(safe-area-inset-bottom)]">
-          {navItems.map(({ href, icon: Icon, label }) => {
-            const active = location === href;
+          {navItems.map(({ href, icon: Icon, label, activeFor }) => {
+            const active = activeFor ? activeFor.includes(location) : location === href;
             return (
               <Link
                 key={href}

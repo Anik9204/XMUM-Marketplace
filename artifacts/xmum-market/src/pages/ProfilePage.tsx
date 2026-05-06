@@ -5,7 +5,7 @@ import { getUserListings, deleteListing, markAsSold } from "@/lib/listings";
 import { Listing } from "@/lib/types";
 import ListingCard from "@/components/ListingCard";
 import AuthModal from "@/components/AuthModal";
-import { User, CheckCircle, AlertCircle, LogOut, CheckCircle2 } from "lucide-react";
+import { User, CheckCircle, AlertCircle, LogOut, CheckCircle2, Settings } from "lucide-react";
 import { logOut } from "@/lib/auth";
 import { useLocation } from "wouter";
 
@@ -141,6 +141,22 @@ export default function ProfilePage() {
           >
             <LogOut size={14} />
             {t.signOut}
+          </button>
+        </div>
+
+        {/* Tab bar — My Listings / Settings */}
+        <div className="flex border-b border-gray-200 dark:border-slate-700 mb-5">
+          <button
+            className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold border-b-2 border-[#003366] dark:border-blue-400 text-[#003366] dark:text-blue-400 -mb-px"
+          >
+            {t.myListings}
+          </button>
+          <button
+            onClick={() => navigate("/settings")}
+            className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300 transition-colors -mb-px"
+          >
+            <Settings size={14} />
+            {t.accountSettings}
           </button>
         </div>
 
