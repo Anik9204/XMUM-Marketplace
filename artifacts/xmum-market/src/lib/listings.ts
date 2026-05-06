@@ -72,22 +72,25 @@ export async function getListingsPage(
     return { listings, cursor: nextCursor, hasMore };
   } catch (err: any) {
     if (err?.code === "failed-precondition" || err?.message?.includes("index")) {
-      // Fallback: existing type+isArchived+createdAt index, client-side status filter
-      const fallback = [
-        where("type", "==", type),
-        where("isArchived", "==", false),
-        orderBy("createdAt", "desc"),
-        ...(cursor ? [startAfter(cursor)] : []),
-        limit(PAGE_SIZE + 1),
-      ];
-      const snap = await getDocs(query(collection(db, "listings"), ...fallback));
-      const hasMore = snap.docs.length > PAGE_SIZE;
-      const pageDocs = snap.docs.slice(0, PAGE_SIZE);
-      const listings = pageDocs
-        .map((d) => ({ id: d.id, ...d.data() } as Listing))
-        .filter((l) => l.status !== "sold");
-      const nextCursor = pageDocs.length > 0 ? pageDocs[pageDocs.length - 1] : null;
-      return { listings, cursor: nextCursor, hasMore };
+      // True index-free fallback: single-field orderBy only — no composite index needed.
+      // Fetches a larger batch and filters client-side so the feed works while the
+      // composite index is being built in Firebase Console.
+      console.warn("[listings] Composite index not ready — using client-side fallback");
+      const fallbackSnap = await getDocs(
+        query(
+          collection(db, "listings"),
+          orderBy("createdAt", "desc"),
+          limit(PAGE_SIZE * 4)
+        )
+      );
+      const allDocs = fallbackSnap.docs.map(
+        (d) => ({ id: d.id, ...d.data() } as Listing)
+      );
+      const filtered = allDocs.filter(
+        (l) => l.type === type && l.isArchived === false && l.status === "available"
+      );
+      const page = filtered.slice(0, PAGE_SIZE);
+      return { listings: page, cursor: null, hasMore: filtered.length > PAGE_SIZE };
     }
     throw err;
   }
@@ -108,17 +111,19 @@ export async function getListings(type: ListingType): Promise<Listing[]> {
     return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Listing));
   } catch (err: any) {
     if (err?.code === "failed-precondition" || err?.message?.includes("index")) {
-      const q2 = query(
-        collection(db, "listings"),
-        where("type", "==", type),
-        where("isArchived", "==", false),
-        limit(40)
+      // True index-free fallback: single-field orderBy, filter client-side
+      console.warn("[listings] Composite index not ready — using client-side fallback for search");
+      const snap = await getDocs(
+        query(
+          collection(db, "listings"),
+          orderBy("createdAt", "desc"),
+          limit(160)
+        )
       );
-      const snap = await getDocs(q2);
       const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Listing));
-      return docs
-        .filter((l) => l.status !== "sold")
-        .sort((a, b) => b.createdAt - a.createdAt);
+      return docs.filter(
+        (l) => l.type === type && l.isArchived === false && l.status === "available"
+      );
     }
     throw err;
   }

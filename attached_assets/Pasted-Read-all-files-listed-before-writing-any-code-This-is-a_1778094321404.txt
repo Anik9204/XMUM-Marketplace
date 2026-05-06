@@ -1,0 +1,231 @@
+Read all files listed before writing any code.
+This is a data visibility bug — other users cannot see 
+listings posted by other users. Only the poster can see 
+their own listing.
+
+Files to read first:
+  - src/lib/listings.ts       (getListingsPage, getFeedListings, 
+                               or whatever the feed query function 
+                               is named)
+  - src/lib/firebase.ts       (confirm db export and initialization)
+  - src/pages/HomePage.tsx    (how the feed is fetched and rendered)
+  - src/contexts/AuthContext.tsx  (confirm auth state handling)
+
+=================================================================
+DIAGNOSE FIRST — DO NOT WRITE CODE UNTIL DIAGNOSIS IS CONFIRMED
+=================================================================
+
+Run these diagnostic steps IN ORDER and report findings:
+
+DIAGNOSTIC 1 — Open the browser console on the live app 
+and look for any of these errors:
+  - "Missing or insufficient permissions"
+  - "The query requires an index"
+  - "FAILED_PRECONDITION"
+  - Any Firebase error code
+
+These errors are the smoking gun. Report exactly what 
+you see in the console.
+
+DIAGNOSTIC 2 — Check if the Firestore security rules are 
+actually deployed to the Firebase project (xmum--market).
+
+The rules that MUST be live are:
+  match /listings/{listingId} {
+    allow read: if true;   ← THIS IS CRITICAL
+    ...
+  }
+
+If the rules deployed to Firebase Console are different 
+from above — especially if "allow read" requires auth — 
+that is the bug. 
+
+To verify: go to Firebase Console → Firestore → Rules tab 
+and check what is currently published. Do NOT change the 
+rules in code — only report what you see.
+
+DIAGNOSTIC 3 — Check the feed query in listings.ts.
+Look for the main feed query function. It likely uses:
+  query(
+    collection(db, 'listings'),
+    where('type', '==', feedType),
+    where('isArchived', '==', false),
+    where('status', '==', 'active'),
+    orderBy('createdAt', 'desc'),
+    limit(12)
+  )
+
+This query with 3 where clauses + orderBy REQUIRES a 
+composite index in Firestore. Without it, the query 
+throws a FAILED_PRECONDITION error and returns nothing.
+
+If there is a try/catch around this query that silently 
+swallows the error and returns an empty array, the user 
+would see an empty feed with no error message — which 
+matches exactly the symptom being reported.
+
+Check if there is a fallback in the catch block. Report 
+what the catch block does.
+
+=================================================================
+MOST LIKELY ROOT CAUSE AND FIX
+=================================================================
+
+Based on the symptom (only poster sees own listing, 
+everyone else sees empty feed), the most likely cause is:
+
+ROOT CAUSE A — Missing Firestore composite index:
+The paginated feed query requires this composite index. 
+Without it, the query fails with FAILED_PRECONDITION 
+and the catch block returns an empty array silently.
+
+Required index:
+  Collection: listings
+  Fields (in this exact order):
+    type          Ascending
+    isArchived    Ascending  
+    status        Ascending
+    createdAt     Descending
+  Query scope: Collection
+
+FIX FOR ROOT CAUSE A:
+Go to Firebase Console → Firestore Database → Indexes tab
+→ Composite → Add Index → fill in the fields above exactly.
+Index creation takes 2-5 minutes. The feed will work once 
+the index status shows "Enabled".
+
+Alternatively, check the browser console for a Firestore 
+error message that contains a direct link like:
+  https://console.firebase.google.com/project/xmum--market/
+  firestore/indexes?create_composite=...
+Clicking that link auto-fills the index creation form.
+This is the fastest way to create the correct index.
+
+ROOT CAUSE B — Firestore security rules not deployed:
+If the rules in Firebase Console do not have 
+"allow read: if true" for listings, then only 
+authenticated owners can read their own documents.
+
+FIX FOR ROOT CAUSE B:
+Go to Firebase Console → Firestore → Rules tab.
+The published rules MUST contain exactly:
+  match /listings/{listingId} {
+    allow read: if true;
+    allow create: if request.auth != null
+                  && request.auth.token.email
+                     .matches('.*@xmu\\.edu\\.my');
+    allow update, delete: if request.auth != null
+                  && request.auth.uid == resource.data.userId;
+  }
+If the read rule is missing or requires auth, click 
+"Edit rules", paste the correct rules, and click Publish.
+Do NOT change the create/update/delete rules.
+
+ROOT CAUSE C — Query falls back to client-side filter 
+but the status/isArchived fields are missing on the 
+Firestore document:
+When a listing is created, if the code does not write 
+a status field ('active') and isArchived field (false) 
+to the Firestore document, then any query filtering 
+on those fields will exclude the document entirely.
+
+Check the createListing function in listings.ts.
+The Firestore document written on listing creation MUST 
+include these fields:
+  {
+    ...other fields,
+    status: 'active',
+    isArchived: false,
+    createdAt: serverTimestamp(),
+    userId: auth.currentUser.uid,
+    type: 'buy-sell' | 'lost-found',
+  }
+
+If any of these are missing, add them to the createListing 
+function's data object.
+
+=================================================================
+IMMEDIATE WORKAROUND WHILE INDEX IS BUILDING
+=================================================================
+
+If Root Cause A is confirmed (missing index), add this 
+temporary fallback to the feed query in listings.ts so 
+users can see listings while the index builds (it takes 
+a few minutes):
+
+In the catch block of the paginated query, instead of 
+returning an empty array, fall back to a simpler query 
+without the composite index:
+
+  try {
+    // Full paginated query with composite index
+    const q = query(
+      collection(db, 'listings'),
+      where('type', '==', feedType),
+      where('isArchived', '==', false),
+      where('status', '==', 'active'),
+      orderBy('createdAt', 'desc'),
+      limit(12)
+    )
+    const snap = await getDocs(q)
+    // ... process results
+  } catch (err: any) {
+    if (err.code === 'failed-precondition' || 
+        err.code === 'unimplemented') {
+      // Index not ready yet — fall back to simple query
+      // This fetches more and filters client-side
+      const fallbackQ = query(
+        collection(db, 'listings'),
+        orderBy('createdAt', 'desc'),
+        limit(50)
+      )
+      const snap = await getDocs(fallbackQ)
+      const docs = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter((d: any) => 
+          d.type === feedType && 
+          d.isArchived === false && 
+          d.status === 'active'
+        )
+      return { listings: docs.slice(0, 12), lastDoc: null }
+    }
+    // For any other error, log it visibly
+    console.error('Feed query error:', err)
+    return { listings: [], lastDoc: null }
+  }
+
+This fallback query only needs orderBy('createdAt') which 
+does NOT require a composite index. It works immediately 
+while the composite index is being built.
+
+=================================================================
+VERIFICATION AFTER FIX
+=================================================================
+
+After applying the fix, verify with two different accounts:
+
+Test 1 — Sign in as User A, post a listing.
+Test 2 — Sign out. Sign in as User B (different account).
+         User B must be able to see User A's listing in 
+         the feed without any errors in the console.
+Test 3 — Open the app in an incognito/private window 
+         WITHOUT signing in. The listing must still be 
+         visible (public read = no auth required).
+
+If Test 3 fails, the security rules are the problem.
+If Test 2 fails but Test 3 works, it's an auth-scoped 
+query issue in the code.
+If both fail, it is the missing composite index.
+
+=================================================================
+CONSTRAINTS — DO NOT VIOLATE
+=================================================================
+- Do NOT change Firebase security rules — only READ them 
+  and report what is currently published
+- Do NOT change firebase.ts, env vars, or long-polling
+- Do NOT remove experimentalAutoDetectLongPolling: true
+- Keep wouter for all navigation
+- Tailwind v4: dark mode via @custom-variant in index.css
+- All new strings in i18n.ts in both 'en' and 'zh'
+- Run TypeScript typecheck after any code changes
+  Zero new TypeScript errors required

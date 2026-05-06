@@ -35,8 +35,7 @@ export default function HomePage() {
       const code: string = err?.code ?? err?.message ?? "";
       const isOffline =
         code.includes("unavailable") ||
-        code.includes("offline") ||
-        code.includes("failed-precondition");
+        code.includes("offline");
       if (!isOffline) {
         console.error("[HomePage] Failed to load listings:", err);
       }
