@@ -1,0 +1,37 @@
+Let me read the current PostPage state management to diagnose this precisely.
+
+
+2 actions
+I can see the issue. The form is plain useState (no react-hook-form), so setWhatsapp/setWechat should work — but I need to see what's actually happening. Let me audit the exact dependency and add the requested logs before touching anything else.
+
+The dependency is [user] — the full Firebase User object. Since Firebase Auth reuses object references, if the component first renders with user = null (auth still loading) and then the auth listener fires with a User object, the effect should re-run. But if for any reason getProfile is silently failing or returning null, the fields stay blank and we'd never know. Changing the dependency to [user?.uid] (a primitive string) is more reliable, and adding logs will tell us exactly what's happening.
+
+
+2 actions
+Now I need to wire the hasEdited refs to the actual input onChange handlers, otherwise the guard never activates. Let me read those inputs and check the new logs simultaneously.
+
+
+3 actions
+The HMR is live. I can see no [PostPage] logs yet — the user hasn't navigated to Post since the change applied. Now I need to wire the hasEdited refs into the actual input onChange handlers so the "don't overwrite" guard works:
+
+
+5 actions
+All changes are live. Here's a precise summary of what was fixed and why the original attempt silently failed:
+
+Root cause of the silent failure: The original .catch(() => {}) swallowed every error without a trace. If getProfile threw a Firestore "unavailable" error (which it does in the Replit dev environment before long polling establishes), the fields would just stay blank with zero indication of why.
+
+What changed:
+
+Dependency: [user] → [user?.uid] — The full Firebase User object is a reference type. React compares dependencies with Object.is(), and if Firebase reuses the same User instance across re-renders, the effect might not re-fire when expected. user?.uid is a primitive string — comparisons are always exact and reliable.
+
+Debug logs added — When you navigate to Post now, the console will show one of these two outcomes:
+
+[PostPage] Fetching profile for auto-fill, uid: ... → [PostPage] Auto-fill whatsapp: ... ✅ — data arrived and was injected
+[PostPage] Profile fetch failed: ... ❌ — tells you exactly what error is blocking the fetch
+"Don't overwrite" guard — Two useRef flags (hasEditedWhatsapp, hasEditedWechat) are set to true the moment the user types in either field. The auto-fill only runs setWhatsapp/setWechat if the user hasn't touched that field yet. If the profile fetch resolves after the user has already typed something, their input is preserved.
+
+Error surfaced — .catch((err) => console.warn("[PostPage] Profile fetch failed:", err)) — no more silent swallowing.
+
+When you navigate to the Post page now, check the browser console. If you see [PostPage] Profile fetched: null, it means the user's profile document doesn't exist yet in Firestore — that would be a data issue, not a code issue. If you see the auto-fill logs, the fields should populate.
+
+Next, I can add a "Sold" / "Mark as Resolved" button on listings so sellers can close their posts once a deal is made. Would you like me to do that?
