@@ -60,15 +60,33 @@ export default function PostPage() {
   const [showAuth, setShowAuth] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Bug 1 fix: pre-fill contact fields from the user's saved profile
+  // Pre-fill contact fields from the user's saved profile.
+  // Use user?.uid (primitive) as dependency — more reliable than the full
+  // User object reference which Firebase may reuse across renders.
+  // Guard: only overwrite if the user hasn't already started typing.
+  const hasEditedWhatsapp = useRef(false);
+  const hasEditedWechat = useRef(false);
+
   useEffect(() => {
-    if (!user) return;
-    getProfile(user.uid).then((p) => {
-      if (!p) return;
-      if (p.whatsapp) setWhatsapp(p.whatsapp);
-      if (p.wechat) setWechat(p.wechat);
-    }).catch(() => {});
-  }, [user]);
+    if (!user?.uid) return;
+    console.log("[PostPage] Fetching profile for auto-fill, uid:", user.uid);
+    getProfile(user.uid)
+      .then((p) => {
+        console.log("[PostPage] Profile fetched:", p);
+        if (!p) return;
+        if (p.whatsapp && !hasEditedWhatsapp.current) {
+          console.log("[PostPage] Auto-fill whatsapp:", p.whatsapp);
+          setWhatsapp(p.whatsapp);
+        }
+        if (p.wechat && !hasEditedWechat.current) {
+          console.log("[PostPage] Auto-fill wechat:", p.wechat);
+          setWechat(p.wechat);
+        }
+      })
+      .catch((err) => {
+        console.warn("[PostPage] Profile fetch failed (fields will stay blank):", err);
+      });
+  }, [user?.uid]);
 
   // ── Auth / Verification gates ──────────────────────────────────────────────
   if (!user) {
@@ -390,7 +408,7 @@ export default function PostPage() {
             <input
               type="text"
               value={whatsapp}
-              onChange={(e) => setWhatsapp(e.target.value)}
+              onChange={(e) => { hasEditedWhatsapp.current = true; setWhatsapp(e.target.value); }}
               placeholder="+60 12-345 6789"
               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#003366]/30 focus:border-[#003366]"
             />
@@ -400,7 +418,7 @@ export default function PostPage() {
             <input
               type="text"
               value={wechat}
-              onChange={(e) => setWechat(e.target.value)}
+              onChange={(e) => { hasEditedWechat.current = true; setWechat(e.target.value); }}
               placeholder="WeChat ID"
               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#003366]/30 focus:border-[#003366]"
             />
