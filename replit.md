@@ -5,7 +5,7 @@ A mobile-first community marketplace for Xiamen University Malaysia (XMUM) stude
 ## Run & Operate
 
 ```bash
-PORT=5173 BASE_PATH=/ pnpm --filter @workspace/xmum-market run dev   # start dev server
+PORT=5000 BASE_PATH=/ pnpm --filter @workspace/xmum-market run dev    # start dev server (port 5000 required for Replit webview)
 pnpm --filter @workspace/xmum-market run build                         # production build
 ```
 
