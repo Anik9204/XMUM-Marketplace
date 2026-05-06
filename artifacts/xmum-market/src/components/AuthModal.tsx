@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useLang } from "@/contexts/LanguageContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { signIn, signUp, resetPassword, isXmuEmail, resendVerification } from "@/lib/auth";
 import { X, Eye, EyeOff, MailCheck } from "lucide-react";
 
@@ -14,6 +15,7 @@ const RESEND_COOLDOWN = 60;
 
 export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
   const { t } = useLang();
+  const { user } = useAuth();
   const [mode, setMode] = useState<Mode>(defaultMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -37,6 +39,14 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
   useEffect(() => {
     return () => clearInterval(timerRef.current);
   }, []);
+
+  // Auto-close the modal the instant the context detects email verification.
+  // Gated on verificationPending so this never fires during a normal sign-in.
+  useEffect(() => {
+    if (verificationPending && user?.emailVerified) {
+      onClose();
+    }
+  }, [user?.emailVerified, verificationPending]);
 
   const startCooldown = () => {
     setCooldown(RESEND_COOLDOWN);
