@@ -19,7 +19,7 @@ import {
   getDownloadURL,
   deleteObject,
 } from "firebase/storage";
-import { db, storage } from "./firebase";
+import { db, storage, auth } from "./firebase";
 import { Listing, ListingType } from "./types";
 
 const PAGE_SIZE = 12;
@@ -34,13 +34,29 @@ export async function uploadPhoto(file: File, userId: string): Promise<string> {
 export async function createListing(
   data: Omit<Listing, "id" | "createdAt" | "isArchived" | "status">
 ): Promise<string> {
-  const docRef = await addDoc(collection(db, "listings"), {
+  console.log('Step 1: createListing called');
+  console.log('Step 2: Auth user:', auth.currentUser?.uid);
+  console.log('Step 3: Auth email:', auth.currentUser?.email);
+  console.log('Step 4: Email verified:', auth.currentUser?.emailVerified);
+
+  const listingData = {
     ...data,
     createdAt: Date.now(),
     isArchived: false,
     status: "available",
-  });
-  return docRef.id;
+  };
+
+  console.log('Step 5: About to write to Firestore...');
+  console.log('Step 6: Data:', JSON.stringify(listingData, null, 2));
+
+  try {
+    const docRef = await addDoc(collection(db, "listings"), listingData);
+    console.log('Step 7: SUCCESS - doc ID:', docRef.id);
+    return docRef.id;
+  } catch (err: any) {
+    console.error('Step 7: FAILED -', err.code, err.message);
+    throw err;
+  }
 }
 
 export async function markAsSold(id: string): Promise<void> {
