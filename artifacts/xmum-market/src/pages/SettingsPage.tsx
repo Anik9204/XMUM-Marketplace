@@ -77,7 +77,6 @@ export default function SettingsPage() {
   const [fullName, setFullName] = useState("");
   const [settingsWhatsapp, setSettingsWhatsapp] = useState("");
   const [settingsWechat, setSettingsWechat] = useState("");
-  const [showEmail, setShowEmail] = useState(true);
   const [showWhatsApp, setShowWhatsApp] = useState(true);
   const [showWeChat, setShowWeChat] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
@@ -111,7 +110,6 @@ export default function SettingsPage() {
     setFullName(userProfile.fullName ?? "");
     setSettingsWhatsapp(userProfile.whatsapp ?? "");
     setSettingsWechat(userProfile.wechat ?? "");
-    setShowEmail(userProfile.showEmail ?? true);
     setShowWhatsApp(userProfile.showWhatsApp ?? true);
     setShowWeChat(userProfile.showWeChat ?? true);
     // Only reset avatarPreview when NOT mid-upload (don't flash old photo during upload)
@@ -231,16 +229,14 @@ export default function SettingsPage() {
     }
   };
 
-  const handlePrivacyToggle = async (field: "showEmail" | "showWhatsApp" | "showWeChat", value: boolean) => {
-    if (field === "showEmail") setShowEmail(value);
-    else if (field === "showWhatsApp") setShowWhatsApp(value);
+  const handlePrivacyToggle = async (field: "showWhatsApp" | "showWeChat", value: boolean) => {
+    if (field === "showWhatsApp") setShowWhatsApp(value);
     else setShowWeChat(value);
     try {
       await updateProfile(user.uid, { [field]: value });
       await refetchProfile().catch(() => {});
     } catch {
-      if (field === "showEmail") setShowEmail(!value);
-      else if (field === "showWhatsApp") setShowWhatsApp(!value);
+      if (field === "showWhatsApp") setShowWhatsApp(!value);
       else setShowWeChat(!value);
     }
   };
@@ -425,7 +421,6 @@ export default function SettingsPage() {
             <h3 className="text-sm font-bold text-gray-800 dark:text-slate-200 mb-1">Privacy Settings</h3>
             <p className="text-xs text-gray-400 dark:text-slate-500 mb-2">Control what contact info is visible to other users on your listings.</p>
             <div className="divide-y divide-gray-100 dark:divide-slate-700">
-              <PrivacyRow label="Show Email" sub="Allow others to see your email address" value={showEmail} onChange={(v) => handlePrivacyToggle("showEmail", v)} />
               <PrivacyRow label="Show WhatsApp" sub="Display WhatsApp contact button on your listings" value={showWhatsApp} onChange={(v) => handlePrivacyToggle("showWhatsApp", v)} />
               <PrivacyRow label="Show WeChat" sub="Display WeChat contact button on your listings" value={showWeChat} onChange={(v) => handlePrivacyToggle("showWeChat", v)} />
             </div>

@@ -204,6 +204,12 @@ export default function EditListingPage() {
       setLoading(false);
       return;
     }
+    const hasContact = whatsapp.trim() || wechat.trim() || teams.trim();
+    if (!hasContact) {
+      setError(t.contactRequired);
+      setLoading(false);
+      return;
+    }
     try {
       await withTimeout(auth.currentUser?.getIdToken(true) ?? Promise.resolve(""), 10_000, "token-refresh");
 
@@ -414,21 +420,57 @@ export default function EditListingPage() {
         {/* Contact info */}
         <div className="border border-gray-200 dark:border-slate-700 rounded-xl p-4 space-y-3">
           <p className="text-sm font-semibold text-gray-700 dark:text-slate-300">{t.contactInfo}</p>
+          <p className="text-xs text-gray-400 dark:text-slate-500">
+            {t.contactAtLeastOne}
+          </p>
           <div>
-            <label className="block text-xs text-gray-500 dark:text-slate-400 mb-1">{t.whatsapp}</label>
-            <input type="text" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="+60 12-345 6789" className={inputCls} />
+            <label className="block text-xs text-gray-500 dark:text-slate-400 mb-1">
+              {t.whatsapp}
+              <span className="text-amber-500 ml-1 font-medium">{t.whatsappCountryCodeHint}</span>
+            </label>
+            <input
+              type="text"
+              value={whatsapp}
+              onChange={(e) => setWhatsapp(e.target.value.slice(0, 20))}
+              placeholder="+60 12-345 6789"
+              maxLength={20}
+              className={inputCls}
+            />
+            <p className={`text-right text-[10px] mt-0.5 ${whatsapp.length >= 18 ? "text-amber-500" : "text-gray-400 dark:text-slate-500"}`}>
+              {whatsapp.length}/20
+            </p>
           </div>
           <div>
             <label className="block text-xs text-gray-500 dark:text-slate-400 mb-1">{t.wechat}</label>
-            <input type="text" value={wechat} onChange={(e) => setWechat(e.target.value)} placeholder="WeChat ID" className={inputCls} />
+            <input
+              type="text"
+              value={wechat}
+              onChange={(e) => setWechat(e.target.value.slice(0, 30))}
+              placeholder="WeChat ID"
+              maxLength={30}
+              className={inputCls}
+            />
+            <p className={`text-right text-[10px] mt-0.5 ${wechat.length >= 27 ? "text-amber-500" : "text-gray-400 dark:text-slate-500"}`}>
+              {wechat.length}/30
+            </p>
           </div>
           <div>
             <label className="block text-xs text-gray-500 dark:text-slate-400 mb-1">{t.teams}</label>
-            <input type="text" value={teams} onChange={(e) => setTeams(e.target.value)} placeholder="student@xmu.edu.my" className={inputCls} />
+            <input type="text" value={teams} onChange={(e) => setTeams(e.target.value)} placeholder="student@xmu.edu.my" maxLength={60} className={inputCls} />
           </div>
           <div>
             <label className="block text-xs text-gray-500 dark:text-slate-400 mb-1">{t.meetupSpot}</label>
-            <input type="text" value={meetupSpot} onChange={(e) => setMeetupSpot(e.target.value)} placeholder={t.meetupSpotPlaceholder} className={inputCls} />
+            <input
+              type="text"
+              value={meetupSpot}
+              onChange={(e) => setMeetupSpot(e.target.value.slice(0, 80))}
+              placeholder={t.meetupSpotPlaceholder}
+              maxLength={80}
+              className={inputCls}
+            />
+            <p className={`text-right text-[10px] mt-0.5 ${meetupSpot.length >= 70 ? "text-amber-500" : "text-gray-400 dark:text-slate-500"}`}>
+              {meetupSpot.length}/80
+            </p>
           </div>
         </div>
 

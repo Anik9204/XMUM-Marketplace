@@ -252,6 +252,7 @@ export default function ListingDetailPage() {
             <div>
               <p className="text-xs font-medium text-gray-500 dark:text-slate-400">{t.postedBy}</p>
               <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">{sellerProfile?.fullName || listing.userName}</p>
+              <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">{listing.userEmail}</p>
             </div>
           </div>
 

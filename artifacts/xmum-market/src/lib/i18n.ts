@@ -157,6 +157,9 @@ export const translations = {
     messageSeller: "Message Seller",
     typeMessage: "Type a message...",
     noMessages: "No messages yet",
+    contactRequired: "Please provide at least one contact method (WhatsApp, WeChat, or MS Teams) before posting.",
+    whatsappCountryCodeHint: "Include country code (e.g. +60 for Malaysia)",
+    contactAtLeastOne: "At least one contact method is required. Include country code for WhatsApp (e.g. +60).",
   },
   zh: {
     appName: "厦大市集",
@@ -314,6 +317,9 @@ export const translations = {
     messageSeller: "发送消息",
     typeMessage: "输入消息...",
     noMessages: "暂无消息",
+    contactRequired: "发布前请至少填写一种联系方式（WhatsApp、微信或MS Teams）。",
+    whatsappCountryCodeHint: "请包含国家代码（如马来西亚为 +60）",
+    contactAtLeastOne: "请至少填写一种联系方式。WhatsApp 请包含国家代码（如 +60）。",
   },
 };
 
