@@ -1,4 +1,4 @@
-modules = ["nodejs-24"]
+modules = ["nodejs-20", "web", "bash"]
 
 [deployment]
 router = "application"
@@ -92,3 +92,6 @@ VITE_FIREBASE_MESSAGING_SENDER_ID = "265563320468"
 VITE_FIREBASE_PROJECT_ID = "xmum--market"
 VITE_FIREBASE_STORAGE_BUCKET = "xmum--market.firebasestorage.app"
 VITE_FIREBASE_MEASUREMENT_ID = "G-JMF8ZV5J5Z"
+
+[nix]
+channel = "stable-25_05"
