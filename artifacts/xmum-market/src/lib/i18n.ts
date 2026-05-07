@@ -127,6 +127,10 @@ export const translations = {
     done: "Done",
     descriptionLabel: "Details",
     descriptionPlaceholder: "Describe your item — condition, size, reason for selling, meetup preferences, etc.",
+    meetupSpot: "Meet-Up Spot",
+    meetupSpotPlaceholder: "e.g. Library Ground Floor, Block A Lobby",
+    editListingTitle: "Edit Listing",
+    typeLockedNote: "Listing type cannot be changed after posting",
   },
   zh: {
     appName: "厦大市集",
@@ -254,6 +258,10 @@ export const translations = {
     done: "完成",
     descriptionLabel: "详情",
     descriptionPlaceholder: "描述您的商品——状态、尺寸、出售原因、交易偏好等。",
+    meetupSpot: "见面地点",
+    meetupSpotPlaceholder: "例如：图书馆一楼、A栋大厅",
+    editListingTitle: "编辑物品",
+    typeLockedNote: "发布后不可更改物品类型",
   },
 };
 

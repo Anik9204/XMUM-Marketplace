@@ -6,7 +6,7 @@ import { getListing, markAsSold } from "@/lib/listings";
 import { getProfile } from "@/lib/userProfile";
 import { Listing, UserProfile } from "@/lib/types";
 import AuthModal from "@/components/AuthModal";
-import { ArrowLeft, Clock, Tag, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Clock, Tag, CheckCircle2, MapPin } from "lucide-react";
 import { SiWhatsapp, SiWechat } from "react-icons/si";
 import { MdGroups } from "react-icons/md";
 
@@ -294,6 +294,16 @@ export default function ListingDetailPage() {
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {listing.meetupSpot && (
+            <div className="flex items-start gap-2 mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800">
+              <MapPin size={15} className="text-[#003366] dark:text-blue-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs font-semibold text-[#003366] dark:text-blue-400">{t.meetupSpot}</p>
+                <p className="text-sm text-gray-700 dark:text-slate-200 mt-0.5">{listing.meetupSpot}</p>
+              </div>
             </div>
           )}
         </div>

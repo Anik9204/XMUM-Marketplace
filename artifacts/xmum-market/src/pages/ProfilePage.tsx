@@ -199,8 +199,10 @@ export default function ProfilePage() {
                 listing={l}
                 showDelete
                 showMarkSold
+                showEdit
                 onDelete={() => setDeleteTarget(l)}
                 onMarkSold={() => handleMarkAsSold(l)}
+                onEdit={() => navigate(`/edit/${l.id}`)}
               />
             ))}
           </div>

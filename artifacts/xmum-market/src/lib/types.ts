@@ -17,6 +17,7 @@ export interface Listing {
   whatsapp?: string;
   wechat?: string;
   teams?: string;
+  meetupSpot?: string;
   createdAt: number;
   isArchived: boolean;
   status?: ListingStatus;

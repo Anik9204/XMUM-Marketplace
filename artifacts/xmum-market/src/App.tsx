@@ -11,6 +11,7 @@ import PostPage from "@/pages/PostPage";
 import ProfilePage from "@/pages/ProfilePage";
 import SettingsPage from "@/pages/SettingsPage";
 import ListingDetailPage from "@/pages/ListingDetailPage";
+import EditListingPage from "@/pages/EditListingPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import NotFound from "@/pages/not-found";
 
@@ -48,6 +49,7 @@ function Router() {
         <Route path="/profile" component={ProfilePage} />
         <Route path="/settings" component={SettingsPage} />
         <Route path="/listing/:id" component={ListingDetailPage} />
+        <Route path="/edit/:id" component={EditListingPage} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

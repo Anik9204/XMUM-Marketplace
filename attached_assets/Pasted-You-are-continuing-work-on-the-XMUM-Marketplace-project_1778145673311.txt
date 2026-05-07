@@ -1,0 +1,300 @@
+You are continuing work on the XMUM Marketplace project. Read every file listed below carefully before writing a single line of code. Do NOT refactor anything not mentioned. Only build what is described.
+
+Files to read first:
+- src/lib/types.ts
+- src/lib/listings.ts
+- src/lib/i18n.ts
+- src/pages/PostPage.tsx
+- src/pages/ListingDetailPage.tsx
+- src/components/ListingCard.tsx
+- src/pages/ProfilePage.tsx
+- src/App.tsx
+
+---
+
+## FEATURE 1 — Meet-Up Spot field in Post forms
+
+### What to add
+Both the Buy & Sell and Lost & Found post forms need an optional free-text "Meet-Up Spot" field so the poster can specify where they prefer to exchange items (e.g. "Library Ground Floor", "Block A Lobby").
+
+### Step A — Update types.ts
+Add `meetupSpot?: string` to the `Listing` interface, after the `teams` field:
+```ts
+meetupSpot?: string;
+```
+
+### Step B — Update PostPage.tsx
+In the contact info section (the bordered box containing whatsapp/wechat/teams fields), add a fourth field at the bottom of the box:
+```tsx
+<div>
+  <label className="block text-xs text-gray-500 dark:text-slate-400 mb-1">
+    {t.meetupSpot}
+  </label>
+  <input
+    type="text"
+    value={meetupSpot}
+    onChange={(e) => setMeetupSpot(e.target.value)}
+    placeholder={t.meetupSpotPlaceholder}
+    className={inputCls}
+  />
+</div>
+```
+
+Add `const [meetupSpot, setMeetupSpot] = useState("");` to the state declarations.
+
+In `handleSubmit`, add `meetupSpot` to `baseData`:
+```ts
+const baseData = {
+  ...existingFields,
+  meetupSpot,
+};
+```
+
+### Step C — Show meet-up spot in ListingDetailPage.tsx
+In the listing detail page, after the contact info section (whatsapp/wechat/teams buttons), add a meet-up spot display row IF `listing.meetupSpot` is truthy:
+```tsx
+{listing.meetupSpot && (
+  <div className="flex items-start gap-2 mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800">
+    <MapPin size={15} className="text-[#003366] dark:text-blue-400 shrink-0 mt-0.5" />
+    <div>
+      <p className="text-xs font-semibold text-[#003366] dark:text-blue-400">{t.meetupSpot}</p>
+      <p className="text-sm text-gray-700 dark:text-slate-200 mt-0.5">{listing.meetupSpot}</p>
+    </div>
+  </div>
+)}
+```
+
+`MapPin` is already imported in ListingDetailPage. If not, add it from lucide-react.
+
+### Step D — Show meet-up spot in ListingCard.tsx
+In the bottom info row of the card (where MapPin and Clock are shown), update the left side to show `meetupSpot` instead of category label IF `meetupSpot` is present:
+```tsx
+<span className="flex items-center gap-1 truncate max-w-[60%]">
+  <MapPin size={10} />
+  {listing.meetupSpot
+    ? listing.meetupSpot
+    : (listing.type === "buy-sell" ? catLabel : listing.userEmail.split("@")[0])}
+</span>
+```
+
+### Step E — Add translation keys to i18n.ts
+Add to both EN and ZH objects:
+- EN: `meetupSpot: "Meet-Up Spot"`, `meetupSpotPlaceholder: "e.g. Library Ground Floor, Block A Lobby"`
+- ZH: `meetupSpot: "见面地点"`, `meetupSpotPlaceholder: "例如：图书馆一楼、A栋大厅"`
+
+---
+
+## FEATURE 2 — Edit Posts (allow users to edit their published listings)
+
+### Step A — Add updateListing function to listings.ts
+```ts
+export async function updateListing(
+  id: string,
+  data: Partial<Omit<Listing, "id" | "createdAt" | "userId" | "userEmail" | "userName">>
+): Promise<void> {
+  await Promise.race([
+    updateDoc(doc(db, "listings", id), data),
+    new Promise<void>((_, reject) =>
+      setTimeout(() => reject(new Error("timeout:update-listing")), 6_000)
+    ),
+  ]);
+}
+```
+`updateDoc` is already imported in listings.ts.
+
+### Step B — Create EditListingPage.tsx
+Create a new file `src/pages/EditListingPage.tsx`. This page is structurally identical to `PostPage.tsx` but pre-populates all form fields from an existing listing fetched by ID from Firestore, and calls `updateListing` instead of `createListing` on submit.
+
+The page receives the listing ID from the URL param (wouter route `/edit/:id`).
+
+Key differences from PostPage:
+- Page title: `t.editListing` instead of `t.postItem`
+- Fetch the listing on mount using `getListing(id)` from `lib/listings.ts`
+- If `listing.userId !== user.uid`, show an error and redirect to `/profile`
+- Pre-populate all state: `setTitle(listing.title)`, `setDescription(listing.description)`, `setPrice(listing.price?.toString() ?? "")`, `setCategory(listing.category)`, `setCondition(listing.condition)`, `setWhatsapp(listing.whatsapp ?? "")`, `setWechat(listing.wechat ?? "")`, `setTeams(listing.teams ?? "")`, `setMeetupSpot(listing.meetupSpot ?? "")`, `setType(listing.type)`, `setExistingPhotos(listing.photos)` (see below)
+- Photos: existing photos are shown as already-uploaded previews. Add state `const [existingPhotos, setExistingPhotos] = useState<string[]>([])` for already-uploaded URLs. Users can remove existing photos (they won't be deleted from Storage on removal — just removed from the listing data). New photo uploads work the same as PostPage. On submit, combine: `photos: [...existingPhotos, ...newlyUploadedUrls]`
+- Submit calls `updateListing(id, updatedData)` then shows a success toast and navigates to `/listing/${id}`
+- The type selector is DISABLED (read-only) on edit — show it grayed out. You cannot change a buy-sell to lost-found after posting.
+- Show a loading skeleton while the listing is being fetched.
+
+Full structure of EditListingPage (adapt from PostPage but replace createListing with updateListing, add the existing photos row, disable type toggle):
+
+```tsx
+import { useState, useRef, useEffect } from "react";
+import { useLocation, useParams } from "wouter";
+import { useLang } from "@/contexts/LanguageContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { uploadPhoto, updateListing, getListing } from "@/lib/listings";
+import { auth } from "@/lib/firebase";
+import { ListingType, Condition } from "@/lib/types";
+import { ImagePlus, X, AlertCircle, CheckCircle2, Lock } from "lucide-react";
+
+// Copy SuccessToast, inputCls, selectCls, labelCls, BUY_SELL_CATEGORIES,
+// LOST_FOUND_CATEGORIES, MAX_FILE_BYTES, and withTimeout from PostPage.tsx —
+// do NOT import them from PostPage (they are not exported). Re-declare them
+// at the top of this file.
+
+export default function EditListingPage() {
+  // ... (see full implementation notes below)
+}
+```
+
+Implementation notes for EditListingPage:
+- Use `const { id } = useParams<{ id: string }>();`
+- Loading state: while fetching, show a centered `<Loader2 className="animate-spin" />` 
+- On mount, call `getListing(id)` and populate state
+- If listing not found or `listing.userId !== user?.uid`, show an error message with a link back to `/profile`
+- The type selector renders the same toggle buttons but with `pointer-events-none opacity-60` and a `<Lock size={12} />` icon next to it with a note: "Listing type cannot be changed after posting"
+- Existing photos section: show thumbnails with X buttons. Removing an existing photo removes it from `existingPhotos` array (NOT from Storage). New upload slot appears when `existingPhotos.length + photos.length < 3`
+- On submit: upload any new `photos` files first, then call `updateListing(id, { title, description, price (if buy-sell), category, condition, photos: [...existingPhotos, ...newUrls], whatsapp, wechat, teams, meetupSpot })`
+
+### Step C — Add route to App.tsx
+Add the import and route:
+```tsx
+import EditListingPage from "@/pages/EditListingPage";
+// In the Switch:
+<Route path="/edit/:id" component={EditListingPage} />
+```
+Add it after the `/listing/:id` route.
+
+### Step D — Add Edit button to ProfilePage.tsx
+In `ProfilePage.tsx`, the `ListingCard` for each listing has `showDelete` and `showMarkSold` props. Add a new `showEdit` prop to `ListingCard`:
+- In the owner action buttons section at the bottom of ListingCard, if `showEdit && onEdit`, add an edit button ABOVE the mark-as-sold button:
+```tsx
+{showEdit && onEdit && !isSold && (
+  <button
+    onClick={(e) => { e.stopPropagation(); onEdit(); }}
+    className="w-full min-h-[44px] text-xs text-gray-600 dark:text-slate-300 border border-gray-300 dark:border-slate-600 rounded-lg py-1.5 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors font-medium flex items-center justify-center gap-1"
+  >
+    <Pencil size={12} />
+    {t.editListing}
+  </button>
+)}
+```
+Add `Pencil` to the lucide-react import in `ListingCard.tsx`.
+
+Update `ListingCard` Props interface:
+```ts
+interface Props {
+  listing: Listing;
+  onDelete?: () => void;
+  showDelete?: boolean;
+  showMarkSold?: boolean;
+  onMarkSold?: () => void;
+  showEdit?: boolean;
+  onEdit?: () => void;
+}
+```
+
+In `ProfilePage.tsx`, pass `showEdit` and `onEdit` to each ListingCard:
+```tsx
+<ListingCard
+  key={l.id}
+  listing={l}
+  showDelete
+  showMarkSold
+  showEdit
+  onDelete={() => setDeleteTarget(l)}
+  onMarkSold={() => handleMarkAsSold(l)}
+  onEdit={() => navigate(`/edit/${l.id}`)}
+/>
+```
+
+### Step E — Add translation keys to i18n.ts (if not already present)
+`editListing` is already in i18n.ts in both languages. No change needed there.
+
+Add:
+- EN: `editListingTitle: "Edit Listing"`, `typeLockedNote: "Listing type cannot be changed after posting"`
+- ZH: `editListingTitle: "编辑物品"`, `typeLockedNote: "发布后不可更改物品类型"`
+
+---
+
+## FEATURE 3 — Mudah.my-inspired design polish
+
+These are targeted UI improvements inspired by Mudah.my's classifieds-style layout. Do NOT redesign the whole app — apply these specific improvements only.
+
+### Change A — Category filter chips on HomePage.tsx
+On Mudah.my, users can quickly filter by category from the home feed without going to the search page. Add horizontal scrollable category chips below the tab bar in `HomePage.tsx`.
+
+Add `const [categoryFilter, setCategoryFilter] = useState<string>("all");` to HomePage state.
+
+After the tab bar `<div>` and before the listings grid `<div>`, insert:
+```tsx
+{/* Category chips */}
+<div className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700">
+  <div className="max-w-5xl mx-auto px-4 py-2 flex gap-2 overflow-x-auto scrollbar-hide">
+    {["all", ...(activeTab === "buy-sell" ? BUY_SELL_CATEGORIES : LOST_FOUND_CATEGORIES)].map((cat) => (
+      <button
+        key={cat}
+        onClick={() => setCategoryFilter(cat)}
+        className={`shrink-0 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+          categoryFilter === cat
+            ? "bg-[#003366] text-white border-[#003366] dark:bg-blue-600 dark:border-blue-600"
+            : "bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 border-gray-200 dark:border-slate-600 hover:border-[#003366] dark:hover:border-blue-400"
+        }`}
+      >
+        {cat === "all" ? (lang === "en" ? "All" : "全部") : t.categories[cat as keyof typeof t.categories]}
+      </button>
+    ))}
+  </div>
+</div>
+```
+
+Import `BUY_SELL_CATEGORIES` and `LOST_FOUND_CATEGORIES` — since these are defined in PostPage.tsx and not exported, define them again here at the top of HomePage.tsx (same values, just re-declare them). Do NOT import from PostPage.
+
+Add `const { lang } = useLang();` to HomePage (it already uses `t` from `useLang` — just destructure `lang` too).
+
+Filter the displayed listings client-side:
+```tsx
+const displayedListings = categoryFilter === "all"
+  ? listings
+  : listings.filter((l) => l.category === categoryFilter);
+```
+Use `displayedListings` in the grid instead of `listings` directly.
+
+Reset `categoryFilter` to `"all"` when `activeTab` changes (add to the `useEffect` that calls `loadFirst`).
+
+### Change B — Improve ListingCard info density
+On Mudah.my, each card shows: image, title, price, location/category, and time. Update ListingCard to show the category chip as a small label above the title (not just in the bottom bar), and make the card bottom bar show ONLY meet-up spot or time:
+
+In the card body `<div className="p-3">`:
+1. Add a small category badge ABOVE the title for buy-sell listings:
+```tsx
+{listing.type === "buy-sell" && !isSold && (
+  <span className="inline-block text-[9px] font-semibold uppercase tracking-wide text-[#003366]/70 dark:text-blue-400/70 mb-0.5">
+    {catLabel}
+  </span>
+)}
+```
+2. The bottom info row: show meetupSpot OR the time — not both at once on mobile. Keep both on larger screens using `hidden sm:flex`:
+```tsx
+<div className="mt-2 flex items-center justify-between text-[10px] text-gray-400 dark:text-slate-500">
+  {listing.meetupSpot ? (
+    <span className="flex items-center gap-1 truncate">
+      <MapPin size={10} />
+      {listing.meetupSpot}
+    </span>
+  ) : (
+    <span className="flex items-center gap-1">
+      <MapPin size={10} />
+      {listing.type === "buy-sell" ? catLabel : listing.userEmail.split("@")[0]}
+    </span>
+  )}
+  <span className="flex items-center gap-1 shrink-0 ml-2">
+    <Clock size={10} />
+    {timeAgo(listing.createdAt)}
+  </span>
+</div>
+```
+
+---
+
+## IMPORTANT CONSTRAINTS
+
+1. Do NOT change Firestore or Storage security rules.
+2. Do NOT change firebase.ts.
+3. Do NOT add any new npm packages.
+4. Do NOT modify SettingsPage.tsx, AuthModal.tsx, ResetPasswordPage.tsx, or auth.ts — those are finalized.
+5. The `updateListing` function must use the existing 6s timeout pattern already used in `markAsSold` and `deleteListing`.
+6. EditListingPage must be a new file — do NOT modify PostPage.tsx to handle both create and edit modes.
+7. After all changes, confirm exactly which files were created or modified.

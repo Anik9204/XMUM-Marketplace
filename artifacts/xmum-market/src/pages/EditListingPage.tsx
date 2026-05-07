@@ -1,14 +1,13 @@
 import { useState, useRef, useEffect } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useParams } from "wouter";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { uploadPhoto, createListing } from "@/lib/listings";
+import { uploadPhoto, updateListing, getListing } from "@/lib/listings";
 import { auth } from "@/lib/firebase";
 import { ListingType, Condition } from "@/lib/types";
-import AuthModal from "@/components/AuthModal";
-import { ImagePlus, X, AlertCircle, CheckCircle2, Edit2 } from "lucide-react";
+import { ImagePlus, X, AlertCircle, CheckCircle2, Lock, Edit2, Loader2 } from "lucide-react";
 
-const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB — matches Firebase Storage security rule
+const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
 const BUY_SELL_CATEGORIES = [
   "electronics", "books", "clothing", "furniture", "food", "services", "others",
@@ -55,7 +54,6 @@ function DescriptionEditorModal({ value, onChange, onClose }: DescriptionEditorM
 
   return (
     <div className="fixed inset-0 z-[70] flex flex-col bg-white dark:bg-slate-900">
-      {/* Header bar */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-slate-700">
         <button
           type="button"
@@ -75,8 +73,6 @@ function DescriptionEditorModal({ value, onChange, onClose }: DescriptionEditorM
           {t.done}
         </button>
       </div>
-
-      {/* Textarea fills remaining height */}
       <div className="flex flex-col flex-1 px-4 py-3 overflow-hidden">
         <textarea
           autoFocus
@@ -86,12 +82,7 @@ function DescriptionEditorModal({ value, onChange, onClose }: DescriptionEditorM
           placeholder={t.descriptionPlaceholder}
           className="flex-1 w-full resize-none bg-transparent text-gray-900 dark:text-slate-100 text-sm leading-relaxed placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none"
         />
-        {/* Character counter */}
-        <div className={`text-right text-xs mt-2 font-medium ${
-          draft.length > 900
-            ? "text-red-500 dark:text-red-400"
-            : "text-gray-400 dark:text-slate-500"
-        }`}>
+        <div className={`text-right text-xs mt-2 font-medium ${draft.length > 900 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
           {draft.length} / 1000
         </div>
       </div>
@@ -99,10 +90,14 @@ function DescriptionEditorModal({ value, onChange, onClose }: DescriptionEditorM
   );
 }
 
-export default function PostPage() {
+export default function EditListingPage() {
   const { t } = useLang();
-  const { user, userProfile } = useAuth();
+  const { user } = useAuth();
   const [, navigate] = useLocation();
+  const { id } = useParams<{ id: string }>();
+
+  const [fetchLoading, setFetchLoading] = useState(true);
+  const [fetchError, setFetchError] = useState("");
 
   const [type, setType] = useState<ListingType>("buy-sell");
   const [title, setTitle] = useState("");
@@ -113,53 +108,62 @@ export default function PostPage() {
   const [whatsapp, setWhatsapp] = useState("");
   const [wechat, setWechat] = useState("");
   const [teams, setTeams] = useState("");
+  const [meetupSpot, setMeetupSpot] = useState("");
+  const [existingPhotos, setExistingPhotos] = useState<string[]>([]);
   const [photos, setPhotos] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
-  const [showAuth, setShowAuth] = useState(false);
   const [showDescEditor, setShowDescEditor] = useState(false);
-  const [meetupSpot, setMeetupSpot] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!userProfile) return;
-    if (userProfile.whatsapp) setWhatsapp(userProfile.whatsapp);
-    if (userProfile.wechat) setWechat(userProfile.wechat);
-  }, [userProfile]);
+    if (!id) { setFetchError("Invalid listing ID."); setFetchLoading(false); return; }
+    getListing(id)
+      .then((listing) => {
+        if (!listing) { setFetchError("Listing not found."); return; }
+        if (listing.userId !== user?.uid) {
+          setFetchError("You don't have permission to edit this listing.");
+          return;
+        }
+        setType(listing.type);
+        setTitle(listing.title);
+        setDescription(listing.description);
+        setPrice(listing.price?.toString() ?? "");
+        setCategory(listing.category);
+        setCondition(listing.condition);
+        setWhatsapp(listing.whatsapp ?? "");
+        setWechat(listing.wechat ?? "");
+        setTeams(listing.teams ?? "");
+        setMeetupSpot(listing.meetupSpot ?? "");
+        setExistingPhotos(listing.photos);
+      })
+      .catch(() => setFetchError("Failed to load listing. Please try again."))
+      .finally(() => setFetchLoading(false));
+  }, [id, user?.uid]);
 
-  // Re-run on type change so the field is populated when switching tabs
-  useEffect(() => {
-    if (user?.email) setTeams(user.email);
-  }, [user, type]);
-
-  if (!user) {
+  if (fetchLoading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 text-center">
-        <AlertCircle size={40} className="text-gray-300 dark:text-slate-600 mb-3" />
-        <p className="text-gray-600 dark:text-slate-300 font-medium mb-1">{t.loginToPost}</p>
-        <button onClick={() => setShowAuth(true)} className="mt-3 bg-[#003366] dark:bg-blue-600 text-white px-5 min-h-[44px] py-2.5 rounded-xl text-sm font-semibold">
-          {t.signIn}
-        </button>
-        {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Loader2 size={32} className="animate-spin text-[#003366] dark:text-blue-400" />
       </div>
     );
   }
 
-  if (!user.emailVerified) {
+  if (fetchError) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 text-center">
-        <AlertCircle size={40} className="text-amber-400 mb-3" />
-        <p className="text-gray-600 dark:text-slate-300 font-medium">{t.verifyToPost}</p>
-        <p className="text-xs text-gray-400 dark:text-slate-500 mt-1 max-w-xs">{t.verifyEmailMsg}</p>
-        <button onClick={() => window.location.reload()} className="mt-4 text-xs text-[#003366] dark:text-blue-400 underline">
-          I've verified my email — refresh
+      <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 text-center gap-3">
+        <AlertCircle size={40} className="text-red-400" />
+        <p className="text-gray-600 dark:text-slate-300">{fetchError}</p>
+        <button onClick={() => navigate("/profile")} className="text-sm text-[#003366] dark:text-blue-400 underline">
+          Back to Profile
         </button>
       </div>
     );
   }
 
+  const totalPhotos = existingPhotos.length + photos.length;
   const categories = type === "buy-sell" ? BUY_SELL_CATEGORIES : LOST_FOUND_CATEGORIES;
 
   function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
@@ -171,7 +175,7 @@ export default function PostPage() {
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
-    if (photos.length + files.length > 3) { setError(t.uploadLimit); return; }
+    if (totalPhotos + files.length > 3) { setError(t.uploadLimit); return; }
     const oversized = files.find((f) => f.size > MAX_FILE_BYTES);
     if (oversized) { setError(t.imageTooLarge); return; }
     setError("");
@@ -180,14 +184,13 @@ export default function PostPage() {
     e.target.value = "";
   };
 
-  const removePhoto = (i: number) => {
-    setPhotos(photos.filter((_, idx) => idx !== i));
-    setPreviews(previews.filter((_, idx) => idx !== i));
+  const removeExistingPhoto = (i: number) => {
+    setExistingPhotos(existingPhotos.filter((_, idx) => idx !== i));
   };
 
-  const handleTypeChange = (newType: ListingType) => {
-    setType(newType);
-    setCategory(newType === "buy-sell" ? "electronics" : "lostItem");
+  const removeNewPhoto = (i: number) => {
+    setPhotos(photos.filter((_, idx) => idx !== i));
+    setPreviews(previews.filter((_, idx) => idx !== i));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -197,40 +200,35 @@ export default function PostPage() {
     try {
       await withTimeout(auth.currentUser?.getIdToken(true) ?? Promise.resolve(""), 10_000, "token-refresh");
 
-      const urls: string[] = [];
+      const newUrls: string[] = [];
       for (const f of photos) {
         try {
-          const url = await withTimeout(uploadPhoto(f, user.uid), 30_000, "photo-upload");
-          urls.push(url);
+          const url = await withTimeout(uploadPhoto(f, user!.uid), 30_000, "photo-upload");
+          newUrls.push(url);
         } catch (photoErr: any) {
-          console.warn("[PostPage] Photo skipped:", photoErr?.message);
+          console.warn("[EditListingPage] Photo skipped:", photoErr?.message);
         }
       }
 
-      // Offline persistence is disabled — createListing either succeeds on the
-      // server immediately or throws a real error. Never swallow this error.
-      // price is omitted entirely for lost-found (Firestore rejects undefined values).
-      const baseData = {
-        type, title, description,
-        category, condition, photos: urls,
-        userId: user.uid, userEmail: user.email ?? "",
-        userName: user.email?.split("@")[0] ?? "",
+      const baseData: Record<string, unknown> = {
+        title, description,
+        category, condition,
+        photos: [...existingPhotos, ...newUrls],
         whatsapp, wechat, teams, meetupSpot,
       };
-      const listingData = type === "buy-sell"
-        ? { ...baseData, price: parseFloat(price) || 0 }
-        : baseData;
+      if (type === "buy-sell") {
+        baseData.price = parseFloat(price) || 0;
+      }
 
-      await withTimeout(createListing(listingData), 12_000, "create-listing");
-
-      setToast("Your post has been successfully published.");
+      await withTimeout(updateListing(id, baseData as Parameters<typeof updateListing>[1]), 12_000, "update-listing");
+      setToast("Listing updated successfully!");
     } catch (err: any) {
       const code: string = err?.code ?? "";
       const msg: string = err?.message ?? "";
       if (msg.startsWith("timeout:token-refresh")) setError("Session refresh timed out. Please sign out and sign back in.");
       else if (msg.startsWith("timeout:photo-upload")) setError("A photo upload timed out. Try a smaller image or check your connection.");
-      else if (msg.startsWith("timeout:create-listing")) setError("Post timed out. Please check your connection and try again.");
-      else if (code === "permission-denied") setError("Permission denied. Make sure your email is verified and the Firestore rules are published in Firebase Console.");
+      else if (msg.startsWith("timeout:update-listing")) setError("Update timed out. Please check your connection and try again.");
+      else if (code === "permission-denied") setError("Permission denied. Make sure your email is verified.");
       else if (code === "unauthenticated") setError("Your session expired. Please sign out and sign back in.");
       else if (msg) setError(`Error: ${msg}`);
       else setError(t.errorOccurred);
@@ -241,41 +239,58 @@ export default function PostPage() {
 
   return (
     <div className="max-w-lg mx-auto px-4 py-5 pb-28 sm:pb-8 animate-in fade-in duration-200">
-      {toast && <SuccessToast message={toast} onDone={() => navigate("/profile")} />}
+      {toast && <SuccessToast message={toast} onDone={() => navigate(`/listing/${id}`)} />}
 
-      <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-4">{t.postItem}</h1>
+      <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-4">{t.editListingTitle}</h1>
 
-      {/* Type selector */}
-      <div className="flex bg-gray-100 dark:bg-slate-800 rounded-xl p-1 mb-5">
-        {(["buy-sell", "lost-found"] as const).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => handleTypeChange(tab)}
-            className={`flex-1 py-2 min-h-[44px] rounded-lg text-sm font-semibold transition-all ${type === tab ? "bg-white dark:bg-slate-700 shadow text-[#003366] dark:text-slate-100" : "text-gray-500 dark:text-slate-400"}`}
-          >
-            {tab === "buy-sell" ? t.buySell : t.lostFound}
-          </button>
-        ))}
+      {/* Type selector — disabled/read-only after posting */}
+      <div className="mb-5">
+        <div className="flex bg-gray-100 dark:bg-slate-800 rounded-xl p-1 pointer-events-none opacity-60">
+          {(["buy-sell", "lost-found"] as const).map((tab) => (
+            <div
+              key={tab}
+              className={`flex-1 py-2 min-h-[44px] rounded-lg text-sm font-semibold text-center flex items-center justify-center transition-all ${type === tab ? "bg-white dark:bg-slate-700 shadow text-[#003366] dark:text-slate-100" : "text-gray-500 dark:text-slate-400"}`}
+            >
+              {tab === "buy-sell" ? t.buySell : t.lostFound}
+            </div>
+          ))}
+        </div>
+        <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-1.5 flex items-center gap-1">
+          <Lock size={10} />
+          {t.typeLockedNote}
+        </p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Photos */}
+        {/* Photos — existing + new */}
         <div>
           <label className={labelCls}>{t.photos}</label>
           <div className="grid grid-cols-3 gap-2">
-            {previews.map((src, i) => (
-              <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-gray-200 dark:border-slate-600">
+            {existingPhotos.map((src, i) => (
+              <div key={`existing-${i}`} className="relative aspect-square rounded-xl overflow-hidden border border-gray-200 dark:border-slate-600">
                 <img src={src} alt="" className="w-full h-full object-cover" />
                 <button
                   type="button"
-                  onClick={() => removePhoto(i)}
+                  onClick={() => removeExistingPhoto(i)}
                   className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-0.5"
                 >
                   <X size={12} />
                 </button>
               </div>
             ))}
-            {photos.length < 3 && (
+            {previews.map((src, i) => (
+              <div key={`new-${i}`} className="relative aspect-square rounded-xl overflow-hidden border border-blue-200 dark:border-blue-600">
+                <img src={src} alt="" className="w-full h-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => removeNewPhoto(i)}
+                  className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-0.5"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+            {totalPhotos < 3 && (
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
@@ -301,11 +316,7 @@ export default function PostPage() {
             maxLength={80}
             className={inputCls}
           />
-          <div className={`text-right text-xs mt-1 font-medium ${
-            title.length > 70
-              ? "text-red-500 dark:text-red-400"
-              : "text-gray-400 dark:text-slate-500"
-          }`}>
+          <div className={`text-right text-xs mt-1 font-medium ${title.length > 70 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
             {title.length} / 80
           </div>
         </div>
@@ -321,10 +332,7 @@ export default function PostPage() {
             onClick={() => setShowDescEditor(true)}
             className="w-full min-h-[80px] text-left bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition flex items-start justify-between gap-2"
           >
-            <span className={description
-              ? "text-gray-900 dark:text-slate-100 line-clamp-3 flex-1"
-              : "text-gray-400 dark:text-slate-500 flex-1"
-            }>
+            <span className={description ? "text-gray-900 dark:text-slate-100 line-clamp-3 flex-1" : "text-gray-400 dark:text-slate-500 flex-1"}>
               {description || t.descriptionPlaceholder}
             </span>
             <Edit2 size={15} className="text-gray-400 dark:text-slate-500 mt-0.5 shrink-0" />
@@ -363,7 +371,7 @@ export default function PostPage() {
           </div>
         </div>
 
-        {/* Price */}
+        {/* Price (buy-sell only) */}
         {type === "buy-sell" && (
           <div>
             <label className={labelCls}>{t.price}</label>
@@ -422,7 +430,7 @@ export default function PostPage() {
               </svg>
               {t.submitting}
             </span>
-          ) : t.submit}
+          ) : t.save}
         </button>
       </form>
 

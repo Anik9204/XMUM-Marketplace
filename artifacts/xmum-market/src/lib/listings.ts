@@ -70,6 +70,18 @@ export async function createListing(
   return docRef.id;
 }
 
+export async function updateListing(
+  id: string,
+  data: Partial<Omit<Listing, "id" | "createdAt" | "userId" | "userEmail" | "userName">>
+): Promise<void> {
+  await Promise.race([
+    updateDoc(doc(db, "listings", id), data),
+    new Promise<void>((_, reject) =>
+      setTimeout(() => reject(new Error("timeout:update-listing")), 6_000)
+    ),
+  ]);
+}
+
 // Race against 6s timeout as a safety net in case of slow server response
 // in Replit's proxy environment. (Offline persistence is disabled so writes
 // fail fast, but network latency can still cause slow responses.)

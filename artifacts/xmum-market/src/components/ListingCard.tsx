@@ -1,7 +1,7 @@
 import { Link } from "wouter";
 import { Listing } from "@/lib/types";
 import { useLang } from "@/contexts/LanguageContext";
-import { MapPin, Clock } from "lucide-react";
+import { MapPin, Clock, Pencil } from "lucide-react";
 
 interface Props {
   listing: Listing;
@@ -9,9 +9,11 @@ interface Props {
   showDelete?: boolean;
   showMarkSold?: boolean;
   onMarkSold?: () => void;
+  showEdit?: boolean;
+  onEdit?: () => void;
 }
 
-export default function ListingCard({ listing, onDelete, showDelete, showMarkSold, onMarkSold }: Props) {
+export default function ListingCard({ listing, onDelete, showDelete, showMarkSold, onMarkSold, showEdit, onEdit }: Props) {
   const { t } = useLang();
   const isSold = listing.status === "sold";
 
@@ -67,6 +69,11 @@ export default function ListingCard({ listing, onDelete, showDelete, showMarkSol
         </div>
 
         <div className="p-3">
+          {listing.type === "buy-sell" && !isSold && (
+            <span className="inline-block text-[9px] font-semibold uppercase tracking-wide text-[#003366]/70 dark:text-blue-400/70 mb-0.5">
+              {catLabel}
+            </span>
+          )}
           <h3 className={`font-semibold text-sm line-clamp-1 ${isSold ? "text-gray-400 dark:text-slate-500" : "text-gray-900 dark:text-slate-100"}`}>{listing.title}</h3>
           <p className="text-xs text-gray-500 dark:text-slate-400 line-clamp-2 mt-0.5">{listing.description}</p>
 
@@ -77,11 +84,18 @@ export default function ListingCard({ listing, onDelete, showDelete, showMarkSol
           )}
 
           <div className="mt-2 flex items-center justify-between text-[10px] text-gray-400 dark:text-slate-500">
-            <span className="flex items-center gap-1">
-              <MapPin size={10} />
-              {listing.type === "buy-sell" ? catLabel : listing.userEmail.split("@")[0]}
-            </span>
-            <span className="flex items-center gap-1">
+            {listing.meetupSpot ? (
+              <span className="flex items-center gap-1 truncate">
+                <MapPin size={10} />
+                {listing.meetupSpot}
+              </span>
+            ) : (
+              <span className="flex items-center gap-1">
+                <MapPin size={10} />
+                {listing.type === "buy-sell" ? catLabel : listing.userEmail.split("@")[0]}
+              </span>
+            )}
+            <span className="flex items-center gap-1 shrink-0 ml-2">
               <Clock size={10} />
               {timeAgo(listing.createdAt)}
             </span>
@@ -90,8 +104,17 @@ export default function ListingCard({ listing, onDelete, showDelete, showMarkSol
       </Link>
 
       {/* Owner action buttons */}
-      {(showDelete || showMarkSold) && (
-        <div className={`px-3 pb-3 flex gap-2 ${showDelete && showMarkSold ? "flex-col" : ""}`}>
+      {(showDelete || showMarkSold || showEdit) && (
+        <div className={`px-3 pb-3 flex gap-2 ${(showDelete || showMarkSold || showEdit) ? "flex-col" : ""}`}>
+          {showEdit && onEdit && !isSold && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onEdit(); }}
+              className="w-full min-h-[44px] text-xs text-gray-600 dark:text-slate-300 border border-gray-300 dark:border-slate-600 rounded-lg py-1.5 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors font-medium flex items-center justify-center gap-1"
+            >
+              <Pencil size={12} />
+              {t.editListing}
+            </button>
+          )}
           {showMarkSold && onMarkSold && !isSold && (
             <button
               onClick={(e) => { e.stopPropagation(); onMarkSold(); }}

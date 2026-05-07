@@ -9,8 +9,13 @@ import ListingCard from "@/components/ListingCard";
 import AuthModal from "@/components/AuthModal";
 import { ShoppingBag, Search, MapPin, Loader2 } from "lucide-react";
 
+const BUY_SELL_CATEGORIES = [
+  "electronics", "books", "clothing", "furniture", "food", "services", "others",
+];
+const LOST_FOUND_CATEGORIES = ["lostItem", "foundItem"];
+
 export default function HomePage() {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const [activeTab, setActiveTab] = useState<"buy-sell" | "lost-found">("buy-sell");
@@ -20,6 +25,7 @@ export default function HomePage() {
   const [cursor, setCursor] = useState<QueryDocumentSnapshot | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
 
   const loadFirst = useCallback(async (tab: "buy-sell" | "lost-found") => {
     setLoading(true);
@@ -45,6 +51,7 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
+    setCategoryFilter("all");
     loadFirst(activeTab);
   }, [activeTab, loadFirst]);
 
@@ -62,6 +69,10 @@ export default function HomePage() {
       setLoadingMore(false);
     }
   };
+
+  const displayedListings = categoryFilter === "all"
+    ? listings
+    : listings.filter((l) => l.category === categoryFilter);
 
   const SkeletonGrid = () => (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -141,11 +152,32 @@ export default function HomePage() {
         </div>
       </div>
 
+      {/* Category chips */}
+      <div className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700">
+        <div className="max-w-5xl mx-auto px-4 py-2 flex gap-2 overflow-x-auto scrollbar-hide">
+          {["all", ...(activeTab === "buy-sell" ? BUY_SELL_CATEGORIES : LOST_FOUND_CATEGORIES)].map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setCategoryFilter(cat)}
+              className={`shrink-0 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                categoryFilter === cat
+                  ? "bg-[#003366] text-white border-[#003366] dark:bg-blue-600 dark:border-blue-600"
+                  : "bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 border-gray-200 dark:border-slate-600 hover:border-[#003366] dark:hover:border-blue-400"
+              }`}
+            >
+              {cat === "all"
+                ? (lang === "en" ? "All" : "全部")
+                : t.categories[cat as keyof typeof t.categories]}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Listings grid */}
       <div className="max-w-5xl mx-auto px-4 py-5">
         {loading ? (
           <SkeletonGrid />
-        ) : listings.length === 0 ? (
+        ) : displayedListings.length === 0 ? (
           <div className="text-center py-16 text-gray-400 dark:text-slate-400">
             <ShoppingBag size={40} className="mx-auto mb-3 opacity-30" />
             <p className="text-sm font-medium">{t.noListings}</p>
@@ -157,29 +189,31 @@ export default function HomePage() {
         ) : (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {listings.map((listing) => (
+              {displayedListings.map((listing) => (
                 <ListingCard key={listing.id} listing={listing} />
               ))}
             </div>
 
-            {/* Load More */}
-            <div className="mt-6 flex justify-center">
-              {hasMore ? (
-                <button
-                  onClick={handleLoadMore}
-                  disabled={loadingMore}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-[#003366] dark:bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-[#002244] dark:hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                >
-                  {loadingMore ? (
-                    <><Loader2 size={15} className="animate-spin" /> {t.loading}</>
-                  ) : (
-                    t.loadMore
-                  )}
-                </button>
-              ) : listings.length > 0 ? (
-                <p className="text-xs text-gray-400 dark:text-slate-500">{t.noMoreListings}</p>
-              ) : null}
-            </div>
+            {/* Load More — only shown when viewing all (not filtered) */}
+            {categoryFilter === "all" && (
+              <div className="mt-6 flex justify-center">
+                {hasMore ? (
+                  <button
+                    onClick={handleLoadMore}
+                    disabled={loadingMore}
+                    className="flex items-center gap-2 px-6 py-2.5 bg-[#003366] dark:bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-[#002244] dark:hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  >
+                    {loadingMore ? (
+                      <><Loader2 size={15} className="animate-spin" /> {t.loading}</>
+                    ) : (
+                      t.loadMore
+                    )}
+                  </button>
+                ) : listings.length > 0 ? (
+                  <p className="text-xs text-gray-400 dark:text-slate-500">{t.noMoreListings}</p>
+                ) : null}
+              </div>
+            )}
           </>
         )}
       </div>
