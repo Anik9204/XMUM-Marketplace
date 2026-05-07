@@ -8,11 +8,13 @@ export async function getActiveAds(count = 2): Promise<SponsoredAd[]> {
     const q = query(
       collection(db, "ads"),
       where("isActive", "==", true),
-      where("endsAt", ">", now),
-      limit(count)
+      limit(20)
     );
     const snap = await getDocs(q);
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as SponsoredAd));
+    return snap.docs
+      .map((d) => ({ id: d.id, ...d.data() } as SponsoredAd))
+      .filter((ad) => ad.endsAt > now)
+      .slice(0, count);
   } catch {
     return [];
   }
