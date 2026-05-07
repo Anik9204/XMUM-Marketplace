@@ -3,8 +3,6 @@ import { getAuth } from "firebase/auth";
 import {
   initializeFirestore,
   getFirestore,
-  doc,
-  getDoc,
   Firestore,
 } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
@@ -39,12 +37,6 @@ try {
 }
 export { db };
 
-// Connection test — runs once on app start to surface DB issues early
-getDoc(doc(db, "_health", "ping"))
-  .then(() => console.log("Firestore connected ✅"))
-  .catch((err) =>
-    console.error("Firestore connection test:", err.code, err.message)
-  );
 
 export const storage = getStorage(app);
 export default app;

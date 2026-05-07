@@ -47,6 +47,10 @@ localPort = 5000
 externalPort = 80
 
 [[ports]]
+localPort = 5001
+externalPort = 3002
+
+[[ports]]
 localPort = 5173
 externalPort = 5173
 
@@ -59,8 +63,16 @@ localPort = 8081
 externalPort = 80
 
 [[ports]]
+localPort = 8082
+externalPort = 3001
+
+[[ports]]
 localPort = 23007
 externalPort = 3000
+
+[[ports]]
+localPort = 23008
+externalPort = 3003
 
 [userenv]
 

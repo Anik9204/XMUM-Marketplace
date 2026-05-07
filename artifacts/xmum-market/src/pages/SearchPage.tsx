@@ -40,6 +40,13 @@ export default function SearchPage() {
 
   useEffect(() => {
     clearTimeout(debounceRef.current);
+    // Don't auto-search on empty state — wait for user input to avoid
+    // an unnecessary Firestore read every time the Search page mounts.
+    if (!keyword && !minPrice && !maxPrice && condition === "all") {
+      setResults([]);
+      setSearched(false);
+      return;
+    }
     debounceRef.current = setTimeout(doSearch, 400);
     return () => clearTimeout(debounceRef.current);
   }, [keyword, type, minPrice, maxPrice, condition]);
@@ -163,7 +170,12 @@ export default function SearchPage() {
               </div>
             ))}
           </div>
-        ) : searched && results.length === 0 ? (
+        ) : !searched ? (
+          <div className="text-center py-16 text-gray-400 dark:text-slate-400">
+            <Search size={36} className="mx-auto mb-3 opacity-30" />
+            <p className="text-sm font-medium">{t.searchPlaceholder}</p>
+          </div>
+        ) : results.length === 0 ? (
           <div className="text-center py-16 text-gray-400 dark:text-slate-400">
             <Search size={36} className="mx-auto mb-3 opacity-30" />
             <p className="text-sm font-medium">{t.noResults}</p>

@@ -8,7 +8,7 @@ import { ListingType, Condition } from "@/lib/types";
 import AuthModal from "@/components/AuthModal";
 import { ImagePlus, X, AlertCircle, CheckCircle2 } from "lucide-react";
 
-const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB — matches Firebase Storage security rule
 
 const BUY_SELL_CATEGORIES = [
   "electronics", "books", "clothing", "furniture", "food", "services", "others",
@@ -40,7 +40,6 @@ function SuccessToast({ message, onDone }: { message: string; onDone: () => void
 
 export default function PostPage() {
   const { t } = useLang();
-  // userProfile from context — pre-populated by AuthContext, survives navigation
   const { user, userProfile } = useAuth();
   const [, navigate] = useLocation();
 
@@ -61,14 +60,12 @@ export default function PostPage() {
   const [showAuth, setShowAuth] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Pre-fill contact info from shared context userProfile (no extra Firestore fetch needed)
   useEffect(() => {
     if (!userProfile) return;
     if (userProfile.whatsapp && !whatsapp) setWhatsapp(userProfile.whatsapp);
     if (userProfile.wechat && !wechat) setWechat(userProfile.wechat);
   }, [userProfile]);
 
-  // Pre-fill MS Teams email once user is available
   useEffect(() => {
     if (user?.email && !teams) setTeams(user.email);
   }, [user?.email]);
@@ -146,23 +143,20 @@ export default function PostPage() {
         }
       }
 
-      try {
-        await withTimeout(
-          createListing({
-            type, title, description,
-            price: type === "buy-sell" ? (parseFloat(price) || 0) : undefined,
-            category, condition, photos: urls,
-            userId: user.uid, userEmail: user.email ?? "",
-            userName: user.email?.split("@")[0] ?? "",
-            whatsapp, wechat, teams,
-          }),
-          12_000,
-          "create-listing"
-        );
-      } catch (listingErr: any) {
-        if (!listingErr?.message?.startsWith("timeout:")) throw listingErr;
-        console.warn("[PostPage] Firestore write queued locally (server pending sync)");
-      }
+      // Offline persistence is disabled — createListing either succeeds on the
+      // server immediately or throws a real error. Never swallow this error.
+      await withTimeout(
+        createListing({
+          type, title, description,
+          price: type === "buy-sell" ? (parseFloat(price) || 0) : undefined,
+          category, condition, photos: urls,
+          userId: user.uid, userEmail: user.email ?? "",
+          userName: user.email?.split("@")[0] ?? "",
+          whatsapp, wechat, teams,
+        }),
+        12_000,
+        "create-listing"
+      );
 
       setToast("Your post has been successfully published.");
     } catch (err: any) {
@@ -170,6 +164,7 @@ export default function PostPage() {
       const msg: string = err?.message ?? "";
       if (msg.startsWith("timeout:token-refresh")) setError("Session refresh timed out. Please sign out and sign back in.");
       else if (msg.startsWith("timeout:photo-upload")) setError("A photo upload timed out. Try a smaller image or check your connection.");
+      else if (msg.startsWith("timeout:create-listing")) setError("Post timed out. Please check your connection and try again.");
       else if (code === "permission-denied") setError("Permission denied. Make sure your email is verified and the Firestore rules are published in Firebase Console.");
       else if (code === "unauthenticated") setError("Your session expired. Please sign out and sign back in.");
       else if (msg) setError(`Error: ${msg}`);
@@ -180,8 +175,6 @@ export default function PostPage() {
   };
 
   return (
-    // pb-28 ensures the submit button clears the 48px mobile bottom nav with breathing room.
-    // sm:pb-8 resets it on tablet/desktop where the bottom nav is not shown.
     <div className="max-w-lg mx-auto px-4 py-5 pb-28 sm:pb-8 animate-in fade-in duration-200">
       {toast && <SuccessToast message={toast} onDone={() => navigate("/profile")} />}
 
@@ -228,7 +221,7 @@ export default function PostPage() {
               </button>
             )}
           </div>
-          <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-1.5">Max 10 MB per photo · Up to 3 photos</p>
+          <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-1.5">Max 5 MB per photo · Up to 3 photos</p>
           <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoChange} />
         </div>
 
@@ -318,7 +311,6 @@ export default function PostPage() {
           </div>
         )}
 
-        {/* mb-6 ensures the button doesn't sit at the very bottom edge on small screens */}
         <button
           type="submit"
           disabled={loading || !title}

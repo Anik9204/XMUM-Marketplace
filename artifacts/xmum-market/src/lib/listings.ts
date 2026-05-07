@@ -26,8 +26,6 @@ import { Listing, ListingType } from "./types";
 const PAGE_SIZE = 12;
 
 // Convert a Firestore Timestamp (or plain number) to milliseconds.
-// serverTimestamp() returns a Timestamp object on read; Date.now() returns a number.
-// This normalises both so the UI always gets a plain number.
 function toMillis(val: unknown): number {
   if (typeof val === "number") return val;
   if (val && typeof (val as any).toMillis === "function") return (val as any).toMillis();
@@ -37,6 +35,20 @@ function toMillis(val: unknown): number {
 function mapDoc(d: QueryDocumentSnapshot): Listing {
   const data = d.data();
   return { id: d.id, ...data, createdAt: toMillis(data.createdAt) } as Listing;
+}
+
+// Extract the Firebase Storage path from a full https:// download URL.
+// ref(storage, fullUrl) only accepts gs:// or storage paths — passing a
+// download URL to it throws. This helper extracts the encoded path portion
+// so deleteObject works correctly.
+function storagePathFromUrl(url: string): string | null {
+  try {
+    const match = url.match(/\/o\/(.+?)(\?|$)/);
+    if (!match) return null;
+    return decodeURIComponent(match[1]);
+  } catch {
+    return null;
+  }
 }
 
 export async function uploadPhoto(file: File, userId: string): Promise<string> {
@@ -58,6 +70,9 @@ export async function createListing(
   return docRef.id;
 }
 
+// Race against 6s timeout as a safety net in case of slow server response
+// in Replit's proxy environment. (Offline persistence is disabled so writes
+// fail fast, but network latency can still cause slow responses.)
 export async function markAsSold(id: string): Promise<void> {
   await Promise.race([
     updateDoc(doc(db, "listings", id), { status: "sold" }),
@@ -87,9 +102,6 @@ export async function getListingsPage(
     return { listings, cursor: nextCursor, hasMore };
   } catch (err: any) {
     if (err?.code === "failed-precondition" || err?.message?.includes("index")) {
-      // True index-free fallback: single-field orderBy only — no composite index needed.
-      // Fetches a larger batch and filters client-side so the feed works while the
-      // composite index is being built in Firebase Console.
       console.warn("[listings] Composite index not ready — using client-side fallback");
       const fallbackSnap = await getDocs(
         query(
@@ -124,7 +136,6 @@ export async function getListings(type: ListingType): Promise<Listing[]> {
     return snap.docs.map(mapDoc);
   } catch (err: any) {
     if (err?.code === "failed-precondition" || err?.message?.includes("index")) {
-      // True index-free fallback: single-field orderBy, filter client-side
       console.warn("[listings] Composite index not ready — using client-side fallback for search");
       const snap = await getDocs(
         query(
@@ -149,7 +160,10 @@ export async function getListing(id: string): Promise<Listing | null> {
   return { id: snap.id, ...data, createdAt: toMillis(data.createdAt) } as Listing;
 }
 
-// Owners see ALL their listings including sold (no status filter)
+// Owners see ALL their listings including sold (no status filter).
+// Primary query uses a composite index (userId + isArchived + createdAt DESC).
+// Fallback uses a single equality filter — no composite index required —
+// then filters and sorts client-side.
 export async function getUserListings(userId: string): Promise<Listing[]> {
   try {
     const q = query(
@@ -163,15 +177,17 @@ export async function getUserListings(userId: string): Promise<Listing[]> {
     return snap.docs.map(mapDoc);
   } catch (err: any) {
     if (err?.code === "failed-precondition" || err?.message?.includes("index")) {
+      // Single equality filter — no composite index needed.
       const q2 = query(
         collection(db, "listings"),
         where("userId", "==", userId),
-        where("isArchived", "==", false),
         limit(40)
       );
       const snap = await getDocs(q2);
       const docs = snap.docs.map(mapDoc);
-      return docs.sort((a, b) => b.createdAt - a.createdAt);
+      return docs
+        .filter((l) => l.isArchived === false)
+        .sort((a, b) => b.createdAt - a.createdAt);
     }
     throw err;
   }
@@ -180,14 +196,19 @@ export async function getUserListings(userId: string): Promise<Listing[]> {
 export async function deleteListing(listing: Listing): Promise<void> {
   if (listing.photos.length > 0) {
     await Promise.allSettled(
-      listing.photos.map((url) =>
-        deleteObject(ref(storage, url)).catch((err) => {
+      listing.photos.map((url) => {
+        const path = storagePathFromUrl(url);
+        if (!path) return Promise.resolve();
+        return deleteObject(ref(storage, path)).catch((err) => {
           if (err?.code !== "storage/object-not-found") throw err;
-        })
-      )
+        });
+      })
     );
   }
 
+  // Race against 6s timeout as a safety net in case of slow server response
+  // in Replit's proxy environment. (Offline persistence is disabled so writes
+  // fail fast, but network latency can still cause slow responses.)
   await Promise.race([
     deleteDoc(doc(db, "listings", listing.id)),
     new Promise<void>((resolve) => setTimeout(resolve, 6_000)),

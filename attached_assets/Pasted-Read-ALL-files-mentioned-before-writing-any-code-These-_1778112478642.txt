@@ -1,0 +1,384 @@
+Read ALL files mentioned before writing any code.
+These are all the remaining bugs found after a full 
+codebase audit. Fix them all in one pass.
+
+=================================================================
+BUG 1 — .replit HAS DUPLICATE externalPort 80 MAPPINGS
+=================================================================
+
+FILE: .replit
+
+The .replit file currently has FIVE port entries:
+  localPort = 5000  → externalPort = 80   ← correct
+  localPort = 5173  → externalPort = 5173
+  localPort = 8080  → externalPort = 8080
+  localPort = 8081  → externalPort = 80   ← CONFLICT
+  localPort = 23007 → externalPort = 3000
+
+Two ports (5000 and 8081) both map to externalPort = 80.
+This confuses Replit's proxy and causes the preview to 
+show "app not running" intermittently.
+
+FIX: Keep ONLY the first port entry. Delete all others:
+
+  [[ports]]
+  localPort = 5000
+  externalPort = 80
+
+=================================================================
+BUG 2 — FIRESTORE OFFLINE PERSISTENCE REMOVED BUT 
+         TIMEOUT PATTERN STILL NEEDED
+=================================================================
+
+FILE: src/lib/firebase.ts
+
+The current firebase.ts deliberately removed offline 
+persistence to prevent silent write failures. This is 
+the correct decision. However the comment says:
+
+  "Offline persistence is intentionally omitted so that 
+  writes either succeed on the server immediately or 
+  throw a real, visible error"
+
+BUT the 6-second timeout race in listings.ts markAsSold 
+and userProfile.ts deleteAccount still uses the old 
+timeout pattern written for when persistence was enabled.
+
+Now that persistence is OFF, deleteDoc and updateDoc 
+will either succeed or throw immediately — the 6-second 
+timeout race is still safe to keep but the comment 
+explaining it is misleading. Update the comment in 
+listings.ts and userProfile.ts:
+
+  // Race against 6s timeout as a safety net in case
+  // of slow server response in Replit's proxy environment.
+  // (Offline persistence is disabled so writes fail fast,
+  // but network latency can still cause slow responses.)
+
+No code change needed — just update the comments.
+
+=================================================================
+BUG 3 — deleteListing USES WRONG STORAGE URL FORMAT
+=================================================================
+
+FILE: src/lib/listings.ts — deleteListing function
+
+Current code:
+  listing.photos.map((url) =>
+    deleteObject(ref(storage, url))
+  )
+
+The photos array stores FULL Firebase Storage download 
+URLs like:
+  https://firebasestorage.googleapis.com/v0/b/xmum--market
+  .firebasestorage.app/o/listings%2F...?alt=media&token=...
+
+But ref(storage, url) expects EITHER a storage path 
+(listings/userId/filename.png) OR a gs:// URL.
+Passing a full https download URL to ref() will FAIL 
+silently — deleteObject will throw an error that is 
+swallowed by the catch block, leaving orphan files 
+in Storage.
+
+FIX: Add a helper to extract the Storage path from the 
+download URL, and use it before calling deleteObject:
+
+  function storagePathFromUrl(url: string): string | null {
+    try {
+      const match = url.match(/\/o\/(.+?)(\?|$)/);
+      if (!match) return null;
+      return decodeURIComponent(match[1]);
+    } catch {
+      return null;
+    }
+  }
+
+Then update deleteListing:
+
+  listing.photos.map((url) => {
+    const path = storagePathFromUrl(url);
+    if (!path) return Promise.resolve();
+    return deleteObject(ref(storage, path)).catch((err) => {
+      if (err?.code !== 'storage/object-not-found') throw err;
+    });
+  })
+
+Apply the SAME fix to deleteAccount in userProfile.ts 
+Step 4 where listing photos are deleted.
+
+Also fix Step 5 in deleteAccount — avatar deletion:
+
+  Current:
+    deleteObject(ref(storage, profile.avatarUrl))
+  
+  profile.avatarUrl is also a full download URL.
+  Fix:
+    const avatarPath = storagePathFromUrl(profile.avatarUrl)
+    if (avatarPath) {
+      await deleteObject(ref(storage, avatarPath)).catch(...)
+    }
+
+=================================================================
+BUG 4 — getUserListings REQUIRES A COMPOSITE INDEX
+         THAT MAY NOT EXIST
+=================================================================
+
+FILE: src/lib/listings.ts — getUserListings function
+
+Current primary query:
+  where('userId', '==', userId),
+  where('isArchived', '==', false),
+  orderBy('createdAt', 'desc')
+
+This requires a composite index:
+  userId ASC + isArchived ASC + createdAt DESC
+
+This index was never mentioned in the setup docs and 
+likely does not exist in Firebase Console. Without it 
+the query throws failed-precondition and falls to the 
+fallback — but the fallback query:
+  where('userId', '==', userId),
+  where('isArchived', '==', false)
+  
+still requires a composite index (userId + isArchived).
+
+FIX the fallback to be truly index-free:
+  const q2 = query(
+    collection(db, 'listings'),
+    where('userId', '==', userId),
+    limit(40)
+  )
+  const snap = await getDocs(q2)
+  const docs = snap.docs.map(mapDoc)
+  return docs
+    .filter(l => l.isArchived === false)
+    .sort((a, b) => b.createdAt - a.createdAt)
+
+A single where('userId') equality filter does NOT 
+require a composite index — only the combination 
+with other filters or orderBy does.
+
+Also add this second index to the Firebase Console 
+documentation in replit.md:
+  Collection: listings
+  Fields: userId ASC + isArchived ASC + createdAt DESC
+  Scope: Collection
+
+=================================================================
+BUG 5 — PostPage SILENTLY TREATS FIRESTORE TIMEOUT AS 
+         SUCCESS
+=================================================================
+
+FILE: src/pages/PostPage.tsx — handleSubmit
+
+Current code:
+  } catch (listingErr: any) {
+    if (!listingErr?.message?.startsWith('timeout:')) 
+      throw listingErr;
+    console.warn('[PostPage] Firestore write queued 
+      locally (server pending sync)');
+  }
+
+Now that offline persistence is DISABLED (firebase.ts), 
+a Firestore timeout means the write genuinely FAILED — 
+it is NOT "queued locally". The document will never 
+appear in anyone's feed.
+
+FIX: Remove the timeout swallow. Always throw on 
+createListing failure so the user sees an error:
+
+  await withTimeout(
+    createListing({ ... }),
+    12_000,
+    'create-listing'
+  );
+  // Remove the inner try/catch entirely —
+  // let errors propagate to the outer catch block
+
+The outer catch already handles timeout: messages:
+  else if (msg.startsWith('timeout:photo-upload')) ...
+Add handling for create-listing timeout:
+  else if (msg.startsWith('timeout:create-listing')) 
+    setError('Post timed out. Please check your 
+      connection and try again.');
+
+=================================================================
+BUG 6 — LISTING DETAIL PAGE CALLS getProfile ON 
+         EVERY LOAD (UNNECESSARY FIRESTORE READ)
+=================================================================
+
+FILE: src/pages/ListingDetailPage.tsx
+
+Current code fetches the seller's profile with a 
+separate getProfile() call for every listing view.
+This costs one extra Firestore read per page view 
+and is slow on mobile.
+
+The only fields used from sellerProfile are:
+  sellerProfile?.showWhatsApp
+  sellerProfile?.showWeChat
+
+These are already stored on the listing document 
+itself (the poster's privacy settings at time of 
+posting are not available, but the current setting 
+IS available if we store it on the listing).
+
+SHORT-TERM FIX (no schema change needed):
+Keep the getProfile call but add error handling and 
+a loading state so the contact buttons don't flash 
+or jump while the profile loads:
+
+  const [profileLoading, setProfileLoading] = useState(true)
+  
+  .then(setSellerProfile)
+  .catch(() => setSellerProfile(null))
+  .finally(() => setProfileLoading(false))
+
+Then show contact buttons only when profileLoading 
+is false, using a skeleton placeholder while loading.
+
+=================================================================
+BUG 7 — HEADER z-index CONFLICTS WITH STICKY ELEMENTS
+=================================================================
+
+FILE: src/components/Layout.tsx
+
+The header uses z-50 (z-index: 50).
+The sticky tab bar on HomePage uses z-30.
+The sticky back button on ListingDetailPage uses z-20.
+
+But Layout.tsx line:
+  <header className="sticky top-0 z-50 ...">
+
+And the bottom nav uses z-40.
+Modals use z-[60].
+
+This hierarchy is fine. BUT the header dropdown 
+menu (desktop profile menu) uses z-50 inside the 
+header which is ALSO z-50. This means the dropdown 
+can be clipped by sibling elements.
+
+FIX: The dropdown menu div needs:
+  className="... z-[70]"
+  (above modals is fine since it's inside the header 
+  which is already stacked above everything)
+
+Change the desktop dropdown from z-50 to z-[70]:
+  <div className="absolute right-0 top-9 bg-white 
+    dark:bg-slate-800 rounded-xl shadow-xl border 
+    border-gray-100 dark:border-slate-700 
+    min-w-44 z-[70]">
+
+=================================================================
+IMPROVEMENT 1 — MAX PHOTO SIZE INCONSISTENCY
+=================================================================
+
+FILE: src/pages/PostPage.tsx vs Firebase Storage Rules
+
+PostPage.tsx validates: MAX_FILE_BYTES = 10 * 1024 * 1024 (10MB)
+Storage rules enforce:  request.resource.size < 5 * 1024 * 1024 (5MB)
+
+A user can pass the client-side validation with a 6MB 
+file but the Storage upload will be rejected by the 
+security rule with a permission-denied error.
+
+FIX: Change PostPage.tsx to match the Storage rule:
+  const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5MB
+
+Also update the UI hint text from:
+  "Max 10 MB per photo"
+to:
+  "Max 5 MB per photo"
+
+=================================================================
+IMPROVEMENT 2 — NO LOADING STATE ON PROFILE TAB 
+               SWITCHING BACK FROM SETTINGS
+=================================================================
+
+FILE: src/pages/ProfilePage.tsx
+
+When user navigates: Profile → Settings → back to Profile,
+the listings reload from scratch (getUserListings is called 
+again in useEffect). On slow connections this shows a 
+skeleton flash every time.
+
+FIX: Cache the listings in a ref so they survive 
+navigation within the same session:
+
+  const listingsCache = useRef<Listing[]>([]);
+  
+  useEffect(() => {
+    if (!user) return;
+    if (listingsCache.current.length > 0) {
+      setListings(listingsCache.current);
+      return; // use cache, skip fetch
+    }
+    setLoading(true);
+    getUserListings(user.uid)
+      .then((data) => {
+        listingsCache.current = data;
+        setListings(data);
+      })
+      .finally(() => setLoading(false));
+  }, [user]);
+
+  // After delete or mark sold, update cache too:
+  // listingsCache.current = listingsCache.current
+  //   .filter(l => l.id !== deletedId)
+
+=================================================================
+IMPROVEMENT 3 — SEARCH PAGE FIRES ON EVERY KEYSTROKE 
+               INCLUDING EMPTY STATE
+=================================================================
+
+FILE: src/pages/SearchPage.tsx
+
+The search fires via debounce on mount with an empty 
+keyword, fetching ALL listings immediately when the 
+page loads. This is an unnecessary Firestore read.
+
+FIX: Only trigger the search if there's a keyword OR 
+a non-default filter applied:
+
+  useEffect(() => {
+    clearTimeout(debounceRef.current);
+    // Don't auto-search on empty state — wait for user input
+    if (!keyword && !minPrice && !maxPrice && 
+        condition === 'all') {
+      setResults([]);
+      setSearched(false);
+      return;
+    }
+    debounceRef.current = setTimeout(doSearch, 400);
+    return () => clearTimeout(debounceRef.current);
+  }, [keyword, type, minPrice, maxPrice, condition]);
+
+=================================================================
+VERIFICATION AFTER ALL FIXES
+=================================================================
+
+1. Run TypeScript typecheck — zero new errors required
+2. Test delete listing — confirm orphan Storage files 
+   are no longer left behind (check Firebase Console 
+   Storage browser after deleting a listing with photos)
+3. Test post creation — confirm toast shows success 
+   and listing appears immediately in the feed for 
+   another user in incognito
+4. Confirm .replit has only ONE [[ports]] entry
+5. Push to GitHub after all fixes:
+   git add .
+   git commit -m "Fix: storage path URLs, index-free 
+     fallback, port config, photo size limit, 
+     silent timeout swallow"
+   git push origin main
+
+=================================================================
+CONSTRAINTS — DO NOT VIOLATE
+=================================================================
+- Do NOT change Firebase security rules
+- Do NOT re-enable offline persistence in firebase.ts
+- Do NOT remove experimentalAutoDetectLongPolling: true
+- Keep wouter for all routing
+- Tailwind v4: @custom-variant dark mode in index.css
+- All new strings in i18n.ts in both en and zh
+- Zero new TypeScript errors required

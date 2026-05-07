@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { getUserListings, deleteListing, markAsSold } from "@/lib/listings";
@@ -26,8 +26,6 @@ function SuccessToast({ message, onDone }: { message: string; onDone: () => void
 
 export default function ProfilePage() {
   const { t } = useLang();
-  // avatarOverride is a temporary object URL set by SettingsPage during an upload.
-  // It propagates here via context so this page also shows the new photo instantly.
   const { user, userProfile, avatarOverride } = useAuth();
   const [, navigate] = useLocation();
 
@@ -39,10 +37,22 @@ export default function ProfilePage() {
   const [deleteError, setDeleteError] = useState("");
   const [successToast, setSuccessToast] = useState("");
 
+  // Cache listings in a ref so navigating Settings → Profile doesn't re-fetch on every visit.
+  const listingsCache = useRef<Listing[]>([]);
+
   useEffect(() => {
     if (!user) return;
+    if (listingsCache.current.length > 0) {
+      setListings(listingsCache.current);
+      return;
+    }
     setLoading(true);
-    getUserListings(user.uid).then(setListings).finally(() => setLoading(false));
+    getUserListings(user.uid)
+      .then((data) => {
+        listingsCache.current = data;
+        setListings(data);
+      })
+      .finally(() => setLoading(false));
   }, [user]);
 
   if (!user) {
@@ -66,7 +76,9 @@ export default function ProfilePage() {
     setDeleteError("");
     try {
       await deleteListing(listing);
-      setListings((prev) => prev.filter((l) => l.id !== listing.id));
+      const updated = listingsCache.current.filter((l) => l.id !== listing.id);
+      listingsCache.current = updated;
+      setListings(updated);
       setDeleteTarget(null);
       setSuccessToast("Your post has been deleted successfully.");
     } catch (err: any) {
@@ -74,7 +86,9 @@ export default function ProfilePage() {
       if (code === "permission-denied" || code === "storage/unauthorized") {
         setDeleteError("Permission denied. Make sure you are signed in with your XMUM email.");
       } else if (code === "not-found" || code === "storage/object-not-found") {
-        setListings((prev) => prev.filter((l) => l.id !== listing.id));
+        const updated = listingsCache.current.filter((l) => l.id !== listing.id);
+        listingsCache.current = updated;
+        setListings(updated);
         setDeleteTarget(null);
         setSuccessToast("Your post has been deleted successfully.");
       } else if (code === "unavailable" || code === "storage/retry-limit-exceeded") {
@@ -90,12 +104,14 @@ export default function ProfilePage() {
   const handleMarkAsSold = async (listing: Listing) => {
     try {
       await markAsSold(listing.id);
-      setListings((prev) =>
-        prev.map((l) => l.id === listing.id ? { ...l, status: "sold" as const } : l)
+      const updated = listingsCache.current.map((l) =>
+        l.id === listing.id ? { ...l, status: "sold" as const } : l
       );
+      listingsCache.current = updated;
+      setListings(updated);
       setSuccessToast(t.markedAsSold);
     } catch {
-      // silently ignore — Firestore write will sync in background
+      // silently ignore — surface via UI if needed
     }
   };
 
@@ -104,7 +120,6 @@ export default function ProfilePage() {
     navigate("/");
   };
 
-  // Priority: avatarOverride (instant object URL during upload) → Firestore URL from context
   const avatarSrc = avatarOverride ?? userProfile?.avatarUrl ?? "";
   const displayName = userProfile?.fullName || user.email?.split("@")[0] || "";
 
@@ -121,7 +136,6 @@ export default function ProfilePage() {
     <>
       {successToast && <SuccessToast message={successToast} onDone={() => setSuccessToast("")} />}
 
-      {/* pb-24 clears mobile bottom nav; resets on sm+ */}
       <div className="max-w-5xl mx-auto px-4 py-5 pb-24 sm:pb-8 animate-in fade-in duration-200">
         {/* Profile card */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-5 mb-5 flex items-center gap-4">
@@ -144,7 +158,7 @@ export default function ProfilePage() {
           </button>
         </div>
 
-        {/* Tab bar — My Listings / Settings */}
+        {/* Tab bar */}
         <div className="flex border-b border-gray-200 dark:border-slate-700 mb-5">
           <button
             className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold border-b-2 border-[#003366] dark:border-blue-400 text-[#003366] dark:text-blue-400 -mb-px"

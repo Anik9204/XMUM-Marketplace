@@ -23,6 +23,7 @@ export default function ListingDetailPage() {
   const [markingAsSold, setMarkingAsSold] = useState(false);
   const [soldToast, setSoldToast] = useState(false);
   const [sellerProfile, setSellerProfile] = useState<UserProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
 
   useEffect(() => {
     if (!params?.id) return;
@@ -30,7 +31,12 @@ export default function ListingDetailPage() {
       .then((l) => {
         setListing(l);
         if (l?.userId) {
-          getProfile(l.userId).then(setSellerProfile).catch(() => {});
+          getProfile(l.userId)
+            .then(setSellerProfile)
+            .catch(() => setSellerProfile(null))
+            .finally(() => setProfileLoading(false));
+        } else {
+          setProfileLoading(false);
         }
       })
       .finally(() => setLoading(false));
@@ -245,42 +251,49 @@ export default function ListingDetailPage() {
             </div>
           )}
 
-          {/* Contact buttons — hidden when sold */}
+          {/* Contact buttons — hidden when sold; skeleton while seller profile loads */}
           {!isSold && (
             <div>
               <p className="text-sm font-semibold text-gray-700 dark:text-slate-200 mb-2">{t.contactSeller}</p>
-              <div className="flex flex-col sm:flex-row gap-2">
-                {canShowWhatsApp && (
-                  <button
-                    onClick={() => handleContact(() => window.open(`https://wa.me/${listing.whatsapp?.replace(/\D/g, "")}?text=${pre}`, "_blank"))}
-                    className="flex items-center justify-center gap-2 w-full sm:w-auto flex-1 bg-[#25D366]/10 text-[#25D366] border border-[#25D366]/20 rounded-xl py-3 min-h-[44px] hover:bg-[#25D366]/20 transition-colors"
-                  >
-                    <SiWhatsapp size={20} />
-                    <span className="text-sm font-medium">{t.contactViaWhatsApp}</span>
-                  </button>
-                )}
-                {canShowWeChat && (
-                  <button
-                    onClick={() => handleContact(() => { navigator.clipboard.writeText(listing.wechat ?? ""); alert(`WeChat ID copied: ${listing.wechat}`); })}
-                    className="flex items-center justify-center gap-2 w-full sm:w-auto flex-1 bg-[#09B83E]/10 text-[#09B83E] border border-[#09B83E]/20 rounded-xl py-3 min-h-[44px] hover:bg-[#09B83E]/20 transition-colors"
-                  >
-                    <SiWechat size={20} />
-                    <span className="text-sm font-medium">{t.contactViaWeChat}</span>
-                  </button>
-                )}
-                {listing.teams && (
-                  <button
-                    onClick={() => handleContact(() => window.open(`https://teams.microsoft.com/l/chat/0/0?users=${listing.teams}&message=${pre}`, "_blank"))}
-                    className="flex items-center justify-center gap-2 w-full sm:w-auto flex-1 bg-[#6264A7]/10 text-[#6264A7] border border-[#6264A7]/20 rounded-xl py-3 min-h-[44px] hover:bg-[#6264A7]/20 transition-colors"
-                  >
-                    <MdGroups size={20} />
-                    <span className="text-sm font-medium">{t.contactViaTeams}</span>
-                  </button>
-                )}
-                {noContact && (
-                  <p className="text-xs text-gray-400 dark:text-slate-500 text-center py-2">No contact info provided.</p>
-                )}
-              </div>
+              {profileLoading ? (
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <div className="flex-1 h-12 rounded-xl bg-gray-100 dark:bg-slate-800 animate-pulse" />
+                  <div className="flex-1 h-12 rounded-xl bg-gray-100 dark:bg-slate-800 animate-pulse" />
+                </div>
+              ) : (
+                <div className="flex flex-col sm:flex-row gap-2">
+                  {canShowWhatsApp && (
+                    <button
+                      onClick={() => handleContact(() => window.open(`https://wa.me/${listing.whatsapp?.replace(/\D/g, "")}?text=${pre}`, "_blank"))}
+                      className="flex items-center justify-center gap-2 w-full sm:w-auto flex-1 bg-[#25D366]/10 text-[#25D366] border border-[#25D366]/20 rounded-xl py-3 min-h-[44px] hover:bg-[#25D366]/20 transition-colors"
+                    >
+                      <SiWhatsapp size={20} />
+                      <span className="text-sm font-medium">{t.contactViaWhatsApp}</span>
+                    </button>
+                  )}
+                  {canShowWeChat && (
+                    <button
+                      onClick={() => handleContact(() => { navigator.clipboard.writeText(listing.wechat ?? ""); alert(`WeChat ID copied: ${listing.wechat}`); })}
+                      className="flex items-center justify-center gap-2 w-full sm:w-auto flex-1 bg-[#09B83E]/10 text-[#09B83E] border border-[#09B83E]/20 rounded-xl py-3 min-h-[44px] hover:bg-[#09B83E]/20 transition-colors"
+                    >
+                      <SiWechat size={20} />
+                      <span className="text-sm font-medium">{t.contactViaWeChat}</span>
+                    </button>
+                  )}
+                  {listing.teams && (
+                    <button
+                      onClick={() => handleContact(() => window.open(`https://teams.microsoft.com/l/chat/0/0?users=${listing.teams}&message=${pre}`, "_blank"))}
+                      className="flex items-center justify-center gap-2 w-full sm:w-auto flex-1 bg-[#6264A7]/10 text-[#6264A7] border border-[#6264A7]/20 rounded-xl py-3 min-h-[44px] hover:bg-[#6264A7]/20 transition-colors"
+                    >
+                      <MdGroups size={20} />
+                      <span className="text-sm font-medium">{t.contactViaTeams}</span>
+                    </button>
+                  )}
+                  {noContact && (
+                    <p className="text-xs text-gray-400 dark:text-slate-500 text-center py-2">No contact info provided.</p>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
