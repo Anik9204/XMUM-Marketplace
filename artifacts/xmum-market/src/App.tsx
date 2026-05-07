@@ -13,6 +13,7 @@ import SettingsPage from "@/pages/SettingsPage";
 import ListingDetailPage from "@/pages/ListingDetailPage";
 import EditListingPage from "@/pages/EditListingPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
+import MessagesPage from "@/pages/MessagesPage";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -50,6 +51,7 @@ function Router() {
         <Route path="/settings" component={SettingsPage} />
         <Route path="/listing/:id" component={ListingDetailPage} />
         <Route path="/edit/:id" component={EditListingPage} />
+        <Route path="/messages" component={MessagesPage} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

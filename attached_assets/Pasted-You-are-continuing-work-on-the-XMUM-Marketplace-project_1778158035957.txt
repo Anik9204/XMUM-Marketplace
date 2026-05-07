@@ -1,0 +1,471 @@
+You are continuing work on the XMUM Marketplace project. Read every file listed below carefully before writing a single line of code. Do NOT refactor anything not mentioned.
+
+Files to read first:
+- src/lib/types.ts
+- src/lib/firebase.ts
+- src/lib/listings.ts
+- src/contexts/AuthContext.tsx
+- src/components/Layout.tsx
+- src/pages/ListingDetailPage.tsx
+- src/App.tsx
+- src/lib/i18n.ts
+- src/pages/HomePage.tsx
+
+---
+
+## FEATURE 9 — In-app Messaging System
+
+### Architecture (IMPORTANT — read before coding)
+Messages are stored in Firestore under a `conversations` top-level collection. Each conversation document represents a thread between two users about a specific listing. Message documents live in a `messages` subcollection.
+
+Data model:
+conversations/{conversationId}
+listingId: string
+listingTitle: string
+listingPhoto: string (first photo URL or "")
+participants: [uid1, uid2]  — always exactly 2 UIDs
+lastMessage: string
+lastMessageAt: number (timestamp)
+unreadCount: { [uid]: number }  — unread count per participant
+conversations/{conversationId}/messages/{messageId}
+senderId: string
+text: string
+createdAt: Firestore Timestamp
+
+Conversation ID is deterministic: `[uid1, uid2, listingId].sort().join("_")` so duplicate conversations cannot be created.
+
+### Firestore rules for messaging (ADD to existing rules — this is the only rules change)
+Add as sibling match blocks inside `match /databases/{database}/documents`:
+match /conversations/{convId} {
+  allow read, write: if request.auth != null
+    && request.auth.uid in resource.data.participants;
+  allow create: if request.auth != null
+    && request.auth.token.email.matches('.*@xmu\\.edu\\.my')
+    && request.auth.uid in request.resource.data.participants;
+}
+match /conversations/{convId}/messages/{msgId} {
+  allow read: if request.auth != null
+    && exists(/databases/(database)/documents/conversations/(database)/documents/conversations/
+(database)/documents/conversations/(convId))
+    && request.auth.uid in get(/databases/(database)/documents/conversations/(database)/documents/conversations/
+(database)/documents/conversations/(convId)).data.participants;
+  allow create: if request.auth != null
+    && request.auth.uid == request.resource.data.senderId
+    && request.auth.token.email.matches('.*@xmu\\.edu\\.my');
+}
+
+Show the user exactly where to paste these in the Firebase Console.
+
+### Step A — Create src/lib/messaging.ts
+```ts
+import {
+  collection, doc, getDoc, setDoc, addDoc, getDocs,
+  query, orderBy, limit, onSnapshot, updateDoc,
+  serverTimestamp, where, Unsubscribe,
+} from "firebase/firestore";
+import { db } from "./firebase";
+
+export interface Conversation {
+  id: string;
+  listingId: string;
+  listingTitle: string;
+  listingPhoto: string;
+  participants: string[];
+  lastMessage: string;
+  lastMessageAt: number;
+  unreadCount: Record<string, number>;
+}
+
+export interface Message {
+  id: string;
+  senderId: string;
+  text: string;
+  createdAt: number;
+}
+
+function toMillis(val: unknown): number {
+  if (typeof val === "number") return val;
+  if (val && typeof (val as any).toMillis === "function") return (val as any).toMillis();
+  return Date.now();
+}
+
+export function getConversationId(uid1: string, uid2: string, listingId: string): string {
+  return [uid1, uid2, listingId].sort().join("_");
+}
+
+export async function getOrCreateConversation(
+  myUid: string,
+  otherUid: string,
+  listing: { id: string; title: string; photos: string[] }
+): Promise<string> {
+  const convId = getConversationId(myUid, otherUid, listing.id);
+  const convRef = doc(db, "conversations", convId);
+  const snap = await getDoc(convRef);
+  if (!snap.exists()) {
+    await setDoc(convRef, {
+      listingId: listing.id,
+      listingTitle: listing.title,
+      listingPhoto: listing.photos[0] ?? "",
+      participants: [myUid, otherUid],
+      lastMessage: "",
+      lastMessageAt: Date.now(),
+      unreadCount: { [myUid]: 0, [otherUid]: 0 },
+    });
+  }
+  return convId;
+}
+
+export async function sendMessage(
+  convId: string,
+  senderId: string,
+  text: string,
+  otherUid: string
+): Promise<void> {
+  const trimmed = text.trim();
+  if (!trimmed) return;
+
+  const convRef = doc(db, "conversations", convId);
+  await addDoc(collection(db, "conversations", convId, "messages"), {
+    senderId,
+    text: trimmed,
+    createdAt: serverTimestamp(),
+  });
+
+  await updateDoc(convRef, {
+    lastMessage: trimmed.slice(0, 80),
+    lastMessageAt: Date.now(),
+    [`unreadCount.${otherUid}`]: (await getDoc(convRef)).data()?.unreadCount?.[otherUid] + 1 || 1,
+  });
+}
+
+export function subscribeToMessages(
+  convId: string,
+  callback: (messages: Message[]) => void
+): Unsubscribe {
+  const q = query(
+    collection(db, "conversations", convId, "messages"),
+    orderBy("createdAt", "asc"),
+    limit(100)
+  );
+  return onSnapshot(q, (snap) => {
+    const msgs: Message[] = snap.docs.map(d => {
+      const data = d.data();
+      return { id: d.id, ...data, createdAt: toMillis(data.createdAt) } as Message;
+    });
+    callback(msgs);
+  });
+}
+
+export async function getUserConversations(uid: string): Promise<Conversation[]> {
+  try {
+    const q = query(
+      collection(db, "conversations"),
+      where("participants", "array-contains", uid),
+      orderBy("lastMessageAt", "desc"),
+      limit(20)
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(d => {
+      const data = d.data();
+      return { id: d.id, ...data, lastMessageAt: toMillis(data.lastMessageAt) } as Conversation;
+    });
+  } catch {
+    return [];
+  }
+}
+
+export async function markConversationRead(convId: string, uid: string): Promise<void> {
+  try {
+    await updateDoc(doc(db, "conversations", convId), {
+      [`unreadCount.${uid}`]: 0,
+    });
+  } catch {
+    // Silent
+  }
+}
+```
+
+### Step B — Create src/pages/MessagesPage.tsx
+This page shows the user's conversation list. When a conversation is tapped, it opens a chat thread view within the same page.
+
+```tsx
+// Two views: "list" and "thread"
+// List view: shows all conversations with listing thumbnail, last message, unread badge
+// Thread view: real-time messages with a text input bar at the bottom
+
+import { useState, useEffect, useRef } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useLang } from "@/contexts/LanguageContext";
+import {
+  getUserConversations, subscribeToMessages, sendMessage,
+  markConversationRead, Conversation, Message,
+} from "@/lib/messaging";
+import { MessageCircle, ArrowLeft, Send, Loader2 } from "lucide-react";
+import AuthModal from "@/components/AuthModal";
+
+export default function MessagesPage() {
+  const { user } = useAuth();
+  const { t } = useLang();
+  const [showAuth, setShowAuth] = useState(false);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [loadingConvs, setLoadingConvs] = useState(true);
+  const [activeConv, setActiveConv] = useState<Conversation | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [inputText, setInputText] = useState("");
+  const [sending, setSending] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    setLoadingConvs(true);
+    getUserConversations(user.uid)
+      .then(setConversations)
+      .finally(() => setLoadingConvs(false));
+  }, [user]);
+
+  // Subscribe to messages when a conversation is opened
+  useEffect(() => {
+    if (!activeConv || !user) return;
+    markConversationRead(activeConv.id, user.uid);
+    const unsub = subscribeToMessages(activeConv.id, (msgs) => {
+      setMessages(msgs);
+      setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+    });
+    return unsub;
+  }, [activeConv?.id, user]);
+
+  const handleSend = async () => {
+    if (!inputText.trim() || !activeConv || !user) return;
+    setSending(true);
+    const otherUid = activeConv.participants.find(p => p !== user.uid) ?? "";
+    try {
+      await sendMessage(activeConv.id, user.uid, inputText, otherUid);
+      setInputText("");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  if (!user) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 text-center">
+        <MessageCircle size={48} className="text-gray-200 dark:text-slate-600 mb-4" />
+        <p className="text-gray-600 dark:text-slate-300 font-medium mb-1">{t.loginToPost}</p>
+        <button onClick={() => setShowAuth(true)} className="mt-3 bg-[#003366] dark:bg-blue-600 text-white px-5 min-h-[44px] py-2.5 rounded-xl text-sm font-semibold">
+          {t.signIn}
+        </button>
+        {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
+      </div>
+    );
+  }
+
+  // Thread view
+  if (activeConv) {
+    const otherUid = activeConv.participants.find(p => p !== user.uid) ?? "";
+    return (
+      <div className="flex flex-col h-[calc(100vh-56px)] md:h-[calc(100vh-64px)] max-w-2xl mx-auto">
+        {/* Thread header */}
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-900 shrink-0">
+          <button onClick={() => { setActiveConv(null); setMessages([]); }} className="text-[#003366] dark:text-blue-400">
+            <ArrowLeft size={20} />
+          </button>
+          {activeConv.listingPhoto && (
+            <img src={activeConv.listingPhoto} className="w-9 h-9 rounded-lg object-cover" alt="" />
+          )}
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-gray-900 dark:text-slate-100 truncate">{activeConv.listingTitle}</p>
+            <p className="text-xs text-gray-400 dark:text-slate-500">{t.messages}</p>
+          </div>
+        </div>
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-gray-50 dark:bg-slate-950">
+          {messages.map(msg => {
+            const isMine = msg.senderId === user.uid;
+            return (
+              <div key={msg.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm ${isMine ? "bg-[#003366] text-white rounded-br-sm" : "bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 border border-gray-100 dark:border-slate-700 rounded-bl-sm"}`}>
+                  {msg.text}
+                </div>
+              </div>
+            );
+          })}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Input bar */}
+        <div className="shrink-0 flex items-center gap-2 px-4 py-3 border-t border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-900">
+          <input
+            type="text"
+            value={inputText}
+            onChange={e => setInputText(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+            placeholder={t.typeMessage}
+            maxLength={500}
+            className="flex-1 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-slate-100 min-h-[44px]"
+          />
+          <button
+            onClick={handleSend}
+            disabled={sending || !inputText.trim()}
+            className="w-11 h-11 bg-[#003366] dark:bg-blue-600 text-white rounded-xl flex items-center justify-center hover:bg-[#002244] disabled:opacity-50 transition-colors shrink-0"
+          >
+            {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Conversation list view
+  return (
+    <div className="max-w-2xl mx-auto px-4 py-5 pb-24 sm:pb-8">
+      <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-4 flex items-center gap-2">
+        <MessageCircle size={22} className="text-[#003366] dark:text-blue-400" />
+        {t.messages}
+      </h1>
+
+      {loadingConvs ? (
+        <div className="flex justify-center py-12">
+          <Loader2 size={24} className="animate-spin text-[#003366] dark:text-blue-400" />
+        </div>
+      ) : conversations.length === 0 ? (
+        <div className="text-center py-16 text-gray-400 dark:text-slate-500">
+          <MessageCircle size={40} className="mx-auto mb-3 opacity-30" />
+          <p className="text-sm">{t.noMessages}</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {conversations.map(conv => {
+            const unread = conv.unreadCount?.[user.uid] ?? 0;
+            return (
+              <button
+                key={conv.id}
+                onClick={() => setActiveConv(conv)}
+                className="w-full flex items-center gap-3 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-4 hover:shadow-md transition-shadow text-left"
+              >
+                {conv.listingPhoto ? (
+                  <img src={conv.listingPhoto} className="w-12 h-12 rounded-xl object-cover shrink-0" alt="" />
+                ) : (
+                  <div className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-slate-700 flex items-center justify-center shrink-0">
+                    <MessageCircle size={20} className="text-gray-400" />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-900 dark:text-slate-100 truncate">{conv.listingTitle}</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400 truncate mt-0.5">{conv.lastMessage || t.noMessages}</p>
+                </div>
+                {unread > 0 && (
+                  <span className="shrink-0 w-5 h-5 bg-[#003366] dark:bg-blue-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                    {unread}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+### Step C — Add "Message Seller" button to ListingDetailPage.tsx
+In the contact section of `ListingDetailPage.tsx`, add a "Message Seller" button that is visible only to logged-in, verified users who are NOT the listing owner:
+
+```tsx
+import { useLocation } from "wouter";
+import { getOrCreateConversation } from "@/lib/messaging";
+
+// In the component, add state:
+const [startingChat, setStartingChat] = useState(false);
+
+// Handler:
+const handleMessageSeller = async () => {
+  if (!user || !listing) return;
+  setStartingChat(true);
+  try {
+    await getOrCreateConversation(user.uid, listing.userId, {
+      id: listing.id,
+      title: listing.title,
+      photos: listing.photos,
+    });
+    navigate("/messages");
+  } catch {
+    // Silently fail
+  } finally {
+    setStartingChat(false);
+  }
+};
+
+// In the JSX, add the button in the contact section, as the FIRST contact option:
+{user && user.emailVerified && user.uid !== listing.userId && (
+  <button
+    onClick={handleMessageSeller}
+    disabled={startingChat}
+    className="w-full min-h-[48px] flex items-center justify-center gap-2 bg-[#003366] dark:bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-[#002244] dark:hover:bg-blue-700 disabled:opacity-50 transition-colors mb-3"
+  >
+    {startingChat ? <Loader2 size={16} className="animate-spin" /> : <MessageCircle size={16} />}
+    {t.messageSeller}
+  </button>
+)}
+```
+
+Import `MessageCircle`, `Loader2` from lucide-react in ListingDetailPage.tsx if not already imported.
+
+### Step D — Add route + nav item
+In `App.tsx`, add:
+```tsx
+import MessagesPage from "@/pages/MessagesPage";
+// In Switch:
+<Route path="/messages" component={MessagesPage} />
+```
+
+In `Layout.tsx`, add Messages to the mobile bottom nav and desktop nav:
+```tsx
+import { MessageCircle } from "lucide-react"; // add to existing import
+
+// In navItems array, add after Search and before Post:
+{ href: "/messages", icon: MessageCircle, label: t.messages },
+```
+
+For the desktop nav in the header, add a Messages link alongside Home/Search/Post.
+
+### Step E — Add translation keys to i18n.ts
+Add to both EN and ZH:
+- EN: `messages: "Messages"`, `messageSeller: "Message Seller"`, `typeMessage: "Type a message..."`, `noMessages: "No messages yet"`
+- ZH: `messages: "消息"`, `messageSeller: "发送消息"`, `typeMessage: "输入消息..."`, `noMessages: "暂无消息"`
+
+---
+
+## FEATURE 10 — Ad Space placeholder
+
+### What to add
+A clearly marked ad space banner that appears on the home feed. This is a static placeholder for now — no real ads are served. It is designed so a real ad network (Google AdSense, etc.) can be dropped in later by replacing the placeholder content.
+
+### In HomePage.tsx
+After the category chips row and before the listings grid, insert the ad banner:
+```tsx
+{/* Ad Space — placeholder for future advertisements */}
+<div className="max-w-5xl mx-auto px-4 mt-4">
+  <div className="w-full h-16 bg-gray-100 dark:bg-slate-800 border border-dashed border-gray-300 dark:border-slate-600 rounded-xl flex items-center justify-center">
+    <p className="text-xs text-gray-400 dark:text-slate-600 font-medium tracking-wide uppercase">
+      Advertisement
+    </p>
+  </div>
+</div>
+```
+
+This renders a subtle dashed-border placeholder banner. On mobile it is full-width. It requires no new imports or state. The banner is always visible (not conditional on auth state). Leave a comment in the code: `{/* TODO: Replace with real ad network code (e.g. Google AdSense) when ready */}`
+
+---
+
+## IMPORTANT CONSTRAINTS
+
+1. The ONLY Firestore rules changes allowed are the `conversations` and `conversations/{convId}/messages` rules shown above. Show the user exactly where in the Firebase Console to paste them.
+2. Do NOT change firebase.ts.
+3. Do NOT add any new npm packages. All components use existing dependencies only.
+4. `onSnapshot` (real-time listener) from Firebase Firestore is already available — it is part of the existing firebase/firestore package.
+5. The messaging system must NEVER block or crash the main app — all Firestore operations in messaging.ts must be wrapped in try/catch.
+6. The messages nav item adds a 5th item to the mobile bottom nav. Adjust the flex layout if the 5 items look too cramped on small screens — use `text-[9px]` for labels if needed.
+7. Do NOT modify PostPage.tsx, EditListingPage.tsx, SettingsPage.tsx, or ProfilePage.tsx.
+8. After all changes, list every file created or modified and state the Firestore rules additions the user needs to apply manually in the Firebase Console.

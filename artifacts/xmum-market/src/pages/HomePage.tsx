@@ -173,6 +173,16 @@ export default function HomePage() {
         </div>
       </div>
 
+      {/* Ad Space — placeholder for future advertisements */}
+      {/* TODO: Replace with real ad network code (e.g. Google AdSense) when ready */}
+      <div className="max-w-5xl mx-auto px-4 mt-4">
+        <div className="w-full h-16 bg-gray-100 dark:bg-slate-800 border border-dashed border-gray-300 dark:border-slate-600 rounded-xl flex items-center justify-center">
+          <p className="text-xs text-gray-400 dark:text-slate-600 font-medium tracking-wide uppercase">
+            Advertisement
+          </p>
+        </div>
+      </div>
+
       {/* Listings grid */}
       <div className="max-w-5xl mx-auto px-4 py-5">
         {loading ? (

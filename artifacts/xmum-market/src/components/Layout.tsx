@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { logOut } from "@/lib/auth";
 import AuthModal from "@/components/AuthModal";
 import VerificationBanner from "@/components/VerificationBanner";
-import { Home, Search, PlusSquare, User, Globe } from "lucide-react";
+import { Home, Search, PlusSquare, User, Globe, MessageCircle } from "lucide-react";
 import { useState } from "react";
 import NotificationBell from "@/components/NotificationBell";
 
@@ -18,6 +18,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const navItems = [
     { href: "/", icon: Home, label: t.home },
     { href: "/search", icon: Search, label: t.search },
+    { href: "/messages", icon: MessageCircle, label: t.messages },
     { href: "/post", icon: PlusSquare, label: t.post },
     { href: "/profile", icon: User, label: t.profile, activeFor: ["/profile", "/settings"] },
   ];
@@ -51,6 +52,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <nav className="hidden md:flex items-center gap-1">
               <Link href="/" className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${location === "/" ? "text-white bg-white/20" : "text-white/70 hover:text-white hover:bg-white/10"}`}>{t.home}</Link>
               <Link href="/search" className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${location === "/search" ? "text-white bg-white/20" : "text-white/70 hover:text-white hover:bg-white/10"}`}>{t.search}</Link>
+              <Link href="/messages" className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${location === "/messages" ? "text-white bg-white/20" : "text-white/70 hover:text-white hover:bg-white/10"}`}>{t.messages}</Link>
               <Link href="/post" className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${location === "/post" ? "text-white bg-white/20" : "text-white/70 hover:text-white hover:bg-white/10"}`}>{t.post}</Link>
               {user ? (
                 <div className="relative">
@@ -122,8 +124,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 href={href}
                 className={`flex-1 flex flex-col items-center justify-center h-12 gap-0.5 transition-colors ${active ? "text-[#003366] dark:text-blue-400" : "text-gray-400 dark:text-slate-500"}`}
               >
-                <Icon size={22} strokeWidth={active ? 2.5 : 1.8} />
-                <span className="text-[10px] font-medium">{label}</span>
+                <Icon size={20} strokeWidth={active ? 2.5 : 1.8} />
+                <span className="text-[9px] font-medium">{label}</span>
               </Link>
             );
           })}

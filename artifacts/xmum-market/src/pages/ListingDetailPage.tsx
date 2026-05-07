@@ -6,7 +6,8 @@ import { getListing, markAsSold } from "@/lib/listings";
 import { getProfile } from "@/lib/userProfile";
 import { Listing, UserProfile } from "@/lib/types";
 import AuthModal from "@/components/AuthModal";
-import { ArrowLeft, Clock, Tag, CheckCircle2, MapPin } from "lucide-react";
+import { ArrowLeft, Clock, Tag, CheckCircle2, MapPin, MessageCircle, Loader2 } from "lucide-react";
+import { getOrCreateConversation } from "@/lib/messaging";
 import { SiWhatsapp, SiWechat } from "react-icons/si";
 import { MdGroups } from "react-icons/md";
 
@@ -24,6 +25,7 @@ export default function ListingDetailPage() {
   const [soldToast, setSoldToast] = useState(false);
   const [sellerProfile, setSellerProfile] = useState<UserProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
+  const [startingChat, setStartingChat] = useState(false);
 
   useEffect(() => {
     if (!params?.id) return;
@@ -63,6 +65,23 @@ export default function ListingDetailPage() {
 
   const isSold = listing.status === "sold";
   const isOwner = user?.uid === listing.userId;
+
+  const handleMessageSeller = async () => {
+    if (!user || !listing) return;
+    setStartingChat(true);
+    try {
+      await getOrCreateConversation(user.uid, listing.userId, {
+        id: listing.id,
+        title: listing.title,
+        photos: listing.photos,
+      });
+      navigate("/messages");
+    } catch {
+      // Silently fail
+    } finally {
+      setStartingChat(false);
+    }
+  };
 
   const handleMarkAsSold = async () => {
     if (!listing) return;
@@ -254,6 +273,17 @@ export default function ListingDetailPage() {
           {/* Contact buttons — hidden when sold; skeleton while seller profile loads */}
           {!isSold && (
             <div>
+              {/* Message Seller — first contact option, only for logged-in verified non-owners */}
+              {user && user.emailVerified && user.uid !== listing.userId && (
+                <button
+                  onClick={handleMessageSeller}
+                  disabled={startingChat}
+                  className="w-full min-h-[48px] flex items-center justify-center gap-2 bg-[#003366] dark:bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-[#002244] dark:hover:bg-blue-700 disabled:opacity-50 transition-colors mb-3"
+                >
+                  {startingChat ? <Loader2 size={16} className="animate-spin" /> : <MessageCircle size={16} />}
+                  {t.messageSeller}
+                </button>
+              )}
               <p className="text-sm font-semibold text-gray-700 dark:text-slate-200 mb-2">{t.contactSeller}</p>
               {profileLoading ? (
                 <div className="flex flex-col sm:flex-row gap-2">

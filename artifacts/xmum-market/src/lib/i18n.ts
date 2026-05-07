@@ -153,6 +153,10 @@ export const translations = {
     notifListingDeleted: "Listing auto-removed",
     notifListingSold: "Listing marked as sold",
     notifWelcome: "Welcome to XMUM Market!",
+    messages: "Messages",
+    messageSeller: "Message Seller",
+    typeMessage: "Type a message...",
+    noMessages: "No messages yet",
   },
   zh: {
     appName: "厦大市集",
@@ -306,6 +310,10 @@ export const translations = {
     notifListingDeleted: "帖子已自动删除",
     notifListingSold: "帖子已标记为已售",
     notifWelcome: "欢迎来到厦大市集！",
+    messages: "消息",
+    messageSeller: "发送消息",
+    typeMessage: "输入消息...",
+    noMessages: "暂无消息",
   },
 };
 
