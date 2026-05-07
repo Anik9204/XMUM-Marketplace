@@ -6,6 +6,7 @@ import AuthModal from "@/components/AuthModal";
 import VerificationBanner from "@/components/VerificationBanner";
 import { Home, Search, PlusSquare, User, Globe } from "lucide-react";
 import { useState } from "react";
+import NotificationBell from "@/components/NotificationBell";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { t, toggleLang, lang } = useLang();
@@ -42,6 +43,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <Globe size={16} />
               <span className="hidden sm:inline">{lang === "en" ? "中文" : "EN"}</span>
             </button>
+
+            {/* Notification bell — signed-in users only */}
+            {user && <NotificationBell />}
 
             {/* Desktop nav — md and above */}
             <nav className="hidden md:flex items-center gap-1">

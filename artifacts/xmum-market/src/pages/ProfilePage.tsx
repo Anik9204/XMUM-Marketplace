@@ -8,6 +8,7 @@ import AuthModal from "@/components/AuthModal";
 import { User, CheckCircle, AlertCircle, LogOut, CheckCircle2, Settings, Clock, X } from "lucide-react";
 import { logOut } from "@/lib/auth";
 import { useLocation } from "wouter";
+import { addNotification } from "@/lib/notifications";
 
 function SuccessToast({ message, onDone }: { message: string; onDone: () => void }) {
   const [visible, setVisible] = useState(true);
@@ -61,6 +62,14 @@ export default function ProfilePage() {
             } else {
               setSuccessToast(`${expired.length} listings have been automatically removed after 30 days.`);
             }
+            expired.forEach(l => {
+              addNotification(user.uid, {
+                type: "listing_deleted",
+                title: "Listing Removed",
+                body: `"${l.title}" was automatically removed after 30 days.`,
+                listingId: l.id,
+              });
+            });
           });
         }
 
@@ -134,6 +143,12 @@ export default function ProfilePage() {
       listingsCache.current = updated;
       setListings(updated);
       setSuccessToast(t.markedAsSold);
+      addNotification(user.uid, {
+        type: "listing_sold",
+        title: listing.type === "lost-found" ? "Item Resolved" : "Item Marked as Sold",
+        body: `"${listing.title}" has been marked as ${listing.type === "lost-found" ? "resolved" : "sold"}.`,
+        listingId: listing.id,
+      });
     } catch {
       // silently ignore — surface via UI if needed
     }
