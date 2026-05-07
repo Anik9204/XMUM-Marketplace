@@ -21,6 +21,8 @@ export interface Listing {
   createdAt: number;
   isArchived: boolean;
   status?: ListingStatus;
+  lastBumpedAt?: number;
+  sortKey?: number;
 }
 
 export interface AppNotification {
@@ -31,6 +33,21 @@ export interface AppNotification {
   createdAt: number;
   read: boolean;
   listingId?: string;
+}
+
+export interface SponsoredAd {
+  id: string;
+  businessName: string;
+  tagline: string;
+  imageUrl: string;
+  ctaLabel: string;
+  ctaUrl: string;
+  category?: string;
+  startsAt: number;
+  endsAt: number;
+  isActive: boolean;
+  impressions: number;
+  clicks: number;
 }
 
 export interface UserProfile {

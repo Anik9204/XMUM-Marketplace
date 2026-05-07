@@ -1,11 +1,13 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Fragment } from "react";
 import { Link, useLocation } from "wouter";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { getListingsPage } from "@/lib/listings";
-import { Listing } from "@/lib/types";
+import { getActiveAds } from "@/lib/ads";
+import { Listing, SponsoredAd } from "@/lib/types";
 import { QueryDocumentSnapshot } from "firebase/firestore";
 import ListingCard from "@/components/ListingCard";
+import SponsoredAdCard from "@/components/SponsoredAdCard";
 import AuthModal from "@/components/AuthModal";
 import { ShoppingBag, Search, MapPin, Loader2 } from "lucide-react";
 
@@ -26,6 +28,7 @@ export default function HomePage() {
   const [hasMore, setHasMore] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [ads, setAds] = useState<SponsoredAd[]>([]);
 
   const loadFirst = useCallback(async (tab: "buy-sell" | "lost-found") => {
     setLoading(true);
@@ -54,6 +57,10 @@ export default function HomePage() {
     setCategoryFilter("all");
     loadFirst(activeTab);
   }, [activeTab, loadFirst]);
+
+  useEffect(() => {
+    getActiveAds(2).then(setAds);
+  }, []);
 
   const handleLoadMore = async () => {
     if (loadingMore || !hasMore) return;
@@ -173,15 +180,11 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Ad Space — placeholder for future advertisements */}
-      {/* TODO: Replace with real ad network code (e.g. Google AdSense) when ready */}
-      <div className="max-w-5xl mx-auto px-4 mt-4">
-        <div className="w-full h-16 bg-gray-100 dark:bg-slate-800 border border-dashed border-gray-300 dark:border-slate-600 rounded-xl flex items-center justify-center">
-          <p className="text-xs text-gray-400 dark:text-slate-600 font-medium tracking-wide uppercase">
-            Advertisement
-          </p>
+      {ads.length > 0 && (
+        <div className="max-w-5xl mx-auto px-4 mt-4">
+          <SponsoredAdCard ad={ads[0]} />
         </div>
-      </div>
+      )}
 
       {/* Listings grid */}
       <div className="max-w-5xl mx-auto px-4 py-5">
@@ -199,8 +202,13 @@ export default function HomePage() {
         ) : (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {displayedListings.map((listing) => (
-                <ListingCard key={listing.id} listing={listing} />
+              {displayedListings.map((listing, i) => (
+                <Fragment key={listing.id}>
+                  <ListingCard listing={listing} />
+                  {(i + 1) % 6 === 0 && ads[1] && (
+                    <SponsoredAdCard ad={ads[1]} />
+                  )}
+                </Fragment>
               ))}
             </div>
 

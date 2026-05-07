@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { getUserListings, deleteListing, markAsSold, LISTING_EXPIRY_MS, LISTING_REMINDER_MS } from "@/lib/listings";
+import { getUserListings, deleteListing, markAsSold, bumpListing, LISTING_EXPIRY_MS, LISTING_REMINDER_MS } from "@/lib/listings";
 import { Listing } from "@/lib/types";
 import ListingCard from "@/components/ListingCard";
 import AuthModal from "@/components/AuthModal";
-import { User, CheckCircle, AlertCircle, LogOut, CheckCircle2, Settings, Clock, X } from "lucide-react";
+import { User, CheckCircle, AlertCircle, LogOut, CheckCircle2, Settings, Clock, X, ArrowUp } from "lucide-react";
 import { logOut } from "@/lib/auth";
 import { useLocation } from "wouter";
 import { addNotification } from "@/lib/notifications";
@@ -26,7 +26,7 @@ function SuccessToast({ message, onDone }: { message: string; onDone: () => void
 }
 
 export default function ProfilePage() {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const { user, userProfile, avatarOverride } = useAuth();
   const [, navigate] = useLocation();
 
@@ -131,6 +131,16 @@ export default function ProfilePage() {
       }
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleBump = async (listing: Listing) => {
+    if (listing.status === "sold") return;
+    try {
+      await bumpListing(listing.id);
+      setSuccessToast(lang === "en" ? "Listing bumped to top!" : "已置顶！");
+    } catch {
+      // silently ignore
     }
   };
 
@@ -266,16 +276,26 @@ export default function ProfilePage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {listings.map((l) => (
-              <ListingCard
-                key={l.id}
-                listing={l}
-                showDelete
-                showMarkSold
-                showEdit
-                onDelete={() => setDeleteTarget(l)}
-                onMarkSold={() => handleMarkAsSold(l)}
-                onEdit={() => navigate(`/edit/${l.id}`)}
-              />
+              <div key={l.id} className="flex flex-col gap-1">
+                <ListingCard
+                  listing={l}
+                  showDelete
+                  showMarkSold
+                  showEdit
+                  onDelete={() => setDeleteTarget(l)}
+                  onMarkSold={() => handleMarkAsSold(l)}
+                  onEdit={() => navigate(`/edit/${l.id}`)}
+                />
+                {l.status !== "sold" && (
+                  <button
+                    onClick={() => handleBump(l)}
+                    className="text-xs text-purple-600 border border-purple-200 rounded-lg py-1.5 hover:bg-purple-50 transition-colors w-full min-h-[44px] flex items-center justify-center gap-1.5"
+                  >
+                    <ArrowUp size={13} />
+                    {lang === "en" ? "Bump to Top" : "置顶"}
+                  </button>
+                )}
+              </div>
             ))}
           </div>
         )}

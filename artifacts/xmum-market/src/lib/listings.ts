@@ -61,12 +61,21 @@ export async function uploadPhoto(file: File, userId: string): Promise<string> {
   return getDownloadURL(storageRef);
 }
 
+// ── MIGRATION NOTE ────────────────────────────────────────────────────────────
+// Existing listing documents do NOT have a sortKey field.
+// Before deploying to production, run a one-time migration script that sets
+// sortKey = createdAt for all existing documents, or the new sortKey-based
+// index/query will return inconsistent results.
+// New listings created after this deployment will have sortKey set automatically.
+// ──────────────────────────────────────────────────────────────────────────────
 export async function createListing(
   data: Omit<Listing, "id" | "createdAt" | "isArchived" | "status">
 ): Promise<string> {
+  const now = Date.now();
   const docRef = await addDoc(collection(db, "listings"), {
     ...data,
     createdAt: serverTimestamp(),
+    sortKey: now,
     isArchived: false,
     status: "active",
   });
@@ -81,6 +90,19 @@ export async function updateListing(
     updateDoc(doc(db, "listings", id), data),
     new Promise<void>((_, reject) =>
       setTimeout(() => reject(new Error("timeout:update-listing")), 6_000)
+    ),
+  ]);
+}
+
+export async function bumpListing(id: string): Promise<void> {
+  const now = Date.now();
+  await Promise.race([
+    updateDoc(doc(db, "listings", id), {
+      lastBumpedAt: now,
+      sortKey: now,
+    }),
+    new Promise<void>((_, reject) =>
+      setTimeout(() => reject(new Error("timeout:bump-listing")), 6_000)
     ),
   ]);
 }
@@ -105,7 +127,7 @@ export async function getListingsPage(
       where("type", "==", type),
       where("isArchived", "==", false),
       where("status", "==", "active"),
-      orderBy("createdAt", "desc"),
+      orderBy("sortKey", "desc"),
       ...(cursor ? [startAfter(cursor)] : []),
       limit(PAGE_SIZE + 1),
     ];
