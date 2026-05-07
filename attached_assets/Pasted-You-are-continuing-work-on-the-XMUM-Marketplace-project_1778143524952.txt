@@ -1,0 +1,191 @@
+You are continuing work on the XMUM Marketplace project. Read the file listed below carefully before writing a single line of code. Do NOT refactor anything not mentioned. Fix only what is described.
+
+Files to read first:
+- src/pages/PostPage.tsx
+- src/lib/i18n.ts
+- src/lib/types.ts
+
+---
+
+## BUG 3 — Description field too small; need full-screen editor + character limits on title and description
+
+### Overview
+
+The description `<textarea>` in `PostPage.tsx` is too small (rows={3}) for users to write and review meaningful content. The fix has two parts:
+1. Replace the textarea with a tappable preview that opens a full-screen editor modal
+2. Add character counters and limits to both the title input (80 chars) and the description editor (1000 chars)
+
+---
+
+### Part A — Full-screen Description Editor Modal
+
+Inside `PostPage.tsx`, create a new component called `DescriptionEditorModal` defined at the TOP of the file (above the `PostPage` default export, not inside it). This avoids re-mounting on every render.
+
+```tsx
+interface DescriptionEditorModalProps {
+  value: string;
+  onChange: (val: string) => void;
+  onClose: () => void;
+}
+
+function DescriptionEditorModal({ value, onChange, onClose }: DescriptionEditorModalProps) {
+  const [draft, setDraft] = useState(value);
+  const { t } = useLang();
+
+  const handleSave = () => {
+    onChange(draft);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[70] flex flex-col bg-white dark:bg-slate-900">
+      {/* Header bar */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-slate-700">
+        <button
+          type="button"
+          onClick={onClose}
+          className="text-sm text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200 transition-colors"
+        >
+          {t.cancel}
+        </button>
+        <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-100">
+          {t.descriptionLabel}
+        </h2>
+        <button
+          type="button"
+          onClick={handleSave}
+          className="text-sm font-semibold text-[#003366] dark:text-blue-400 hover:opacity-75 transition-opacity"
+        >
+          {t.done}
+        </button>
+      </div>
+
+      {/* Textarea fills remaining height */}
+      <div className="flex flex-col flex-1 px-4 py-3 overflow-hidden">
+        <textarea
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value.slice(0, 1000))}
+          maxLength={1000}
+          placeholder={t.descriptionPlaceholder}
+          className="flex-1 w-full resize-none bg-transparent text-gray-900 dark:text-slate-100 text-sm leading-relaxed placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none"
+        />
+        {/* Character counter */}
+        <div className={`text-right text-xs mt-2 font-medium ${
+          draft.length > 900
+            ? "text-red-500 dark:text-red-400"
+            : "text-gray-400 dark:text-slate-500"
+        }`}>
+          {draft.length} / 1000
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+### Part B — Replace the description textarea in the main PostPage form
+
+In `PostPage.tsx`, find the existing `<textarea>` for description in the form JSX. Replace it entirely with:
+
+1. A state variable to control the modal: `const [showDescEditor, setShowDescEditor] = useState(false);` — add this alongside the other useState declarations at the top of `PostPage`.
+
+2. A tappable preview box that opens the modal when clicked:
+```tsx
+{/* Description — tappable preview */}
+<div>
+  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+    {t.descriptionLabel}
+    <span className="text-red-500 ml-0.5">*</span>
+  </label>
+  <button
+    type="button"
+    onClick={() => setShowDescEditor(true)}
+    className="w-full min-h-[80px] text-left bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition flex items-start justify-between gap-2"
+  >
+    <span className={description
+      ? "text-gray-900 dark:text-slate-100 line-clamp-3 flex-1"
+      : "text-gray-400 dark:text-slate-500 flex-1"
+    }>
+      {description || t.descriptionPlaceholder}
+    </span>
+    <Edit2 size={15} className="text-gray-400 dark:text-slate-500 mt-0.5 shrink-0" />
+  </button>
+  {description && (
+    <p className="text-xs text-gray-400 dark:text-slate-500 mt-1 text-right">
+      {description.length} / 1000
+    </p>
+  )}
+</div>
+```
+
+3. Mount the modal at the bottom of the JSX return, just before the closing fragment/div, conditionally:
+```tsx
+{showDescEditor && (
+  <DescriptionEditorModal
+    value={description}
+    onChange={(val) => setDescription(val)}
+    onClose={() => setShowDescEditor(false)}
+  />
+)}
+```
+
+4. Add the `Edit2` icon to the existing lucide-react import line in `PostPage.tsx`.
+
+5. The existing form validation that checks `if (!description.trim())` should remain unchanged — the tappable button approach still populates the same `description` state.
+
+---
+
+### Part C — Title character limit and live counter
+
+Find the `<input>` for the title field in `PostPage.tsx`. Make these two changes:
+
+1. Add `maxLength={80}` to the input element.
+
+2. Directly below the title input (inside the same wrapping `<div>`), add a character counter:
+```tsx
+<div className={`text-right text-xs mt-1 font-medium ${
+  title.length > 70
+    ? "text-red-500 dark:text-red-400"
+    : "text-gray-400 dark:text-slate-500"
+}`}>
+  {title.length} / 80
+</div>
+```
+
+---
+
+### Part D — Add missing translation keys to i18n.ts
+
+Add the following keys to BOTH the `en` and `zh` objects in `src/lib/i18n.ts`:
+
+EN:
+```ts
+done: "Done",
+descriptionLabel: "Details",
+descriptionPlaceholder: "Describe your item — condition, size, reason for selling, meetup preferences, etc.",
+```
+
+ZH:
+```ts
+done: "完成",
+descriptionLabel: "详情",
+descriptionPlaceholder: "描述您的商品——状态、尺寸、出售原因、交易偏好等。",
+```
+
+Note: `cancel` likely already exists in `i18n.ts` from the delete confirm modal. Check first — only add it if missing.
+- EN: `cancel: "Cancel"`
+- ZH: `cancel: "取消"`
+
+---
+
+## IMPORTANT CONSTRAINTS — Do NOT violate these
+
+1. Do NOT change any Firestore or Storage security rules.
+2. Do NOT change `firebase.ts`.
+3. Do NOT add any new npm packages. `Edit2` is already available in lucide-react which is already installed.
+4. Do NOT modify any files other than `PostPage.tsx` and `src/lib/i18n.ts`.
+5. Do NOT touch the photo upload section, the category/condition selectors, the contact fields, or the `handleSubmit` logic — those were fixed in Part 1 and must not be regressed.
+6. The `DescriptionEditorModal` component must be defined OUTSIDE and ABOVE the `PostPage` default export function — not nested inside it — to prevent re-mounting on every keystroke.
+7. The `draft` state inside `DescriptionEditorModal` is intentionally local and separate from the parent `description` state. Changes are only committed when the user taps "Done" — tapping "Cancel" discards the draft. This is the correct intended behaviour.
+8. After all changes, confirm in your response exactly which files were modified and list the specific additions made.

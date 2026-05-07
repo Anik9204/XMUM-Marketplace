@@ -124,6 +124,9 @@ export const translations = {
     requestNewLink: "Request a new reset link",
     emailNotRegistered: "No account found with this email. Please sign up instead.",
     resendIn: "Resend in",
+    done: "Done",
+    descriptionLabel: "Details",
+    descriptionPlaceholder: "Describe your item — condition, size, reason for selling, meetup preferences, etc.",
   },
   zh: {
     appName: "厦大市集",
@@ -248,6 +251,9 @@ export const translations = {
     requestNewLink: "重新申请重置链接",
     emailNotRegistered: "找不到与此电子邮件关联的账号，请注册。",
     resendIn: "重新发送",
+    done: "完成",
+    descriptionLabel: "详情",
+    descriptionPlaceholder: "描述您的商品——状态、尺寸、出售原因、交易偏好等。",
   },
 };
 

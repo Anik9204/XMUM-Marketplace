@@ -6,7 +6,7 @@ import { uploadPhoto, createListing } from "@/lib/listings";
 import { auth } from "@/lib/firebase";
 import { ListingType, Condition } from "@/lib/types";
 import AuthModal from "@/components/AuthModal";
-import { ImagePlus, X, AlertCircle, CheckCircle2 } from "lucide-react";
+import { ImagePlus, X, AlertCircle, CheckCircle2, Edit2 } from "lucide-react";
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB — matches Firebase Storage security rule
 
@@ -38,6 +38,67 @@ function SuccessToast({ message, onDone }: { message: string; onDone: () => void
   );
 }
 
+interface DescriptionEditorModalProps {
+  value: string;
+  onChange: (val: string) => void;
+  onClose: () => void;
+}
+
+function DescriptionEditorModal({ value, onChange, onClose }: DescriptionEditorModalProps) {
+  const [draft, setDraft] = useState(value);
+  const { t } = useLang();
+
+  const handleSave = () => {
+    onChange(draft);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[70] flex flex-col bg-white dark:bg-slate-900">
+      {/* Header bar */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-slate-700">
+        <button
+          type="button"
+          onClick={onClose}
+          className="text-sm text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200 transition-colors"
+        >
+          {t.cancel}
+        </button>
+        <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-100">
+          {t.descriptionLabel}
+        </h2>
+        <button
+          type="button"
+          onClick={handleSave}
+          className="text-sm font-semibold text-[#003366] dark:text-blue-400 hover:opacity-75 transition-opacity"
+        >
+          {t.done}
+        </button>
+      </div>
+
+      {/* Textarea fills remaining height */}
+      <div className="flex flex-col flex-1 px-4 py-3 overflow-hidden">
+        <textarea
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value.slice(0, 1000))}
+          maxLength={1000}
+          placeholder={t.descriptionPlaceholder}
+          className="flex-1 w-full resize-none bg-transparent text-gray-900 dark:text-slate-100 text-sm leading-relaxed placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none"
+        />
+        {/* Character counter */}
+        <div className={`text-right text-xs mt-2 font-medium ${
+          draft.length > 900
+            ? "text-red-500 dark:text-red-400"
+            : "text-gray-400 dark:text-slate-500"
+        }`}>
+          {draft.length} / 1000
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function PostPage() {
   const { t } = useLang();
   const { user, userProfile } = useAuth();
@@ -58,6 +119,7 @@ export default function PostPage() {
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
   const [showAuth, setShowAuth] = useState(false);
+  const [showDescEditor, setShowDescEditor] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -230,18 +292,47 @@ export default function PostPage() {
         {/* Title */}
         <div>
           <label className={labelCls}>{t.title} *</label>
-          <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} required className={inputCls} />
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            required
+            maxLength={80}
+            className={inputCls}
+          />
+          <div className={`text-right text-xs mt-1 font-medium ${
+            title.length > 70
+              ? "text-red-500 dark:text-red-400"
+              : "text-gray-400 dark:text-slate-500"
+          }`}>
+            {title.length} / 80
+          </div>
         </div>
 
-        {/* Description */}
+        {/* Description — tappable preview */}
         <div>
-          <label className={labelCls}>{t.description}</label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={3}
-            className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 transition resize-none"
-          />
+          <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+            {t.descriptionLabel}
+            <span className="text-red-500 ml-0.5">*</span>
+          </label>
+          <button
+            type="button"
+            onClick={() => setShowDescEditor(true)}
+            className="w-full min-h-[80px] text-left bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition flex items-start justify-between gap-2"
+          >
+            <span className={description
+              ? "text-gray-900 dark:text-slate-100 line-clamp-3 flex-1"
+              : "text-gray-400 dark:text-slate-500 flex-1"
+            }>
+              {description || t.descriptionPlaceholder}
+            </span>
+            <Edit2 size={15} className="text-gray-400 dark:text-slate-500 mt-0.5 shrink-0" />
+          </button>
+          {description && (
+            <p className="text-xs text-gray-400 dark:text-slate-500 mt-1 text-right">
+              {description.length} / 1000
+            </p>
+          )}
         </div>
 
         {/* Category */}
@@ -329,6 +420,14 @@ export default function PostPage() {
           ) : t.submit}
         </button>
       </form>
+
+      {showDescEditor && (
+        <DescriptionEditorModal
+          value={description}
+          onChange={(val) => setDescription(val)}
+          onClose={() => setShowDescEditor(false)}
+        />
+      )}
     </div>
   );
 }
