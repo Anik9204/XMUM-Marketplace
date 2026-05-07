@@ -40,8 +40,20 @@ export async function getOrCreateConversation(
 ): Promise<string> {
   const convId = getConversationId(myUid, otherUid, listing.id);
   const convRef = doc(db, "conversations", convId);
-  const snap = await getDoc(convRef);
-  if (!snap.exists()) {
+
+  // The Firestore read rule checks resource.data.participants, but resource is
+  // null when the document doesn't exist yet — causing a permission-denied on
+  // the read even for legitimate users. We catch that and treat it as
+  // "not exists", then fall through to create the document.
+  let exists = false;
+  try {
+    const snap = await getDoc(convRef);
+    exists = snap.exists();
+  } catch {
+    exists = false;
+  }
+
+  if (!exists) {
     await setDoc(convRef, {
       listingId: listing.id,
       listingTitle: listing.title,
