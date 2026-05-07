@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { getUserListings, deleteListing, markAsSold } from "@/lib/listings";
+import { getUserListings, deleteListing, markAsSold, LISTING_EXPIRY_MS, LISTING_REMINDER_MS } from "@/lib/listings";
 import { Listing } from "@/lib/types";
 import ListingCard from "@/components/ListingCard";
 import AuthModal from "@/components/AuthModal";
-import { User, CheckCircle, AlertCircle, LogOut, CheckCircle2, Settings } from "lucide-react";
+import { User, CheckCircle, AlertCircle, LogOut, CheckCircle2, Settings, Clock, X } from "lucide-react";
 import { logOut } from "@/lib/auth";
 import { useLocation } from "wouter";
 
@@ -36,6 +36,7 @@ export default function ProfilePage() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   const [successToast, setSuccessToast] = useState("");
+  const [expiryReminders, setExpiryReminders] = useState<Listing[]>([]);
 
   // Cache listings in a ref so navigating Settings → Profile doesn't re-fetch on every visit.
   const listingsCache = useRef<Listing[]>([]);
@@ -49,8 +50,31 @@ export default function ProfilePage() {
     setLoading(true);
     getUserListings(user.uid)
       .then((data) => {
-        listingsCache.current = data;
-        setListings(data);
+        const now = Date.now();
+        const expired = data.filter(l => now - l.createdAt >= LISTING_EXPIRY_MS && l.status === "active");
+        const active = data.filter(l => !(now - l.createdAt >= LISTING_EXPIRY_MS && l.status === "active"));
+
+        if (expired.length > 0) {
+          Promise.allSettled(expired.map(l => deleteListing(l))).then(() => {
+            if (expired.length === 1) {
+              setSuccessToast(`"${expired[0].title}" has been automatically removed after 30 days.`);
+            } else {
+              setSuccessToast(`${expired.length} listings have been automatically removed after 30 days.`);
+            }
+          });
+        }
+
+        listingsCache.current = active;
+        setListings(active);
+
+        const expiringSoon = active.filter(
+          l => l.status === "active" &&
+          now - l.createdAt >= LISTING_REMINDER_MS &&
+          now - l.createdAt < LISTING_EXPIRY_MS
+        );
+        if (expiringSoon.length > 0) {
+          setExpiryReminders(expiringSoon);
+        }
       })
       .finally(() => setLoading(false));
   }, [user]);
@@ -173,6 +197,39 @@ export default function ProfilePage() {
             {t.accountSettings}
           </button>
         </div>
+
+        {/* Expiry reminder banner */}
+        {expiryReminders.length > 0 && (
+          <div className="mb-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-2xl p-4 flex items-start gap-3">
+            <Clock size={16} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                {t.listingExpiryReminderTitle}
+              </p>
+              <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                {expiryReminders.length === 1
+                  ? `"${expiryReminders[0].title}" ${t.listingExpiryReminderBody}`
+                  : `${expiryReminders.length} ${t.listingExpiryReminderBodyMultiple}`}
+              </p>
+              <ul className="mt-1.5 space-y-0.5">
+                {expiryReminders.map(l => {
+                  const daysLeft = Math.ceil((l.createdAt + LISTING_EXPIRY_MS - Date.now()) / (1000 * 60 * 60 * 24));
+                  return (
+                    <li key={l.id} className="text-xs text-amber-700 dark:text-amber-400 truncate">
+                      • {l.title} — {daysLeft} {t.daysLeft}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+            <button
+              onClick={() => setExpiryReminders([])}
+              className="text-amber-500 hover:text-amber-700 dark:hover:text-amber-300 shrink-0"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
 
         {/* Listings grid */}
         {loading ? (

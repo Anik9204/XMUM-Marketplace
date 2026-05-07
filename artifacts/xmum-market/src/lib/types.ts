@@ -23,6 +23,16 @@ export interface Listing {
   status?: ListingStatus;
 }
 
+export interface AppNotification {
+  id: string;
+  type: "listing_deleted" | "listing_sold" | "welcome";
+  title: string;
+  body: string;
+  createdAt: number;
+  read: boolean;
+  listingId?: string;
+}
+
 export interface UserProfile {
   uid: string;
   email: string;

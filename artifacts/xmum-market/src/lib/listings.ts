@@ -25,6 +25,9 @@ import { Listing, ListingType } from "./types";
 
 const PAGE_SIZE = 12;
 
+export const LISTING_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+export const LISTING_REMINDER_MS = 23 * 24 * 60 * 60 * 1000; // 23 days (7-day warning)
+
 // Convert a Firestore Timestamp (or plain number) to milliseconds.
 function toMillis(val: unknown): number {
   if (typeof val === "number") return val;

@@ -1,0 +1,198 @@
+You are continuing work on the XMUM Marketplace project. Read every file listed below carefully before writing a single line of code. Do NOT refactor anything not mentioned.
+
+Files to read first:
+- src/lib/types.ts
+- src/lib/listings.ts
+- src/lib/firebase.ts
+- src/contexts/AuthContext.tsx
+- src/components/Layout.tsx
+- src/App.tsx
+- src/lib/i18n.ts
+- src/pages/ProfilePage.tsx
+
+---
+
+## FEATURE 7 — Post auto-deletion after 30 days with reminders
+
+### Architecture decision (IMPORTANT — read before coding)
+Firebase Cloud Functions (server-side cron) are NOT available in this Replit/Firebase project without a paid Blaze plan and separate deployment. Therefore, auto-deletion must be implemented CLIENT-SIDE using a "lazy expiry" pattern: expiry is checked and enforced when the user visits their Profile page and when listings are loaded. This is a standard pattern for student/hobby apps.
+
+The approach:
+1. Each listing already has `createdAt` (timestamp in milliseconds).
+2. Define EXPIRY_MS = 30 days in milliseconds = `30 * 24 * 60 * 60 * 1000`.
+3. Define REMINDER_MS = 23 days in milliseconds = `23 * 24 * 60 * 60 * 1000` (7 days before expiry).
+4. When `ProfilePage` loads the user's listings, check each one: if `Date.now() - listing.createdAt >= EXPIRY_MS`, call `deleteListing(listing)` automatically and remove it from the list.
+5. Show a dismissible notification banner on ProfilePage if any listing is within the reminder window (23–30 days old).
+6. Show a toast notification when a listing is auto-deleted.
+
+### Step A — Add expiry constants to listings.ts
+At the top of `listings.ts`, after the `PAGE_SIZE` constant:
+```ts
+export const LISTING_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+export const LISTING_REMINDER_MS = 23 * 24 * 60 * 60 * 1000; // 23 days (7-day warning)
+```
+
+### Step B — Update ProfilePage.tsx to auto-delete expired listings and show reminder
+In `ProfilePage.tsx`, after `getUserListings` returns data, run the expiry check:
+
+```ts
+import { deleteListing, getUserListings, markAsSold, LISTING_EXPIRY_MS, LISTING_REMINDER_MS } from "@/lib/listings";
+
+// After fetching listings:
+const now = Date.now();
+const expired = data.filter(l => now - l.createdAt >= LISTING_EXPIRY_MS && l.status === "active");
+const active = data.filter(l => !(now - l.createdAt >= LISTING_EXPIRY_MS && l.status === "active"));
+
+// Auto-delete expired listings silently in background
+if (expired.length > 0) {
+  Promise.allSettled(expired.map(l => deleteListing(l))).then(() => {
+    if (expired.length === 1) {
+      setSuccessToast(`"${expired[0].title}" has been automatically removed after 30 days.`);
+    } else {
+      setSuccessToast(`${expired.length} listings have been automatically removed after 30 days.`);
+    }
+  });
+}
+
+listingsCache.current = active;
+setListings(active);
+
+// Check for listings in the reminder window (23–30 days old)
+const expiringSoon = active.filter(
+  l => l.status === "active" && 
+  now - l.createdAt >= LISTING_REMINDER_MS && 
+  now - l.createdAt < LISTING_EXPIRY_MS
+);
+if (expiringSoon.length > 0) {
+  setExpiryReminders(expiringSoon);
+}
+```
+
+Add state: `const [expiryReminders, setExpiryReminders] = useState<Listing[]>([]);`
+
+### Step C — Show reminder banner in ProfilePage.tsx
+Above the listings grid (after the tab bar), add a dismissible amber reminder banner when `expiryReminders.length > 0`:
+
+```tsx
+{expiryReminders.length > 0 && (
+  <div className="mb-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-2xl p-4 flex items-start gap-3">
+    <Clock size={16} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+    <div className="flex-1 min-w-0">
+      <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+        {t.listingExpiryReminderTitle}
+      </p>
+      <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+        {expiryReminders.length === 1
+          ? `"${expiryReminders[0].title}" ${t.listingExpiryReminderBody}`
+          : `${expiryReminders.length} ${t.listingExpiryReminderBodyMultiple}`}
+      </p>
+      <ul className="mt-1.5 space-y-0.5">
+        {expiryReminders.map(l => {
+          const daysLeft = Math.ceil((l.createdAt + LISTING_EXPIRY_MS - Date.now()) / (1000 * 60 * 60 * 24));
+          return (
+            <li key={l.id} className="text-xs text-amber-700 dark:text-amber-400 truncate">
+              • {l.title} — {daysLeft} {t.daysLeft}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+    <button
+      onClick={() => setExpiryReminders([])}
+      className="text-amber-500 hover:text-amber-700 dark:hover:text-amber-300 shrink-0"
+    >
+      <X size={16} />
+    </button>
+  </div>
+)}
+```
+
+Import `Clock` and `X` from lucide-react in ProfilePage.tsx (check if already imported — add only missing ones).
+
+### Step D — Add translation keys to i18n.ts
+Add to both EN and ZH:
+- EN: `listingExpiryReminderTitle: "Some listings are expiring soon"`, `listingExpiryReminderBody: "will be automatically deleted in less than 7 days."`, `listingExpiryReminderBodyMultiple: "listings will be automatically deleted in less than 7 days."`, `daysLeft: "days left"`, `listingAutoDeleted: "listing was automatically removed after 30 days."`, `listingsAutoDeleted: "listings were automatically removed after 30 days."`
+- ZH: `listingExpiryReminderTitle: "部分帖子即将到期"`, `listingExpiryReminderBody: "将在不到7天内自动删除。"`, `listingExpiryReminderBodyMultiple: "个帖子将在不到7天内自动删除。"`, `daysLeft: "天后到期"`, `listingAutoDeleted: "个帖子已在30天后自动删除。"`, `listingsAutoDeleted: "个帖子已在30天后自动删除。"`
+
+---
+
+## FEATURE 8 — Notification system (in-app, client-side)
+
+### Architecture decision (IMPORTANT — read before coding)
+A full push notification system requires Firebase Cloud Messaging and a service worker, which is complex and overkill for a student app. Instead, implement an IN-APP notification bell that shows a dropdown of recent app events that happened during the current session, plus persistent notifications stored in Firestore under `users/{uid}/notifications` subcollection.
+
+### What notifications are generated:
+1. Listing auto-deleted (generated in ProfilePage when expiry check runs)
+2. Listing marked as sold (generated in ProfilePage/ListingDetailPage when markAsSold is called)
+3. Welcome notification (generated once when user first logs in — check Firestore if a welcome notification already exists)
+
+### Step A — Add notification types to types.ts
+```ts
+export interface AppNotification {
+  id: string;
+  type: "listing_deleted" | "listing_sold" | "welcome";
+  title: string;
+  body: string;
+  createdAt: number;
+  read: boolean;
+  listingId?: string;
+}
+```
+
+### Step B — Create src/lib/notifications.ts
+```ts
+import { collection, addDoc, getDocs, updateDoc, doc, query, orderBy, limit, serverTimestamp } from "firebase/firestore";
+import { db } from "./firebase";
+import { AppNotification } from "./types";
+
+function toMillis(val: unknown): number {
+  if (typeof val === "number") return val;
+  if (val && typeof (val as any).toMillis === "function") return (val as any).toMillis();
+  return Date.now();
+}
+
+export async function addNotification(
+  uid: string,
+  data: Omit<AppNotification, "id" | "createdAt" | "read">
+): Promise<void> {
+  try {
+    await addDoc(collection(db, "users", uid, "notifications"), {
+      ...data,
+      createdAt: serverTimestamp(),
+      read: false,
+    });
+  } catch {
+    // Notifications are non-critical — silently fail
+  }
+}
+
+export async function getNotifications(uid: string): Promise<AppNotification[]> {
+  try {
+    const q = query(
+      collection(db, "users", uid, "notifications"),
+      orderBy("createdAt", "desc"),
+      limit(20)
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(d => {
+      const data = d.data();
+      return { id: d.id, ...data, createdAt: toMillis(data.createdAt) } as AppNotification;
+    });
+  } catch {
+    return [];
+  }
+}
+
+export async function markNotificationsRead(uid: string, ids: string[]): Promise<void> {
+  try {
+    await Promise.allSettled(
+      ids.map(id => updateDoc(doc(db, "users", uid, "notifications", id), { read: true }))
+    );
+  } catch {
+    // Silent
+  }
+}
+```
+
+### Step C — Update Firestore rules to allow notifications subcollection
+Add to the Firestore rules (this is the ONLY rules change allowed):
