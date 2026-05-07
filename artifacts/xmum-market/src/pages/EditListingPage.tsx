@@ -3,6 +3,7 @@ import { useLocation, useParams } from "wouter";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { uploadPhoto, updateListing, getListing } from "@/lib/listings";
+import { checkContent } from "@/lib/contentFilter";
 import { auth } from "@/lib/firebase";
 import { ListingType, Condition } from "@/lib/types";
 import { ImagePlus, X, AlertCircle, CheckCircle2, Lock, Edit2, Loader2 } from "lucide-react";
@@ -197,6 +198,12 @@ export default function EditListingPage() {
     e.preventDefault();
     setError("");
     setLoading(true);
+    const filterResult = checkContent(title, description);
+    if (!filterResult.passed) {
+      setError(filterResult.reason ?? t.contentNotAllowed);
+      setLoading(false);
+      return;
+    }
     try {
       await withTimeout(auth.currentUser?.getIdToken(true) ?? Promise.resolve(""), 10_000, "token-refresh");
 

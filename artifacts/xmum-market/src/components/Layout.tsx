@@ -2,16 +2,14 @@ import { Link, useLocation } from "wouter";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { logOut } from "@/lib/auth";
-import { useDarkMode } from "@/hooks/use-dark-mode";
 import AuthModal from "@/components/AuthModal";
 import VerificationBanner from "@/components/VerificationBanner";
-import { Home, Search, PlusSquare, User, Globe, Sun, Moon } from "lucide-react";
+import { Home, Search, PlusSquare, User, Globe } from "lucide-react";
 import { useState } from "react";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { t, toggleLang, lang } = useLang();
   const { user } = useAuth();
-  const { dark, toggle: toggleDark } = useDarkMode();
   const [location] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
@@ -36,15 +34,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </Link>
 
           <div className="flex items-center gap-1 sm:gap-2">
-            {/* Dark mode toggle */}
-            <button
-              onClick={toggleDark}
-              className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-white/70 hover:text-white transition-colors rounded-lg hover:bg-white/10"
-              aria-label="Toggle dark mode"
-            >
-              {dark ? <Sun size={17} /> : <Moon size={17} />}
-            </button>
-
             {/* Language Toggle — icon only on xs, text on sm+ */}
             <button
               onClick={toggleLang}

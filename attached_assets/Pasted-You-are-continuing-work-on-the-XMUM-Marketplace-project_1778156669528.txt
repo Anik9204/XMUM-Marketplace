@@ -1,0 +1,270 @@
+You are continuing work on the XMUM Marketplace project. Read every file listed below carefully before writing a single line of code. Do NOT refactor anything not mentioned.
+
+Files to read first:
+- src/components/AuthModal.tsx
+- src/lib/auth.ts
+- src/pages/SettingsPage.tsx
+- src/components/Layout.tsx
+- src/hooks/use-dark-mode.ts
+- src/lib/i18n.ts
+- src/pages/PostPage.tsx
+- src/pages/EditListingPage.tsx
+
+---
+
+## FEATURE 4 — Stronger password requirements on sign-up
+
+### Current state
+The password is only validated with `if (password.length < 6)` which uses `t.weakPassword`. The sign-up form has no maximum length check and no complexity requirements.
+
+### What to implement
+Industry-standard password rules for a student marketplace:
+- Minimum 8 characters (increased from 6)
+- Maximum 32 characters
+- Must contain at least one letter AND one number
+
+These rules apply ONLY to sign-up (new account creation). The sign-in and password-reset flows must NOT be changed — existing users may have passwords that don't meet the new rules.
+
+### In AuthModal.tsx — sign-up validation
+Find the `handleSubmit` function. In the `mode === "sign-up"` branch, replace the existing weak-password check with:
+
+```ts
+// Password strength validation (sign-up only)
+if (password.length < 8) {
+  setError(t.passwordTooShort);
+  return;
+}
+if (password.length > 32) {
+  setError(t.passwordTooLong);
+  return;
+}
+if (!/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+  setError(t.passwordTooWeak);
+  return;
+}
+if (password !== confirmPassword) {
+  setError(t.passwordsNoMatch);
+  return;
+}
+```
+
+Also add `maxLength={32}` to the password input and confirm password input in the sign-up form fields.
+
+### In AuthModal.tsx — live password strength indicator
+Below the password input in the SIGN-UP form only (not sign-in), add a visual strength bar. Add a helper function at the top of the component:
+
+```ts
+function getPasswordStrength(pw: string): { level: 0 | 1 | 2 | 3; label: string } {
+  if (pw.length === 0) return { level: 0, label: "" };
+  const hasLetter = /[a-zA-Z]/.test(pw);
+  const hasNumber = /[0-9]/.test(pw);
+  const hasSpecial = /[^a-zA-Z0-9]/.test(pw);
+  const longEnough = pw.length >= 8;
+  if (!longEnough || !hasLetter) return { level: 1, label: "Weak" };
+  if (longEnough && hasLetter && hasNumber && !hasSpecial) return { level: 2, label: "Fair" };
+  if (longEnough && hasLetter && hasNumber && hasSpecial) return { level: 3, label: "Strong" };
+  return { level: 1, label: "Weak" };
+}
+```
+
+Below the password `<input>` in the sign-up section, insert:
+```tsx
+{mode === "sign-up" && password.length > 0 && (() => {
+  const { level, label } = getPasswordStrength(password);
+  const colors = ["", "bg-red-400", "bg-yellow-400", "bg-green-500"];
+  const widths = ["", "w-1/3", "w-2/3", "w-full"];
+  return (
+    <div className="mt-1.5">
+      <div className="h-1 w-full bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden">
+        <div className={`h-full rounded-full transition-all duration-300 ${colors[level]} ${widths[level]}`} />
+      </div>
+      <p className={`text-[10px] mt-0.5 ${level === 1 ? "text-red-500" : level === 2 ? "text-yellow-500" : "text-green-600"}`}>
+        {label}
+      </p>
+    </div>
+  );
+})()}
+```
+
+### In i18n.ts — add new translation keys
+Add to both EN and ZH:
+- EN: `passwordTooShort: "Password must be at least 8 characters."`, `passwordTooLong: "Password cannot exceed 32 characters."`, `passwordTooWeak: "Password must contain at least one letter and one number."`, `passwordStrengthWeak: "Weak"`, `passwordStrengthFair: "Fair"`, `passwordStrengthStrong: "Strong"`
+- ZH: `passwordTooShort: "密码至少需要8个字符。"`, `passwordTooLong: "密码不能超过32个字符。"`, `passwordTooWeak: "密码必须包含至少一个字母和一个数字。"`, `passwordStrengthWeak: "弱"`, `passwordStrengthFair: "中"`, `passwordStrengthStrong: "强"`
+
+Also update the existing `weakPassword` key (used for reset flow, keep it to 6 chars as Firebase minimum):
+- EN: Keep `weakPassword: "Password must be at least 6 characters."` unchanged — this is only used in ResetPasswordPage which we do not change.
+
+### In SettingsPage.tsx — apply the same rules to the Change Password form
+Find the change-password section. It likely has a `if (newPassword.length < 6)` guard. Update it to use the same 3-check validation (min 8, max 32, letter+number). Add `maxLength={32}` to the new-password input there as well. Do NOT validate the current password field — only the new password.
+
+---
+
+## FEATURE 5 — Content restrictions: inappropriate language and item filter
+
+### What to implement
+A client-side content filter that runs on `handleSubmit` in both `PostPage.tsx` and `EditListingPage.tsx` BEFORE the Firestore write. It checks the title and description for prohibited content and blocks submission with a clear error message.
+
+### Implementation — create src/lib/contentFilter.ts
+
+Create a new file `src/lib/contentFilter.ts`:
+
+```ts
+// Client-side content filter for XMUM Marketplace.
+// This is a first line of defence — not a replacement for moderation.
+// Checks title and description for prohibited content before submission.
+
+// ── Prohibited item keywords ─────────────────────────────────────────────────
+// Items that should not be listed on a student marketplace.
+const PROHIBITED_ITEMS = [
+  // Weapons
+  "weapon", "knife", "parang", "gun", "pistol", "rifle", "explosive", "bomb",
+  "grenade", "ammo", "ammunition", "firearm", "blade",
+  // Drugs
+  "drug", "weed", "cannabis", "marijuana", "cocaine", "heroin", "meth",
+  "ecstasy", "mdma", "ketamine", "ganja", "dadah",
+  // Adult
+  "porn", "pornography", "sex toy", "dildo", "vibrator", "adult toy",
+  // Counterfeit
+  "fake id", "fake ic", "counterfeit", "pirated", "bootleg",
+  // Gambling
+  "lottery ticket", "sports bet", "gambling",
+];
+
+// ── Harassment / inappropriate language keywords ─────────────────────────────
+const INAPPROPRIATE_LANGUAGE = [
+  "fuck", "shit", "asshole", "bastard", "bitch", "cunt", "dick", "pussy",
+  "nigger", "nigga", "faggot", "retard", "whore", "slut",
+  // Malay equivalents
+  "bodoh", "babi", "puki", "lancau", "sial", "celaka", "anjing", "bangsat",
+  // Chinese equivalents (pinyin)
+  "tmd", "nmsl", "sb",
+];
+
+export interface FilterResult {
+  passed: boolean;
+  reason?: string;
+}
+
+export function checkContent(title: string, description: string): FilterResult {
+  const combined = `${title} ${description}`.toLowerCase();
+
+  for (const word of PROHIBITED_ITEMS) {
+    // Use word boundary matching where possible
+    const regex = new RegExp(`\\b${word.replace(/[-]/g, "[-\\s]?")}\\b`, "i");
+    if (regex.test(combined)) {
+      return {
+        passed: false,
+        reason: `Your listing appears to contain a prohibited item or keyword: "${word}". Please review our community guidelines.`,
+      };
+    }
+  }
+
+  for (const word of INAPPROPRIATE_LANGUAGE) {
+    const regex = new RegExp(`\\b${word}\\b`, "i");
+    if (regex.test(combined)) {
+      return {
+        passed: false,
+        reason: "Your listing contains inappropriate language. Please keep the marketplace respectful.",
+      };
+    }
+  }
+
+  return { passed: true };
+}
+```
+
+### In PostPage.tsx — apply filter before submit
+In `handleSubmit`, immediately after `setLoading(true)` and before the token refresh, add:
+```ts
+const filterResult = checkContent(title, description);
+if (!filterResult.passed) {
+  setError(filterResult.reason ?? t.contentNotAllowed);
+  setLoading(false);
+  return;
+}
+```
+
+Import `checkContent` from `@/lib/contentFilter`.
+
+### In EditListingPage.tsx — apply same filter
+Apply the identical check in its `handleSubmit`, in the same position.
+
+### In i18n.ts — add key
+- EN: `contentNotAllowed: "Your listing contains content that is not allowed on this platform. Please review and resubmit."`
+- ZH: `contentNotAllowed: "您的帖子包含平台不允许的内容，请修改后重新提交。"`
+
+---
+
+## FEATURE 6 — Move dark mode toggle from header to Settings page
+
+### Current state
+The dark mode toggle button lives in the sticky header in `Layout.tsx` as a Sun/Moon icon button, visible on every page.
+
+### What to change
+
+### In Layout.tsx
+Remove the dark mode toggle button entirely from the header. Find this block and delete it:
+```tsx
+{/* Dark mode toggle */}
+<button
+  onClick={toggleDark}
+  className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-white/70 hover:text-white transition-colors rounded-lg hover:bg-white/10"
+  aria-label="Toggle dark mode"
+>
+  {dark ? <Sun size={17} /> : <Moon size={17} />}
+</button>
+```
+
+Also remove `Sun, Moon` from the lucide-react import in Layout.tsx if they are no longer used after this removal. Keep `useDarkMode` imported in Layout.tsx ONLY if it's used elsewhere in the file. If the only usage was the toggle button, remove the `useDarkMode` import and the `const { dark, toggle: toggleDark } = useDarkMode();` line.
+
+### In SettingsPage.tsx
+Add a dark mode toggle row in the settings UI. Find the existing appearance/privacy section or add a new "Appearance" section. Add the following as a settings row:
+
+```tsx
+import { useDarkMode } from "@/hooks/use-dark-mode";
+
+// Inside the component:
+const { dark, toggle: toggleDark } = useDarkMode();
+```
+
+Add an "Appearance" section to the settings page (place it before or after the Privacy section — wherever is visually cleanest in the existing layout). Each setting row follows the same pattern as existing privacy toggles:
+
+```tsx
+{/* Appearance section */}
+<div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-5 mb-4">
+  <h2 className="text-sm font-bold text-gray-800 dark:text-slate-100 mb-4 flex items-center gap-2">
+    <Palette size={16} className="text-[#003366] dark:text-blue-400" />
+    {t.appearance}
+  </h2>
+  <div className="flex items-center justify-between py-2">
+    <div>
+      <p className="text-sm font-medium text-gray-700 dark:text-slate-200">{t.darkMode}</p>
+      <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">{t.darkModeDesc}</p>
+    </div>
+    <button
+      onClick={toggleDark}
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${dark ? "bg-[#003366] dark:bg-blue-600" : "bg-gray-200 dark:bg-slate-600"}`}
+    >
+      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${dark ? "translate-x-6" : "translate-x-1"}`} />
+    </button>
+  </div>
+</div>
+```
+
+Import `Palette` from lucide-react in SettingsPage.tsx.
+
+Add translation keys to i18n.ts:
+- EN: `appearance: "Appearance"`, `darkMode: "Dark Mode"`, `darkModeDesc: "Switch between light and dark theme"`
+- ZH: `appearance: "外观"`, `darkMode: "深色模式"`, `darkModeDesc: "切换浅色与深色主题"`
+
+---
+
+## IMPORTANT CONSTRAINTS
+
+1. Do NOT change Firestore or Storage security rules.
+2. Do NOT change firebase.ts.
+3. Do NOT add any new npm packages. `Palette` is in lucide-react already installed.
+4. Do NOT touch auth.ts, ResetPasswordPage.tsx, userProfile.ts, or listings.ts.
+5. The content filter in contentFilter.ts is purely client-side and does not make any network calls.
+6. The dark mode state (localStorage key) in use-dark-mode.ts must not be changed — both Layout and Settings will use the same hook so they stay in sync.
+7. After all changes, confirm exactly which files were created or modified.

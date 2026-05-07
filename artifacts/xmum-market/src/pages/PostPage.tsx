@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { uploadPhoto, createListing } from "@/lib/listings";
+import { checkContent } from "@/lib/contentFilter";
 import { auth } from "@/lib/firebase";
 import { ListingType, Condition } from "@/lib/types";
 import AuthModal from "@/components/AuthModal";
@@ -194,6 +195,12 @@ export default function PostPage() {
     e.preventDefault();
     setError("");
     setLoading(true);
+    const filterResult = checkContent(title, description);
+    if (!filterResult.passed) {
+      setError(filterResult.reason ?? t.contentNotAllowed);
+      setLoading(false);
+      return;
+    }
     try {
       await withTimeout(auth.currentUser?.getIdToken(true) ?? Promise.resolve(""), 10_000, "token-refresh");
 

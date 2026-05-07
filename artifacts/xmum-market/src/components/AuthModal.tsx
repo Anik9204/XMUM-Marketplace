@@ -6,6 +6,18 @@ import { X, Eye, EyeOff, MailCheck } from "lucide-react";
 
 type Mode = "signin" | "signup" | "forgot";
 
+function getPasswordStrength(pw: string): { level: 0 | 1 | 2 | 3; label: string } {
+  if (pw.length === 0) return { level: 0, label: "" };
+  const hasLetter = /[a-zA-Z]/.test(pw);
+  const hasNumber = /[0-9]/.test(pw);
+  const hasSpecial = /[^a-zA-Z0-9]/.test(pw);
+  const longEnough = pw.length >= 8;
+  if (!longEnough || !hasLetter) return { level: 1, label: "Weak" };
+  if (longEnough && hasLetter && hasNumber && !hasSpecial) return { level: 2, label: "Fair" };
+  if (longEnough && hasLetter && hasNumber && hasSpecial) return { level: 3, label: "Strong" };
+  return { level: 1, label: "Weak" };
+}
+
 interface Props {
   onClose: () => void;
   defaultMode?: Mode;
@@ -110,7 +122,9 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
       } else if (mode === "signup") {
         if (!isXmuEmail(email)) { setError(t.onlyXmuEmail); return; }
         if (!fullName.trim()) { setError("Full name is required."); return; }
-        if (password.length < 6) { setError(t.weakPassword); return; }
+        if (password.length < 8) { setError(t.passwordTooShort); return; }
+        if (password.length > 32) { setError(t.passwordTooLong); return; }
+        if (!/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) { setError(t.passwordTooWeak); return; }
         if (password !== confirmPass) { setError(t.passwordsNoMatch); return; }
         await signUp(email, password, fullName.trim(), whatsapp.trim(), wechat.trim());
         setPendingEmail(email);
@@ -252,12 +266,28 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
+                    maxLength={mode === "signup" ? 32 : undefined}
                     className={`${inputCls} pr-10`}
                   />
                   <button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-400">
                     {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
+                {mode === "signup" && password.length > 0 && (() => {
+                  const { level, label } = getPasswordStrength(password);
+                  const colors = ["", "bg-red-400", "bg-yellow-400", "bg-green-500"];
+                  const widths = ["", "w-1/3", "w-2/3", "w-full"];
+                  return (
+                    <div className="mt-1.5">
+                      <div className="h-1 w-full bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full transition-all duration-300 ${colors[level]} ${widths[level]}`} />
+                      </div>
+                      <p className={`text-[10px] mt-0.5 ${level === 1 ? "text-red-500" : level === 2 ? "text-yellow-500" : "text-green-600"}`}>
+                        {label}
+                      </p>
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
@@ -269,6 +299,7 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
                   value={confirmPass}
                   onChange={(e) => setConfirmPass(e.target.value)}
                   required
+                  maxLength={32}
                   className={inputCls}
                 />
               </div>

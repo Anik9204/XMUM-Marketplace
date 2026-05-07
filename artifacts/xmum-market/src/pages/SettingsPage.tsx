@@ -9,9 +9,10 @@ import {
 } from "@/lib/userProfile";
 import AuthModal from "@/components/AuthModal";
 import VerificationBanner from "@/components/VerificationBanner";
-import { User, Camera, CheckCircle2, Trash2, Settings } from "lucide-react";
+import { User, Camera, CheckCircle2, Trash2, Settings, Palette } from "lucide-react";
 import { useLocation } from "wouter";
 import { auth } from "@/lib/firebase";
+import { useDarkMode } from "@/hooks/use-dark-mode";
 
 const inputCls =
   "w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 transition min-h-[44px]";
@@ -68,6 +69,7 @@ export default function SettingsPage() {
   const { t } = useLang();
   const { user, userProfile, loading: authLoading, refetchProfile, setAvatarOverride } = useAuth();
   const [, navigate] = useLocation();
+  const { dark, toggle: toggleDark } = useDarkMode();
 
   const [showAuth, setShowAuth] = useState(false);
   const [successToast, setSuccessToast] = useState("");
@@ -246,7 +248,9 @@ export default function SettingsPage() {
   const handleChangePassword = async () => {
     setPassError("");
     setPassSaved(false);
-    if (newPass.length < 6) { setPassError("New password must be at least 6 characters."); return; }
+    if (newPass.length < 8) { setPassError(t.passwordTooShort); return; }
+    if (newPass.length > 32) { setPassError(t.passwordTooLong); return; }
+    if (!/[a-zA-Z]/.test(newPass) || !/[0-9]/.test(newPass)) { setPassError(t.passwordTooWeak); return; }
     if (newPass !== confirmNewPass) { setPassError("Passwords do not match."); return; }
     setChangingPass(true);
     try {
@@ -383,7 +387,7 @@ export default function SettingsPage() {
             <h3 className="text-sm font-bold text-gray-800 dark:text-slate-200 mb-4">Change Password</h3>
             <div className="space-y-3">
               <input type="password" value={currentPass} onChange={(e) => setCurrentPass(e.target.value)} placeholder="Current password" className={inputCls} />
-              <input type="password" value={newPass} onChange={(e) => setNewPass(e.target.value)} placeholder="New password (min 6 characters)" className={inputCls} />
+              <input type="password" value={newPass} onChange={(e) => setNewPass(e.target.value)} placeholder="New password (min 8 characters)" maxLength={32} className={inputCls} />
               <input type="password" value={confirmNewPass} onChange={(e) => setConfirmNewPass(e.target.value)} placeholder="Confirm new password" className={inputCls} />
               {passError && <p className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 rounded-xl px-3 py-2">{passError}</p>}
               <button
@@ -392,6 +396,26 @@ export default function SettingsPage() {
                 className={`w-full min-h-[44px] py-2.5 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 ${passSaved ? "bg-green-500 text-white" : "bg-[#003366] dark:bg-blue-600 text-white hover:bg-[#002244] dark:hover:bg-blue-700"}`}
               >
                 {changingPass ? "Updating…" : passSaved ? "Password Updated!" : "Update Password"}
+              </button>
+            </div>
+          </div>
+
+          {/* Appearance */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-5 mb-4">
+            <h2 className="text-sm font-bold text-gray-800 dark:text-slate-100 mb-4 flex items-center gap-2">
+              <Palette size={16} className="text-[#003366] dark:text-blue-400" />
+              {t.appearance}
+            </h2>
+            <div className="flex items-center justify-between py-2">
+              <div>
+                <p className="text-sm font-medium text-gray-700 dark:text-slate-200">{t.darkMode}</p>
+                <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">{t.darkModeDesc}</p>
+              </div>
+              <button
+                onClick={toggleDark}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${dark ? "bg-[#003366] dark:bg-blue-600" : "bg-gray-200 dark:bg-slate-600"}`}
+              >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${dark ? "translate-x-6" : "translate-x-1"}`} />
               </button>
             </div>
           </div>
