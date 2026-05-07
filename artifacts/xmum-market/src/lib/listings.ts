@@ -37,7 +37,13 @@ function toMillis(val: unknown): number {
 
 function mapDoc(d: QueryDocumentSnapshot): Listing {
   const data = d.data();
-  return { id: d.id, ...data, createdAt: toMillis(data.createdAt) } as Listing;
+  const createdAt = toMillis(data.createdAt);
+  return {
+    id: d.id,
+    ...data,
+    createdAt,
+    sortKey: data.sortKey ?? createdAt,
+  } as Listing;
 }
 
 // Extract the Firebase Storage path from a full https:// download URL.
