@@ -1,0 +1,234 @@
+You are continuing work on the XMUM Marketplace project. Read every file listed below carefully before writing a single line of code. Fix only what is described.
+
+Files to read first:
+- src/lib/messaging.ts
+- src/pages/ListingDetailPage.tsx
+- src/pages/MessagesPage.tsx
+- src/components/Layout.tsx
+- src/lib/i18n.ts
+
+---
+
+## FIX 1 — Message Seller button does nothing when clicked
+
+### Root cause
+The Firestore security rule for conversations currently requires `request.auth.uid in resource.data.participants` on READ and WRITE. However when creating a NEW conversation (the document does not exist yet), `resource` is null — there is no existing document to read `.data.participants` from. This causes the `setDoc` call in `getOrCreateConversation` to silently fail with a permissions error, which is swallowed by the empty `catch {}` block in `handleMessageSeller` in ListingDetailPage. The user sees nothing happen.
+
+### Fix A — Update the Firestore security rules
+The user must go to Firebase Console → Firestore → Rules and replace the conversations rules with the following. Show them the exact rules to paste:
+match /conversations/{convId} {
+  allow read: if request.auth != null
+    && request.auth.uid in resource.data.participants;
+  allow create: if request.auth != null
+    && request.auth.token.email.matches('.*@xmu\\.edu\\.my')
+    && request.auth.uid in request.resource.data.participants;
+  allow update: if request.auth != null
+    && request.auth.uid in resource.data.participants;
+  allow delete: if false;
+}
+match /conversations/{convId}/messages/{msgId} {
+  allow read: if request.auth != null
+    && request.auth.uid in get(/databases/(database)/documents/conversations/(database)/documents/conversations/
+(database)/documents/conversations/(convId)).data.participants;
+  allow create: if request.auth != null
+    && request.auth.token.email.matches('.*@xmu\\.edu\\.my')
+    && request.auth.uid == request.resource.data.senderId;
+  allow update, delete: if false;
+}
+
+Tell the user: "Replace ONLY the conversations and conversations/{convId}/messages blocks in your Firebase Console Firestore rules. Keep all other rules (users, listings, notifications) exactly as they are."
+
+### Fix B — Surface errors in handleMessageSeller
+In `ListingDetailPage.tsx`, the `handleMessageSeller` function has an empty `catch {}` block that silently swallows errors, making the button appear broken. Replace it with proper error handling:
+
+Add a state: `const [chatError, setChatError] = useState<string | null>(null);`
+
+Replace the catch block:
+```ts
+const handleMessageSeller = async () => {
+  if (!user || !listing) return;
+  setChatError(null);
+  setStartingChat(true);
+  try {
+    await getOrCreateConversation(user.uid, listing.userId, {
+      id: listing.id,
+      title: listing.title,
+      photos: listing.photos,
+    });
+    navigate("/messages");
+  } catch (err: any) {
+    const code = err?.code ?? err?.message ?? "";
+    if (code.includes("permission-denied") || code.includes("PERMISSION_DENIED")) {
+      setChatError("Unable to start chat. Make sure you are signed in with your XMUM email and your email is verified.");
+    } else {
+      setChatError("Failed to open chat. Please try again.");
+    }
+  } finally {
+    setStartingChat(false);
+  }
+};
+```
+
+Render the error below the Message Seller button:
+```tsx
+{chatError && (
+  <p className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl px-3 py-2 mb-2">
+    {chatError}
+  </p>
+)}
+```
+
+Place this error div immediately BELOW the Message Seller button and ABOVE the `<p className="text-sm font-semibold ...">Contact Seller</p>` line.
+
+### Fix C — Update MessagesPage to re-fetch conversations when navigating back from thread
+In `MessagesPage.tsx`, when the user presses the back arrow from a thread view (`setActiveConv(null); setMessages([]);`), the conversations list is stale and does not show the new conversation that was just created. Fix: after setting `activeConv` to null, also refresh the conversations list.
+
+Add a `refreshConversations` function:
+```ts
+const refreshConversations = () => {
+  if (!user) return;
+  getUserConversations(user.uid).then(setConversations);
+};
+```
+
+Change the back button onClick to:
+```tsx
+onClick={() => {
+  setActiveConv(null);
+  setMessages([]);
+  refreshConversations();
+}}
+```
+
+---
+
+## FIX 2 — Maybank-style price input (digits fill from right of decimal point)
+
+### How it works
+When the user types digits, the price fills from the right of the decimal point, exactly like a point-of-sale terminal or Maybank transfer screen:
+- Start: `0.00`
+- User types `1`: `0.01`
+- User types `2`: `0.12`
+- User types `9`: `1.29`
+- User types `0`: `12.90`
+- User presses Backspace: `1.29`
+
+The underlying value stored in state is an integer representing cents (e.g. 1290 = RM 12.90). The display value is always formatted as `(cents / 100).toFixed(2)`.
+
+### In PostPage.tsx — replace the price input
+
+Replace the `const [price, setPrice] = useState("");` state declaration with:
+```ts
+const [priceCents, setPriceCents] = useState(0);
+```
+
+Replace the entire price input JSX block (the `{type === "buy-sell" && (...)}` block) with:
+```tsx
+{type === "buy-sell" && (
+  <div>
+    <label className={labelCls}>{t.price}</label>
+    <div className="relative">
+      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-400 text-sm font-medium">RM</span>
+      <input
+        type="text"
+        inputMode="numeric"
+        value={(priceCents / 100).toFixed(2)}
+        onKeyDown={(e) => {
+          if (e.key >= "0" && e.key <= "9") {
+            e.preventDefault();
+            setPriceCents((prev) => {
+              const next = prev * 10 + parseInt(e.key);
+              return next > 9999999 ? prev : next; // cap at RM 99999.99
+            });
+          } else if (e.key === "Backspace") {
+            e.preventDefault();
+            setPriceCents((prev) => Math.floor(prev / 10));
+          }
+        }}
+        onFocus={(e) => e.target.select()}
+        readOnly={false}
+        className={`${inputCls} pl-10 text-right font-mono tracking-wide`}
+      />
+    </div>
+    <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-1">
+      Type digits to enter price — backspace to correct
+    </p>
+  </div>
+)}
+```
+
+Update `handleSubmit` — replace `price: parseFloat(price) || 0` with `price: priceCents / 100` in the `listingData` spread:
+```ts
+const listingData = type === "buy-sell"
+  ? { ...baseData, price: priceCents / 100 }
+  : baseData;
+```
+
+Also reset `priceCents` to 0 after successful submission (add `setPriceCents(0);` after `setToast(...)` in the success path, or simply let the navigate away handle it since state resets on unmount).
+
+### In EditListingPage.tsx — same Maybank-style price input
+EditListingPage currently uses `const [price, setPrice] = useState("");` and sets it from `listing.price?.toString() ?? ""` on fetch.
+
+Replace with `const [priceCents, setPriceCents] = useState(0);`
+
+On listing fetch, change:
+```ts
+setPrice(listing.price?.toString() ?? "");
+```
+to:
+```ts
+setPriceCents(Math.round((listing.price ?? 0) * 100));
+```
+
+Replace the price input JSX block (same pattern as PostPage above — copy the identical JSX).
+
+Update the submit: change `baseData.price = parseFloat(price) || 0;` to `baseData.price = priceCents / 100;`
+
+---
+
+## FIX 3 — Remove PDPA disclaimer from all pages except HomePage
+
+### Current state
+In `Layout.tsx`:
+1. The desktop `<footer>` block renders the PDPA title + text + copyright on ALL pages.
+2. The mobile bottom nav has a second `<div>` below the nav links that renders the full `{t.pdpaText}` on ALL pages.
+
+### Fix
+The PDPA content should only appear on the HomePage (`/`). Layout does not know which page is active for the footer content — but it does have access to `location` from `useLocation()`.
+
+In `Layout.tsx`, `const [location] = useLocation();` is already declared.
+
+**Desktop footer**: Wrap the pdpa content (title + text) in a conditional, keeping only the copyright line visible on all pages:
+```tsx
+<footer className="hidden md:block bg-[#003366] dark:bg-slate-900 dark:border-t dark:border-slate-700 text-white/70 text-xs py-6 px-4">
+  <div className="max-w-5xl mx-auto">
+    {location === "/" && (
+      <>
+        <p className="font-semibold text-white/90 mb-1">{t.pdpaTitle}</p>
+        <p className="mb-3">{t.pdpaText}</p>
+      </>
+    )}
+    <p className="text-white/50">{t.allRights}</p>
+  </div>
+</footer>
+```
+
+**Mobile bottom nav PDPA strip**: The entire second `<div>` block below the nav links (the one with `bg-gray-50` and `{t.pdpaText}`) should be conditionally rendered only on the home page:
+```tsx
+{location === "/" && (
+  <div className="bg-gray-50 dark:bg-slate-800 border-t border-gray-100 dark:border-slate-700 px-4 py-2">
+    <p className="text-[9px] text-gray-400 dark:text-slate-500 text-center leading-relaxed">
+      {t.pdpaText}
+    </p>
+  </div>
+)}
+```
+
+---
+
+## IMPORTANT CONSTRAINTS
+1. Do NOT change firebase.ts.
+2. Do NOT add any new npm packages.
+3. Do NOT modify any files other than ListingDetailPage.tsx, MessagesPage.tsx, PostPage.tsx, EditListingPage.tsx, and Layout.tsx.
+4. The price input must use `inputMode="numeric"` (not `type="number"`) so mobile keyboards show a numpad. The `readOnly={false}` is intentional — the input is controlled via onKeyDown, not onChange.
+5. After all changes, confirm exactly which files were modified.

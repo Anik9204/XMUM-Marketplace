@@ -107,8 +107,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* Footer — desktop only */}
       <footer className="hidden md:block bg-[#003366] dark:bg-slate-900 dark:border-t dark:border-slate-700 text-white/70 text-xs py-6 px-4">
         <div className="max-w-5xl mx-auto">
-          <p className="font-semibold text-white/90 mb-1">{t.pdpaTitle}</p>
-          <p className="mb-3">{t.pdpaText}</p>
+          {location === "/" && (
+            <>
+              <p className="font-semibold text-white/90 mb-1">{t.pdpaTitle}</p>
+              <p className="mb-3">{t.pdpaText}</p>
+            </>
+          )}
           <p className="text-white/50">{t.allRights}</p>
         </div>
       </footer>
@@ -130,11 +134,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             );
           })}
         </div>
-        <div className="bg-gray-50 dark:bg-slate-800 border-t border-gray-100 dark:border-slate-700 px-4 py-2">
-          <p className="text-[9px] text-gray-400 dark:text-slate-500 text-center leading-relaxed">
-            {t.pdpaText}
-          </p>
-        </div>
+        {location === "/" && (
+          <div className="bg-gray-50 dark:bg-slate-800 border-t border-gray-100 dark:border-slate-700 px-4 py-2">
+            <p className="text-[9px] text-gray-400 dark:text-slate-500 text-center leading-relaxed">
+              {t.pdpaText}
+            </p>
+          </div>
+        )}
       </nav>
 
       {/* Auth modal — global, triggered from header */}

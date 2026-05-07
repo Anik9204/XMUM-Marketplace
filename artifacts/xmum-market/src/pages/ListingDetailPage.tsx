@@ -26,6 +26,7 @@ export default function ListingDetailPage() {
   const [sellerProfile, setSellerProfile] = useState<UserProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const [startingChat, setStartingChat] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!params?.id) return;
@@ -68,6 +69,7 @@ export default function ListingDetailPage() {
 
   const handleMessageSeller = async () => {
     if (!user || !listing) return;
+    setChatError(null);
     setStartingChat(true);
     try {
       await getOrCreateConversation(user.uid, listing.userId, {
@@ -76,8 +78,13 @@ export default function ListingDetailPage() {
         photos: listing.photos,
       });
       navigate("/messages");
-    } catch {
-      // Silently fail
+    } catch (err: any) {
+      const code = err?.code ?? err?.message ?? "";
+      if (code.includes("permission-denied") || code.includes("PERMISSION_DENIED")) {
+        setChatError("Unable to start chat. Make sure you are signed in with your XMUM email and your email is verified.");
+      } else {
+        setChatError("Failed to open chat. Please try again.");
+      }
     } finally {
       setStartingChat(false);
     }
@@ -283,6 +290,11 @@ export default function ListingDetailPage() {
                   {startingChat ? <Loader2 size={16} className="animate-spin" /> : <MessageCircle size={16} />}
                   {t.messageSeller}
                 </button>
+              )}
+              {chatError && (
+                <p className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl px-3 py-2 mb-2">
+                  {chatError}
+                </p>
               )}
               <p className="text-sm font-semibold text-gray-700 dark:text-slate-200 mb-2">{t.contactSeller}</p>
               {profileLoading ? (

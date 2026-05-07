@@ -108,7 +108,7 @@ export default function PostPage() {
   const [type, setType] = useState<ListingType>("buy-sell");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [price, setPrice] = useState("");
+  const [priceCents, setPriceCents] = useState(0);
   const [category, setCategory] = useState("electronics");
   const [condition, setCondition] = useState<Condition>("used");
   const [whatsapp, setWhatsapp] = useState("");
@@ -225,7 +225,7 @@ export default function PostPage() {
         whatsapp, wechat, teams, meetupSpot,
       };
       const listingData = type === "buy-sell"
-        ? { ...baseData, price: parseFloat(price) || 0 }
+        ? { ...baseData, price: priceCents / 100 }
         : baseData;
 
       await withTimeout(createListing(listingData), 12_000, "create-listing");
@@ -375,17 +375,31 @@ export default function PostPage() {
           <div>
             <label className={labelCls}>{t.price}</label>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-400 text-sm">RM</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-400 text-sm font-medium">RM</span>
               <input
-                type="number"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                min={0}
-                step="0.01"
-                placeholder="0.00"
-                className={`${inputCls} pl-10`}
+                type="text"
+                inputMode="numeric"
+                value={(priceCents / 100).toFixed(2)}
+                onKeyDown={(e) => {
+                  if (e.key >= "0" && e.key <= "9") {
+                    e.preventDefault();
+                    setPriceCents((prev) => {
+                      const next = prev * 10 + parseInt(e.key);
+                      return next > 9999999 ? prev : next;
+                    });
+                  } else if (e.key === "Backspace") {
+                    e.preventDefault();
+                    setPriceCents((prev) => Math.floor(prev / 10));
+                  }
+                }}
+                onFocus={(e) => e.target.select()}
+                readOnly={false}
+                className={`${inputCls} pl-10 text-right font-mono tracking-wide`}
               />
             </div>
+            <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-1">
+              Type digits to enter price — backspace to correct
+            </p>
           </div>
         )}
 

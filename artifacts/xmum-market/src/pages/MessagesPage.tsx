@@ -38,6 +38,11 @@ export default function MessagesPage() {
     return unsub;
   }, [activeConv?.id, user]);
 
+  const refreshConversations = () => {
+    if (!user) return;
+    getUserConversations(user.uid).then(setConversations);
+  };
+
   const handleSend = async () => {
     if (!inputText.trim() || !activeConv || !user) return;
     setSending(true);
@@ -72,7 +77,7 @@ export default function MessagesPage() {
         {/* Thread header */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-900 shrink-0">
           <button
-            onClick={() => { setActiveConv(null); setMessages([]); }}
+            onClick={() => { setActiveConv(null); setMessages([]); refreshConversations(); }}
             className="text-[#003366] dark:text-blue-400"
           >
             <ArrowLeft size={20} />
