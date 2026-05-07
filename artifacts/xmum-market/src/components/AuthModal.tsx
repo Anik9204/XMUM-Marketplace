@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { signIn, signUp, resetPassword, isXmuEmail, resendVerification } from "@/lib/auth";
+import { signIn, signUp, resetPasswordWithCheck, isXmuEmail, resendVerification } from "@/lib/auth";
 import { X, Eye, EyeOff, MailCheck } from "lucide-react";
 
 type Mode = "signin" | "signup" | "forgot";
@@ -38,9 +38,22 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
   const [resendMsg, setResendMsg] = useState("");
   const timerRef = useRef<ReturnType<typeof setInterval>>(undefined);
 
+  const [forgotCooldown, setForgotCooldown] = useState(0);
+  const forgotTimerRef = useRef<ReturnType<typeof setInterval>>(undefined);
+
+  // Clean up both timers on unmount
   useEffect(() => {
-    return () => clearInterval(timerRef.current);
+    return () => {
+      clearInterval(timerRef.current);
+      clearInterval(forgotTimerRef.current);
+    };
   }, []);
+
+  // Reset forgot cooldown whenever the mode changes
+  useEffect(() => {
+    setForgotCooldown(0);
+    clearInterval(forgotTimerRef.current);
+  }, [mode]);
 
   // Lock body scroll while modal is open
   useEffect(() => {
@@ -85,8 +98,15 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
     setLoading(true);
     try {
       if (mode === "forgot") {
-        await resetPassword(email);
+        await resetPasswordWithCheck(email);
         setSuccess(t.emailSent);
+        setForgotCooldown(60);
+        forgotTimerRef.current = setInterval(() => {
+          setForgotCooldown((prev) => {
+            if (prev <= 1) { clearInterval(forgotTimerRef.current); return 0; }
+            return prev - 1;
+          });
+        }, 1000);
       } else if (mode === "signup") {
         if (!isXmuEmail(email)) { setError(t.onlyXmuEmail); return; }
         if (!fullName.trim()) { setError("Full name is required."); return; }
@@ -102,7 +122,9 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
       }
     } catch (err: any) {
       const code = err?.code ?? err?.message ?? "";
-      if (code === "only_xmu_email" || code.includes("only_xmu")) setError(t.onlyXmuEmail);
+      if (mode === "forgot" && (code === "auth/user-not-found" || code.includes("user-not-found"))) {
+        setError(t.emailNotRegistered);
+      } else if (code === "only_xmu_email" || code.includes("only_xmu")) setError(t.onlyXmuEmail);
       else if (code.includes("wrong-password") || code.includes("invalid-credential")) setError("Invalid email or password.");
       else if (code.includes("user-not-found")) setError("No account found with this email.");
       else if (code.includes("email-already-in-use")) setError("An account already exists with this email. Please sign in.");
@@ -285,11 +307,13 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || (mode === "forgot" && forgotCooldown > 0)}
               className="w-full min-h-[44px] bg-[#003366] dark:bg-blue-600 text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-[#002244] dark:hover:bg-blue-700 disabled:opacity-50 transition-colors mt-1"
             >
               {loading
                 ? t.loading
+                : mode === "forgot" && forgotCooldown > 0
+                ? `${t.resendIn} ${forgotCooldown}s`
                 : mode === "forgot"
                 ? t.sendResetEmail
                 : mode === "signup"

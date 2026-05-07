@@ -122,6 +122,8 @@ export const translations = {
     signInNow: "Sign In Now",
     expiredResetLink: "This reset link has expired or is invalid.",
     requestNewLink: "Request a new reset link",
+    emailNotRegistered: "No account found with this email. Please sign up instead.",
+    resendIn: "Resend in",
   },
   zh: {
     appName: "厦大市集",
@@ -244,6 +246,8 @@ export const translations = {
     signInNow: "立即登录",
     expiredResetLink: "此重置链接已过期或无效。",
     requestNewLink: "重新申请重置链接",
+    emailNotRegistered: "找不到与此电子邮件关联的账号，请注册。",
+    resendIn: "重新发送",
   },
 };
 

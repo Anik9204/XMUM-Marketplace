@@ -1,0 +1,239 @@
+You are continuing work on the XMUM Marketplace project. Read every file listed below carefully before writing a single line of code. Do NOT refactor anything not mentioned. Fix only what is described.
+
+Files to read first:
+- src/lib/auth.ts
+- src/lib/firebase.ts
+- src/lib/types.ts
+- src/lib/listings.ts
+- src/contexts/AuthContext.tsx
+- src/pages/PostPage.tsx
+- src/pages/ResetPasswordPage.tsx
+- src/components/AuthModal.tsx
+- src/lib/i18n.ts
+
+---
+
+## BUG 1 — Lost & Found form: contact info not pre-filled + `price: undefined` crashes Firestore
+
+### Problem A — Contact info not pre-filling on Lost & Found
+
+In `PostPage.tsx`, there are two `useEffect` hooks that pre-fill `whatsapp`, `wechat`, and `teams` contact fields from `userProfile` and `user.email`. These hooks have guards like `if (userProfile.whatsapp && !whatsapp)` — the `!whatsapp` condition means once any value is in local state, the hook will never update again. When the user switches to the Lost & Found tab, `userProfile` is already loaded, the effect does not re-run because `userProfile` reference has not changed, and the guard blocks any fill because whatsapp/wechat state is already set.
+
+Fix: Remove the `!whatsapp` and `!wechat` guards from inside the useEffect. Simply always set them from userProfile when userProfile has a value. The effects should unconditionally assign:
+```ts
+if (userProfile.whatsapp) setWhatsapp(userProfile.whatsapp);
+if (userProfile.wechat) setWechat(userProfile.wechat);
+```
+This is safe because the effect only runs when `userProfile` changes, so it will not overwrite user edits during a single session unless the profile actually reloads.
+
+For the teams field, the existing `useEffect` that sets `setTeams(user.email ?? "")` should also add `type` to its dependency array and re-run whenever the listing type changes, so the field is correctly populated when switching tabs:
+```ts
+useEffect(() => {
+  if (user?.email) setTeams(user.email);
+}, [user, type]);
+```
+
+### Problem B — `price: undefined` crashes Firestore on Lost & Found submit
+
+In `PostPage.tsx`, inside `handleSubmit`, the listing data object is constructed with:
+```ts
+price: type === "buy-sell" ? (parseFloat(price) || 0) : undefined,
+```
+
+Firestore does not accept `undefined` field values. When `type` is `"lost-found"`, this passes `price: undefined` to `addDoc()` and throws: `"Function addDoc() called with invalid data. Unsupported field value: undefined (found in field price)"`.
+
+Fix: Construct the base listing data object WITHOUT the price field, then conditionally spread price in only for buy-sell listings:
+
+```ts
+const baseData = {
+  type,
+  title,
+  description,
+  category,
+  condition,
+  photos: urls,
+  userId: user.uid,
+  userEmail: user.email ?? "",
+  userName: user.email?.split("@")[0] ?? "",
+  whatsapp,
+  wechat,
+  teams,
+};
+
+const listingData = type === "buy-sell"
+  ? { ...baseData, price: parseFloat(price) || 0 }
+  : baseData;
+
+await withTimeout(createListing(listingData), 12_000, "create-listing");
+```
+
+The `Listing` type in `src/lib/types.ts` already has `price?: number` (optional), so this is type-safe. No changes needed to `src/lib/types.ts` or `src/lib/listings.ts`.
+
+---
+
+## BUG 2 — Forgot Password: wrong message for unregistered emails, no resend cooldown, no auto sign-in after reset
+
+### Problem A — "Email sent!" shown for unregistered emails
+
+Firebase's email enumeration protection is enabled by default on all Firebase projects created after September 15, 2023. Under this protection, `sendPasswordResetEmail()` silently succeeds for ANY email address — registered or not — and never throws an error. `fetchSignInMethodsForEmail()` is also deprecated and disabled. This is why unregistered emails show "Email sent! Check your inbox." when no email is actually sent.
+
+Fix: Before calling `sendPasswordResetEmail`, query Firestore to check whether a user document with that email exists. All registered users have a document in the `users` collection with an `email` field (written at sign-up). This is a safe check that does not violate email enumeration protection because it is within our own secured database.
+
+In `src/lib/auth.ts`, add a new exported async function `resetPasswordWithCheck`:
+
+```ts
+import { collection, query, where, getDocs, limit } from "firebase/firestore";
+import { db } from "./firebase";
+
+export async function resetPasswordWithCheck(email: string): Promise<void> {
+  const normalised = email.toLowerCase().trim();
+  const q = query(
+    collection(db, "users"),
+    where("email", "==", normalised),
+    limit(1)
+  );
+  const snap = await getDocs(q);
+  if (snap.empty) {
+    const err = new Error("No account found with this email address.");
+    (err as any).code = "auth/user-not-found";
+    throw err;
+  }
+  await sendPasswordResetEmail(auth, normalised);
+}
+```
+
+In `AuthModal.tsx`:
+- Replace the import of `resetPassword` (or whatever the existing function is called) with `resetPasswordWithCheck` from `@/lib/auth`.
+- In the `handleSubmit` function, inside the `mode === "forgot"` branch, replace the call to the old reset function with `await resetPasswordWithCheck(email)`.
+- In the catch block for this branch, add a specific handler for `"auth/user-not-found"`:
+```ts
+} catch (err: any) {
+  if (err?.code === "auth/user-not-found") {
+    setError("No account found with this email. Please sign up instead.");
+  } else {
+    setError(t.errorOccurred);
+  }
+}
+```
+
+Also add the translation key to `src/lib/i18n.ts` for both EN and ZH:
+- EN: `emailNotRegistered: "No account found with this email. Please sign up instead."`
+- ZH: `emailNotRegistered: "找不到与此电子邮件关联的账号，请注册。"`
+
+Use `t.emailNotRegistered` in the catch block instead of a hardcoded string.
+
+### Problem B — No resend cooldown on the Forgot Password modal
+
+In `AuthModal.tsx`, after the user successfully submits the forgot password form, there is no cooldown timer preventing them from immediately submitting again.
+
+Fix: Add a cooldown mechanism to the forgot password flow. In `AuthModal.tsx`, add these two state variables alongside the existing state:
+```ts
+const [forgotCooldown, setForgotCooldown] = useState(0);
+```
+
+After a successful `resetPasswordWithCheck` call (just after `setSuccess(...)` or `setForgotSent(true)` or however the success state is currently set), start a 60-second countdown:
+```ts
+setForgotCooldown(60);
+const interval = setInterval(() => {
+  setForgotCooldown((prev) => {
+    if (prev <= 1) { clearInterval(interval); return 0; }
+    return prev - 1;
+  });
+}, 1000);
+```
+
+Update the submit button in the forgot password form section to be disabled and show the countdown when cooling down:
+```tsx
+<button
+  type="submit"
+  disabled={loading || forgotCooldown > 0}
+  className="w-full bg-[#003366] text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-[#002244] disabled:opacity-50 transition-colors"
+>
+  {loading
+    ? t.loading
+    : forgotCooldown > 0
+    ? `Resend in ${forgotCooldown}s`
+    : t.sendResetEmail}
+</button>
+```
+
+Add the translation key to `i18n.ts` for both languages:
+- EN: `resendIn: "Resend in"` (used as `\`${t.resendIn} ${forgotCooldown}s\``)
+- ZH: `resendIn: "重新发送"`
+
+Reset `forgotCooldown` back to 0 when the modal closes or when mode changes (add cleanup in the relevant `useEffect` or `onClose` handler).
+
+### Problem C — After password reset, user must manually click "Back to Sign In" — should be auto signed-in and redirected
+
+In `ResetPasswordPage.tsx`, the `handleSubmit` function currently calls `confirmPasswordReset(auth, oobCode, password)` and then sets a `success` state which renders a success card. The user must manually click "Back to Sign In."
+
+Fix: Use `verifyPasswordResetCode` first to recover the email, then `confirmPasswordReset` to reset the password, then immediately `signInWithEmailAndPassword` to auto sign-in, then navigate to home.
+
+Replace the entire `handleSubmit` function in `ResetPasswordPage.tsx` with:
+
+```ts
+import {
+  confirmPasswordReset,
+  verifyPasswordResetCode,
+  signInWithEmailAndPassword,
+} from "firebase/auth";
+
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setError("");
+
+  if (password.length < 6) { setError(t.weakPassword); return; }
+  if (password !== confirm) { setError(t.passwordsNoMatch); return; }
+
+  setLoading(true);
+  try {
+    // Step 1: verify the code and retrieve the email
+    const email = await verifyPasswordResetCode(auth, oobCode);
+
+    // Step 2: commit the new password
+    await confirmPasswordReset(auth, oobCode, password);
+
+    // Step 3: auto sign-in with the new password
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch {
+      // sign-in failed silently — user can sign in manually from home
+    }
+
+    // Step 4: redirect to home regardless
+    window.history.replaceState({}, "", "/");
+    navigate("/");
+
+  } catch (err: any) {
+    const code = err?.code ?? "";
+    if (
+      code.includes("expired-action-code") ||
+      code.includes("invalid-action-code")
+    ) {
+      setError(t.expiredResetLink);
+    } else {
+      setError(t.errorOccurred);
+    }
+    setLoading(false);
+  }
+};
+```
+
+Because the function now always navigates away on success, the `success` state and the success card JSX branch can be removed entirely. Remove:
+- `const [success, setSuccess] = useState(false);`
+- The entire `if (success) { return (...); }` block
+
+The expired-link fallback card (the `if (!oobCode)` block) should remain unchanged.
+
+---
+
+## IMPORTANT CONSTRAINTS — Do NOT violate these
+
+1. Do NOT change any Firestore or Storage security rules.
+2. Do NOT change `firebase.ts` — the `experimentalAutoDetectLongPolling: true` and HMR singleton guard must remain exactly as-is.
+3. Do NOT add any new npm packages. Use only existing dependencies.
+4. Do NOT refactor or reformat any code outside the specific functions described above.
+5. Do NOT use `fetchSignInMethodsForEmail` — it is deprecated and broken under Firebase email enumeration protection.
+6. Keep all existing `withTimeout` / `Promise.race` wrappers on Firestore writes — they are required for Replit's proxy environment.
+7. The `price` field in the Listing type must remain `price?: number` (optional). Do not make it required.
+8. After all changes, confirm in your response exactly which files were modified and which specific functions/blocks were changed.

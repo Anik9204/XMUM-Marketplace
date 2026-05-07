@@ -62,13 +62,14 @@ export default function PostPage() {
 
   useEffect(() => {
     if (!userProfile) return;
-    if (userProfile.whatsapp && !whatsapp) setWhatsapp(userProfile.whatsapp);
-    if (userProfile.wechat && !wechat) setWechat(userProfile.wechat);
+    if (userProfile.whatsapp) setWhatsapp(userProfile.whatsapp);
+    if (userProfile.wechat) setWechat(userProfile.wechat);
   }, [userProfile]);
 
+  // Re-run on type change so the field is populated when switching tabs
   useEffect(() => {
-    if (user?.email && !teams) setTeams(user.email);
-  }, [user?.email]);
+    if (user?.email) setTeams(user.email);
+  }, [user, type]);
 
   if (!user) {
     return (
@@ -145,18 +146,19 @@ export default function PostPage() {
 
       // Offline persistence is disabled — createListing either succeeds on the
       // server immediately or throws a real error. Never swallow this error.
-      await withTimeout(
-        createListing({
-          type, title, description,
-          price: type === "buy-sell" ? (parseFloat(price) || 0) : undefined,
-          category, condition, photos: urls,
-          userId: user.uid, userEmail: user.email ?? "",
-          userName: user.email?.split("@")[0] ?? "",
-          whatsapp, wechat, teams,
-        }),
-        12_000,
-        "create-listing"
-      );
+      // price is omitted entirely for lost-found (Firestore rejects undefined values).
+      const baseData = {
+        type, title, description,
+        category, condition, photos: urls,
+        userId: user.uid, userEmail: user.email ?? "",
+        userName: user.email?.split("@")[0] ?? "",
+        whatsapp, wechat, teams,
+      };
+      const listingData = type === "buy-sell"
+        ? { ...baseData, price: parseFloat(price) || 0 }
+        : baseData;
+
+      await withTimeout(createListing(listingData), 12_000, "create-listing");
 
       setToast("Your post has been successfully published.");
     } catch (err: any) {

@@ -1,9 +1,13 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { confirmPasswordReset } from "firebase/auth";
+import {
+  confirmPasswordReset,
+  verifyPasswordResetCode,
+  signInWithEmailAndPassword,
+} from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useLang } from "@/contexts/LanguageContext";
-import { Eye, EyeOff, KeyRound, CheckCircle2, AlertCircle } from "lucide-react";
+import { Eye, EyeOff, KeyRound, AlertCircle } from "lucide-react";
 
 export default function ResetPasswordPage() {
   const { t } = useLang();
@@ -17,7 +21,6 @@ export default function ResetPasswordPage() {
   const [showPass, setShowPass] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
 
   const handleGoHome = () => {
@@ -50,50 +53,33 @@ export default function ResetPasswordPage() {
     );
   }
 
-  // ── Success state ────────────────────────────────────────────────────────────
-  if (success) {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center px-4">
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 w-full max-w-sm p-8 text-center">
-          <div className="w-16 h-16 bg-green-50 dark:bg-green-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CheckCircle2 size={32} className="text-green-600" />
-          </div>
-          <h1 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-2">
-            {t.resetPassword}
-          </h1>
-          <p className="text-sm text-gray-500 dark:text-slate-400 mb-6">
-            {t.passwordResetSuccess}
-          </p>
-          <button
-            onClick={handleGoHome}
-            className="w-full bg-[#003366] text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-[#002244] transition-colors"
-          >
-            {t.signInNow}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   // ── Reset form ───────────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
-    if (password.length < 6) {
-      setError(t.weakPassword);
-      return;
-    }
-    if (password !== confirm) {
-      setError(t.passwordsNoMatch);
-      return;
-    }
+    if (password.length < 6) { setError(t.weakPassword); return; }
+    if (password !== confirm) { setError(t.passwordsNoMatch); return; }
 
     setLoading(true);
     try {
+      // Step 1: verify the code and retrieve the email
+      const email = await verifyPasswordResetCode(auth, oobCode);
+
+      // Step 2: commit the new password
       await confirmPasswordReset(auth, oobCode, password);
+
+      // Step 3: auto sign-in with the new password
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+      } catch {
+        // sign-in failed silently — user can sign in manually from home
+      }
+
+      // Step 4: redirect to home regardless
       window.history.replaceState({}, "", "/");
-      setSuccess(true);
+      navigate("/");
+
     } catch (err: any) {
       const code = err?.code ?? "";
       if (
@@ -104,7 +90,6 @@ export default function ResetPasswordPage() {
       } else {
         setError(t.errorOccurred);
       }
-    } finally {
       setLoading(false);
     }
   };
