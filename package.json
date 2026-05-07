@@ -10,8 +10,8 @@
   },
   "private": true,
   "devDependencies": {
-    "typescript": "~5.9.2",
-    "prettier": "^3.8.1"
+    "prettier": "^3.8.1",
+    "typescript": "~5.9.2"
   },
   "pnpm": {
     "overrides": {
@@ -23,5 +23,8 @@
       "yaml@>=2.0.0 <2.8.3": "^2.8.4",
       "postcss@<8.5.10": "^8.5.14"
     }
+  },
+  "dependencies": {
+    "firebase-admin": "^13.8.0"
   }
 }
