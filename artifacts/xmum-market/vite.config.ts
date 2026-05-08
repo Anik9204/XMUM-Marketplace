@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
+import fs from "node:fs";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
 // PORT and BASE_PATH are only used by the dev/preview server.
@@ -9,6 +10,34 @@ import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 // to safe defaults instead of throwing, which would abort the build.
 const port = Number(process.env.PORT ?? "5000");
 const basePath = process.env.BASE_PATH ?? "/";
+
+const readmePath = path.resolve(import.meta.dirname, "README.md");
+
+function updateReadmeTimestamp() {
+  try {
+    const content = fs.readFileSync(readmePath, "utf8");
+    const updated = content.replace(
+      /Last updated:.*/g,
+      `Last updated: ${new Date().toUTCString()}`
+    );
+    fs.writeFileSync(readmePath, updated, "utf8");
+    console.log("[readme] timestamp updated");
+  } catch {
+    // README may not exist yet on first run
+  }
+}
+
+function readmeTimestampPlugin() {
+  return {
+    name: "readme-timestamp",
+    buildEnd() {
+      updateReadmeTimestamp();
+    },
+    handleHotUpdate() {
+      updateReadmeTimestamp();
+    },
+  };
+}
 
 export default defineConfig({
   base: basePath,
@@ -32,6 +61,7 @@ export default defineConfig({
             : []),
         ]
       : []),
+    readmeTimestampPlugin(),
   ],
   resolve: {
     alias: {

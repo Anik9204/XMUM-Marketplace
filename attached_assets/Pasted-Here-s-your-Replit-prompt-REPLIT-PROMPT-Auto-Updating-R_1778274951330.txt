@@ -1,0 +1,90 @@
+Here's your Replit prompt:
+
+---
+
+**REPLIT PROMPT — Auto-Updating README for Project Handoff**
+
+Read every file in the project before writing anything. This is a critical infrastructure task.
+
+Create a file called `README.md` at the root of the `artifacts/xmum-admin/` folder AND at the root of the `artifacts/xmum-market/` folder. Each README must serve as a complete self-contained handoff document so that a brand new Replit account can pick up exactly where the last one stopped — with zero guesswork.
+
+---
+
+**PART 1 — Create the README files with the following sections:**
+
+Each README must contain these sections:
+
+**1. Project Overview**
+Write a plain-English summary of what this project is, what it does, who it is for, and what tech stack it uses (React + Vite + TypeScript + Firebase + Tailwind CSS + Wouter). For the admin app, note that it is a separate Vite/React app that connects to the same Firebase project as the main marketplace.
+
+**2. Current Project State**
+Write a "Last Updated" timestamp placeholder that says: `Last updated: [AUTO-UPDATED — see instructions below]`. Then write a bullet list of every major feature that is currently complete and working, and a second bullet list of every known bug or incomplete feature. Keep this honest and specific — do not write generic placeholder text.
+
+**3. Firebase Configuration**
+List every Firebase service being used: Authentication, Firestore, Storage. Include the exact environment variable names from `.env.example` (e.g. `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_PROJECT_ID`, etc.) and explain that the new developer must create a `.env` file in the project root and fill in these values from the Firebase console of the existing project. Do NOT hardcode any actual API keys or secrets in the README.
+
+**4. Firestore Rules (full copy)**
+Paste the complete current Firestore security rules verbatim inside a code block so the new developer can re-apply them to Firebase Console → Firestore → Rules if needed. Use the rules that are currently in `artifacts/xmum-market/firestore.rules`.
+
+**5. Firebase Storage Rules (full copy)**
+Paste the complete current Storage rules verbatim inside a code block. Use the rules from `artifacts/xmum-market/storage.rules`.
+
+**6. Firestore Collection Schema**
+Document every Firestore collection that currently exists in this project: `users`, `listings`, `reports`, `ads`, `analytics`, `conversations`, `conversations/{id}/messages`, `users/{id}/notifications`. For each collection, list every field name, its data type, and a one-line description of what it stores. Base this on the TypeScript types in `src/lib/types.ts` for both apps.
+
+**7. How to Run the Project (step by step)**
+Write numbered steps for how to install and run both apps from scratch on a new Replit account:
+- Clone or import the project
+- Run `pnpm install` from the root
+- Create `.env` file with Firebase credentials
+- Run the main marketplace: `cd artifacts/xmum-market && pnpm dev`
+- Run the admin app: `cd artifacts/xmum-admin && pnpm dev`
+- Note any known Replit-specific setup quirks (port forwarding, `.replit` config, etc.)
+
+**8. Deployment Notes**
+Note that both apps are deployed to Vercel. List the environment variables that must be set in Vercel for each app. Note that `MAIN_APP_URL` in `ReportsPage.tsx` must be updated to the live marketplace URL before deploying the admin app.
+
+**9. Admin Account Setup**
+Explain that after deploying, the first admin user must be manually set in Firestore: go to Firebase Console → Firestore → `users` collection → find the user's document → add/edit the field `role` to `"admin"`. Without this step, no one can log into the admin panel.
+
+**10. What Was Last Worked On**
+Leave a clearly labeled section at the top of this section that says: `=== UPDATE THIS SECTION EVERY TIME YOU MAKE CHANGES ===`. Then write the current state: the most recent features added, the bugs that were just fixed, and what the next planned task is. This section is the most important one for handoff continuity.
+
+---
+
+**PART 2 — Make the README auto-update on every save:**
+
+In `artifacts/xmum-market/vite.config.ts` and `artifacts/xmum-admin/vite.config.ts`, add a custom Vite plugin that writes the current UTC timestamp into the README whenever the dev server detects a file change or a build completes. The plugin should:
+
+1. Be named `readmeTimestampPlugin`
+2. Hook into the `buildEnd` lifecycle (for builds) and the `handleHotUpdate` lifecycle (for dev server file changes)
+3. Read the current README, find the line that contains `Last updated:`, and replace the entire line with: `Last updated: ${new Date().toUTCString()}`
+4. Write the file back using Node's `fs.writeFileSync`
+5. Only update the README that belongs to the same app (admin updates admin README, market updates market README)
+6. Log `[readme] timestamp updated` to the console so the developer can confirm it ran
+
+The plugin must be imported from `node:fs` and `node:path` and must NOT break the existing Vite config — add it as the last item in the `plugins: []` array.
+
+---
+
+**PART 3 — Add a git pre-commit hook (optional but recommended):**
+
+In the `scripts/` folder, create a file called `update-readme-timestamp.sh` with the following content:
+
+```bash
+#!/bin/bash
+DATE=$(date -u)
+sed -i "s/Last updated: .*/Last updated: $DATE/" artifacts/xmum-admin/README.md
+sed -i "s/Last updated: .*/Last updated: $DATE/" artifacts/xmum-market/README.md
+git add artifacts/xmum-admin/README.md artifacts/xmum-market/README.md
+```
+
+Make it executable (`chmod +x`) and reference it in `scripts/post-merge.sh` so it runs automatically.
+
+---
+
+**IMPORTANT CONSTRAINTS:**
+- Do not invent or hallucinate any field names, collection names, or config values. Only document what actually exists in the codebase.
+- Do not hardcode any Firebase API keys, auth domains, or secrets anywhere in the README or scripts.
+- The README must be written in plain Markdown so it renders correctly on GitHub and in any code editor.
+- After creating both README files, show me the final content of each one in the chat so I can verify it before you stop.
