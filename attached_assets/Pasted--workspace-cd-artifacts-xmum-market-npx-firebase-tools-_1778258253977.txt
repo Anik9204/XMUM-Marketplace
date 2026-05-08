@@ -1,0 +1,46 @@
+~/workspace$ cd artifacts/xmum-market
+npx firebase-tools login --no-localhost
+Need to install the following packages:
+firebase-tools@15.17.0
+Ok to proceed? (y) y
+
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+npm warn deprecated uuid@8.3.2: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
+npm warn deprecated uuid@9.0.1: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
+npm warn deprecated glob@10.5.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+npm warn deprecated json-ptr@3.1.1: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+i  The Firebase CLI’s MCP server feature can optionally make use of Gemini in Firebase. Learn more about Gemini in Firebase and how it uses your data: https://firebase.google.com/docs/gemini-in-firebase#how-gemini-in-firebase-uses-your-data
+✔ Enable Gemini in Firebase features? Yes
+
+i  Firebase optionally collects CLI and Emulator Suite usage and error reporting information to help improve our products. Data is collected in accordance with Google's privacy policy (https://policies.google.com/privacy) and is not used to identify you.
+✔ Allow Firebase to collect CLI and Emulator Suite usage and error reporting information? Yes
+
+i  To change your preferences at any time, run `firebase logout` and `firebase login` again.
+
+To sign in to the Firebase CLI:
+
+1. Take note of your session ID:
+
+   9F3E8
+
+2. Visit the URL below on any device and follow the instructions to get your code:
+
+   https://auth.firebase.tools/login?code_challenge=BoTg3wlrKjha9Nv7hEo8bfYI5NLIDckbZbiED1JprkE&session=9f3e8fee-5ca1-4435-9323-0df11fb00a33&attest=XbCCrdhF38XPiW6jQB_F_sHzGkeAKd7XJF6pOHm64R8
+
+3. Paste or enter the authorization code below once you have it:
+
+✔ Enter authorization code: npx firebase-tools deploy --only firestore:rules --project xmum--market
+Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+
+Error: Unable to authenticate using the provided code. Please try again.
+~/.../artifacts/xmum-market$ Copy and paste this authorization code into the CLI prompt to complete the login process:
+
+4/0AeoWuM9kN0g99b7JVH8c-Iv4RzoSkL84TbgwjDhnP2iD_34GVJeZ7zH63O4P8EG3gaM2iQ
+bash: Copy: command not found
+bash: 4/0AeoWuM9kN0g99b7JVH8c-Iv4RzoSkL84TbgwjDhnP2iD_34GVJeZ7zH63O4P8EG3gaM2iQ: No such file or directory
+~/.../artifacts/xmum-market$ 4/0AeoWuM9kN0g99b7JVH8c-Iv4RzoSkL84TbgwjDhnP2iD_34GVJeZ7zH63O4P8EG3gaM2iQ
+bash: 4/0AeoWuM9kN0g99b7JVH8c-Iv4RzoSkL84TbgwjDhnP2iD_34GVJeZ7zH63O4P8EG3gaM2iQ: No such file or directory
+~/.../artifacts/xmum-market$ ^C
+~/.../artifacts/xmum-market$ 
