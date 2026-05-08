@@ -1,0 +1,400 @@
+## REPLIT AGENT ONBOARDING — XMUM Marketplace
+
+You are a Senior Full-Stack Developer working on the XMUM Marketplace project.
+The code is already imported from GitHub. You do NOT need to scaffold anything.
+Read this entire document before touching any file.
+
+---
+
+## PROJECT OVERVIEW
+
+A student-only buy/sell and lost-and-found platform for Xiamen University Malaysia
+students. Only @xmu.edu.my emails are allowed to register.
+
+- Repo: https://github.com/Anik9204/XMUM-Marketplace
+- App root: artifacts/xmum-market/
+- Live URL: Vercel (auto-deploys on push to main)
+- Package manager: pnpm
+
+---
+
+## TECH STACK
+
+| Layer       | Technology                                      |
+|-------------|-------------------------------------------------|
+| Frontend    | React 18 + Vite + TypeScript                    |
+| Styling     | Tailwind CSS (dark mode via `class` strategy)   |
+| Routing     | wouter v3 — NOT React Router                    |
+| State       | useState / useEffect — NOT react-query          |
+| UI          | shadcn/ui + Radix UI (src/components/ui/)       |
+| Backend     | Firebase v12 (Auth, Firestore, Cloud Storage)   |
+| i18n        | Custom i18n.ts + LanguageContext (EN / 中文)    |
+| Icons       | lucide-react + react-icons                      |
+
+---
+
+## ENVIRONMENT VARIABLES
+
+Create a .env file at artifacts/xmum-market/.env with these keys.
+Get the values from Firebase Console → Project Settings → Your Apps.
+
+VITE_FIREBASE_API_KEY=
+VITE_FIREBASE_AUTH_DOMAIN=
+VITE_FIREBASE_PROJECT_ID=
+VITE_FIREBASE_STORAGE_BUCKET=
+VITE_FIREBASE_MESSAGING_SENDER_ID=
+VITE_FIREBASE_APP_ID=
+VITE_FIREBASE_MEASUREMENT_ID=
+
+NEVER hardcode these values anywhere in source files.
+All access is via import.meta.env.VITE_FIREBASE_*
+
+---
+
+## FIREBASE PROJECT SETUP FACTS
+
+- Auth: Email/Password provider enabled. Only @xmu.edu.my emails pass the domain check.
+- Firestore: Production mode. experimentalAutoDetectLongPolling: true — do NOT remove this.
+- Storage: Production mode. Images only, 5MB max per file.
+- Collections in use: users, listings, ads, notifications, conversations, messages
+
+---
+
+## FIRESTORE SECURITY RULES
+(Already deployed — do not change without explicit instruction)
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    match /listings/{listingId} {
+      allow read: if true;
+      allow create: if request.auth != null
+                    && request.auth.token.email.matches('.*@xmu\\.edu\\.my');
+      allow update, delete: if request.auth != null
+                             && request.auth.uid == resource.data.userId;
+    }
+    match /ads/{adId} {
+      allow read: if true;
+      allow write: if false;
+    }
+  }
+}
+
+---
+
+## FIREBASE STORAGE RULES
+(Already deployed — do not change without explicit instruction)
+
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /listings/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow create, update: if request.auth != null
+                   && request.auth.token.email.matches('.*@xmu\\.edu\\.my')
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null
+                   && request.auth.uid == userId
+                   && request.auth.token.email.matches('.*@xmu\\.edu\\.my');
+    }
+    match /avatars/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow create, update: if request.auth != null
+                   && request.auth.uid == userId
+                   && request.auth.token.email.matches('.*@xmu\\.edu\\.my')
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null
+                   && request.auth.uid == userId
+                   && request.auth.token.email.matches('.*@xmu\\.edu\\.my');
+    }
+  }
+}
+
+---
+
+## FIRESTORE COMPOSITE INDEXES
+(Already deployed in firestore.indexes.json)
+
+1. listings: type ASC + isArchived ASC + sortKey DESC
+2. listings: type ASC + sortKey DESC
+3. listings: userId ASC + isArchived ASC + sortKey DESC
+
+If a query throws "failed-precondition" or mentions "index", add a client-side
+fallback filter instead of creating new indexes without instruction.
+
+---
+
+## FILE STRUCTURE
+
+artifacts/xmum-market/
+├── vercel.json
+├── firestore.rules
+├── firestore.indexes.json
+├── storage.rules
+├── package.json
+├── tsconfig.json
+├── vite.config.ts
+├── .env.example
+└── src/
+    ├── App.tsx
+    ├── main.tsx
+    ├── index.css
+    ├── components/
+    │   ├── AuthModal.tsx
+    │   ├── Layout.tsx
+    │   ├── ListingCard.tsx
+    │   ├── NotificationBell.tsx
+    │   ├── SponsoredAdCard.tsx
+    │   └── VerificationBanner.tsx
+    ├── components/ui/          ← shadcn primitives, never modify
+    ├── contexts/
+    │   ├── AuthContext.tsx
+    │   └── LanguageContext.tsx
+    ├── hooks/
+    │   ├── use-dark-mode.ts
+    │   ├── use-mobile.tsx
+    │   └── use-toast.ts
+    ├── lib/
+    │   ├── ads.ts
+    │   ├── auth.ts
+    │   ├── contentFilter.ts
+    │   ├── firebase.ts
+    │   ├── i18n.ts
+    │   ├── listings.ts
+    │   ├── messaging.ts
+    │   ├── notifications.ts
+    │   ├── types.ts
+    │   ├── userProfile.ts
+    │   └── utils.ts
+    └── pages/
+        ├── EditListingPage.tsx
+        ├── HomePage.tsx
+        ├── ListingDetailPage.tsx
+        ├── MessagesPage.tsx
+        ├── PostPage.tsx
+        ├── ProfilePage.tsx
+        ├── ResetPasswordPage.tsx
+        ├── SearchPage.tsx
+        ├── SettingsPage.tsx
+        └── not-found.tsx
+
+---
+
+## TYPESCRIPT TYPES (src/lib/types.ts)
+
+export type ListingType = "buy-sell" | "lost-found";
+export type Condition = "new" | "used";
+export type ListingStatus = "active" | "sold";
+
+export interface Listing {
+  id: string;
+  type: ListingType;
+  title: string;
+  description: string;
+  price?: number;
+  category: string;
+  condition: Condition;
+  photos: string[];
+  userId: string;
+  userEmail: string;
+  userName: string;
+  whatsapp?: string;
+  wechat?: string;
+  teams?: string;
+  meetupSpot?: string;
+  createdAt: number;
+  isArchived: boolean;
+  status?: ListingStatus;
+  lastBumpedAt?: number;
+  sortKey?: number;
+}
+
+export interface SponsoredAd {
+  id: string;
+  businessName: string;
+  tagline: string;
+  imageUrl: string;
+  ctaLabel: string;
+  ctaUrl: string;
+  category?: string;
+  startsAt: number;
+  endsAt: number;
+  isActive: boolean;
+  impressions: number;
+  clicks: number;
+}
+
+export interface AppNotification {
+  id: string;
+  type: "listing_deleted" | "listing_sold" | "welcome";
+  title: string;
+  body: string;
+  createdAt: number;
+  read: boolean;
+  listingId?: string;
+}
+
+export interface UserProfile {
+  uid: string;
+  email: string;
+  displayName: string;
+  fullName: string;
+  avatarUrl?: string;
+  whatsapp?: string;
+  wechat?: string;
+  emailVerified: boolean;
+  isVerified: boolean;
+  rating: number;
+  isBlacklisted: boolean;
+  isFeatured: boolean;
+  showEmail: boolean;
+  showWhatsApp: boolean;
+  showWeChat: boolean;
+  createdAt: number;
+}
+
+---
+
+## KEY FUNCTION SIGNATURES
+
+// listings.ts
+createListing(data): Promise<string>
+updateListing(id, data): Promise<void>
+bumpListing(id): Promise<void>              // sortKey = lastBumpedAt = Date.now()
+markAsSold(id): Promise<void>
+getListingsPage(type, cursor?): Promise<{ listings, cursor, hasMore }>
+getListings(type): Promise<Listing[]>
+getListing(id): Promise<Listing | null>
+getUserListings(userId): Promise<Listing[]>
+deleteListing(listing): Promise<void>
+searchListings(type, keyword, minPrice?, maxPrice?, condition?): Promise<Listing[]>
+LISTING_EXPIRY_MS   = 30 * 24 * 60 * 60 * 1000
+LISTING_REMINDER_MS = 23 * 24 * 60 * 60 * 1000
+
+// messaging.ts
+getOrCreateConversation(myUid, otherUid, listing): Promise<string>
+sendMessage(convId, senderId, text, otherUid): Promise<void>
+subscribeToMessages(convId, callback): Unsubscribe
+getUserConversations(uid): Promise<Conversation[]>
+markConversationRead(convId, uid): Promise<void>
+
+// auth.ts
+signUp(email, password, fullName, whatsapp?, wechat?): Promise<User>
+signIn(email, password): Promise<User>
+logOut(): Promise<void>
+resetPasswordWithCheck(email): Promise<void>
+resendVerification(): Promise<void>
+isXmuEmail(email): boolean
+XMU_DOMAIN = "@xmu.edu.my"
+
+---
+
+## MANDATORY CODE PATTERNS — ALWAYS FOLLOW THESE
+
+// 1. All Firestore WRITES use Promise.race with 6s timeout
+await Promise.race([
+  updateDoc(doc(db, "collection", id), data),
+  new Promise<void>((_, reject) =>
+    setTimeout(() => reject(new Error("timeout:op-name")), 6_000)
+  ),
+]);
+
+// 2. All Firestore QUERIES have an index fallback
+try {
+  const snap = await getDocs(query(...primaryConstraints));
+} catch (err: any) {
+  if (err?.code === "failed-precondition" || err?.message?.includes("index")) {
+    // simpler query + client-side filter fallback
+  }
+  throw err;
+}
+
+// 3. Timestamp normalisation
+function toMillis(val: unknown): number {
+  if (typeof val === "number") return val;
+  if (val && typeof (val as any).toMillis === "function") return (val as any).toMillis();
+  return Date.now();
+}
+
+// 4. Routing — always wouter, never react-router
+import { useLocation, Link } from "wouter";
+const [, navigate] = useLocation();
+
+// 5. Dark mode — always Tailwind dark: variants
+// Hook: const { dark, toggle } = useDarkMode()
+// Only writes to localStorage key "xmum-theme" on explicit toggle by user
+
+// 6. Translations
+const { t, lang } = useLang();
+// Inline fallback: lang === "en" ? "English text" : "中文文字"
+
+// 7. Auth guard
+const { user, userProfile } = useAuth();
+
+// 8. Mobile tap targets
+// All interactive elements must have min-h-[44px]
+
+// 9. Card style
+"bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700"
+
+// 10. Input style
+"w-full bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-xl px-3 py-2.5 text-sm min-h-[44px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+
+// 11. Parallel storage deletes — always Promise.allSettled, never Promise.all
+await Promise.allSettled(urls.map(url => deleteObject(ref(storage, url))));
+
+---
+
+## DEVSECOPS RULES — NON-NEGOTIABLE
+
+1. No hardcoded Firebase secrets — all via import.meta.env.VITE_FIREBASE_*
+2. Never write payment status from the browser to Firestore — Cloud Functions only
+3. Never modify firestore.rules or storage.rules without explicit instruction
+4. experimentalAutoDetectLongPolling: true must stay in Firestore init — never remove
+5. Never bypass or weaken the @xmu.edu.my domain check
+6. Use Promise.allSettled for parallel storage deletes, never Promise.all
+7. The ads collection is server-write-only — never write to it from the browser
+
+---
+
+## WHAT IS ALREADY BUILT (do not re-implement)
+
+Phase 1 — Auth: domain-gated signup, email verification, user profiles, avatar upload,
+           privacy toggles, cascading account deletion
+Phase 2 — Marketplace: buy/sell + lost-found listings, SOLD badge, pagination with
+           sortKey cursors, bump to top, sponsored ads, 30-day auto-expiry,
+           in-app notifications, real-time messaging
+Phase 3 — Vercel deployment: vercel.json, self-contained tsconfig, env vars, SPA rewrites
+Phase 4 — Bug fixes: messaging URL param auto-open, dark mode localStorage fix
+Phase 5 — UI/UX polish: real shadows, X logo, emoji category chips, hover lift on cards,
+           message timestamps, character counter, branded 404, result counts
+
+---
+
+## WHAT IS NOT YET BUILT (future work)
+
+- Cloud Functions (no functions/ directory)
+- Payment integration (Billplz / Stripe / ToyyibPay)
+- Payment-gated listing bumps (currently free)
+- Admin dashboard
+- Ad impression / click tracking
+- Push notifications (FCM)
+- Report / flag listing feature
+- User ratings and reviews
+- Image compression on upload
+
+---
+
+## YOUR FIRST STEP
+
+Before doing anything else:
+1. Ask me for the Firebase environment variable values so you can create the .env file.
+2. Run: cd artifacts/xmum-market && pnpm install
+3. Confirm the dev server starts with: pnpm dev
+4. Then wait for my task.
