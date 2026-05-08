@@ -1,0 +1,248 @@
+You are working on the XMUM Marketplace project. There are three bugs to fix and one new feature to add. Read every instruction carefully before touching any file. Only modify the files explicitly named.
+
+CRITICAL CONTEXT — DO NOT VIOLATE
+
+artifacts/xmum-market/src/lib/firebase.ts — NEVER touch this file
+All Firestore writes must use the existing Promise.race([...op, new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 6_000))]) 6-second timeout pattern
+Do not add new npm packages
+The admin panel lives in artifacts/xmum-admin/ — it is a separate Vite app from artifacts/xmum-market/
+
+
+BUG 1 — Report submission silently fails (permission-denied)
+Root cause: The Firestore security rule for /reports/{reportId} requires isXmuEmail(), which internally calls request.auth.token.email.matches('.*@xmu\\.edu\\.my'). This works correctly. However, the rule also has allow read, update: if isEditor() — and isEditor() uses a get() call to look up the user's role document. In Replit's environment, that cross-document get() inside security rules causes the create check to fail intermittently because the rule engine evaluates all allow branches. The actual blocking bug is different: the reports rule is not yet deployed to Firebase — only the rules shown in firestore.rules at the time of the last deploy are live. The currently deployed rules (from the brief shown in the system prompt) have no reports collection rule at all, so every addDoc to reports is denied as there is no matching allow create rule.
+Fix: Deploy the updated firestore.rules file. The file at artifacts/xmum-market/firestore.rules already has the correct rule — it just hasn't been deployed. Run this in the Replit shell:
+bashcd artifacts/xmum-market
+npx firebase-tools deploy --only firestore:rules --project xmum--market
+If firebase-tools is not installed globally, run:
+bashnpx firebase-tools@latest deploy --only firestore:rules --project xmum--market
+If Firebase CLI login is needed first: npx firebase-tools login --no-localhost
+No code file changes needed for Bug 1 — it is purely a missing deployment.
+
+BUG 2 — Admin panel: "Create Ad" button does nothing (silent failure)
+Root cause: artifacts/xmum-admin/src/lib/firebase.ts initialises Firestore using getFirestore(app) instead of initializeFirestore(app, { experimentalAutoDetectLongPolling: true }). In Replit's proxy environment, getFirestore() uses WebSockets which are blocked, causing all Firestore reads and writes in the admin panel to fail silently. Because save() in AdsPage.tsx has a bare catch (e) { console.error(e); } with no user-facing error toast, the failure is invisible — the button appears to do nothing.
+Fix — modify only artifacts/xmum-admin/src/lib/firebase.ts:
+Replace the entire file with:
+typescriptimport { initializeApp } from "firebase/app";
+import { getAuth } from "firebase/auth";
+import { initializeFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
+
+const firebaseConfig = {
+  apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain:        import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId:         import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket:     import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId:             import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId:     import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
+};
+
+const app = initializeApp(firebaseConfig);
+export const auth    = getAuth(app);
+// experimentalAutoDetectLongPolling bypasses Replit's WebSocket proxy block.
+// This MUST use initializeFirestore — do not change to getFirestore().
+export const db      = initializeFirestore(app, {
+  experimentalAutoDetectLongPolling: true,
+});
+export const storage = getStorage(app);
+Also add a visible error toast to AdsPage.tsx so future Firestore failures are never invisible again. In artifacts/xmum-admin/src/pages/AdsPage.tsx, find the save() function's catch block:
+typescript    } catch (e) {
+      console.error(e);
+    } finally {
+Replace it with:
+typescript    } catch (e) {
+      console.error("[AdsPage] save failed:", e);
+      alert("Failed to save ad. Check the console for details. This is usually a Firestore permission or network error.");
+    } finally {
+
+BUG 3 — Admin panel: Reports page loads nothing (same root cause as Bug 2)
+Root cause: Same getFirestore() vs initializeFirestore() issue. The fix in Bug 2 (artifacts/xmum-admin/src/lib/firebase.ts) fixes this automatically since both AdsPage and ReportsPage import db from the same file.
+Additionally, add a visible error state to ReportsPage.tsx so failures surface. In artifacts/xmum-admin/src/pages/ReportsPage.tsx, find the load() function's catch block:
+typescript    } catch (e) {
+      console.error(e);
+    } finally {
+Replace it with:
+typescript    } catch (e) {
+      console.error("[ReportsPage] load failed:", e);
+      alert("Failed to load reports. Check the console for details.");
+    } finally {
+
+NEW FEATURE — Ad frequency / scheduling control
+Add two new fields to the SponsoredAd type: timesPerHour (how many times the ad can appear per hour of browsing) and durationHours (how many hours per day the ad is actively shown). These are set by admins/editors in the Create/Edit form and respected by the marketplace feed when injecting ads.
+Step 1 — Update artifacts/xmum-admin/src/lib/types.ts
+Find the SponsoredAd interface and add two fields after clicks:
+typescriptexport interface SponsoredAd {
+  id: string;
+  businessName: string;
+  tagline: string;
+  imageUrl: string;
+  ctaLabel: string;
+  ctaUrl: string;
+  category?: string;
+  startsAt: number;
+  endsAt: number;
+  isActive: boolean;
+  impressions: number;
+  clicks: number;
+  timesPerHour: number;    // how many times this ad can show per hour (1–10)
+  durationHours: number;   // how many hours per day this ad is active (1–24)
+  createdBy: string;
+  createdByEmail: string;
+  updatedAt: number;
+}
+Step 2 — Update artifacts/xmum-market/src/lib/types.ts
+Find the SponsoredAd interface there too and add the same two fields after clicks:
+typescript  timesPerHour: number;
+  durationHours: number;
+Step 3 — Update artifacts/xmum-admin/src/pages/AdsPage.tsx
+Find const EMPTY_FORM = { and replace the entire constant:
+typescriptconst EMPTY_FORM = {
+  businessName: "", tagline: "", imageUrl: "", ctaLabel: "",
+  ctaUrl: "", category: "", startsAt: "", endsAt: "",
+  timesPerHour: "3", durationHours: "24",
+};
+Find the save() function's const data = { block and add the two new fields. The full updated data object should be:
+typescript    const data = {
+      businessName:   form.businessName.trim(),
+      tagline:        form.tagline.trim(),
+      imageUrl:       form.imageUrl.trim(),
+      ctaLabel:       form.ctaLabel.trim(),
+      ctaUrl:         form.ctaUrl.trim(),
+      category:       form.category.trim(),
+      startsAt:       new Date(form.startsAt).getTime(),
+      endsAt:         new Date(form.endsAt).getTime(),
+      timesPerHour:   Math.min(10, Math.max(1, parseInt(form.timesPerHour, 10) || 3)),
+      durationHours:  Math.min(24, Math.max(1, parseInt(form.durationHours, 10) || 24)),
+      updatedAt:      Date.now(),
+      createdByEmail: adminUser.email,
+    };
+Find the const FORM_FIELDS = [ array and replace the entire array:
+typescript  const FORM_FIELDS = [
+    { key: "businessName", label: "Business Name",        placeholder: "e.g. Campus Café" },
+    { key: "tagline",      label: "Tagline",              placeholder: "e.g. Best coffee on campus!" },
+    { key: "imageUrl",     label: "Image URL",            placeholder: "https://example.com/image.jpg" },
+    { key: "ctaLabel",     label: "Button Label",         placeholder: "e.g. Visit Now" },
+    { key: "ctaUrl",       label: "Button URL",           placeholder: "https://..." },
+    { key: "category",     label: "Category (optional)",  placeholder: "e.g. Food" },
+  ];
+Then, inside the <div className="p-5 space-y-3"> form body, after the date grid (the grid grid-cols-2 gap-3 block with Start Date / End Date) and before the Save button, add this new frequency grid:
+tsx              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-slate-600 dark:text-slate-400 block mb-1">
+                    Times Per Hour
+                    <span className="ml-1 text-slate-400 font-normal">(1–10)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={form.timesPerHour}
+                    onChange={e => setForm(f => ({ ...f, timesPerHour: e.target.value }))}
+                    className="w-full bg-slate-50 dark:bg-slate-700 border border-gray-200
+                               dark:border-slate-600 rounded-xl px-3 py-2.5 text-sm
+                               min-h-[44px] focus:outline-none focus:ring-2 focus:ring-blue-500
+                               text-slate-800 dark:text-slate-200"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Max appearances per hour of browsing
+                  </p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-600 dark:text-slate-400 block mb-1">
+                    Active Hours/Day
+                    <span className="ml-1 text-slate-400 font-normal">(1–24)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={24}
+                    value={form.durationHours}
+                    onChange={e => setForm(f => ({ ...f, durationHours: e.target.value }))}
+                    className="w-full bg-slate-50 dark:bg-slate-700 border border-gray-200
+                               dark:border-slate-600 rounded-xl px-3 py-2.5 text-sm
+                               min-h-[44px] focus:outline-none focus:ring-2 focus:ring-blue-500
+                               text-slate-800 dark:text-slate-200"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Hours per day this ad is shown
+                  </p>
+                </div>
+              </div>
+Also show the frequency values in the ad list cards. In the ad list, find this line:
+tsx                  {" · "}{ad.impressions ?? 0} impressions · {ad.clicks ?? 0} clicks
+Replace it with:
+tsx                  {" · "}{ad.impressions ?? 0} impressions · {ad.clicks ?? 0} clicks
+                  {" · "}{ad.timesPerHour ?? 3}×/hr · {ad.durationHours ?? 24}h/day
+Step 4 — Enforce frequency in artifacts/xmum-market/src/lib/ads.ts
+Replace the entire file:
+typescriptimport { collection, query, where, getDocs, limit } from "firebase/firestore";
+import { db } from "./firebase";
+import { SponsoredAd } from "./types";
+
+// In-memory throttle: tracks how many times each ad has been shown
+// this hour so we never exceed ad.timesPerHour.
+const adShowCount: Record<string, { count: number; hourSlot: number }> = {};
+
+function currentHourSlot(): number {
+  return Math.floor(Date.now() / (1000 * 60 * 60));
+}
+
+function isAdThrottled(ad: SponsoredAd): boolean {
+  const slot = currentHourSlot();
+  const entry = adShowCount[ad.id];
+  if (!entry || entry.hourSlot !== slot) return false;
+  return entry.count >= (ad.timesPerHour ?? 3);
+}
+
+export function recordAdImpression(adId: string): void {
+  const slot = currentHourSlot();
+  const entry = adShowCount[adId];
+  if (!entry || entry.hourSlot !== slot) {
+    adShowCount[adId] = { count: 1, hourSlot: slot };
+  } else {
+    entry.count += 1;
+  }
+}
+
+function isWithinActiveHours(ad: SponsoredAd): boolean {
+  const durationHours = ad.durationHours ?? 24;
+  if (durationHours >= 24) return true;
+  // Active during the first N hours of each day (midnight-based, local time)
+  const nowHour = new Date().getHours();
+  return nowHour < durationHours;
+}
+
+export async function getActiveAds(count = 2): Promise<SponsoredAd[]> {
+  try {
+    const now = Date.now();
+    const q = query(
+      collection(db, "ads"),
+      where("isActive", "==", true),
+      limit(20)
+    );
+    const snap = await getDocs(q);
+    return snap.docs
+      .map((d) => ({ id: d.id, ...d.data() } as SponsoredAd))
+      .filter((ad) =>
+        ad.endsAt > now &&
+        ad.startsAt <= now &&
+        !isAdThrottled(ad) &&
+        isWithinActiveHours(ad)
+      )
+      .slice(0, count);
+  } catch {
+    return [];
+  }
+}
+Step 5 — Call recordAdImpression in artifacts/xmum-market/src/components/SponsoredAdCard.tsx
+Find the import line at the top and add recordAdImpression to the import from ads.ts. Then in the component's useEffect (or add one if it doesn't exist), call recordAdImpression(ad.id) when the card mounts. The component should have this added near the top of the function body:
+tsximport { useEffect } from "react";
+import { recordAdImpression } from "@/lib/ads";
+
+// Inside the component function, before the return:
+useEffect(() => {
+  recordAdImpression(ad.id);
+}, []); // fires once when the card appears in the feed
+
+Summary of all files to modify
+FileChangeartifacts/xmum-admin/src/lib/firebase.tsReplace getFirestore() with initializeFirestore(..., { experimentalAutoDetectLongPolling: true })artifacts/xmum-admin/src/pages/AdsPage.tsxAdd error alert in catch, add frequency fields to form and data object, show frequency in listartifacts/xmum-admin/src/pages/ReportsPage.tsxAdd error alert in catchartifacts/xmum-admin/src/lib/types.tsAdd timesPerHour and durationHours to SponsoredAdartifacts/xmum-market/src/lib/types.tsAdd timesPerHour and durationHours to SponsoredAdartifacts/xmum-market/src/lib/ads.tsReplace with throttle-aware implementationartifacts/xmum-market/src/components/SponsoredAdCard.tsxCall recordAdImpression on mountFirebase Console / CLIDeploy firestore.rules to fix report submission

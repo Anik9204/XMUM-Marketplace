@@ -45,6 +45,8 @@ export interface SponsoredAd {
   isActive: boolean;
   impressions: number;
   clicks: number;
+  timesPerHour: number;
+  durationHours: number;
   createdBy: string;
   createdByEmail: string;
   updatedAt: number;

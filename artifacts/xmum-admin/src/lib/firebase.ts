@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { initializeFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
@@ -14,8 +14,10 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const db   = getFirestore(app);
-// experimentalAutoDetectLongPolling required — do not remove
-(db as any)._settings = { ...(db as any)._settings, experimentalAutoDetectLongPolling: true };
+export const auth    = getAuth(app);
+// experimentalAutoDetectLongPolling bypasses Replit's WebSocket proxy block.
+// This MUST use initializeFirestore — do not change to getFirestore().
+export const db      = initializeFirestore(app, {
+  experimentalAutoDetectLongPolling: true,
+});
 export const storage = getStorage(app);

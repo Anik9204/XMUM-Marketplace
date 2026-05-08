@@ -1,11 +1,17 @@
+import { useEffect } from "react";
 import { ExternalLink } from "lucide-react";
 import { SponsoredAd } from "@/lib/types";
+import { recordAdImpression } from "@/lib/ads";
 
 interface Props {
   ad: SponsoredAd;
 }
 
 export default function SponsoredAdCard({ ad }: Props) {
+  useEffect(() => {
+    recordAdImpression(ad.id);
+  }, []); // fires once when the card appears in the feed
+
   const handleClick = () => {
     window.open(ad.ctaUrl, "_blank", "noopener,noreferrer");
   };

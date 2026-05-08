@@ -23,7 +23,8 @@ export default function ReportsPage() {
             setReports(snap.docs.map(d => ({ id: d.id, ...d.data() })));
         }
         catch (e) {
-            console.error(e);
+            console.error("[ReportsPage] load failed:", e);
+            alert("Failed to load reports. Check the console for details.");
         }
         finally {
             setLoading(false);

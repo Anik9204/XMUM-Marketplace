@@ -9,6 +9,7 @@ import { Plus, Pencil, Trash2, ToggleLeft, ToggleRight, X, Loader2 } from "lucid
 const EMPTY_FORM = {
   businessName: "", tagline: "", imageUrl: "", ctaLabel: "",
   ctaUrl: "", category: "", startsAt: "", endsAt: "",
+  timesPerHour: "3", durationHours: "24",
 };
 
 export default function AdsPage() {
@@ -43,14 +44,16 @@ export default function AdsPage() {
   function openEdit(ad: SponsoredAd) {
     setEditId(ad.id);
     setForm({
-      businessName: ad.businessName,
-      tagline:      ad.tagline,
-      imageUrl:     ad.imageUrl,
-      ctaLabel:     ad.ctaLabel,
-      ctaUrl:       ad.ctaUrl,
-      category:     ad.category || "",
-      startsAt:     new Date(ad.startsAt).toISOString().split("T")[0],
-      endsAt:       new Date(ad.endsAt).toISOString().split("T")[0],
+      businessName:  ad.businessName,
+      tagline:       ad.tagline,
+      imageUrl:      ad.imageUrl,
+      ctaLabel:      ad.ctaLabel,
+      ctaUrl:        ad.ctaUrl,
+      category:      ad.category || "",
+      startsAt:      new Date(ad.startsAt).toISOString().split("T")[0],
+      endsAt:        new Date(ad.endsAt).toISOString().split("T")[0],
+      timesPerHour:  String(ad.timesPerHour ?? 3),
+      durationHours: String(ad.durationHours ?? 24),
     });
     setShowForm(true);
   }
@@ -67,6 +70,8 @@ export default function AdsPage() {
       category:       form.category.trim(),
       startsAt:       new Date(form.startsAt).getTime(),
       endsAt:         new Date(form.endsAt).getTime(),
+      timesPerHour:   Math.min(10, Math.max(1, parseInt(form.timesPerHour, 10) || 3)),
+      durationHours:  Math.min(24, Math.max(1, parseInt(form.durationHours, 10) || 24)),
       updatedAt:      Date.now(),
       createdByEmail: adminUser.email,
     };
@@ -87,7 +92,8 @@ export default function AdsPage() {
       setShowForm(false);
       await load();
     } catch (e) {
-      console.error(e);
+      console.error("[AdsPage] save failed:", e);
+      alert("Failed to save ad. Check the console for details. This is usually a Firestore permission or network error.");
     } finally {
       setSaving(false);
     }
@@ -112,11 +118,11 @@ export default function AdsPage() {
                   form.ctaLabel && form.ctaUrl && form.startsAt && form.endsAt;
 
   const FORM_FIELDS = [
-    { key: "businessName", label: "Business Name", placeholder: "e.g. Campus Café" },
-    { key: "tagline",      label: "Tagline",        placeholder: "e.g. Best coffee on campus!" },
-    { key: "imageUrl",     label: "Image URL",      placeholder: "https://example.com/image.jpg" },
-    { key: "ctaLabel",     label: "Button Label",   placeholder: "e.g. Visit Now" },
-    { key: "ctaUrl",       label: "Button URL",     placeholder: "https://..." },
+    { key: "businessName", label: "Business Name",       placeholder: "e.g. Campus Café" },
+    { key: "tagline",      label: "Tagline",             placeholder: "e.g. Best coffee on campus!" },
+    { key: "imageUrl",     label: "Image URL",           placeholder: "https://example.com/image.jpg" },
+    { key: "ctaLabel",     label: "Button Label",        placeholder: "e.g. Visit Now" },
+    { key: "ctaUrl",       label: "Button URL",          placeholder: "https://..." },
     { key: "category",     label: "Category (optional)", placeholder: "e.g. Food" },
   ];
 
@@ -201,6 +207,49 @@ export default function AdsPage() {
                 ))}
               </div>
 
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-slate-600 dark:text-slate-400 block mb-1">
+                    Times Per Hour
+                    <span className="ml-1 text-slate-400 font-normal">(1–10)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={form.timesPerHour}
+                    onChange={e => setForm(f => ({ ...f, timesPerHour: e.target.value }))}
+                    className="w-full bg-slate-50 dark:bg-slate-700 border border-gray-200
+                               dark:border-slate-600 rounded-xl px-3 py-2.5 text-sm
+                               min-h-[44px] focus:outline-none focus:ring-2 focus:ring-blue-500
+                               text-slate-800 dark:text-slate-200"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Max appearances per hour of browsing
+                  </p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-600 dark:text-slate-400 block mb-1">
+                    Active Hours/Day
+                    <span className="ml-1 text-slate-400 font-normal">(1–24)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={24}
+                    value={form.durationHours}
+                    onChange={e => setForm(f => ({ ...f, durationHours: e.target.value }))}
+                    className="w-full bg-slate-50 dark:bg-slate-700 border border-gray-200
+                               dark:border-slate-600 rounded-xl px-3 py-2.5 text-sm
+                               min-h-[44px] focus:outline-none focus:ring-2 focus:ring-blue-500
+                               text-slate-800 dark:text-slate-200"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Hours per day this ad is shown
+                  </p>
+                </div>
+              </div>
+
               <button
                 onClick={save}
                 disabled={saving || !isValid}
@@ -265,6 +314,7 @@ export default function AdsPage() {
                   {new Date(ad.startsAt).toLocaleDateString()} →{" "}
                   {new Date(ad.endsAt).toLocaleDateString()}
                   {" · "}{ad.impressions ?? 0} impressions · {ad.clicks ?? 0} clicks
+                  {" · "}{ad.timesPerHour ?? 3}×/hr · {ad.durationHours ?? 24}h/day
                 </p>
               </div>
               <div className="flex items-center gap-1 flex-shrink-0">

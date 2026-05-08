@@ -48,6 +48,8 @@ export interface SponsoredAd {
   isActive: boolean;
   impressions: number;
   clicks: number;
+  timesPerHour: number;
+  durationHours: number;
 }
 
 export interface UserProfile {
