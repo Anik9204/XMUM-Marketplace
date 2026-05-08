@@ -1,0 +1,204 @@
+PART 7 OF 10 — Admin App: App.tsx + Layout + LoginPage
+Paste this to Replit after Part 6 is done.
+
+Create the following files:
+artifacts/xmum-admin/src/App.tsx
+typescriptimport { Switch, Route, Redirect } from "wouter";
+import { useAuth } from "./contexts/AuthContext";
+import LoginPage from "./pages/LoginPage";
+import DashboardPage from "./pages/DashboardPage";
+import ReportsPage from "./pages/ReportsPage";
+import UsersPage from "./pages/UsersPage";
+import AdsPage from "./pages/AdsPage";
+import Layout from "./components/Layout";
+
+export default function App() {
+  const { user, isEditor, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-slate-50 dark:bg-slate-900">
+        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent
+                        rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!user || !isEditor) {
+    return <LoginPage />;
+  }
+
+  return (
+    <Layout>
+      <Switch>
+        <Route path="/"          component={DashboardPage} />
+        <Route path="/reports"   component={ReportsPage} />
+        <Route path="/users"     component={UsersPage} />
+        <Route path="/ads"       component={AdsPage} />
+        <Route>
+          <Redirect to="/" />
+        </Route>
+      </Switch>
+    </Layout>
+  );
+}
+artifacts/xmum-admin/src/components/Layout.tsx
+typescriptimport { ReactNode } from "react";
+import { Link, useLocation } from "wouter";
+import { LayoutDashboard, Flag, Users, Megaphone, LogOut } from "lucide-react";
+import { signOut } from "firebase/auth";
+import { auth } from "../lib/firebase";
+import { useAuth } from "../contexts/AuthContext";
+
+const NAV = [
+  { href: "/",        label: "Dashboard", icon: LayoutDashboard },
+  { href: "/reports", label: "Reports",   icon: Flag },
+  { href: "/users",   label: "Users",     icon: Users },
+  { href: "/ads",     label: "Ads",       icon: Megaphone },
+];
+
+export default function Layout({ children }: { children: ReactNode }) {
+  const [location] = useLocation();
+  const { adminUser } = useAuth();
+
+  return (
+    <div className="flex h-screen bg-slate-50 dark:bg-slate-900">
+      <aside className="w-60 flex-shrink-0 bg-white dark:bg-slate-800
+                        border-r border-gray-200 dark:border-slate-700
+                        flex flex-col">
+        <div className="px-6 py-5 border-b border-gray-100 dark:border-slate-700">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center
+                            justify-center text-white font-bold text-sm">X</div>
+            <div>
+              <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                XMUM Admin
+              </p>
+              <p className="text-[10px] text-slate-400 capitalize">
+                {adminUser?.role}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <nav className="flex-1 px-3 py-4 space-y-1">
+          {NAV.map(({ href, label, icon: Icon }) => {
+            const active = location === href;
+            return (
+              <Link key={href} href={href}>
+                <a className={`flex items-center gap-3 px-3 py-2.5 rounded-xl
+                               text-sm font-medium transition-colors min-h-[44px]
+                               ${active
+                                 ? "bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400"
+                                 : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50"}`}>
+                  <Icon className="w-4 h-4" />
+                  {label}
+                </a>
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="px-3 py-4 border-t border-gray-100 dark:border-slate-700">
+          <div className="px-3 py-2 mb-2">
+            <p className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">
+              {adminUser?.displayName}
+            </p>
+            <p className="text-[10px] text-slate-400 truncate">{adminUser?.email}</p>
+          </div>
+          <button onClick={() => signOut(auth)}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl
+                             text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20
+                             transition-colors min-h-[44px]">
+            <LogOut className="w-4 h-4" />
+            Sign out
+          </button>
+        </div>
+      </aside>
+
+      <main className="flex-1 overflow-auto">
+        {children}
+      </main>
+    </div>
+  );
+}
+artifacts/xmum-admin/src/pages/LoginPage.tsx
+typescriptimport { useState } from "react";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { auth } from "../lib/firebase";
+import { Loader2, ShieldCheck } from "lucide-react";
+
+export default function LoginPage() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function handleLogin() {
+    setError("");
+    setLoading(true);
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (e: any) {
+      setError("Invalid credentials or insufficient permissions.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center
+                    justify-center p-4">
+      <div className="w-full max-w-sm bg-white dark:bg-slate-800 rounded-2xl
+                      shadow-xl p-8">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center
+                          justify-center">
+            <ShieldCheck className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h1 className="text-base font-bold text-slate-800 dark:text-slate-200">
+              XMUM Admin Panel
+            </h1>
+            <p className="text-xs text-slate-400">Authorized access only</p>
+          </div>
+        </div>
+
+        {error && (
+          <div className="bg-red-50 dark:bg-red-900/30 border border-red-200
+                          dark:border-red-800 rounded-xl px-4 py-3 mb-4">
+            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+          </div>
+        )}
+
+        <div className="space-y-3">
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+                 placeholder="admin@xmu.edu.my"
+                 className="w-full bg-slate-50 dark:bg-slate-700 border border-gray-200
+                            dark:border-slate-600 rounded-xl px-4 py-2.5 text-sm
+                            min-h-[44px] focus:outline-none focus:ring-2 focus:ring-blue-500
+                            text-slate-800 dark:text-slate-200" />
+          <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+                 placeholder="Password" onKeyDown={e => e.key === "Enter" && handleLogin()}
+                 className="w-full bg-slate-50 dark:bg-slate-700 border border-gray-200
+                            dark:border-slate-600 rounded-xl px-4 py-2.5 text-sm
+                            min-h-[44px] focus:outline-none focus:ring-2 focus:ring-blue-500
+                            text-slate-800 dark:text-slate-200" />
+          <button onClick={handleLogin} disabled={loading || !email || !password}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50
+                             text-white font-semibold rounded-xl min-h-[44px]
+                             flex items-center justify-center gap-2 text-sm">
+            {loading
+              ? <><Loader2 className="w-4 h-4 animate-spin" /> Signing in…</>
+              : "Sign In"}
+          </button>
+        </div>
+
+        <p className="text-center text-xs text-slate-400 mt-5">
+          Only admins and editors can access this panel.
+        </p>
+      </div>
+    </div>
+  );
+}
+Do not touch any other files yet. Stop here and wait for the next part.
