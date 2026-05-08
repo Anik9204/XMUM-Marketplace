@@ -1,0 +1,84 @@
+You are a senior full-stack developer working on the XMUM Marketplace app at artifacts/xmum-market/. Read ALL of the following files completely before writing a single line of code:
+
+- src/lib/types.ts
+- src/pages/PostPage.tsx
+- src/pages/EditListingPage.tsx
+- src/pages/HomePage.tsx
+- src/pages/SearchPage.tsx
+- src/components/ListingCard.tsx
+- src/lib/listings.ts
+- src/lib/i18n.ts
+
+TASK: Add two new listing types — "jobs" (tutoring/freelance services) and "assistance" (moving help, odd jobs with hourly/daily/monthly pricing) — alongside the existing "buy-sell" and "lost-found" types.
+
+─── STEP 1 — Update Types ───────────────────────────────────────
+In src/lib/types.ts:
+  Change: export type ListingType = "buy-sell" | "lost-found";
+  To:     export type ListingType = "buy-sell" | "lost-found" | "jobs" | "assistance";
+
+  Add to the Listing interface:
+    jobSubtype?: "offering" | "seeking";        // for jobs tab only
+    pricingModel?: "per_hour" | "per_day" | "per_month" | "fixed";  // for assistance tab
+    isRemote?: boolean;                          // for jobs tab
+
+─── STEP 2 — Update PostPage ────────────────────────────────────
+In src/pages/PostPage.tsx, add "jobs" and "assistance" as two new tabs in the listing type selector, using the same pill/tab UI pattern that "buy-sell" and "lost-found" use.
+
+For the JOBS tab, render these fields:
+  - Title (text): "Service Title" — e.g. "Math Tutor Available"
+  - Subtype selector (two pills): "I'm Offering" / "I'm Seeking"
+  - Category selector with these values: "tutoring", "freelance_design", "freelance_dev", "language_exchange", "photography", "music_lessons", "fitness_coaching", "other_service"
+  - Description (existing editor modal, reuse as-is)
+  - Price (RM/hr) — number input, optional
+  - Remote toggle (on/off switch): "Available Remotely?"
+  - Meetup spot field (shown only if not remote)
+  - Contact info fields (same as buy-sell: WhatsApp, WeChat, Teams)
+  - Photo upload (optional for jobs, max 3 photos, same existing uploader)
+
+For the ASSISTANCE tab, render these fields:
+  - Title (text): "Service Title" — e.g. "Help Moving Dorm Room"
+  - Category selector: "dorm_moving", "grocery_run", "delivery", "cleaning", "event_setup", "tech_help", "other_assistance"
+  - Description (existing editor modal)
+  - Pricing Model selector (4 options): "Per Hour", "Per Day", "Per Month", "Fixed Price"
+  - Price field (RM) — required
+  - Availability (text field): e.g. "Weekends only"
+  - Meetup/Location field
+  - Contact info fields (WhatsApp, WeChat, Teams)
+  - Photo upload (optional, max 3 photos)
+
+─── STEP 3 — Update Category Icons & Labels ─────────────────────
+In src/pages/HomePage.tsx, add the new category icons to the CATEGORY_ICONS map:
+  tutoring: "📖",  freelance_design: "🎨", freelance_dev: "💻", language_exchange: "🌐",
+  photography: "📷", music_lessons: "🎵", fitness_coaching: "🏋️", other_service: "🛠️",
+  dorm_moving: "📦", grocery_run: "🛒", delivery: "🚴", cleaning: "🧹",
+  event_setup: "🎉", tech_help: "⚙️", other_assistance: "🤝"
+
+In src/pages/HomePage.tsx, add "jobs" and "assistance" as two new main tabs alongside "buy-sell" and "lost-found". Use the same tab pill/button pattern. Each tab must load its own listings via getListingsPage() — update that function if needed to accept the new types.
+
+─── STEP 4 — Update getListingsPage ─────────────────────────────
+In src/lib/listings.ts, update the getListingsPage function signature to accept:
+  type: "buy-sell" | "lost-found" | "jobs" | "assistance"
+The Firestore query already uses where("type","==",type) so no structural changes are needed — just ensure the TypeScript type union is updated to accept the new values.
+
+─── STEP 5 — Update ListingCard ─────────────────────────────────
+In src/components/ListingCard.tsx, add conditional display logic:
+  - For "jobs" listings: show a badge "Offering" or "Seeking" (based on jobSubtype), show "Remote OK" badge if isRemote is true, show the price as "RM X / hr" format.
+  - For "assistance" listings: show the pricingModel as "RM X / hour", "RM X / day" etc. based on pricingModel field.
+  - Keep all existing buy-sell and lost-found display logic completely unchanged.
+
+─── STEP 6 — Update EditListingPage ─────────────────────────────
+In src/pages/EditListingPage.tsx, add the same new fields (jobSubtype, pricingModel, isRemote, pricingModel selector) so users can edit their jobs/assistance listings without losing data. Mirror the PostPage field structure exactly.
+
+─── STEP 7 — Update i18n ────────────────────────────────────────
+In src/lib/i18n.ts, add English and Chinese translation keys for:
+  - All new category names
+  - "jobs", "assistance" tab labels
+  - "I'm Offering", "I'm Seeking"
+  - "Per Hour", "Per Day", "Per Month", "Fixed Price"
+  - "Available Remotely?", "Availability"
+
+─── CONSTRAINTS ─────────────────────────────────────────────────
+- Do NOT remove or rename the existing "buy-sell" and "lost-found" types.
+- Do NOT modify the Firestore security rules — existing rules already allow create for isXmuEmail().
+- Do NOT add any new npm packages.
+- After all edits are done, show me every file modified and a summary of changes.
