@@ -67,4 +67,29 @@ export interface UserProfile {
   showWhatsApp: boolean;
   showWeChat: boolean;
   createdAt: number;
+  role?: "user" | "editor" | "admin";
+}
+
+export type ReportCategory =
+  | "spam"
+  | "scam"
+  | "offensive"
+  | "prohibited_item"
+  | "wrong_category"
+  | "other";
+
+export interface ListingReport {
+  id: string;
+  listingId: string;
+  listingTitle: string;
+  listingUserId: string;
+  listingUserEmail: string;
+  reportedBy: string;
+  reportedByEmail: string;
+  reason: string;
+  category: ReportCategory;
+  status: "pending" | "reviewed" | "dismissed" | "actioned";
+  createdAt: number;
+  reviewedBy?: string;
+  reviewedAt?: number;
 }
