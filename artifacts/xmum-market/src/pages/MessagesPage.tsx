@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLang } from "@/contexts/LanguageContext";
 import {
@@ -11,6 +12,7 @@ import AuthModal from "@/components/AuthModal";
 export default function MessagesPage() {
   const { user } = useAuth();
   const { t } = useLang();
+  const [location] = useLocation();
   const [showAuth, setShowAuth] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loadingConvs, setLoadingConvs] = useState(true);
@@ -27,6 +29,19 @@ export default function MessagesPage() {
       .then(setConversations)
       .finally(() => setLoadingConvs(false));
   }, [user]);
+
+  // Auto-open a conversation when arriving from "Message Seller"
+  useEffect(() => {
+    if (loadingConvs || conversations.length === 0) return;
+    const params = new URLSearchParams(window.location.search);
+    const convId = params.get("conv");
+    if (!convId) return;
+    const match = conversations.find((c) => c.id === convId);
+    if (match) {
+      setActiveConv(match);
+      window.history.replaceState(null, "", "/messages");
+    }
+  }, [loadingConvs, conversations]);
 
   useEffect(() => {
     if (!activeConv || !user) return;

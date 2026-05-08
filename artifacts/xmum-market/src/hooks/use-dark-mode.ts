@@ -1,10 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 export function useDarkMode() {
+  const userHasToggled = useRef(false);
+
   const [dark, setDark] = useState<boolean>(() => {
     try {
       const stored = localStorage.getItem("xmum-theme");
-      if (stored) return stored === "dark";
+      if (stored === "dark") return true;
+      if (stored === "light") return false;
       return window.matchMedia("(prefers-color-scheme: dark)").matches;
     } catch {
       return false;
@@ -15,12 +18,18 @@ export function useDarkMode() {
     const root = document.documentElement;
     if (dark) {
       root.classList.add("dark");
-      localStorage.setItem("xmum-theme", "dark");
     } else {
       root.classList.remove("dark");
-      localStorage.setItem("xmum-theme", "light");
+    }
+    if (userHasToggled.current) {
+      localStorage.setItem("xmum-theme", dark ? "dark" : "light");
     }
   }, [dark]);
 
-  return { dark, toggle: () => setDark((d) => !d) };
+  const toggle = () => {
+    userHasToggled.current = true;
+    setDark((d) => !d);
+  };
+
+  return { dark, toggle };
 }

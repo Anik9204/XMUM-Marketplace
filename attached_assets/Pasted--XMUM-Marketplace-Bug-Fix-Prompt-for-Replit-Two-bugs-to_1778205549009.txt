@@ -1,0 +1,267 @@
+# XMUM Marketplace — Bug Fix Prompt for Replit
+# Two bugs to fix. Read every section carefully before writing any code.
+
+---
+
+## CONTEXT
+
+You are continuing work on the XMUM Marketplace React + Vite + TypeScript app.
+The app lives at `artifacts/xmum-market/src/`.
+Routing uses `wouter`. State uses `useState`/`useEffect`. No react-query for data.
+
+Fix exactly two bugs described below. Do not change any other files.
+
+---
+
+## BUG 1 — "Message Seller" navigates to Messages page but no chat opens
+
+### What happens
+User clicks "Message Seller" on a listing detail page. The app creates the
+conversation correctly, then navigates to `/messages`. The Messages page loads
+and shows the conversation list — but no chat is open. The user has to manually
+find and tap the conversation themselves.
+
+### Root cause
+`ListingDetailPage.tsx` calls `navigate("/messages")` after creating the
+conversation. `MessagesPage.tsx` has no way to know which conversation to
+auto-open — it only reads `activeConv` from local state which starts as `null`.
+
+### The fix — pass the conversation ID via URL
+
+**Step 1 — Update `ListingDetailPage.tsx`**
+
+File: `artifacts/xmum-market/src/pages/ListingDetailPage.tsx`
+
+Find the `handleMessageSeller` function:
+
+```typescript
+const handleMessageSeller = async () => {
+  if (!user || !listing) return;
+  setChatError(null);
+  setStartingChat(true);
+  try {
+    await getOrCreateConversation(user.uid, listing.userId, {
+      id: listing.id,
+      title: listing.title,
+      photos: listing.photos,
+    });
+    navigate("/messages");
+  } catch (err: any) {
+```
+
+Change `navigate("/messages")` to pass the conversation ID as a query param.
+`getOrCreateConversation` already returns the `convId` — capture it:
+
+```typescript
+const handleMessageSeller = async () => {
+  if (!user || !listing) return;
+  setChatError(null);
+  setStartingChat(true);
+  try {
+    const convId = await getOrCreateConversation(user.uid, listing.userId, {
+      id: listing.id,
+      title: listing.title,
+      photos: listing.photos,
+    });
+    navigate(`/messages?conv=${convId}`);
+  } catch (err: any) {
+```
+
+That is the only change to this file.
+
+---
+
+**Step 2 — Update `MessagesPage.tsx` to auto-open the conversation**
+
+File: `artifacts/xmum-market/src/pages/MessagesPage.tsx`
+
+Read the entire file before editing. Make these targeted changes:
+
+**2a. Add `useLocation` to the existing wouter import** at the top of the file.
+The current import is:
+```typescript
+import { MessageCircle, ArrowLeft, Send, Loader2 } from "lucide-react";
+```
+
+The wouter import is not shown in that line — find the existing wouter import
+at the top of the file. It currently only imports what is used. Add `useLocation`
+to it:
+
+Find (the existing wouter import — it may only import what is currently used,
+so look for whatever wouter line exists and add `useLocation` to it):
+```typescript
+import { useAuth } from "@/contexts/AuthContext";
+```
+
+Add this line immediately after the last import block, before the component:
+```typescript
+import { useLocation } from "wouter";
+```
+
+If `useLocation` is already imported, skip this step.
+
+**2b. Inside the `MessagesPage` component, read the `conv` query param and
+auto-open the matching conversation once the conversation list has loaded.**
+
+Find the existing state declarations at the top of the component:
+```typescript
+const [conversations, setConversations] = useState<Conversation[]>([]);
+const [loadingConvs, setLoadingConvs] = useState(true);
+const [activeConv, setActiveConv] = useState<Conversation | null>(null);
+```
+
+Add the `useLocation` call directly below the existing `useLang` and `useAuth`
+calls, before the state declarations:
+
+```typescript
+const [location] = useLocation();
+```
+
+**2c. Add a `useEffect` that fires after conversations load to auto-open the
+conversation specified in the URL.** Add this new `useEffect` directly after
+the existing conversations-loading `useEffect`:
+
+```typescript
+// Auto-open a conversation when arriving from "Message Seller"
+useEffect(() => {
+  if (loadingConvs || conversations.length === 0) return;
+  const params = new URLSearchParams(window.location.search);
+  const convId = params.get("conv");
+  if (!convId) return;
+  const match = conversations.find((c) => c.id === convId);
+  if (match) {
+    setActiveConv(match);
+    // Clean the URL so the param doesn't persist on back navigation
+    window.history.replaceState(null, "", "/messages");
+  }
+}, [loadingConvs, conversations]);
+```
+
+> **Why this works:** When the user arrives at `/messages?conv=abc123`, the
+> page loads conversations from Firestore. Once that fetch completes,
+> `loadingConvs` flips to `false`. The new `useEffect` then reads the `conv`
+> param, finds the matching conversation in the list, and calls `setActiveConv`
+> — which triggers the existing chat view to render with that conversation open.
+> `window.history.replaceState` cleans the URL so it shows `/messages` cleanly.
+
+---
+
+## BUG 2 — Visiting Settings page for the first time forces dark mode permanently
+
+### What happens
+A user who has never changed the theme visits Account Settings. The app
+immediately switches to dark mode and stays there even after leaving Settings.
+The user has to manually turn it off.
+
+### Root cause
+`use-dark-mode.ts` initialises state by reading `localStorage` first, then
+falls back to `window.matchMedia("(prefers-color-scheme: dark)").matches`.
+On phones (and many laptops) the OS is in dark mode, so `matchMedia` returns
+`true`. The `useEffect` then immediately:
+1. Adds the `dark` class to `<html>`
+2. Writes `"dark"` to `localStorage`
+
+This happens the moment `SettingsPage` mounts — because `useDarkMode()` is
+only called in `SettingsPage`, this is the first and only time the hook runs.
+From that point the preference is permanently locked in localStorage as dark.
+
+### The fix — only persist to localStorage when the user explicitly toggles
+
+File: `artifacts/xmum-market/src/hooks/use-dark-mode.ts`
+
+Replace the entire file with this new version:
+
+```typescript
+import { useState, useEffect, useRef } from "react";
+
+export function useDarkMode() {
+  // Track whether the current value came from an explicit user toggle
+  // or was just inferred from the OS / localStorage.
+  const userHasToggled = useRef(false);
+
+  const [dark, setDark] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem("xmum-theme");
+      // Only use a stored value if the user previously made an explicit choice.
+      // A stored value means they toggled before — respect it.
+      if (stored === "dark") return true;
+      if (stored === "light") return false;
+      // No stored preference — read OS preference but DO NOT persist it yet.
+      return window.matchMedia("(prefers-color-scheme: dark)").matches;
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (dark) {
+      root.classList.add("dark");
+    } else {
+      root.classList.remove("dark");
+    }
+    // Only write to localStorage if the user has explicitly toggled.
+    // On first load (userHasToggled.current === false), we apply the class
+    // based on OS preference but do NOT commit it to localStorage.
+    // This means next time they visit Settings, they get their OS preference
+    // again rather than a permanently locked value.
+    if (userHasToggled.current) {
+      localStorage.setItem("xmum-theme", dark ? "dark" : "light");
+    }
+  }, [dark]);
+
+  const toggle = () => {
+    userHasToggled.current = true;
+    setDark((d) => !d);
+  };
+
+  return { dark, toggle };
+}
+```
+
+> **What this changes:**
+> - The `dark` class is still applied on load based on OS preference or stored
+>   preference — so users who previously chose dark mode still get it immediately.
+> - But `localStorage` is only written when `toggle()` is called explicitly.
+> - A first-time visitor whose OS is in dark mode will see dark mode on the
+>   Settings page toggle correctly reflecting their OS — but it won't be
+>   permanently committed until they actually tap the toggle.
+> - A user who previously set dark mode via the toggle will still get dark mode
+>   on every visit because their localStorage value of `"dark"` is still read
+>   and respected.
+
+---
+
+## VERIFICATION STEPS
+
+After making all changes, verify the following:
+
+**Bug 1 — Messaging:**
+1. `pnpm run typecheck` passes with no new errors in the two edited files
+2. Confirm `getOrCreateConversation` in `src/lib/messaging.ts` returns a
+   `Promise<string>` — it does, the return type is already `Promise<string>`
+3. Confirm the new `useEffect` in `MessagesPage` only runs after
+   `loadingConvs === false` (so it never tries to find a conversation before
+   the list is populated)
+
+**Bug 2 — Dark mode:**
+1. No TypeScript errors in `use-dark-mode.ts`
+2. Confirm `useRef` is added to the React import
+3. The exported shape `{ dark, toggle }` is unchanged — no other files need updating
+
+---
+
+## FILES CHANGED — SUMMARY
+
+| File | Change |
+|---|---|
+| `src/pages/ListingDetailPage.tsx` | Capture `convId` from `getOrCreateConversation`, pass it as `?conv=` query param |
+| `src/pages/MessagesPage.tsx` | Add `useLocation` import + new `useEffect` to auto-open conversation from URL param |
+| `src/hooks/use-dark-mode.ts` | Replace file — only write to localStorage on explicit user toggle, not on first mount |
+
+## DO NOT TOUCH
+
+- `src/lib/messaging.ts` — no changes needed, `getOrCreateConversation` already returns `convId`
+- `src/lib/firebase.ts` — no changes
+- `src/pages/SettingsPage.tsx` — no changes needed, it calls `useDarkMode()` correctly
+- All other files

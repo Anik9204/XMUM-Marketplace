@@ -72,12 +72,12 @@ export default function ListingDetailPage() {
     setChatError(null);
     setStartingChat(true);
     try {
-      await getOrCreateConversation(user.uid, listing.userId, {
+      const convId = await getOrCreateConversation(user.uid, listing.userId, {
         id: listing.id,
         title: listing.title,
         photos: listing.photos,
       });
-      navigate("/messages");
+      navigate(`/messages?conv=${convId}`);
     } catch (err: any) {
       const code = err?.code ?? err?.message ?? "";
       if (code.includes("permission-denied") || code.includes("PERMISSION_DENIED")) {
