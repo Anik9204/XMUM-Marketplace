@@ -1,0 +1,125 @@
+PART 4 OF 10 — Update ListingDetailPage (Main App)
+Paste this to Replit after Part 3 is done.
+
+Open src/pages/ListingDetailPage.tsx in the main app. Make only these three targeted changes — do NOT rewrite the file or change any existing logic:
+Change 1 — Add imports near the top of the file (with the other imports):
+typescriptimport ReportModal from "../components/ReportModal";
+Also make sure useState is already imported from React (it likely is). If not, add it.
+Change 2 — Add state inside the component function, near the other useState declarations:
+typescriptconst [showReport, setShowReport] = useState(false);
+Change 3 — Wire up the existing "Report this listing" button. Find the existing report button in the JSX. Change its onClick to:
+typescriptonClick={() => {
+  if (!user) {
+    toast({ title: "Sign in to report a listing", variant: "destructive" });
+    return;
+  }
+  setShowReport(true);
+}}
+Change 4 — Render the modal. Just before the final closing tag of the component's returned JSX, add:
+typescript{showReport && listing && (
+  <ReportModal listing={listing} onClose={() => setShowReport(false)} />
+)}
+Do not touch any other files yet. Stop here and wait for the next part.
+
+✅ PART 5 OF 10 — Scaffold the Admin App Directory & Config Files
+Paste this to Replit after Part 4 is done.
+
+Create a brand new directory artifacts/xmum-admin/. This is a completely separate Vite app — it is NOT inside artifacts/xmum-market/. Create the following files exactly as shown:
+artifacts/xmum-admin/package.json
+json{
+  "name": "xmum-admin",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "firebase": "^10.14.1",
+    "wouter": "^3.3.5",
+    "lucide-react": "^0.383.0",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^2.5.4"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.11",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.2",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.14",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.9"
+  }
+}
+artifacts/xmum-admin/vite.config.ts
+typescriptimport { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+
+export default defineConfig({
+  plugins: [react()],
+  build: { outDir: "dist" },
+});
+artifacts/xmum-admin/tsconfig.json
+json{
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true
+  },
+  "include": ["src"]
+}
+artifacts/xmum-admin/tailwind.config.js
+javascriptexport default {
+  content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
+  darkMode: "class",
+  theme: { extend: {} },
+  plugins: [],
+};
+artifacts/xmum-admin/postcss.config.js
+javascriptexport default {
+  plugins: { tailwindcss: {}, autoprefixer: {} },
+};
+artifacts/xmum-admin/vercel.json
+json{
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
+  "headers": [
+    {
+      "source": "/assets/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+    }
+  ]
+}
+artifacts/xmum-admin/.env.example
+VITE_FIREBASE_API_KEY=
+VITE_FIREBASE_AUTH_DOMAIN=
+VITE_FIREBASE_PROJECT_ID=
+VITE_FIREBASE_STORAGE_BUCKET=
+VITE_FIREBASE_MESSAGING_SENDER_ID=
+VITE_FIREBASE_APP_ID=
+VITE_FIREBASE_MEASUREMENT_ID=
+artifacts/xmum-admin/index.html
+html<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>XMUM Admin Panel</title>
+    <meta name="robots" content="noindex, nofollow" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+After creating all these files, do NOT run anything yet. Stop here and wait for the next part.

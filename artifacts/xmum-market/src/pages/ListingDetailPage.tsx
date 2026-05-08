@@ -6,6 +6,7 @@ import { getListing, markAsSold } from "@/lib/listings";
 import { getProfile } from "@/lib/userProfile";
 import { Listing, UserProfile } from "@/lib/types";
 import AuthModal from "@/components/AuthModal";
+import ReportModal from "@/components/ReportModal";
 import { ArrowLeft, Clock, Tag, CheckCircle2, MapPin, MessageCircle, Loader2 } from "lucide-react";
 import { getOrCreateConversation } from "@/lib/messaging";
 import { SiWhatsapp, SiWechat } from "react-icons/si";
@@ -39,6 +40,7 @@ export default function ListingDetailPage() {
   const [profileLoading, setProfileLoading] = useState(true);
   const [startingChat, setStartingChat] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
+  const [showReport, setShowReport] = useState(false);
 
   useEffect(() => {
     if (!params?.id) return;
@@ -349,7 +351,13 @@ export default function ListingDetailPage() {
           {/* Report link */}
           <div className="flex justify-center pt-2">
             <button
-              onClick={() => toast({ title: "Thank you for reporting.", description: "We'll review this listing." })}
+              onClick={() => {
+                if (!user) {
+                  toast({ title: "Sign in to report a listing", variant: "destructive" });
+                  return;
+                }
+                setShowReport(true);
+              }}
               className="text-xs text-slate-400 hover:text-red-500 dark:hover:text-red-400 underline mt-4 min-h-[44px] flex items-center"
             >
               Report this listing
@@ -392,6 +400,9 @@ export default function ListingDetailPage() {
       )}
 
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
+      {showReport && listing && (
+        <ReportModal listing={listing} onClose={() => setShowReport(false)} />
+      )}
     </>
   );
 }
