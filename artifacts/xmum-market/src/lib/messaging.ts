@@ -111,18 +111,21 @@ export function subscribeToMessages(
 
 export async function getUserConversations(uid: string): Promise<Conversation[]> {
   try {
+    // No orderBy — avoids needing a composite index. Sort client-side instead.
     const q = query(
       collection(db, "conversations"),
       where("participants", "array-contains", uid),
-      orderBy("lastMessageAt", "desc"),
-      limit(20)
+      limit(50)
     );
     const snap = await getDocs(q);
-    return snap.docs.map((d) => {
-      const data = d.data();
-      return { id: d.id, ...data, lastMessageAt: toMillis(data.lastMessageAt) } as Conversation;
-    });
-  } catch {
+    return snap.docs
+      .map((d) => {
+        const data = d.data();
+        return { id: d.id, ...data, lastMessageAt: toMillis(data.lastMessageAt) } as Conversation;
+      })
+      .sort((a, b) => b.lastMessageAt - a.lastMessageAt);
+  } catch (err) {
+    console.error("[messaging] getUserConversations failed:", err);
     return [];
   }
 }
