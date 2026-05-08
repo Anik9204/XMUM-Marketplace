@@ -3,13 +3,31 @@ import { collection, getDocs, updateDoc, doc, orderBy, query } from "firebase/fi
 import { db } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { AdminUser, UserRole } from "../lib/types";
-import { Ban, CheckCircle } from "lucide-react";
+import { Ban, CheckCircle, CheckCircle2 } from "lucide-react";
+
+function Toast({ message, type, onDone }: { message: string; type: "success" | "error"; onDone: () => void }) {
+  useEffect(() => {
+    const t = setTimeout(onDone, 3000);
+    return () => clearTimeout(t);
+  }, [onDone]);
+  return (
+    <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl
+                     shadow-lg text-sm font-medium flex items-center gap-2 animate-in
+                     ${type === "success"
+                       ? "bg-green-600 text-white"
+                       : "bg-red-600 text-white"}`}>
+      {type === "success" ? <CheckCircle2 className="w-4 h-4" /> : null}
+      {message}
+    </div>
+  );
+}
 
 export default function UsersPage() {
   const { adminUser, isAdmin } = useAuth();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -18,7 +36,7 @@ export default function UsersPage() {
           query(collection(db, "users"), orderBy("createdAt", "desc"))
         );
         setUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() } as AdminUser)));
-      } catch (e) {
+      } catch {
         const snap = await getDocs(collection(db, "users"));
         setUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() } as AdminUser)));
       } finally {
@@ -31,11 +49,28 @@ export default function UsersPage() {
   async function updateUser(uid: string, data: Partial<AdminUser>) {
     if (!isAdmin && "role" in data) return;
     if (uid === adminUser?.uid && "role" in data) return;
-    await Promise.race([
-      updateDoc(doc(db, "users", uid), data as any),
-      new Promise<never>((_, r) => setTimeout(() => r(new Error("timeout")), 6000)),
-    ]);
-    setUsers(prev => prev.map(u => u.uid === uid ? { ...u, ...data } : u));
+    try {
+      await Promise.race([
+        updateDoc(doc(db, "users", uid), data as any),
+        new Promise<never>((_, r) => setTimeout(() => r(new Error("timeout")), 6000)),
+      ]);
+      setUsers(prev => prev.map(u => u.uid === uid ? { ...u, ...data } : u));
+      setToast({ message: "Change saved.", type: "success" });
+    } catch (e) {
+      console.error("[UsersPage] updateUser failed:", e);
+      setToast({ message: "Failed to save. Check the console.", type: "error" });
+    }
+  }
+
+  function handleRoleChange(u: AdminUser, newRole: UserRole) {
+    if (!window.confirm(`Change ${u.email}'s role to "${newRole}"?`)) return;
+    updateUser(u.uid, { role: newRole });
+  }
+
+  function handleBanToggle(u: AdminUser) {
+    const action = u.isBlacklisted ? "unban" : "ban";
+    if (!window.confirm(`Are you sure you want to ${action} ${u.email}?`)) return;
+    updateUser(u.uid, { isBlacklisted: !u.isBlacklisted });
   }
 
   const filtered = users.filter(u =>
@@ -47,6 +82,14 @@ export default function UsersPage() {
 
   return (
     <div className="p-6">
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onDone={() => setToast(null)}
+        />
+      )}
+
       <div className="mb-5">
         <h1 className="text-xl font-bold text-slate-800 dark:text-slate-200">Users</h1>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
@@ -101,7 +144,7 @@ export default function UsersPage() {
                       {isAdmin && u.uid !== adminUser?.uid ? (
                         <select
                           value={u.role || "user"}
-                          onChange={e => updateUser(u.uid, { role: e.target.value as UserRole })}
+                          onChange={e => handleRoleChange(u, e.target.value as UserRole)}
                           className="bg-slate-50 dark:bg-slate-700 border border-gray-200
                                      dark:border-slate-600 rounded-lg px-2 py-1.5 text-xs
                                      text-slate-700 dark:text-slate-300 min-h-[36px]">
@@ -135,7 +178,7 @@ export default function UsersPage() {
                     <td className="px-4 py-3">
                       {u.uid !== adminUser?.uid && (
                         <button
-                          onClick={() => updateUser(u.uid, { isBlacklisted: !u.isBlacklisted })}
+                          onClick={() => handleBanToggle(u)}
                           className={`flex items-center gap-1.5 text-xs rounded-xl px-3 py-1.5
                                       border min-h-[36px] transition-colors
                                       ${u.isBlacklisted
