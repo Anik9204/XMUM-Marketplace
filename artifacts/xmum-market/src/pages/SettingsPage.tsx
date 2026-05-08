@@ -34,6 +34,17 @@ function SuccessToast({ message, onDone }: { message: string; onDone: () => void
   );
 }
 
+function SectionCard({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-card mb-4 overflow-hidden">
+      <div className="px-4 py-3 border-b border-gray-100 dark:border-slate-700">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">{label}</h3>
+      </div>
+      <div className="p-5">{children}</div>
+    </div>
+  );
+}
+
 function PrivacyRow({ label, sub, value, onChange }: { label: string; sub: string; value: boolean; onChange: (v: boolean) => void }) {
   return (
     <div className="flex items-center justify-between py-3">
@@ -83,8 +94,6 @@ export default function SettingsPage() {
   const [profileSaved, setProfileSaved] = useState(false);
   const [profileError, setProfileError] = useState("");
 
-  // Local preview URL (object URL) shown instantly before Storage upload completes.
-  // When null, falls back to userProfile.avatarUrl from context.
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [avatarError, setAvatarError] = useState("");
@@ -103,8 +112,6 @@ export default function SettingsPage() {
   const [deleteError, setDeleteError] = useState("");
   const deletingAccountRef = useRef(false);
 
-  // Populate form state from context userProfile whenever it changes.
-  // This handles initial load, tab navigation back, and post-save refresh.
   useEffect(() => {
     if (!userProfile) return;
     setFullName(userProfile.fullName ?? "");
@@ -112,10 +119,7 @@ export default function SettingsPage() {
     setSettingsWechat(userProfile.wechat ?? "");
     setShowWhatsApp(userProfile.showWhatsApp ?? true);
     setShowWeChat(userProfile.showWeChat ?? true);
-    // Only reset avatarPreview when NOT mid-upload (don't flash old photo during upload)
-    if (!uploadingAvatar) {
-      setAvatarPreview(null);
-    }
+    if (!uploadingAvatar) setAvatarPreview(null);
   }, [userProfile]);
 
   if (!user) {
@@ -144,16 +148,6 @@ export default function SettingsPage() {
       <div className="max-w-5xl mx-auto px-4 py-5">
         <div className="h-5 bg-gray-200 dark:bg-slate-700 rounded w-40 mb-5 animate-pulse" />
         <div className="space-y-4 max-w-lg">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-5 animate-pulse">
-            <div className="h-3.5 bg-gray-200 dark:bg-slate-700 rounded w-1/4 mb-4" />
-            <div className="flex items-center gap-4">
-              <div className="w-20 h-20 rounded-full bg-gray-200 dark:bg-slate-700 shrink-0" />
-              <div className="space-y-2 flex-1">
-                <div className="h-8 bg-gray-100 dark:bg-slate-700 rounded-lg w-28" />
-                <div className="h-2.5 bg-gray-100 dark:bg-slate-700 rounded w-36" />
-              </div>
-            </div>
-          </div>
           <SkeletonCard rows={3} />
           <SkeletonCard rows={3} />
           <SkeletonCard rows={3} />
@@ -170,26 +164,18 @@ export default function SettingsPage() {
     if (!file.type.startsWith("image/")) { setAvatarError("Only image files are allowed (JPG, PNG, WebP, etc.)."); return; }
     if (file.size > 5 * 1024 * 1024) { setAvatarError(t.imageTooLarge); return; }
 
-    // Fix A — instant local preview: show the new image the moment the user picks it,
-    // before any network call. No network delay; the object URL reads directly from memory.
     const localPreviewUrl = URL.createObjectURL(file);
     setAvatarPreview(localPreviewUrl);
-    // Fix C — propagate to context so ProfilePage and any other consumer also
-    // shows the new photo instantly during the upload window.
     setAvatarOverride(localPreviewUrl);
     setUploadingAvatar(true);
 
     try {
-      // uploadAvatar: uploads to Storage, gets download URL, writes to Firestore users/{uid}
       await uploadAvatar(file, user.uid);
-      // Refresh context so userProfile.avatarUrl becomes the real Firebase Storage URL
       await refetchProfile();
-      // Fix B — clean up: the real URL is now in context; revoke the object URL to free memory
       setAvatarOverride(null);
       URL.revokeObjectURL(localPreviewUrl);
       setAvatarPreview(null);
     } catch (err: any) {
-      // On failure: revert the optimistic preview and clear the override
       setAvatarPreview(null);
       setAvatarOverride(null);
       URL.revokeObjectURL(localPreviewUrl);
@@ -281,8 +267,6 @@ export default function SettingsPage() {
     }
   };
 
-  // Fix A — avatar display: use local object URL preview (instant) → fall back to
-  // Firestore URL from context → fall back to initials placeholder.
   const avatarSrc = avatarPreview ?? userProfile?.avatarUrl;
 
   const AvatarDisplay = () =>
@@ -299,15 +283,14 @@ export default function SettingsPage() {
       {successToast && <SuccessToast message={successToast} onDone={() => setSuccessToast("")} />}
       {!user.emailVerified && <VerificationBanner />}
 
-      {/* pb-24 clears the 48px mobile bottom nav + breathing room; resets on sm+ */}
       <div className="max-w-5xl mx-auto px-4 py-5 pb-24 sm:pb-8 animate-in fade-in duration-200">
-        {/* Tab bar — My Listings / Settings */}
+        {/* Tab bar */}
         <div className="flex border-b border-gray-200 dark:border-slate-700 mb-5">
           <button
             onClick={() => navigate("/profile")}
             className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300 transition-colors -mb-px"
           >
-            {t.myListings}
+            My Listings
           </button>
           <button
             className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold border-b-2 border-[#003366] dark:border-blue-400 text-[#003366] dark:text-blue-400 -mb-px"
@@ -317,12 +300,10 @@ export default function SettingsPage() {
           </button>
         </div>
 
-        <div className="space-y-4 max-w-lg">
-          {/* Avatar */}
-          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-5">
-            <h3 className="text-sm font-bold text-gray-800 dark:text-slate-200 mb-4">Profile Photo</h3>
-            <div className="flex items-center gap-4">
-              {/* Fix D — spinner overlay during upload, visible in both light and dark */}
+        <div className="space-y-0 max-w-lg">
+          {/* Profile section */}
+          <SectionCard label="Profile">
+            <div className="flex items-center gap-4 mb-4">
               <div className="relative shrink-0">
                 <AvatarDisplay />
                 {uploadingAvatar && (
@@ -348,12 +329,6 @@ export default function SettingsPage() {
                 )}
               </div>
             </div>
-            <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
-          </div>
-
-          {/* Profile Info */}
-          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-5">
-            <h3 className="text-sm font-bold text-gray-800 dark:text-slate-200 mb-4">Profile Information</h3>
             <div className="space-y-3">
               <div>
                 <label className={labelCls}>Full Name <span className="text-red-500">*</span></label>
@@ -376,11 +351,37 @@ export default function SettingsPage() {
                 {savingProfile ? "Saving…" : profileSaved ? "Saved!" : "Save Changes"}
               </button>
             </div>
-          </div>
+            <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
+          </SectionCard>
 
-          {/* Password */}
-          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-5">
-            <h3 className="text-sm font-bold text-gray-800 dark:text-slate-200 mb-4">Change Password</h3>
+          {/* Privacy section */}
+          <SectionCard label="Privacy">
+            <p className="text-xs text-gray-400 dark:text-slate-500 mb-2">Control what contact info is visible to other users on your listings.</p>
+            <div className="divide-y divide-gray-100 dark:divide-slate-700">
+              <PrivacyRow label="Show WhatsApp" sub="Display WhatsApp contact button on your listings" value={showWhatsApp} onChange={(v) => handlePrivacyToggle("showWhatsApp", v)} />
+              <PrivacyRow label="Show WeChat" sub="Display WeChat contact button on your listings" value={showWeChat} onChange={(v) => handlePrivacyToggle("showWeChat", v)} />
+            </div>
+          </SectionCard>
+
+          {/* Appearance section */}
+          <SectionCard label="Appearance">
+            <div className="flex items-center justify-between py-1">
+              <div>
+                <p className="text-sm font-medium text-gray-700 dark:text-slate-200">{t.darkMode}</p>
+                <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">{t.darkModeDesc}</p>
+              </div>
+              <button
+                onClick={toggleDark}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${dark ? "bg-[#003366] dark:bg-blue-600" : "bg-gray-200 dark:bg-slate-600"}`}
+              >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${dark ? "translate-x-6" : "translate-x-1"}`} />
+              </button>
+            </div>
+          </SectionCard>
+
+          {/* Account section */}
+          <SectionCard label="Account">
+            <h4 className="text-sm font-semibold text-gray-800 dark:text-slate-200 mb-3">Change Password</h4>
             <div className="space-y-3">
               <input type="password" value={currentPass} onChange={(e) => setCurrentPass(e.target.value)} placeholder="Current password" className={inputCls} />
               <input type="password" value={newPass} onChange={(e) => setNewPass(e.target.value)} placeholder="New password (min 8 characters)" maxLength={32} className={inputCls} />
@@ -394,51 +395,23 @@ export default function SettingsPage() {
                 {changingPass ? "Updating…" : passSaved ? "Password Updated!" : "Update Password"}
               </button>
             </div>
-          </div>
+          </SectionCard>
 
-          {/* Appearance */}
-          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-5 mb-4">
-            <h2 className="text-sm font-bold text-gray-800 dark:text-slate-100 mb-4 flex items-center gap-2">
-              <Palette size={16} className="text-[#003366] dark:text-blue-400" />
-              {t.appearance}
-            </h2>
-            <div className="flex items-center justify-between py-2">
-              <div>
-                <p className="text-sm font-medium text-gray-700 dark:text-slate-200">{t.darkMode}</p>
-                <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">{t.darkModeDesc}</p>
-              </div>
+          {/* Danger Zone */}
+          <div className="border border-red-200 dark:border-red-900 rounded-2xl mb-4 overflow-hidden">
+            <div className="px-4 py-3 border-b border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900/20">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-red-500">Danger Zone</h3>
+            </div>
+            <div className="p-2">
               <button
-                onClick={toggleDark}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${dark ? "bg-[#003366] dark:bg-blue-600" : "bg-gray-200 dark:bg-slate-600"}`}
+                onClick={() => { setDeleteError(""); setDeletePassword(""); setShowDeleteModal(true); }}
+                className="w-full text-left px-4 py-3 text-red-600 dark:text-red-400 font-medium text-sm min-h-[44px] hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl flex items-center gap-2"
               >
-                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${dark ? "translate-x-6" : "translate-x-1"}`} />
+                <Trash2 size={15} />
+                Delete Account
               </button>
             </div>
           </div>
-
-          {/* Privacy */}
-          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-5">
-            <h3 className="text-sm font-bold text-gray-800 dark:text-slate-200 mb-1">Privacy Settings</h3>
-            <p className="text-xs text-gray-400 dark:text-slate-500 mb-2">Control what contact info is visible to other users on your listings.</p>
-            <div className="divide-y divide-gray-100 dark:divide-slate-700">
-              <PrivacyRow label="Show WhatsApp" sub="Display WhatsApp contact button on your listings" value={showWhatsApp} onChange={(v) => handlePrivacyToggle("showWhatsApp", v)} />
-              <PrivacyRow label="Show WeChat" sub="Display WeChat contact button on your listings" value={showWeChat} onChange={(v) => handlePrivacyToggle("showWeChat", v)} />
-            </div>
-          </div>
-
-          {/* Danger Zone */}
-          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-red-200 dark:border-red-900/50 p-5">
-            <h3 className="text-sm font-bold text-red-700 dark:text-red-400 mb-1">Danger Zone</h3>
-            <p className="text-xs text-gray-500 dark:text-slate-400 mb-4">Permanently delete your account and all associated data. This cannot be undone.</p>
-            <button
-              onClick={() => { setDeleteError(""); setDeletePassword(""); setShowDeleteModal(true); }}
-              className="flex items-center gap-2 px-4 min-h-[44px] py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-xl transition-colors"
-            >
-              <Trash2 size={15} />
-              Delete Account
-            </button>
-          </div>
-
         </div>
       </div>
 
@@ -453,38 +426,37 @@ export default function SettingsPage() {
               <p className="font-bold text-gray-900 dark:text-slate-100">Delete Account Permanently</p>
             </div>
             <p className="text-xs text-gray-500 dark:text-slate-400 mb-1">This will immediately and permanently delete:</p>
-            <ul className="text-xs text-gray-500 dark:text-slate-400 mb-4 list-disc list-inside space-y-0.5 ml-1">
-              <li>All your listings and their photos</li>
-              <li>Your profile photo and account data</li>
-              <li>Your login credentials</li>
+            <ul className="text-xs text-gray-500 dark:text-slate-400 list-disc list-inside mb-4 space-y-0.5">
+              <li>Your account and profile</li>
+              <li>All your listings and photos</li>
+              <li>Your messages and conversations</li>
             </ul>
-            <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Enter your password to confirm:</label>
+            <label className="block text-xs font-medium text-gray-600 dark:text-slate-300 mb-1">Enter your password to confirm</label>
             <input
               type="password"
               value={deletePassword}
               onChange={(e) => setDeletePassword(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && !deletingAccount && handleDeleteAccount()}
               placeholder="Your current password"
               className={`${inputCls} mb-3`}
-              autoFocus
             />
             {deleteError && (
-              <p className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl px-3 py-2 mb-3">{deleteError}</p>
+              <p className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl px-3 py-2 mb-3">
+                {deleteError}
+              </p>
             )}
             <div className="flex gap-2">
               <button
                 onClick={() => { setShowDeleteModal(false); setDeletePassword(""); setDeleteError(""); }}
-                disabled={deletingAccount}
-                className="flex-1 min-h-[44px] border border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300 py-2.5 rounded-xl text-sm font-medium disabled:opacity-50"
+                className="flex-1 min-h-[44px] border border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300 py-2.5 rounded-xl text-sm font-medium"
               >
-                {t.cancel}
+                Cancel
               </button>
               <button
                 onClick={handleDeleteAccount}
-                disabled={deletingAccount || !deletePassword}
-                className="flex-1 min-h-[44px] bg-red-600 text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 hover:bg-red-700 transition-colors"
+                disabled={deletingAccount}
+                className="flex-1 min-h-[44px] bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50"
               >
-                {deletingAccount ? "Deleting…" : "Delete Forever"}
+                {deletingAccount ? "Deleting…" : "Delete Account"}
               </button>
             </div>
           </div>

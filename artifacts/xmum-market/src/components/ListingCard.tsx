@@ -13,24 +13,25 @@ interface Props {
   onEdit?: () => void;
 }
 
+function relativeTime(ms: number): string {
+  const diff = Date.now() - ms;
+  const mins = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+  if (mins < 60) return mins <= 1 ? "Just now" : mins + "m ago";
+  if (hours < 24) return hours + "h ago";
+  return days + "d ago";
+}
+
 export default function ListingCard({ listing, onDelete, showDelete, showMarkSold, onMarkSold, showEdit, onEdit }: Props) {
   const { t } = useLang();
   const isSold = listing.status === "sold";
-
-  const timeAgo = (ts: number) => {
-    const diff = Date.now() - ts;
-    const mins = Math.floor(diff / 60000);
-    if (mins < 60) return `${mins}m ago`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h ago`;
-    return `${Math.floor(hrs / 24)}d ago`;
-  };
 
   const catKey = listing.category as keyof typeof t.categories;
   const catLabel = t.categories[catKey] ?? listing.category;
 
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
+    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-card border border-gray-100 dark:border-slate-700 overflow-hidden hover:shadow-hover hover:-translate-y-0.5 transition-all duration-200">
       <Link href={`/listing/${listing.id}`}>
         <div className="relative">
           {listing.photos.length > 0 ? (
@@ -53,36 +54,40 @@ export default function ListingCard({ listing, onDelete, showDelete, showMarkSol
           )}
 
           {isSold && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span className="bg-black/70 text-white text-xs font-bold tracking-widest px-3 py-1.5 rounded-full rotate-[-8deg] shadow-lg">
+            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+              <span className="text-white text-lg font-bold tracking-widest">
                 {listing.type === "lost-found" ? t.resolvedBadge : t.soldBadge}
               </span>
             </div>
           )}
 
           {!isSold && (
-            <span className={`absolute top-2 right-2 text-xs font-semibold px-2 py-0.5 rounded-full ${listing.condition === "new" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
-              {listing.condition === "new" ? t.conditionNew : t.conditionUsed}
-            </span>
-          )}
-          {listing.type === "lost-found" && !isSold && (
-            <span className="absolute top-2 left-2 text-xs font-semibold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">
-              {catLabel}
-            </span>
+            <>
+              {listing.type === "buy-sell" ? (
+                <span className="absolute top-2 left-2 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-300">
+                  For Sale
+                </span>
+              ) : (
+                <span className="absolute top-2 left-2 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300">
+                  Lost &amp; Found
+                </span>
+              )}
+              <span className={`absolute top-2 right-2 text-xs font-semibold px-2 py-0.5 rounded-full ${listing.condition === "new" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
+                {listing.condition === "new" ? t.conditionNew : t.conditionUsed}
+              </span>
+            </>
           )}
         </div>
 
         <div className="p-3">
-          {listing.type === "buy-sell" && !isSold && (
-            <span className="inline-block text-[11px] font-semibold uppercase tracking-wide text-[#003366]/70 dark:text-blue-400/70 mb-0.5">
-              {catLabel}
-            </span>
-          )}
+          <span className="inline-block text-[11px] font-semibold uppercase tracking-wide text-[#003366]/70 dark:text-blue-400/70 mb-0.5">
+            {catLabel}
+          </span>
           <h3 className={`font-semibold text-sm line-clamp-1 ${isSold ? "text-gray-400 dark:text-slate-500" : "text-gray-900 dark:text-slate-100"}`}>{listing.title}</h3>
           <p className="text-xs text-gray-500 dark:text-slate-400 line-clamp-2 mt-0.5">{listing.description}</p>
 
           {listing.type === "buy-sell" && (
-            <p className={`mt-2 text-base font-semibold ${isSold ? "text-gray-400 dark:text-slate-500 line-through" : "text-[#003366] dark:text-blue-400"}`}>
+            <p className={`mt-2 text-lg font-bold ${isSold ? "text-gray-400 dark:text-slate-500 line-through" : "text-blue-600 dark:text-blue-400"}`}>
               {listing.price === 0 ? t.free : `${t.rmPrefix} ${listing.price?.toFixed(2)}`}
             </p>
           )}
@@ -101,18 +106,18 @@ export default function ListingCard({ listing, onDelete, showDelete, showMarkSol
             )}
             <span className="flex items-center gap-1 shrink-0 ml-2">
               <Clock size={10} />
-              {timeAgo(listing.createdAt)}
+              {relativeTime(listing.createdAt)}
             </span>
           </div>
         </div>
       </Link>
 
       {(showDelete || showMarkSold || showEdit) && (
-        <div className="px-3 pb-3 flex flex-wrap gap-2">
+        <div className="px-3 pb-3 flex flex-wrap gap-1.5">
           {showEdit && onEdit && !isSold && (
             <button
               onClick={(e) => { e.stopPropagation(); onEdit(); }}
-              className="flex-1 min-h-[40px] text-xs text-gray-600 dark:text-slate-300 border border-gray-300 dark:border-slate-600 rounded-lg py-1.5 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors font-medium flex items-center justify-center gap-1"
+              className="flex-1 min-h-[44px] text-xs text-gray-600 dark:text-slate-300 border border-gray-300 dark:border-slate-600 rounded-lg py-1.5 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors font-medium flex items-center justify-center gap-1"
             >
               <Pencil size={12} />
               {t.editListing}
@@ -121,7 +126,7 @@ export default function ListingCard({ listing, onDelete, showDelete, showMarkSol
           {showMarkSold && onMarkSold && !isSold && (
             <button
               onClick={(e) => { e.stopPropagation(); onMarkSold(); }}
-              className="flex-1 min-h-[40px] text-xs text-[#003366] dark:text-blue-400 border border-[#003366]/30 dark:border-blue-500/30 rounded-lg py-1.5 hover:bg-[#003366]/5 dark:hover:bg-blue-500/10 transition-colors font-medium"
+              className="flex-1 min-h-[44px] text-xs text-[#003366] dark:text-blue-400 border border-[#003366]/30 dark:border-blue-500/30 rounded-lg py-1.5 hover:bg-[#003366]/5 dark:hover:bg-blue-500/10 transition-colors font-medium"
             >
               {listing.type === "lost-found" ? t.markAsResolved : t.markAsSold}
             </button>
@@ -134,7 +139,7 @@ export default function ListingCard({ listing, onDelete, showDelete, showMarkSol
           {showDelete && onDelete && (
             <button
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              className="flex-1 min-h-[40px] text-xs text-red-500 border border-red-200 dark:border-red-800 rounded-lg py-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+              className="flex-1 min-h-[44px] text-xs text-red-500 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg py-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
             >
               {t.delete}
             </button>

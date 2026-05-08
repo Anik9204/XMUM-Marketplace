@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { logOut } from "@/lib/auth";
 import AuthModal from "@/components/AuthModal";
 import VerificationBanner from "@/components/VerificationBanner";
-import { Home, Search, PlusSquare, User, Globe, MessageCircle } from "lucide-react";
+import { Home, Search, PlusSquare, User, Globe, MessageCircle, Plus } from "lucide-react";
 import { useState } from "react";
 import NotificationBell from "@/components/NotificationBell";
 
@@ -14,6 +14,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
+
+  const isHomePage = location === "/";
 
   const navItems = [
     { href: "/", icon: Home, label: t.home },
@@ -26,7 +28,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-950 flex flex-col">
       {/* ── Header ────────────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-50 bg-[#003366] dark:bg-slate-900 shadow-md border-b border-white/10 dark:border-slate-700/50">
+      <header className="sticky top-0 z-50 bg-[#003366] dark:bg-slate-900 shadow-md border-b border-slate-200 dark:border-slate-700/80">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 shrink-0">
@@ -37,7 +39,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </Link>
 
           <div className="flex items-center gap-1 sm:gap-2">
-            {/* Language Toggle — icon only on xs, text on sm+ */}
+            {/* Language Toggle */}
             <button
               onClick={toggleLang}
               className="flex items-center gap-1 text-white/80 hover:text-white text-sm font-medium transition-colors p-2 min-h-[44px] min-w-[44px] justify-center rounded-lg hover:bg-white/10"
@@ -118,7 +120,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </footer>
 
-      {/* Mobile bottom nav — min 48px tap targets, safe area inset */}
+      {/* Mobile bottom nav */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-700 z-40">
         <div className="flex pb-[env(safe-area-inset-bottom)]">
           {navItems.map(({ href, icon: Icon, label, activeFor }) => {
@@ -127,15 +129,24 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <Link
                 key={href}
                 href={href}
-                className={`flex-1 flex flex-col items-center justify-center h-12 gap-0.5 transition-colors ${active ? "text-[#003366] dark:text-blue-400" : "text-gray-400 dark:text-slate-500"}`}
+                className={`flex-1 flex flex-col items-center justify-center min-h-[56px] gap-0.5 transition-colors ${active ? "text-blue-600 dark:text-blue-400" : "text-slate-400 dark:text-slate-500"}`}
               >
                 <Icon size={20} strokeWidth={active ? 2.5 : 1.8} />
-                <span className="text-[10px] font-medium tracking-wide">{label}</span>
+                <span className="text-[10px] font-medium">{label}</span>
               </Link>
             );
           })}
         </div>
       </nav>
+
+      {/* Floating Action Button — home page, authenticated, mobile only */}
+      {user && isHomePage && (
+        <Link href="/post">
+          <button className="fixed bottom-20 right-4 z-50 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-modal flex items-center justify-center transition-transform hover:scale-105 active:scale-95 md:hidden">
+            <Plus className="w-6 h-6" />
+          </button>
+        </Link>
+      )}
 
       {/* Auth modal — global, triggered from header */}
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}

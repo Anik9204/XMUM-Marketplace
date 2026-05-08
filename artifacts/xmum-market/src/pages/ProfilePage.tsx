@@ -25,6 +25,8 @@ function SuccessToast({ message, onDone }: { message: string; onDone: () => void
   );
 }
 
+type ListingTab = "active" | "sold" | "archived";
+
 export default function ProfilePage() {
   const { t, lang } = useLang();
   const { user, userProfile, avatarOverride } = useAuth();
@@ -38,8 +40,8 @@ export default function ProfilePage() {
   const [deleteError, setDeleteError] = useState("");
   const [successToast, setSuccessToast] = useState("");
   const [expiryReminders, setExpiryReminders] = useState<Listing[]>([]);
+  const [tab, setTab] = useState<ListingTab>("active");
 
-  // Cache listings in a ref so navigating Settings → Profile doesn't re-fetch on every visit.
   const listingsCache = useRef<Listing[]>([]);
 
   useEffect(() => {
@@ -81,9 +83,7 @@ export default function ProfilePage() {
           now - l.createdAt >= LISTING_REMINDER_MS &&
           now - l.createdAt < LISTING_EXPIRY_MS
         );
-        if (expiringSoon.length > 0) {
-          setExpiryReminders(expiringSoon);
-        }
+        if (expiringSoon.length > 0) setExpiryReminders(expiringSoon);
       })
       .finally(() => setLoading(false));
   }, [user]);
@@ -160,7 +160,7 @@ export default function ProfilePage() {
         listingId: listing.id,
       });
     } catch {
-      // silently ignore — surface via UI if needed
+      // silently ignore
     }
   };
 
@@ -174,41 +174,62 @@ export default function ProfilePage() {
 
   const AvatarDisplay = () =>
     avatarSrc ? (
-      <img src={avatarSrc} alt="avatar" className="w-14 h-14 rounded-full object-cover border-2 border-white dark:border-slate-700 shadow" />
+      <img src={avatarSrc} alt="avatar" className="w-16 h-16 rounded-full object-cover border-4 border-white dark:border-slate-700 shadow-sm" />
     ) : (
-      <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#003366] to-[#0055aa] flex items-center justify-center text-white font-bold text-xl shadow">
+      <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#003366] to-[#0055aa] flex items-center justify-center text-white font-bold text-xl shadow">
         {(user.email ?? "?")[0].toUpperCase()}
       </div>
     );
+
+  const now = Date.now();
+  const filteredListings = listings.filter(l => {
+    if (tab === "active") return !l.isArchived && l.status !== "sold";
+    if (tab === "sold") return l.status === "sold";
+    if (tab === "archived") return l.isArchived;
+    return true;
+  });
 
   return (
     <>
       {successToast && <SuccessToast message={successToast} onDone={() => setSuccessToast("")} />}
 
       <div className="max-w-5xl mx-auto px-4 py-5 pb-24 sm:pb-8 animate-in fade-in duration-200">
-        {/* Profile card */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-5 mb-5 flex items-center gap-4">
-          <AvatarDisplay />
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-gray-900 dark:text-slate-100 truncate">{displayName}</p>
-            <p className="text-xs text-gray-400 dark:text-slate-500 truncate">{user.email}</p>
-            <span className={`inline-flex items-center gap-1 text-xs font-medium mt-1 px-2 py-0.5 rounded-full ${user.emailVerified ? "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"}`}>
-              {user.emailVerified
-                ? <><CheckCircle size={10} />{t.verifiedBadge}</>
-                : <><AlertCircle size={10} />{t.unverifiedBadge}</>}
-            </span>
+
+        {/* Profile header */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-card mb-4">
+          <div className="flex items-start gap-4">
+            <AvatarDisplay />
+            <div className="flex-1">
+              <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">{displayName}</h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400">{user.email}</p>
+              <div className="flex items-center gap-3 mt-2">
+                <span className="text-xs text-slate-500 dark:text-slate-400">
+                  Member since {userProfile ? new Date(userProfile.createdAt).toLocaleDateString("en-MY", { month: "short", year: "numeric" }) : "—"}
+                </span>
+                <span className="w-1 h-1 bg-slate-400 rounded-full" />
+                {user.emailVerified ? (
+                  <span className="text-xs text-green-600 dark:text-green-400 font-medium flex items-center gap-1">
+                    <CheckCircle size={10} /> XMUM Verified
+                  </span>
+                ) : (
+                  <span className="text-xs text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1">
+                    <AlertCircle size={10} /> Unverified
+                  </span>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={handleSignOut}
+              className="flex items-center gap-1.5 text-xs text-red-500 border border-red-200 dark:border-red-800 px-3 min-h-[44px] py-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors shrink-0"
+            >
+              <LogOut size={14} />
+              {t.signOut}
+            </button>
           </div>
-          <button
-            onClick={handleSignOut}
-            className="flex items-center gap-1.5 text-xs text-red-500 border border-red-200 dark:border-red-800 px-3 min-h-[44px] py-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors shrink-0"
-          >
-            <LogOut size={14} />
-            {t.signOut}
-          </button>
         </div>
 
-        {/* Tab bar */}
-        <div className="flex border-b border-gray-200 dark:border-slate-700 mb-5">
+        {/* Tab bar — My Listings / Settings */}
+        <div className="flex border-b border-gray-200 dark:border-slate-700 mb-4">
           <button
             className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold border-b-2 border-[#003366] dark:border-blue-400 text-[#003366] dark:text-blue-400 -mb-px"
           >
@@ -221,6 +242,23 @@ export default function ProfilePage() {
             <Settings size={14} />
             {t.accountSettings}
           </button>
+        </div>
+
+        {/* Listing sub-tabs: active / sold / archived */}
+        <div className="flex gap-1 bg-slate-100 dark:bg-slate-700/50 rounded-xl p-1 mb-4">
+          {(["active", "sold", "archived"] as ListingTab[]).map(t_ => (
+            <button
+              key={t_}
+              onClick={() => setTab(t_)}
+              className={`flex-1 rounded-lg py-2 text-sm font-medium min-h-[40px] transition-colors capitalize ${
+                tab === t_
+                  ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
+              }`}
+            >
+              {t_}
+            </button>
+          ))}
         </div>
 
         {/* Expiry reminder banner */}
@@ -238,7 +276,7 @@ export default function ProfilePage() {
               </p>
               <ul className="mt-1.5 space-y-0.5">
                 {expiryReminders.map(l => {
-                  const daysLeft = Math.ceil((l.createdAt + LISTING_EXPIRY_MS - Date.now()) / (1000 * 60 * 60 * 24));
+                  const daysLeft = Math.ceil((l.createdAt + LISTING_EXPIRY_MS - now) / (1000 * 60 * 60 * 24));
                   return (
                     <li key={l.id} className="text-xs text-amber-700 dark:text-amber-400 truncate">
                       • {l.title} — {daysLeft} {t.daysLeft}
@@ -247,10 +285,7 @@ export default function ProfilePage() {
                 })}
               </ul>
             </div>
-            <button
-              onClick={() => setExpiryReminders([])}
-              className="text-amber-500 hover:text-amber-700 dark:hover:text-amber-300 shrink-0"
-            >
+            <button onClick={() => setExpiryReminders([])} className="text-amber-500 hover:text-amber-700 dark:hover:text-amber-300 shrink-0">
               <X size={16} />
             </button>
           </div>
@@ -269,34 +304,42 @@ export default function ProfilePage() {
               </div>
             ))}
           </div>
-        ) : listings.length === 0 ? (
+        ) : filteredListings.length === 0 ? (
           <div className="text-center py-12 text-gray-400 dark:text-slate-400">
-            <p className="text-sm">{t.noListings}</p>
+            <p className="text-sm">{tab === "active" ? t.noListings : `No ${tab} listings.`}</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {listings.map((l) => (
-              <div key={l.id} className="flex flex-col gap-1">
-                <ListingCard
-                  listing={l}
-                  showDelete
-                  showMarkSold
-                  showEdit
-                  onDelete={() => setDeleteTarget(l)}
-                  onMarkSold={() => handleMarkAsSold(l)}
-                  onEdit={() => navigate(`/edit/${l.id}`)}
-                />
-                {l.status !== "sold" && (
-                  <button
-                    onClick={() => handleBump(l)}
-                    className="text-xs text-purple-600 border border-purple-200 rounded-lg py-1.5 hover:bg-purple-50 transition-colors w-full min-h-[44px] flex items-center justify-center gap-1.5"
-                  >
-                    <ArrowUp size={13} />
-                    {lang === "en" ? "Bump to Top" : "置顶"}
-                  </button>
-                )}
-              </div>
-            ))}
+            {filteredListings.map((l) => {
+              const expiringSoon = l.status === "active" && now - l.createdAt >= LISTING_REMINDER_MS && now - l.createdAt < LISTING_EXPIRY_MS;
+              return (
+                <div key={l.id} className="flex flex-col gap-1">
+                  <ListingCard
+                    listing={l}
+                    showDelete
+                    showMarkSold
+                    showEdit
+                    onDelete={() => setDeleteTarget(l)}
+                    onMarkSold={() => handleMarkAsSold(l)}
+                    onEdit={() => navigate(`/edit/${l.id}`)}
+                  />
+                  {expiringSoon && (
+                    <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 rounded-lg px-2 py-1">
+                      ⚠️ Expires soon — Bump to refresh
+                    </div>
+                  )}
+                  {l.status !== "sold" && (
+                    <button
+                      onClick={() => handleBump(l)}
+                      className="text-xs text-purple-600 border border-purple-200 rounded-lg py-1.5 hover:bg-purple-50 transition-colors w-full min-h-[44px] flex items-center justify-center gap-1.5"
+                    >
+                      <ArrowUp size={13} />
+                      {lang === "en" ? "Bump to Top" : "置顶"}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

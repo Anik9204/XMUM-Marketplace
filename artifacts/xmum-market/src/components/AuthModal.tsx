@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { signIn, signUp, resetPasswordWithCheck, isXmuEmail, resendVerification } from "@/lib/auth";
-import { X, Eye, EyeOff, MailCheck } from "lucide-react";
+import { X, Eye, EyeOff, MailCheck, Loader2 } from "lucide-react";
 
 type Mode = "signin" | "signup" | "forgot";
 
@@ -53,7 +53,6 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
   const [forgotCooldown, setForgotCooldown] = useState(0);
   const forgotTimerRef = useRef<ReturnType<typeof setInterval>>(undefined);
 
-  // Clean up both timers on unmount
   useEffect(() => {
     return () => {
       clearInterval(timerRef.current);
@@ -61,13 +60,11 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
     };
   }, []);
 
-  // Reset forgot cooldown whenever the mode changes
   useEffect(() => {
     setForgotCooldown(0);
     clearInterval(forgotTimerRef.current);
   }, [mode]);
 
-  // Lock body scroll while modal is open
   useEffect(() => {
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = ""; };
@@ -152,7 +149,7 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
   if (verificationPending) {
     return (
       <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
-        <div className="bg-white dark:bg-slate-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md sm:mx-4 relative max-h-[90dvh] overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)] sm:pb-0">
+        <div className="bg-white dark:bg-slate-800 rounded-t-2xl sm:rounded-2xl shadow-modal w-full sm:max-w-md sm:mx-4 relative max-h-[90dvh] overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)] sm:pb-0">
           <div className="h-1.5 bg-gradient-to-r from-[#003366] to-[#0055aa]" />
           <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-slate-200">
             <X size={20} />
@@ -197,31 +194,50 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
   // ── Normal Auth View ─────────────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-white dark:bg-slate-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md sm:mx-4 relative max-h-[90dvh] overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)] sm:pb-0">
+      <div className="bg-white dark:bg-slate-800 rounded-t-2xl sm:rounded-2xl shadow-modal w-full sm:max-w-md sm:mx-4 relative max-h-[90dvh] overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)] sm:pb-0">
         <div className="h-1.5 bg-gradient-to-r from-[#003366] to-[#0055aa]" />
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-slate-200 z-10">
           <X size={20} />
         </button>
 
         <div className="p-6">
-          <div className="text-center mb-5">
+          <div className="text-center mb-4">
             <h2 className="text-xl font-bold text-[#003366] dark:text-slate-100">{t.appName}</h2>
             <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
               {mode === "forgot" ? t.resetPassword : mode === "signup" ? t.createAccount : t.welcomeBack}
             </p>
           </div>
 
+          {/* XMUM exclusive banner */}
           {mode !== "forgot" && (
-            <div className="flex bg-gray-100 dark:bg-slate-700 rounded-xl p-1 mb-5">
+            <div className="bg-blue-50 dark:bg-blue-950 rounded-xl px-4 py-2.5 mb-4 flex items-center gap-2">
+              <span>🎓</span>
+              <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
+                Exclusive to XMUM students — @xmu.edu.my emails only
+              </p>
+            </div>
+          )}
+
+          {/* Tab switcher — pill style */}
+          {mode !== "forgot" && (
+            <div className="flex bg-slate-100 dark:bg-slate-700 rounded-xl p-1 mb-5">
               <button
                 onClick={() => { setMode("signin"); setError(""); setSuccess(""); }}
-                className={`flex-1 text-sm font-medium py-1.5 rounded-lg transition-all ${mode === "signin" ? "bg-white dark:bg-slate-600 shadow text-[#003366] dark:text-slate-100" : "text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-300 hover:bg-white/50 dark:hover:bg-slate-600/50"}`}
+                className={`flex-1 py-2 rounded-lg text-sm font-medium min-h-[40px] transition-colors ${
+                  mode === "signin"
+                    ? "bg-white dark:bg-slate-600 text-slate-900 dark:text-slate-100 shadow-sm"
+                    : "text-slate-500 hover:text-slate-700 dark:text-slate-400"
+                }`}
               >
                 {t.signIn}
               </button>
               <button
                 onClick={() => { setMode("signup"); setError(""); setSuccess(""); }}
-                className={`flex-1 text-sm font-medium py-1.5 rounded-lg transition-all ${mode === "signup" ? "bg-white dark:bg-slate-600 shadow text-[#003366] dark:text-slate-100" : "text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-300 hover:bg-white/50 dark:hover:bg-slate-600/50"}`}
+                className={`flex-1 py-2 rounded-lg text-sm font-medium min-h-[40px] transition-colors ${
+                  mode === "signup"
+                    ? "bg-white dark:bg-slate-600 text-slate-900 dark:text-slate-100 shadow-sm"
+                    : "text-slate-500 hover:text-slate-700 dark:text-slate-400"
+                }`}
               >
                 {t.signUp}
               </button>
@@ -255,12 +271,6 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
                 required
                 className={inputCls}
               />
-              {mode === "signup" && (
-                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
-                  <span>⚠️</span>
-                  Only <strong>@xmu.edu.my</strong> emails are accepted
-                </p>
-              )}
             </div>
 
             {mode !== "forgot" && (
@@ -275,8 +285,12 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
                     maxLength={mode === "signup" ? 32 : undefined}
                     className={`${inputCls} pr-10`}
                   />
-                  <button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-400">
-                    {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                  <button
+                    type="button"
+                    onClick={() => setShowPass(!showPass)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 min-h-[44px] flex items-center"
+                  >
+                    {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
                 {mode === "signup" && password.length > 0 && (() => {
@@ -318,23 +332,11 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
                 </p>
                 <div>
                   <label className="block text-xs font-medium text-gray-600 dark:text-slate-300 mb-1">{t.whatsapp}</label>
-                  <input
-                    type="text"
-                    value={whatsapp}
-                    onChange={(e) => setWhatsapp(e.target.value)}
-                    placeholder="+60 12-345 6789"
-                    className={inputCls}
-                  />
+                  <input type="text" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="+60 12-345 6789" className={inputCls} />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-600 dark:text-slate-300 mb-1">{t.wechat}</label>
-                  <input
-                    type="text"
-                    value={wechat}
-                    onChange={(e) => setWechat(e.target.value)}
-                    placeholder="WeChat ID"
-                    className={inputCls}
-                  />
+                  <input type="text" value={wechat} onChange={(e) => setWechat(e.target.value)} placeholder="WeChat ID" className={inputCls} />
                 </div>
               </div>
             )}
@@ -345,11 +347,14 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
             <button
               type="submit"
               disabled={loading || (mode === "forgot" && forgotCooldown > 0)}
-              className="w-full min-h-[44px] bg-[#003366] dark:bg-blue-600 text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-[#002244] dark:hover:bg-blue-700 disabled:opacity-50 transition-colors mt-1"
+              className="w-full min-h-[44px] bg-[#003366] dark:bg-blue-600 text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-[#002244] dark:hover:bg-blue-700 disabled:opacity-75 disabled:cursor-not-allowed transition-colors mt-1"
             >
-              {loading
-                ? t.loading
-                : mode === "forgot" && forgotCooldown > 0
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  {mode === "signin" ? "Signing in…" : mode === "signup" ? "Creating account…" : "Sending…"}
+                </span>
+              ) : mode === "forgot" && forgotCooldown > 0
                 ? `${t.resendIn} ${forgotCooldown}s`
                 : mode === "forgot"
                 ? t.sendResetEmail
@@ -358,6 +363,12 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
                 : t.signIn}
             </button>
           </form>
+
+          {mode === "signup" && (
+            <p className="text-center text-xs text-slate-400 dark:text-slate-500 mt-3">
+              Join students already trading on campus 🎓
+            </p>
+          )}
 
           {mode === "signin" && (
             <button
@@ -374,11 +385,6 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
             >
               {t.backToSignIn}
             </button>
-          )}
-          {mode === "signup" && (
-            <p className="text-center text-[10px] text-gray-400 dark:text-slate-500 mt-3">
-              Only <span className="font-semibold text-[#003366] dark:text-blue-400">@xmu.edu.my</span> emails are accepted.
-            </p>
           )}
         </div>
       </div>

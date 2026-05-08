@@ -1,0 +1,527 @@
+## XMUM Marketplace — UI/UX Redesign Implementation
+
+You are implementing a professional UI/UX redesign of the XMUM Marketplace app.
+The backend, Firebase, routing, and logic are all working and must NOT be touched.
+You are only changing visual design, layout, spacing, typography, and UX flows.
+Apply changes file by file. After each file, confirm what was changed.
+
+Follow ALL existing code patterns:
+- wouter for routing (never react-router)
+- Tailwind dark: variants on every element
+- min-h-[44px] on all interactive elements
+- useLang() for translations
+- useAuth() for user state
+- No modifications to src/components/ui/ (shadcn primitives)
+- No modifications to src/lib/ files (Firebase logic)
+- No modifications to firestore.rules or storage.rules
+
+---
+
+## GLOBAL DESIGN TOKENS (apply to index.css)
+
+1. Set font to Inter via Google Fonts import in index.css:
+   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+   Apply: font-family: 'Inter', sans-serif; on body
+
+2. Light mode background: change from white to slate-50 (#f8fafc)
+   In index.css: body { background-color: #f8fafc; }
+   Dark mode: background stays slate-900 (#0f172a)
+
+3. Three-tier shadow system (add to index.css):
+   .shadow-card   { box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04); }
+   .shadow-hover  { box-shadow: 0 4px 12px rgba(0,0,0,0.12), 0 2px 4px rgba(0,0,0,0.06); }
+   .shadow-modal  { box-shadow: 0 20px 60px rgba(0,0,0,0.15), 0 8px 20px rgba(0,0,0,0.08); }
+
+---
+
+## FILE 1: src/components/ListingCard.tsx
+
+Changes:
+1. Photo container: add aspect-[4/3] w-full object-cover to the image element
+   - No-photo placeholder must also fill the same aspect-[4/3] container
+2. Price: change to text-lg font-bold text-blue-600 dark:text-blue-400
+3. Add a type indicator: top-left corner badge
+   - buy-sell: small blue chip "For Sale"
+   - lost-found: small amber chip "Lost & Found"
+   - Use absolute positioning over the photo
+4. Listing age: replace any full date with relative time
+   - Add this helper inline:
+     function relativeTime(ms: number): string {
+       const diff = Date.now() - ms;
+       const mins = Math.floor(diff / 60000);
+       const hours = Math.floor(diff / 3600000);
+       const days = Math.floor(diff / 86400000);
+       if (mins < 60) return mins <= 1 ? "Just now" : mins + "m ago";
+       if (hours < 24) return hours + "h ago";
+       return days + "d ago";
+     }
+5. Owner action buttons: make Delete button text-red-500 dark:text-red-400
+   All owner buttons must be wrapped in a flex-wrap gap-1.5 container
+6. Card wrapper: use shadow-card class, on hover use shadow-hover
+   Keep existing hover:-translate-y-0.5 transition
+7. SOLD overlay: make it more prominent — semi-transparent dark overlay
+   covering the entire card photo with "SOLD" text centered in white font-bold
+
+---
+
+## FILE 2: src/pages/HomePage.tsx
+
+Changes:
+1. Category chips row: change the wrapping flex row to:
+   className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide"
+   (no flex-wrap — horizontal scroll only)
+   Each chip: min-w-fit whitespace-nowrap
+
+2. Add a personalized greeting above the search bar when user is logged in:
+   {user && userProfile && (
+     <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">
+       Good day, {userProfile.displayName} 👋
+     </p>
+   )}
+
+3. For unauthenticated users, show a slim signup nudge banner above the grid:
+   <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800
+                   rounded-xl px-4 py-3 mb-4 flex items-center justify-between">
+     <span className="text-sm text-blue-700 dark:text-blue-300">
+       🎓 Exclusive to XMUM students
+     </span>
+     <button onClick={() => setShowAuth(true)}
+             className="text-sm font-medium text-blue-600 dark:text-blue-400
+                        underline min-h-[44px]">
+       Sign up free
+     </button>
+   </div>
+
+4. Result count: style as
+   className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-3"
+
+5. SponsoredAdCard wrapper: add a label above it:
+   <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1">
+     Sponsored
+   </p>
+
+6. Load More button: add a loading spinner (use lucide Loader2 with animate-spin)
+   when isLoading is true inside the button
+
+7. Empty state when no listings:
+   Replace any plain text with:
+   <div className="col-span-full flex flex-col items-center py-16 text-center">
+     <span className="text-5xl mb-4">🛍️</span>
+     <p className="text-base font-semibold text-slate-700 dark:text-slate-300">
+       No listings yet
+     </p>
+     <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+       Be the first to post something!
+     </p>
+   </div>
+
+---
+
+## FILE 3: src/pages/SearchPage.tsx
+
+Changes:
+1. Active filter pills: after the search bar, render dismissible pills for any active filters
+   For each active filter (category, condition, minPrice, maxPrice):
+   <span className="inline-flex items-center gap-1 bg-blue-100 dark:bg-blue-900
+                    text-blue-700 dark:text-blue-300 rounded-full px-3 py-1 text-xs
+                    font-medium min-h-[32px]">
+     {filterLabel}
+     <button onClick={() => clearFilter(key)} className="ml-1 hover:text-red-500">×</button>
+   </span>
+   Wrap all pills in: <div className="flex flex-wrap gap-2 mt-2 mb-3">
+
+2. Filter button: label it "Filters" with the SlidersHorizontal icon from lucide-react
+   Show an active dot (w-2 h-2 bg-blue-500 rounded-full) on the button when any filter is active
+
+3. Empty state when no results for a search query:
+   <div className="col-span-full flex flex-col items-center py-16 text-center">
+     <span className="text-5xl mb-4">🔍</span>
+     <p className="text-base font-semibold text-slate-700 dark:text-slate-300">
+       No results for "{query}"
+     </p>
+     <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+       Try different keywords or browse by category
+     </p>
+   </div>
+
+4. Grid: ensure max-w-6xl mx-auto with lg:grid-cols-3 md:grid-cols-2 grid-cols-2
+
+---
+
+## FILE 4: src/pages/ListingDetailPage.tsx
+
+Changes:
+1. Price: render as
+   <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">
+     {listing.price ? `RM ${listing.price}` : "Free / Return Item"}
+   </p>
+
+2. Sticky bottom bar on mobile (add inside the page, outside normal flow):
+   <div className="fixed bottom-0 left-0 right-0 z-40
+                   bg-white dark:bg-slate-800 border-t border-gray-200
+                   dark:border-slate-700 px-4 py-3 flex items-center
+                   justify-between gap-3 md:hidden">
+     <div>
+       <p className="text-xs text-slate-500 dark:text-slate-400">Price</p>
+       <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
+         {listing.price ? `RM ${listing.price}` : "Free"}
+       </p>
+     </div>
+     {/* Primary CTA — WhatsApp if available, otherwise Message in App */}
+     {sellerProfile?.showWhatsApp && listing.whatsapp ? (
+       <a href={`https://wa.me/${listing.whatsapp}`}
+          className="flex-1 bg-green-500 hover:bg-green-600 text-white font-semibold
+                     rounded-xl px-4 min-h-[44px] flex items-center justify-center gap-2">
+         <span>💬</span> WhatsApp Seller
+       </a>
+     ) : (
+       <button onClick={handleMessageSeller}
+               className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold
+                          rounded-xl px-4 min-h-[44px] flex items-center justify-center gap-2">
+         Message Seller
+       </button>
+     )}
+   </div>
+   Add pb-24 to the page container on mobile to prevent content hiding behind sticky bar.
+
+3. Meet-up spot: render as a chip:
+   <span className="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-slate-700
+                    text-slate-600 dark:text-slate-300 rounded-lg px-3 py-1.5 text-sm">
+     📍 {listing.meetupSpot}
+   </span>
+
+4. Listing age: show "Listed {relativeTime(listing.createdAt)}" using the same relativeTime
+   helper from ListingCard
+
+5. Seller info card:
+   <div className="bg-slate-50 dark:bg-slate-700/50 rounded-2xl p-4 flex items-center gap-3">
+     <img src={sellerProfile?.avatarUrl || fallback} className="w-12 h-12 rounded-full
+          object-cover border-2 border-white dark:border-slate-600" />
+     <div>
+       <p className="font-semibold text-sm text-slate-800 dark:text-slate-200">
+         {listing.userName}
+       </p>
+       <p className="text-xs text-slate-500 dark:text-slate-400">
+         XMUM Verified ✓
+       </p>
+     </div>
+   </div>
+
+6. Report link at the very bottom:
+   <button className="text-xs text-slate-400 hover:text-red-500 dark:hover:text-red-400
+                      underline mt-4 min-h-[44px]">
+     Report this listing
+   </button>
+   (This is UI only for now — onClick can show a toast "Thank you for reporting.
+   We'll review this listing.")
+
+---
+
+## FILE 5: src/pages/MessagesPage.tsx
+
+Changes:
+1. Desktop layout: wrap the page in a flex container:
+   <div className="flex h-[calc(100vh-64px)]">
+     {/* Conversation list — hidden on mobile when chat open */}
+     <div className={`w-full md:w-80 md:flex flex-col border-r border-gray-200
+                      dark:border-slate-700 ${activeConv ? 'hidden md:flex' : 'flex'}`}>
+       {/* conversation list here */}
+     </div>
+     {/* Chat panel */}
+     <div className={`flex-1 flex flex-col ${activeConv ? 'flex' : 'hidden md:flex'}`}>
+       {/* chat here */}
+     </div>
+   </div>
+
+2. Conversation list items: change layout to:
+   <div className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50
+                   dark:hover:bg-slate-700/50 cursor-pointer border-b
+                   border-gray-100 dark:border-slate-700/50">
+     <img src={listingPhoto || placeholder} className="w-10 h-10 rounded-lg object-cover
+          flex-shrink-0" />
+     <div className="flex-1 min-w-0">
+       <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
+         {otherPersonName}
+       </p>
+       <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+         {lastMessage}
+       </p>
+     </div>
+     <div className="flex flex-col items-end gap-1">
+       <p className="text-[10px] text-slate-400">{relativeTime(conv.lastMessageAt)}</p>
+       {conv.unreadCount > 0 && (
+         <span className="bg-blue-600 text-white text-[10px] font-bold rounded-full
+                          w-5 h-5 flex items-center justify-center">
+           {conv.unreadCount}
+         </span>
+       )}
+     </div>
+   </div>
+
+3. Message bubbles:
+   Sent (by me): right-aligned, bg-blue-600 text-white rounded-2xl rounded-br-sm px-4 py-2
+   Received: left-aligned, bg-slate-100 dark:bg-slate-700 text-slate-800
+             dark:text-slate-200 rounded-2xl rounded-bl-sm px-4 py-2
+   Timestamp below each bubble: text-[10px] text-slate-400 mt-0.5
+   Add relativeTime() to convert timestamps
+
+4. Input bar:
+   <div className="flex items-end gap-2 px-4 py-3 border-t border-gray-200
+                   dark:border-slate-700 bg-white dark:bg-slate-800">
+     <input className="flex-1 bg-slate-100 dark:bg-slate-700 rounded-full
+                       px-4 py-2.5 text-sm min-h-[44px] focus:outline-none
+                       focus:ring-2 focus:ring-blue-500 border-0"
+            placeholder="Type a message…" />
+     <button disabled={!text.trim()}
+             className="w-10 h-10 bg-blue-600 disabled:bg-slate-300 dark:disabled:bg-slate-600
+                        rounded-full flex items-center justify-center flex-shrink-0
+                        transition-colors min-h-[44px]">
+       <SendIcon className="w-4 h-4 text-white" />
+     </button>
+   </div>
+
+5. Empty state (no conversation selected on desktop):
+   <div className="flex-1 hidden md:flex flex-col items-center justify-center text-center">
+     <span className="text-5xl mb-4">💬</span>
+     <p className="font-semibold text-slate-700 dark:text-slate-300">Your messages</p>
+     <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+       Select a conversation to start chatting
+     </p>
+   </div>
+
+---
+
+## FILE 6: src/pages/ProfilePage.tsx
+
+Changes:
+1. Profile header:
+   <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-card mb-4">
+     <div className="flex items-start gap-4">
+       <img src={userProfile.avatarUrl || fallback}
+            className="w-16 h-16 rounded-full object-cover border-4
+                       border-white dark:border-slate-700 shadow-sm" />
+       <div className="flex-1">
+         <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">
+           {userProfile.displayName}
+         </h2>
+         <p className="text-sm text-slate-500 dark:text-slate-400">
+           {userProfile.email}
+         </p>
+         <div className="flex items-center gap-3 mt-2">
+           <span className="text-xs text-slate-500 dark:text-slate-400">
+             Member since {new Date(userProfile.createdAt).toLocaleDateString('en-MY',
+             { month: 'short', year: 'numeric' })}
+           </span>
+           <span className="w-1 h-1 bg-slate-400 rounded-full" />
+           <span className="text-xs text-green-600 dark:text-green-400 font-medium">
+             ✓ XMUM Verified
+           </span>
+         </div>
+       </div>
+     </div>
+   </div>
+
+2. Listings tabs: add tab state (active | sold | archived):
+   const [tab, setTab] = useState<'active' | 'sold' | 'archived'>('active')
+   Tab UI:
+   <div className="flex gap-1 bg-slate-100 dark:bg-slate-700/50 rounded-xl p-1 mb-4">
+     {['active', 'sold', 'archived'].map(t => (
+       <button key={t} onClick={() => setTab(t as any)}
+               className={`flex-1 rounded-lg py-2 text-sm font-medium min-h-[40px]
+                           transition-colors capitalize
+                           ${tab === t
+                             ? 'bg-white dark:bg-slate-700 text-slate-900
+                                dark:text-slate-100 shadow-sm'
+                             : 'text-slate-500 dark:text-slate-400 hover:text-slate-700
+                                dark:hover:text-slate-300'}`}>
+         {t}
+       </button>
+     ))}
+   </div>
+   Filter listings by: active = !isArchived && status !== 'sold'
+                       sold   = status === 'sold'
+                       archived = isArchived
+
+3. Expiry warning on listing card: if createdAt is within 7 days of LISTING_EXPIRY_MS:
+   <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50
+                   dark:bg-amber-900/30 rounded-lg px-2 py-1 mt-1">
+     ⚠️ Expires soon — Bump to refresh
+   </div>
+
+---
+
+## FILE 7: src/pages/SettingsPage.tsx
+
+Changes:
+1. Group settings into sections. Wrap each group in:
+   <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-card mb-4 overflow-hidden">
+     <div className="px-4 py-3 border-b border-gray-100 dark:border-slate-700">
+       <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400
+                      dark:text-slate-500">
+         {sectionLabel}
+       </h3>
+     </div>
+     {/* settings items */}
+   </div>
+
+2. Groups:
+   - "Profile" — name, avatar
+   - "Privacy" — show email, WhatsApp, WeChat toggles
+   - "Appearance" — dark mode, language
+   - "Account" — change password
+   - "Danger Zone" — delete account
+
+3. Danger Zone section: red-tinted border:
+   className="border border-red-200 dark:border-red-900 rounded-2xl mb-4 overflow-hidden"
+   Section header: text-red-500 background bg-red-50 dark:bg-red-900/20
+
+4. Delete Account button: change to:
+   className="w-full text-left px-4 py-3 text-red-600 dark:text-red-400 font-medium
+              text-sm min-h-[44px] hover:bg-red-50 dark:hover:bg-red-900/20"
+
+---
+
+## FILE 8: src/components/AuthModal.tsx
+
+Changes:
+1. Add above the tab switcher:
+   <div className="bg-blue-50 dark:bg-blue-950 rounded-xl px-4 py-2.5 mb-4
+                   flex items-center gap-2">
+     <span>🎓</span>
+     <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
+       Exclusive to XMUM students — @xmu.edu.my emails only
+     </p>
+   </div>
+
+2. Tab switcher: replace with pill toggle:
+   <div className="flex bg-slate-100 dark:bg-slate-700 rounded-xl p-1 mb-5">
+     <button onClick={() => setMode('signin')}
+             className={`flex-1 py-2 rounded-lg text-sm font-medium min-h-[40px]
+                         transition-colors
+                         ${mode === 'signin'
+                           ? 'bg-white dark:bg-slate-600 text-slate-900
+                              dark:text-slate-100 shadow-sm'
+                           : 'text-slate-500 hover:text-slate-700
+                              dark:text-slate-400'}`}>
+       Sign In
+     </button>
+     <button onClick={() => setMode('signup')}
+             className={`flex-1 py-2 rounded-lg text-sm font-medium min-h-[40px]
+                         transition-colors
+                         ${mode === 'signup'
+                           ? 'bg-white dark:bg-slate-600 text-slate-900
+                              dark:text-slate-100 shadow-sm'
+                           : 'text-slate-500 hover:text-slate-700
+                              dark:text-slate-400'}`}>
+       Sign Up
+     </button>
+   </div>
+
+3. Password input: wrap in a relative div and add show/hide toggle:
+   <div className="relative">
+     <input type={showPw ? 'text' : 'password'} ... />
+     <button type="button" onClick={() => setShowPw(!showPw)}
+             className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400
+                        hover:text-slate-600 min-h-[44px] flex items-center">
+       {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+     </button>
+   </div>
+   Add: const [showPw, setShowPw] = useState(false)
+   Import Eye, EyeOff from lucide-react
+
+4. Social proof line (signup mode only):
+   <p className="text-center text-xs text-slate-400 dark:text-slate-500 mt-3">
+     Join students already trading on campus 🎓
+   </p>
+
+5. Submit button loading state: when isLoading is true:
+   className includes opacity-75 cursor-not-allowed
+   Replace button text with:
+   <span className="flex items-center justify-center gap-2">
+     <Loader2 className="w-4 h-4 animate-spin" /> {mode === 'signin' ? 'Signing in…' : 'Creating account…'}
+   </span>
+   Import Loader2 from lucide-react
+
+---
+
+## FILE 9: src/components/NotificationBell.tsx
+
+Changes:
+1. Dropdown: add a slide-down animation class to the dropdown container:
+   className="... animate-in slide-in-from-top-2 duration-150"
+
+2. Add "Mark all as read" button in dropdown header:
+   <div className="flex items-center justify-between px-4 py-3 border-b
+                   border-gray-100 dark:border-slate-700">
+     <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+       Notifications
+     </p>
+     {hasUnread && (
+       <button onClick={markAllRead}
+               className="text-xs text-blue-600 dark:text-blue-400 hover:underline
+                          min-h-[44px] flex items-center">
+         Mark all read
+       </button>
+     )}
+   </div>
+
+3. Unread vs read styling:
+   Unread: bg-blue-50 dark:bg-blue-950/40 font-medium
+   Read: bg-transparent font-normal text-slate-500 dark:text-slate-400
+
+4. Each notification: add an icon on the left based on type:
+   listing_deleted → 🗑️
+   listing_sold → ✅
+   welcome → 👋
+
+5. Empty state:
+   <div className="flex flex-col items-center py-8 text-center">
+     <span className="text-3xl mb-2">🎉</span>
+     <p className="text-sm text-slate-500 dark:text-slate-400">You're all caught up!</p>
+   </div>
+
+---
+
+## FILE 10: src/components/Layout.tsx
+
+Changes:
+1. Header: add a subtle bottom border that is more visible:
+   className="... border-b border-slate-200 dark:border-slate-700/80"
+
+2. Mobile bottom nav: ensure each tab icon+label is min-h-[56px] and the active state
+   uses the blue-600 color for both icon and label, inactive is slate-400
+   Label font: text-[10px] font-medium
+
+3. Add a floating action button for authenticated users on mobile
+   (appears on HomePage and SearchPage only):
+   Place before closing </> of Layout:
+   {user && isHomePage && (
+     <Link href="/post">
+       <button className="fixed bottom-20 right-4 z-50 w-14 h-14 bg-blue-600
+                          hover:bg-blue-700 text-white rounded-full shadow-modal
+                          flex items-center justify-center transition-transform
+                          hover:scale-105 active:scale-95 md:hidden">
+         <Plus className="w-6 h-6" />
+       </button>
+     </Link>
+   )}
+   Import Plus from lucide-react
+   Detect current page with useLocation() from wouter
+
+---
+
+## IMPLEMENTATION NOTES
+
+- Do NOT touch any file in src/lib/ or src/components/ui/
+- Do NOT modify firestore.rules, storage.rules, or firestore.indexes.json
+- Do NOT change any Firebase logic, auth logic, or data fetching
+- All new UI elements must have dark: variants
+- All new interactive elements must have min-h-[44px]
+- All new user-facing strings should use t() from useLang() where a translation key exists,
+  or add new keys to both en and zh objects in src/lib/i18n.ts
+- After each file change, run the dev server and confirm no TypeScript errors
+- Test both light and dark mode after each change
+- Test on a 375px mobile viewport after each change
+
+Start with FILE 1 (ListingCard.tsx) and work through the list in order.
+Confirm each file is complete before moving to the next.

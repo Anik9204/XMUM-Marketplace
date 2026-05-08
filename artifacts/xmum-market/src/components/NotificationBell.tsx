@@ -4,6 +4,22 @@ import { useAuth } from "@/contexts/AuthContext";
 import { getNotifications, markNotificationsRead } from "@/lib/notifications";
 import { AppNotification } from "@/lib/types";
 
+const NOTIF_ICONS: Record<string, string> = {
+  listing_deleted: "🗑️",
+  listing_sold: "✅",
+  welcome: "👋",
+};
+
+function relativeTime(ms: number): string {
+  const diff = Date.now() - ms;
+  const mins = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+  if (mins < 60) return mins <= 1 ? "Just now" : mins + "m ago";
+  if (hours < 24) return hours + "h ago";
+  return days + "d ago";
+}
+
 export default function NotificationBell() {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
@@ -12,6 +28,7 @@ export default function NotificationBell() {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const unreadCount = notifications.filter(n => !n.read).length;
+  const hasUnread = unreadCount > 0;
 
   useEffect(() => {
     if (!user) return;
@@ -29,6 +46,15 @@ export default function NotificationBell() {
         await markNotificationsRead(user.uid, unreadIds);
         setNotifications(prev => prev.map(n => ({ ...n, read: true })));
       }
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    if (!user) return;
+    const unreadIds = notifications.filter(n => !n.read).map(n => n.id);
+    if (unreadIds.length > 0) {
+      await markNotificationsRead(user.uid, unreadIds);
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
     }
   };
 
@@ -62,28 +88,40 @@ export default function NotificationBell() {
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-11 w-80 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700 z-50 overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100 dark:border-slate-700">
-              <p className="text-sm font-bold text-gray-800 dark:text-slate-100">Notifications</p>
+          <div className="absolute right-0 top-11 w-80 bg-white dark:bg-slate-800 rounded-2xl shadow-modal border border-gray-100 dark:border-slate-700 z-50 overflow-hidden animate-in slide-in-from-top-2 duration-150">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-slate-700">
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Notifications</p>
+              {hasUnread && (
+                <button
+                  onClick={handleMarkAllRead}
+                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline min-h-[44px] flex items-center"
+                >
+                  Mark all read
+                </button>
+              )}
             </div>
             <div className="max-h-72 overflow-y-auto">
               {loading ? (
                 <div className="p-4 text-center text-xs text-gray-400">Loading...</div>
               ) : notifications.length === 0 ? (
-                <div className="p-6 text-center text-xs text-gray-400 dark:text-slate-500">
-                  No notifications yet
+                <div className="flex flex-col items-center py-8 text-center">
+                  <span className="text-3xl mb-2">🎉</span>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">You're all caught up!</p>
                 </div>
               ) : (
                 notifications.map(n => (
                   <div
                     key={n.id}
-                    className={`px-4 py-3 border-b border-gray-50 dark:border-slate-700/50 last:border-0 ${!n.read ? "bg-blue-50/50 dark:bg-blue-900/10" : ""}`}
+                    className={`px-4 py-3 border-b border-gray-50 dark:border-slate-700/50 last:border-0 flex items-start gap-3 ${!n.read ? "bg-blue-50 dark:bg-blue-950/40 font-medium" : "bg-transparent"}`}
                   >
-                    <p className="text-xs font-semibold text-gray-800 dark:text-slate-100">{n.title}</p>
-                    <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{n.body}</p>
-                    <p className="text-[10px] text-gray-300 dark:text-slate-600 mt-1">
-                      {new Date(n.createdAt).toLocaleDateString()}
-                    </p>
+                    <span className="text-base shrink-0 mt-0.5">{NOTIF_ICONS[n.type] ?? "🔔"}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-xs text-gray-800 dark:text-slate-100 ${!n.read ? "font-semibold" : "font-normal text-slate-500 dark:text-slate-400"}`}>{n.title}</p>
+                      <p className={`text-xs mt-0.5 ${!n.read ? "text-gray-600 dark:text-slate-300" : "text-gray-400 dark:text-slate-500"}`}>{n.body}</p>
+                      <p className="text-[10px] text-gray-300 dark:text-slate-600 mt-1">
+                        {relativeTime(n.createdAt)}
+                      </p>
+                    </div>
                   </div>
                 ))
               )}

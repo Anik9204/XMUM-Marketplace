@@ -9,7 +9,7 @@ import { QueryDocumentSnapshot } from "firebase/firestore";
 import ListingCard from "@/components/ListingCard";
 import SponsoredAdCard from "@/components/SponsoredAdCard";
 import AuthModal from "@/components/AuthModal";
-import { ShoppingBag, Search, MapPin, Loader2 } from "lucide-react";
+import { Search, MapPin, Loader2 } from "lucide-react";
 
 const BUY_SELL_CATEGORIES = [
   "electronics", "books", "clothing", "furniture", "food", "services", "others",
@@ -31,7 +31,7 @@ const CATEGORY_ICONS: Record<string, string> = {
 
 export default function HomePage() {
   const { t, lang } = useLang();
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const [, navigate] = useLocation();
   const [activeTab, setActiveTab] = useState<"buy-sell" | "lost-found">("buy-sell");
   const [listings, setListings] = useState<Listing[]>([]);
@@ -55,12 +55,8 @@ export default function HomePage() {
       setHasMore(result.hasMore);
     } catch (err: any) {
       const code: string = err?.code ?? err?.message ?? "";
-      const isOffline =
-        code.includes("unavailable") ||
-        code.includes("offline");
-      if (!isOffline) {
-        console.error("[HomePage] Failed to load listings:", err);
-      }
+      const isOffline = code.includes("unavailable") || code.includes("offline");
+      if (!isOffline) console.error("[HomePage] Failed to load listings:", err);
     } finally {
       setLoading(false);
     }
@@ -95,7 +91,7 @@ export default function HomePage() {
     : listings.filter((l) => l.category === categoryFilter);
 
   const SkeletonGrid = () => (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {[...Array(6)].map((_, i) => (
         <div key={i} className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden animate-pulse">
           <div className="aspect-[4/3] bg-gray-100 dark:bg-slate-700" />
@@ -117,6 +113,11 @@ export default function HomePage() {
             <MapPin size={10} />
             Xiamen University Malaysia
           </div>
+          {user && userProfile && (
+            <p className="text-sm text-white/70 mt-2 mb-1">
+              Good day, {userProfile.displayName} 👋
+            </p>
+          )}
           <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold mt-2 leading-tight">
             {t.hero1}<br />{t.hero2}
           </h1>
@@ -164,12 +165,12 @@ export default function HomePage() {
 
       {/* Category chips */}
       <div className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700">
-        <div className="max-w-5xl mx-auto px-4 py-2 flex gap-2 overflow-x-auto scrollbar-hide">
+        <div className="max-w-5xl mx-auto px-4 py-2 flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
           {["all", ...(activeTab === "buy-sell" ? BUY_SELL_CATEGORIES : LOST_FOUND_CATEGORIES)].map((cat) => (
             <button
               key={cat}
               onClick={() => setCategoryFilter(cat)}
-              className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+              className={`shrink-0 min-w-fit whitespace-nowrap flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
                 categoryFilter === cat
                   ? "bg-[#003366] text-white border-[#003366] dark:bg-blue-600 dark:border-blue-600"
                   : "bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 border-gray-200 dark:border-slate-600 hover:border-[#003366] dark:hover:border-blue-400"
@@ -182,8 +183,26 @@ export default function HomePage() {
         </div>
       </div>
 
+      {/* Signup nudge — unauthenticated users only */}
+      {!user && (
+        <div className="max-w-5xl mx-auto px-4 mt-4">
+          <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-xl px-4 py-3 flex items-center justify-between">
+            <span className="text-sm text-blue-700 dark:text-blue-300">
+              🎓 Exclusive to XMUM students
+            </span>
+            <button
+              onClick={() => setShowAuth(true)}
+              className="text-sm font-medium text-blue-600 dark:text-blue-400 underline min-h-[44px]"
+            >
+              Sign up free
+            </button>
+          </div>
+        </div>
+      )}
+
       {ads.length > 0 && (
         <div className="max-w-5xl mx-auto px-4 mt-4">
+          <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1">Sponsored</p>
           <SponsoredAdCard ad={ads[0]} />
         </div>
       )}
@@ -193,16 +212,10 @@ export default function HomePage() {
         {loading ? (
           <SkeletonGrid />
         ) : displayedListings.length === 0 ? (
-          <div className="text-center py-20 text-gray-400 dark:text-slate-400">
-            <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gray-100 dark:bg-slate-800 flex items-center justify-center">
-              <ShoppingBag size={36} className="opacity-40" />
-            </div>
-            <p className="text-base font-semibold text-gray-600 dark:text-slate-300">Nothing here yet</p>
-            <p className="text-sm mt-1 max-w-xs mx-auto text-gray-400 dark:text-slate-500">
-              {categoryFilter !== "all"
-                ? "No listings in this category. Try browsing all categories."
-                : "Check back soon, or be the first to post something."}
-            </p>
+          <div className="col-span-full flex flex-col items-center py-16 text-center">
+            <span className="text-5xl mb-4">🛍️</span>
+            <p className="text-base font-semibold text-slate-700 dark:text-slate-300">No listings yet</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Be the first to post something!</p>
             {categoryFilter !== "all" ? (
               <button onClick={() => setCategoryFilter("all")} className="mt-4 inline-block text-[#003366] dark:text-blue-400 text-sm font-semibold underline">
                 Show all categories
@@ -216,17 +229,20 @@ export default function HomePage() {
         ) : (
           <>
             <div className="flex items-center justify-between mb-3">
-              <p className="text-xs text-gray-400 dark:text-slate-500">
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
                 {displayedListings.length} {displayedListings.length === 1 ? "listing" : "listings"}
                 {categoryFilter !== "all" && ` in ${t.categories[categoryFilter as keyof typeof t.categories] ?? categoryFilter}`}
               </p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {displayedListings.map((listing, i) => (
                 <Fragment key={listing.id}>
                   <ListingCard listing={listing} />
                   {(i + 1) % 6 === 0 && ads[1] && (
-                    <SponsoredAdCard ad={ads[1]} />
+                    <>
+                      <p className="col-span-full text-[10px] font-medium text-slate-400 uppercase tracking-wide -mb-2">Sponsored</p>
+                      <div className="col-span-full"><SponsoredAdCard ad={ads[1]} /></div>
+                    </>
                   )}
                 </Fragment>
               ))}

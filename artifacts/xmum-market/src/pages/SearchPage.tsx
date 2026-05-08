@@ -57,8 +57,21 @@ export default function SearchPage() {
 
   const hasFilters = minPrice || maxPrice || condition !== "all";
 
+  type FilterKey = "minPrice" | "maxPrice" | "condition";
+
+  const activeFilterPills: { key: FilterKey; label: string }[] = [];
+  if (minPrice) activeFilterPills.push({ key: "minPrice", label: `Min RM ${minPrice}` });
+  if (maxPrice) activeFilterPills.push({ key: "maxPrice", label: `Max RM ${maxPrice}` });
+  if (condition !== "all") activeFilterPills.push({ key: "condition", label: condition === "new" ? t.conditionNew : t.conditionUsed });
+
+  const clearFilter = (key: FilterKey) => {
+    if (key === "minPrice") setMinPrice("");
+    else if (key === "maxPrice") setMaxPrice("");
+    else if (key === "condition") setCondition("all");
+  };
+
   return (
-    <div className="max-w-5xl mx-auto animate-in fade-in duration-200">
+    <div className="max-w-6xl mx-auto animate-in fade-in duration-200">
       {/* Search header */}
       <div className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 px-4 py-3 sticky top-14 sm:top-16 z-30">
         <div className="flex gap-2 items-center">
@@ -85,10 +98,22 @@ export default function SearchPage() {
             <SlidersHorizontal size={16} />
             <span className="text-xs font-medium hidden sm:inline">Filters</span>
             {hasFilters && (
-              <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full text-[8px] text-white flex items-center justify-center">!</span>
+              <span className="absolute -top-1 -right-1 w-2 h-2 bg-blue-500 rounded-full" />
             )}
           </button>
         </div>
+
+        {/* Active filter pills */}
+        {activeFilterPills.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-2 mb-1">
+            {activeFilterPills.map(({ key, label }) => (
+              <span key={key} className="inline-flex items-center gap-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full px-3 py-1 text-xs font-medium min-h-[32px]">
+                {label}
+                <button onClick={() => clearFilter(key)} className="ml-1 hover:text-red-500">×</button>
+              </span>
+            ))}
+          </div>
+        )}
 
         {/* Type tabs */}
         <div className="flex gap-1 mt-2.5">
@@ -158,7 +183,7 @@ export default function SearchPage() {
       {/* Results */}
       <div className="px-4 py-4">
         {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {[...Array(4)].map((_, i) => (
               <div key={i} className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden animate-pulse">
                 <div className="aspect-[4/3] bg-gray-100 dark:bg-slate-700" />
@@ -188,16 +213,21 @@ export default function SearchPage() {
             </div>
           </div>
         ) : results.length === 0 ? (
-          <div className="text-center py-16 text-gray-400 dark:text-slate-400">
-            <Search size={36} className="mx-auto mb-3 opacity-30" />
-            <p className="text-sm font-medium">{t.noResults}</p>
+          <div className="col-span-full flex flex-col items-center py-16 text-center">
+            <span className="text-5xl mb-4">🔍</span>
+            <p className="text-base font-semibold text-slate-700 dark:text-slate-300">
+              No results{keyword ? ` for "${keyword}"` : ""}
+            </p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+              Try different keywords or browse by category
+            </p>
           </div>
         ) : (
           <>
-            <p className="text-xs text-gray-400 dark:text-slate-500 mb-3">
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-3">
               {results.length} result{results.length !== 1 ? "s" : ""} found
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {results.map((listing) => (
                 <ListingCard key={listing.id} listing={listing} />
               ))}

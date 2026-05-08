@@ -10,12 +10,24 @@ import { ArrowLeft, Clock, Tag, CheckCircle2, MapPin, MessageCircle, Loader2 } f
 import { getOrCreateConversation } from "@/lib/messaging";
 import { SiWhatsapp, SiWechat } from "react-icons/si";
 import { MdGroups } from "react-icons/md";
+import { useToast } from "@/hooks/use-toast";
+
+function relativeTime(ms: number): string {
+  const diff = Date.now() - ms;
+  const mins = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+  if (mins < 60) return mins <= 1 ? "just now" : mins + "m ago";
+  if (hours < 24) return hours + "h ago";
+  return days + "d ago";
+}
 
 export default function ListingDetailPage() {
   const { t } = useLang();
   const { user } = useAuth();
   const [, params] = useRoute("/listing/:id");
   const [, navigate] = useLocation();
+  const { toast } = useToast();
   const [listing, setListing] = useState<Listing | null>(null);
   const [loading, setLoading] = useState(true);
   const [activePhoto, setActivePhoto] = useState(0);
@@ -104,15 +116,6 @@ export default function ListingDetailPage() {
     }
   };
 
-  const timeAgo = (ts: number) => {
-    const diff = Date.now() - ts;
-    const mins = Math.floor(diff / 60000);
-    if (mins < 60) return `${mins}m ago`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h ago`;
-    return `${Math.floor(hrs / 24)}d ago`;
-  };
-
   const catKey = listing.category as keyof typeof t.categories;
   const catLabel = t.categories[catKey] ?? listing.category;
   const pre = encodeURIComponent(`Hi, I saw your listing "${listing.title}" on XMUM Market. Is it still available?`);
@@ -127,9 +130,10 @@ export default function ListingDetailPage() {
   const canShowWeChat  = listing.wechat  && sellerProfile?.showWeChat  !== false;
   const noContact = !canShowWhatsApp && !canShowWeChat && !listing.teams;
 
+  const avatarFallback = `https://ui-avatars.com/api/?name=${encodeURIComponent(listing.userName)}&background=003366&color=fff`;
+
   return (
     <>
-      {/* Sold toast */}
       {soldToast && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 bg-[#003366] dark:bg-blue-700 text-white text-sm font-medium px-5 py-3 rounded-2xl shadow-xl">
           <CheckCircle2 size={18} className="text-green-300 shrink-0" />
@@ -137,7 +141,7 @@ export default function ListingDetailPage() {
         </div>
       )}
 
-      <div className="max-w-2xl mx-auto pb-24 md:pb-8 animate-in fade-in duration-200">
+      <div className="max-w-2xl mx-auto pb-28 md:pb-8 animate-in fade-in duration-200">
         {/* Back button */}
         <div className="sticky top-14 sm:top-16 z-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm border-b border-gray-100 dark:border-slate-700">
           <button onClick={() => window.history.back()} className="flex items-center gap-2 px-4 py-3 text-sm text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-white min-h-[44px]">
@@ -215,15 +219,13 @@ export default function ListingDetailPage() {
 
           {/* Title & price */}
           <div>
-            <div className="flex items-start justify-between gap-2">
-              <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100 leading-tight flex-1">{listing.title}</h1>
-              {listing.type === "buy-sell" && (
-                <span className={`text-xl font-bold shrink-0 ${isSold ? "text-gray-400 dark:text-slate-500 line-through" : "text-[#003366] dark:text-blue-400"}`}>
-                  {listing.price === 0 ? t.free : `RM ${listing.price?.toFixed(2)}`}
-                </span>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-2 mt-2">
+            <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100 leading-tight">{listing.title}</h1>
+            {listing.type === "buy-sell" && (
+              <p className={`mt-1 text-3xl font-bold ${isSold ? "text-gray-400 dark:text-slate-500 line-through" : "text-blue-600 dark:text-blue-400"}`}>
+                {listing.price === 0 ? "Free / Return Item" : `RM ${listing.price?.toFixed(2)}`}
+              </p>
+            )}
+            <div className="flex flex-wrap gap-2 mt-3">
               <span className="inline-flex items-center gap-1 text-xs bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300 px-2 py-1 rounded-full">
                 <Tag size={10} />{catLabel}
               </span>
@@ -231,7 +233,7 @@ export default function ListingDetailPage() {
                 {listing.condition === "new" ? t.conditionNew : t.conditionUsed}
               </span>
               <span className="inline-flex items-center gap-1 text-xs text-gray-400 dark:text-slate-500">
-                <Clock size={10} />{timeAgo(listing.createdAt)}
+                <Clock size={10} />Listed {relativeTime(listing.createdAt)}
               </span>
             </div>
           </div>
@@ -241,19 +243,23 @@ export default function ListingDetailPage() {
             <p className="text-sm text-gray-600 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{listing.description}</p>
           </div>
 
-          {/* Seller */}
-          <div className="flex items-center gap-3 bg-gray-50 dark:bg-slate-800 rounded-xl p-3">
-            {sellerProfile?.avatarUrl ? (
-              <img src={sellerProfile.avatarUrl} alt="seller" className="w-9 h-9 rounded-full object-cover border border-gray-200 dark:border-slate-600" />
-            ) : (
-              <div className="w-9 h-9 rounded-full bg-[#003366] flex items-center justify-center text-white font-semibold text-sm">
-                {listing.userEmail[0].toUpperCase()}
-              </div>
-            )}
+          {/* Meet-up spot */}
+          {listing.meetupSpot && (
+            <span className="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg px-3 py-1.5 text-sm">
+              📍 {listing.meetupSpot}
+            </span>
+          )}
+
+          {/* Seller info card */}
+          <div className="bg-slate-50 dark:bg-slate-700/50 rounded-2xl p-4 flex items-center gap-3">
+            <img
+              src={sellerProfile?.avatarUrl || avatarFallback}
+              alt={listing.userName}
+              className="w-12 h-12 rounded-full object-cover border-2 border-white dark:border-slate-600"
+            />
             <div>
-              <p className="text-xs font-medium text-gray-500 dark:text-slate-400">{t.postedBy}</p>
-              <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">{sellerProfile?.fullName || listing.userName}</p>
-              <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">{listing.userEmail}</p>
+              <p className="font-semibold text-sm text-slate-800 dark:text-slate-200">{listing.userName}</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">XMUM Verified ✓</p>
             </div>
           </div>
 
@@ -279,10 +285,9 @@ export default function ListingDetailPage() {
             </div>
           )}
 
-          {/* Contact buttons — hidden when sold; skeleton while seller profile loads */}
+          {/* Contact buttons */}
           {!isSold && (
             <div>
-              {/* Message Seller — first contact option, only for logged-in verified non-owners */}
               {user && user.emailVerified && user.uid !== listing.userId && (
                 <button
                   onClick={handleMessageSeller}
@@ -341,17 +346,50 @@ export default function ListingDetailPage() {
             </div>
           )}
 
-          {listing.meetupSpot && (
-            <div className="flex items-start gap-2 mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800">
-              <MapPin size={15} className="text-[#003366] dark:text-blue-400 shrink-0 mt-0.5" />
-              <div>
-                <p className="text-xs font-semibold text-[#003366] dark:text-blue-400">{t.meetupSpot}</p>
-                <p className="text-sm text-gray-700 dark:text-slate-200 mt-0.5">{listing.meetupSpot}</p>
-              </div>
-            </div>
-          )}
+          {/* Report link */}
+          <div className="flex justify-center pt-2">
+            <button
+              onClick={() => toast({ title: "Thank you for reporting.", description: "We'll review this listing." })}
+              className="text-xs text-slate-400 hover:text-red-500 dark:hover:text-red-400 underline mt-4 min-h-[44px] flex items-center"
+            >
+              Report this listing
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Sticky bottom bar — mobile only */}
+      {!isSold && !isOwner && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between gap-3 md:hidden">
+          <div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Price</p>
+            <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
+              {listing.type === "buy-sell"
+                ? (listing.price === 0 ? "Free" : `RM ${listing.price?.toFixed(2)}`)
+                : "Return Item"}
+            </p>
+          </div>
+          {canShowWhatsApp && listing.whatsapp ? (
+            <a
+              href={`https://wa.me/${listing.whatsapp?.replace(/\D/g, "")}?text=${pre}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-xl px-4 min-h-[44px] flex items-center justify-center gap-2"
+            >
+              <span>💬</span> WhatsApp Seller
+            </a>
+          ) : (
+            <button
+              onClick={handleMessageSeller}
+              disabled={startingChat || !user}
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl px-4 min-h-[44px] flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {startingChat ? <Loader2 size={16} className="animate-spin" /> : <MessageCircle size={16} />}
+              Message Seller
+            </button>
+          )}
+        </div>
+      )}
 
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
     </>
