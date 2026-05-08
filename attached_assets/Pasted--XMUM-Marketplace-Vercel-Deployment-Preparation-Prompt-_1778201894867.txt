@@ -1,0 +1,407 @@
+# XMUM Marketplace — Vercel Deployment Preparation Prompt
+# Paste this entire prompt into Replit Agent/AI to prepare the project for Vercel.
+
+---
+
+## CONTEXT: WHO YOU ARE AND WHAT THIS PROJECT IS
+
+You are continuing work on the XMUM Marketplace project. This is a React + Vite + TypeScript SPA that lives inside a pnpm monorepo at `artifacts/xmum-market/`. The backend is entirely Firebase (Auth, Firestore, Storage) — there is no Express server to deploy.
+
+The goal of this task is to make the app deploy successfully on Vercel by building a clean, self-contained deployable package that Vercel can understand without needing the full Replit monorepo context.
+
+---
+
+## WHY THIS PREP IS NEEDED (READ BEFORE DOING ANYTHING)
+
+The project currently has these characteristics that will cause Vercel builds to fail if not addressed:
+
+**Problem 1 — Deep monorepo structure**
+The app lives at `artifacts/xmum-market/` inside a workspace root. Vercel needs to know where to find the app and how to build it. Without configuration, it will try to build from the root and fail.
+
+**Problem 2 — Replit-specific Vite plugins**
+`vite.config.ts` includes `@replit/vite-plugin-cartographer`, `@replit/vite-plugin-dev-banner`, and `@replit/vite-plugin-runtime-error-modal`. These already have conditional guards checking `process.env.REPL_ID`, so the first two won't run on Vercel. The runtime error modal runs unconditionally in production — it must be fully guarded or removed from the build.
+
+**Problem 3 — `tsconfig.json` extends `../../tsconfig.base.json`**
+The app's `tsconfig.json` extends `../../tsconfig.base.json` (the workspace root). This path won't resolve on Vercel since only the `artifacts/xmum-market/` subtree will be deployed. The `tsconfig.json` needs to be self-contained.
+
+**Problem 4 — `@workspace/api-client-react` dependency**
+`package.json` lists `"@workspace/api-client-react": "workspace:*"` as a devDependency. This is a pnpm workspace package that won't be resolvable on Vercel. It needs to be removed (it is only used by shadcn tooling, not by the app's actual source code).
+
+**Problem 5 — `@assets` path alias points outside the app directory**
+`vite.config.ts` has `"@assets": path.resolve(import.meta.dirname, "..", "..", "attached_assets")`. This points to `attached_assets/` at the workspace root, two levels up. On Vercel this path won't exist. The alias needs to be updated to point to `public/` or removed if not used in source.
+
+**Problem 6 — SPA routing (404 on page refresh)**
+Vercel serves SPAs as static files. Any direct URL like `/listing/abc` or `/settings` will return a 404 unless a `vercel.json` rewrites all paths to `index.html`. This is required for `wouter`-based routing to work on page reload.
+
+**Problem 7 — Build output directory**
+The current `vite.config.ts` sets `outDir: "dist/public"`. Vercel needs to be pointed at this exact output directory.
+
+**Problem 8 — `minimumReleaseAge` in `pnpm-workspace.yaml`**
+The workspace root `pnpm-workspace.yaml` has `minimumReleaseAge: 1440` — this requires packages to be 24h old before installing. This setting applies workspace-wide. For Vercel's isolated build environment, this should not be an issue since all packages are already published, but the `pnpm-workspace.yaml` at the app level should handle this gracefully.
+
+**Problem 9 — esbuild platform overrides**
+`pnpm-workspace.yaml` excludes non-linux platforms from esbuild (e.g. `"esbuild>@esbuild/darwin-arm64": "-"`). Vercel builds on Linux so this is fine — but a standalone `pnpm-workspace.yaml` in the app directory must not accidentally exclude the Linux build either.
+
+---
+
+## YOUR TASKS — DO THEM IN ORDER
+
+### TASK 1 — Update `vite.config.ts` to be Vercel-safe
+
+**File:** `artifacts/xmum-market/vite.config.ts`
+
+Make these targeted changes:
+
+**1a. Guard the runtime error modal plugin** — it currently runs unconditionally. Wrap it the same way the other Replit plugins are wrapped (check `REPL_ID`):
+
+Find:
+```typescript
+plugins: [
+  react(),
+  tailwindcss(),
+  runtimeErrorOverlay(),
+  ...(process.env.NODE_ENV !== "production" &&
+  process.env.REPL_ID !== undefined
+    ? [
+        await import("@replit/vite-plugin-cartographer").then(...),
+        await import("@replit/vite-plugin-dev-banner").then(...),
+      ]
+    : []),
+],
+```
+
+Replace with:
+```typescript
+plugins: [
+  react(),
+  tailwindcss(),
+  ...(process.env.REPL_ID !== undefined
+    ? [
+        runtimeErrorOverlay(),
+        ...(process.env.NODE_ENV !== "production"
+          ? [
+              await import("@replit/vite-plugin-cartographer").then((m) =>
+                m.cartographer({
+                  root: path.resolve(import.meta.dirname, ".."),
+                })
+              ),
+              await import("@replit/vite-plugin-dev-banner").then((m) =>
+                m.devBanner()
+              ),
+            ]
+          : []),
+      ]
+    : []),
+],
+```
+
+**1b. Fix the `@assets` alias** — change it to point to the app's own `public/` directory since `attached_assets/` won't exist on Vercel:
+
+Find:
+```typescript
+"@assets": path.resolve(import.meta.dirname, "..", "..", "attached_assets"),
+```
+
+Replace with:
+```typescript
+"@assets": path.resolve(import.meta.dirname, "public"),
+```
+
+**1c. Change `outDir` to `dist`** — Vercel convention is `dist`, not `dist/public`. This is a simpler path to configure:
+
+Find:
+```typescript
+outDir: path.resolve(import.meta.dirname, "dist/public"),
+```
+
+Replace with:
+```typescript
+outDir: path.resolve(import.meta.dirname, "dist"),
+```
+
+**1d. Add `base: "/"` as a hardcoded fallback for production** — the current `basePath` variable reads from `process.env.BASE_PATH` which won't be set on Vercel. Update it:
+
+Find:
+```typescript
+const basePath = process.env.BASE_PATH ?? "/";
+```
+
+This is already fine (defaults to `"/"`), so no change needed here.
+
+---
+
+### TASK 2 — Replace `tsconfig.json` with a self-contained version
+
+**File:** `artifacts/xmum-market/tsconfig.json`
+
+Replace the entire file contents with a self-contained tsconfig that does not extend `../../tsconfig.base.json`. Inline the base compiler options directly:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": false,
+    "noImplicitAny": true,
+    "noImplicitThis": true,
+    "strictNullChecks": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "useUnknownInCatchVariables": true,
+    "alwaysStrict": true,
+    "types": ["node", "vite/client"],
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["src/**/*", "vite.config.ts"],
+  "exclude": ["node_modules", "dist"]
+}
+```
+
+> **Note:** Remove the `"references"` array that points to `../../lib/api-client-react`. It will not resolve outside the monorepo. Also remove `"extends": "../../tsconfig.base.json"`.
+
+---
+
+### TASK 3 — Remove the `@workspace/api-client-react` devDependency
+
+**File:** `artifacts/xmum-market/package.json`
+
+Remove this line from `devDependencies`:
+```json
+"@workspace/api-client-react": "workspace:*",
+```
+
+Do not change anything else in `package.json`.
+
+> **Verify:** Search the entire `src/` directory for any import of `@workspace/api-client-react`. Run:
+> ```bash
+> grep -r "@workspace/api-client-react" artifacts/xmum-market/src/
+> ```
+> If any file imports it, show me the result before proceeding. If the grep returns nothing (it should), continue.
+
+---
+
+### TASK 4 — Check if `@assets` alias is used anywhere in source
+
+Run this grep:
+```bash
+grep -r "@assets" artifacts/xmum-market/src/
+```
+
+If any results are found, list them for me. If nothing is found (most likely), no further action is needed on this alias — the updated alias in Task 1b will handle any future use safely.
+
+---
+
+### TASK 5 — Create `vercel.json` at the app root
+
+**File:** `artifacts/xmum-market/vercel.json` *(new file)*
+
+Create this file. It tells Vercel where to build from, what command to use, where the output is, and how to handle SPA routing:
+
+```json
+{
+  "buildCommand": "pnpm run build",
+  "outputDirectory": "dist",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "framework": null,
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/(.*).js",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/(.*).css",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/index.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+      ]
+    }
+  ]
+}
+```
+
+> The `rewrites` block is what makes `wouter` SPA routing work on page reload — without it, a direct visit to `/listing/abc123` returns a 404. The `headers` blocks set correct caching: immutable cache for fingerprinted assets, no-cache for `index.html`.
+
+---
+
+### TASK 6 — Create a standalone `pnpm-workspace.yaml` inside the app directory
+
+**File:** `artifacts/xmum-market/pnpm-workspace.yaml` *(new file)*
+
+When Vercel builds from the `artifacts/xmum-market/` directory, pnpm will look for a workspace config. Create a minimal one that declares this directory as a standalone workspace with no monorepo packages and no platform exclusions:
+
+```yaml
+packages:
+  - "."
+```
+
+---
+
+### TASK 7 — Verify the build works locally in Replit
+
+After making all the changes above, run the build from inside the app directory to verify it compiles without errors:
+
+```bash
+cd artifacts/xmum-market && pnpm install && pnpm run build
+```
+
+Confirm:
+- The command exits with code 0 (no errors)
+- `artifacts/xmum-market/dist/index.html` exists after the build
+- `artifacts/xmum-market/dist/assets/` directory exists and contains JS/CSS files
+
+If the build fails, show me the full error output. Do not attempt to fix TypeScript type errors by casting to `any` — show them to me first.
+
+---
+
+### TASK 8 — Create a `.env.example` file
+
+**File:** `artifacts/xmum-market/.env.example` *(new file)*
+
+This documents the environment variables that must be set in Vercel's project settings. Never put real values in this file — it's a template only:
+
+```
+# Firebase Configuration
+# Copy these values from your Firebase Console → Project Settings → Your App
+# Then add each one as an Environment Variable in your Vercel project settings
+
+VITE_FIREBASE_API_KEY=your_api_key_here
+VITE_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=your_project_id
+VITE_FIREBASE_STORAGE_BUCKET=your_project.firebasestorage.app
+VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+VITE_FIREBASE_APP_ID=your_app_id
+VITE_FIREBASE_MEASUREMENT_ID=G-XXXXXXXXXX
+```
+
+---
+
+### TASK 9 — Update Firebase Auth authorised domains
+
+This is a reminder step — no code change needed.
+
+After you deploy to Vercel and get your production URL (e.g. `xmum-marketplace.vercel.app`), you must add it to Firebase's authorised domains list:
+
+1. Go to Firebase Console → Authentication → Settings → Authorised domains
+2. Click "Add domain"
+3. Add your Vercel production URL (without `https://`)
+4. Also add your custom domain if you set one up
+
+Without this step, Firebase Auth will refuse to sign in users on the Vercel domain with the error `auth/unauthorized-domain`.
+
+---
+
+### TASK 10 — Confirm `manifest.json` references are correct
+
+**File:** `artifacts/xmum-market/public/manifest.json`
+
+Open this file and confirm it does NOT reference `/icon-192.png` or `/icon-512.png` unless those files actually exist in `public/`. 
+
+Run:
+```bash
+ls artifacts/xmum-market/public/
+```
+
+If `icon-192.png` or `icon-512.png` are missing and `manifest.json` references them, add placeholder entries or remove those references. A missing PWA icon causes browser console errors but does not break the app.
+
+The `index.html` already has `<link rel="apple-touch-icon" href="/icon-192.png" />` — if the file doesn't exist, change it to point to `/favicon.svg` instead:
+```html
+<link rel="apple-touch-icon" href="/favicon.svg" />
+```
+
+---
+
+## SUMMARY OF FILES CHANGED OR CREATED
+
+| File | Action | Why |
+|------|--------|-----|
+| `artifacts/xmum-market/vite.config.ts` | Edit | Guard Replit plugins, fix `@assets` alias, fix `outDir` |
+| `artifacts/xmum-market/tsconfig.json` | Replace | Make self-contained — no `../../` extends |
+| `artifacts/xmum-market/package.json` | Edit | Remove `@workspace/api-client-react` devDep |
+| `artifacts/xmum-market/vercel.json` | **New** | SPA rewrites, caching headers, build config |
+| `artifacts/xmum-market/pnpm-workspace.yaml` | **New** | Standalone pnpm workspace for Vercel |
+| `artifacts/xmum-market/.env.example` | **New** | Documents required Vercel env vars |
+
+---
+
+## DO NOT TOUCH THESE FILES
+
+- `src/lib/firebase.ts` — already uses `import.meta.env.VITE_FIREBASE_*` correctly
+- `src/lib/listings.ts` — no deployment-related changes needed
+- All `src/` component and page files — no changes needed
+- `firestore.rules` — deployed separately via Firebase CLI, not Vercel
+- `storage.rules` — deployed separately via Firebase CLI, not Vercel
+- `firestore.indexes.json` — deployed separately via Firebase CLI, not Vercel
+- `.replit` — Replit config only, Vercel ignores it
+- `public/favicon.svg` and `public/manifest.json` — only touch if Task 10 finds missing icons
+
+---
+
+## AFTER REPLIT FINISHES — STEPS TO DEPLOY ON VERCEL
+
+Once Replit confirms the build succeeds, do the following on Vercel:
+
+### Step 1 — Connect your GitHub repo
+1. Push all changes to GitHub from Replit
+2. Go to vercel.com → New Project → Import from GitHub
+3. Select the `XMUM-Marketplace` repository
+
+### Step 2 — Configure the project in Vercel's UI
+When Vercel asks for build settings, fill in:
+- **Framework Preset:** Other (not Vite — we have our own `vercel.json`)
+- **Root Directory:** `artifacts/xmum-market`
+- **Build Command:** `pnpm run build` (or leave blank — `vercel.json` specifies it)
+- **Output Directory:** `dist` (or leave blank — `vercel.json` specifies it)
+- **Install Command:** `pnpm install --frozen-lockfile`
+
+### Step 3 — Add environment variables
+In Vercel project settings → Environment Variables, add all 7 variables from `.env.example` with the real values from your Firebase console. Make sure to set them for **Production**, **Preview**, and **Development** environments.
+
+### Step 4 — Deploy
+Click Deploy. The first build may take 2-3 minutes.
+
+### Step 5 — Add Vercel domain to Firebase Auth
+Once deployed, copy your `.vercel.app` URL and add it to Firebase Console → Authentication → Settings → Authorised domains.
+
+### Step 6 — Test these specific flows on the live URL
+- [ ] Sign in with @xmu.edu.my account
+- [ ] Post a new listing (tests Firebase Storage write)
+- [ ] View a listing at its direct URL e.g. `/listing/abc` (tests SPA routing rewrite)
+- [ ] Refresh the page on `/profile` (tests SPA routing rewrite)
+- [ ] Dark mode toggle persists on reload
+- [ ] Load More pagination works on the home feed
