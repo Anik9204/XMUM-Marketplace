@@ -3,8 +3,8 @@ modules = ["nodejs-20", "web", "bash"]
 [deployment]
 router = "application"
 deploymentTarget = "static"
-build = ["bash", "-c", "PORT=5000 BASE_PATH=/ pnpm --filter @workspace/xmum-market run build"]
-publicDir = "artifacts/xmum-market/dist/public"
+build = ["bash", "-c", "pnpm --filter xmum-admin run build"]
+publicDir = "artifacts/xmum-admin/dist"
 
 [deployment.postBuild]
 args = ["pnpm", "store", "prune"]
