@@ -77,7 +77,8 @@ export default function ListingDetailPage() {
         title: listing.title,
         photos: listing.photos,
       });
-      navigate(`/messages?conv=${convId}`);
+      const draft = encodeURIComponent(`Hi, I saw your post about "${listing.title}". Is it still available?`);
+      navigate(`/messages?conv=${convId}&draft=${draft}`);
     } catch (err: any) {
       const code = err?.code ?? err?.message ?? "";
       if (code.includes("permission-denied") || code.includes("PERMISSION_DENIED")) {
