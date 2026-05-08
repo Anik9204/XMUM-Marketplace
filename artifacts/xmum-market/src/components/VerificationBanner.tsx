@@ -16,14 +16,14 @@ export default function VerificationBanner() {
   };
 
   return (
-    <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex items-center gap-3">
+    <div className="bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800 px-4 py-2.5 flex items-center gap-3">
       <MailOpen size={16} className="text-amber-600 shrink-0" />
       <div className="flex-1 min-w-0">
-        <p className="text-xs text-amber-800">
+        <p className="text-xs text-amber-800 dark:text-amber-300">
           {sent ? t.emailSent : t.verifyEmailMsg}
         </p>
         {!sent && (
-          <button onClick={handleResend} className="text-xs text-amber-700 underline mt-0.5">
+          <button onClick={handleResend} className="text-xs text-amber-700 dark:text-amber-400 underline mt-0.5">
             {t.resendVerification}
           </button>
         )}

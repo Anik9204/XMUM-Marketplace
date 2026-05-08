@@ -16,6 +16,19 @@ const BUY_SELL_CATEGORIES = [
 ];
 const LOST_FOUND_CATEGORIES = ["lostItem", "foundItem"];
 
+const CATEGORY_ICONS: Record<string, string> = {
+  all: "✨",
+  electronics: "💻",
+  books: "📚",
+  clothing: "👕",
+  furniture: "🪑",
+  food: "🍜",
+  services: "🛠️",
+  others: "📦",
+  lostItem: "🔍",
+  foundItem: "📢",
+};
+
 export default function HomePage() {
   const { t, lang } = useLang();
   const { user } = useAuth();
@@ -82,8 +95,8 @@ export default function HomePage() {
     : listings.filter((l) => l.category === categoryFilter);
 
   const SkeletonGrid = () => (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-      {[...Array(8)].map((_, i) => (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {[...Array(6)].map((_, i) => (
         <div key={i} className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden animate-pulse">
           <div className="aspect-[4/3] bg-gray-100 dark:bg-slate-700" />
           <div className="p-3 space-y-2">
@@ -109,33 +122,23 @@ export default function HomePage() {
           </h1>
           <p className="text-white/70 text-sm mt-2 max-w-sm">{t.heroSub}</p>
 
-          <div className="mt-5 flex gap-3">
-            <button
-              onClick={() => navigate("/search")}
-              className="flex items-center gap-2 bg-white text-[#003366] px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-gray-100 transition-colors"
-            >
-              <Search size={15} />
-              {t.browseListings}
-            </button>
-            {!user && (
-              <button
-                onClick={() => setShowAuth(true)}
-                className="flex items-center gap-2 bg-white/10 text-white border border-white/20 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-white/20 transition-colors"
-              >
-                {t.getStarted}
-              </button>
-            )}
-          </div>
-
-          <div className="mt-5 relative">
-            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+          <div className="mt-6 relative max-w-lg">
+            <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
             <input
               type="text"
               placeholder={t.searchPlaceholder}
               onFocus={() => navigate("/search")}
               readOnly
-              className="w-full bg-white rounded-xl pl-9 pr-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 cursor-pointer shadow-sm focus:outline-none"
+              className="w-full bg-white rounded-xl pl-10 pr-4 py-3 text-sm text-gray-800 placeholder-gray-400 cursor-pointer shadow-lg focus:outline-none hover:shadow-xl transition-shadow"
             />
+            {!user && (
+              <button
+                onClick={() => setShowAuth(true)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 bg-[#003366] text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-[#002244] transition-colors"
+              >
+                {t.getStarted}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -166,15 +169,14 @@ export default function HomePage() {
             <button
               key={cat}
               onClick={() => setCategoryFilter(cat)}
-              className={`shrink-0 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+              className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
                 categoryFilter === cat
                   ? "bg-[#003366] text-white border-[#003366] dark:bg-blue-600 dark:border-blue-600"
                   : "bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 border-gray-200 dark:border-slate-600 hover:border-[#003366] dark:hover:border-blue-400"
               }`}
             >
-              {cat === "all"
-                ? (lang === "en" ? "All" : "全部")
-                : t.categories[cat as keyof typeof t.categories]}
+              <span>{CATEGORY_ICONS[cat] ?? "📦"}</span>
+              <span>{cat === "all" ? (lang === "en" ? "All" : "全部") : t.categories[cat as keyof typeof t.categories]}</span>
             </button>
           ))}
         </div>
@@ -191,17 +193,35 @@ export default function HomePage() {
         {loading ? (
           <SkeletonGrid />
         ) : displayedListings.length === 0 ? (
-          <div className="text-center py-16 text-gray-400 dark:text-slate-400">
-            <ShoppingBag size={40} className="mx-auto mb-3 opacity-30" />
-            <p className="text-sm font-medium">{t.noListings}</p>
-            <p className="text-xs mt-1">{t.beFirstToPost}</p>
-            <Link href="/post" className="mt-4 inline-block bg-[#003366] dark:bg-blue-600 text-white px-5 py-2 rounded-xl text-sm font-semibold">
-              {t.postItem}
-            </Link>
+          <div className="text-center py-20 text-gray-400 dark:text-slate-400">
+            <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gray-100 dark:bg-slate-800 flex items-center justify-center">
+              <ShoppingBag size={36} className="opacity-40" />
+            </div>
+            <p className="text-base font-semibold text-gray-600 dark:text-slate-300">Nothing here yet</p>
+            <p className="text-sm mt-1 max-w-xs mx-auto text-gray-400 dark:text-slate-500">
+              {categoryFilter !== "all"
+                ? "No listings in this category. Try browsing all categories."
+                : "Check back soon, or be the first to post something."}
+            </p>
+            {categoryFilter !== "all" ? (
+              <button onClick={() => setCategoryFilter("all")} className="mt-4 inline-block text-[#003366] dark:text-blue-400 text-sm font-semibold underline">
+                Show all categories
+              </button>
+            ) : (
+              <Link href="/post" className="mt-4 inline-block bg-[#003366] dark:bg-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-[#002244] dark:hover:bg-blue-700 transition-colors">
+                {t.postItem}
+              </Link>
+            )}
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs text-gray-400 dark:text-slate-500">
+                {displayedListings.length} {displayedListings.length === 1 ? "listing" : "listings"}
+                {categoryFilter !== "all" && ` in ${t.categories[categoryFilter as keyof typeof t.categories] ?? categoryFilter}`}
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {displayedListings.map((listing, i) => (
                 <Fragment key={listing.id}>
                   <ListingCard listing={listing} />
@@ -212,14 +232,13 @@ export default function HomePage() {
               ))}
             </div>
 
-            {/* Load More — only shown when viewing all (not filtered) */}
             {categoryFilter === "all" && (
               <div className="mt-6 flex justify-center">
                 {hasMore ? (
                   <button
                     onClick={handleLoadMore}
                     disabled={loadingMore}
-                    className="flex items-center gap-2 px-6 py-2.5 bg-[#003366] dark:bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-[#002244] dark:hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                    className="flex items-center gap-2 px-6 py-2.5 bg-white dark:bg-slate-800 text-[#003366] dark:text-blue-400 border border-[#003366]/30 dark:border-blue-500/30 rounded-xl text-sm font-semibold hover:bg-[#003366]/5 dark:hover:bg-blue-900/20 disabled:opacity-50 transition-colors shadow-sm"
                   >
                     {loadingMore ? (
                       <><Loader2 size={15} className="animate-spin" /> {t.loading}</>

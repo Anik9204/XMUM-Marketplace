@@ -40,8 +40,6 @@ export default function SearchPage() {
 
   useEffect(() => {
     clearTimeout(debounceRef.current);
-    // Don't auto-search on empty state — wait for user input to avoid
-    // an unnecessary Firestore read every time the Search page mounts.
     if (!keyword && !minPrice && !maxPrice && condition === "all") {
       setResults([]);
       setSearched(false);
@@ -82,9 +80,10 @@ export default function SearchPage() {
           </div>
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className={`relative p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl border transition-colors ${showFilters || hasFilters ? "bg-[#003366] dark:bg-blue-600 border-[#003366] dark:border-blue-600 text-white" : "border-gray-300 dark:border-slate-600 text-gray-500 dark:text-slate-400 dark:bg-slate-700"}`}
+            className={`relative flex items-center gap-1.5 px-3 min-h-[44px] rounded-xl border transition-colors ${showFilters || hasFilters ? "bg-[#003366] dark:bg-blue-600 border-[#003366] dark:border-blue-600 text-white" : "border-gray-300 dark:border-slate-600 text-gray-500 dark:text-slate-400 dark:bg-slate-700"}`}
           >
-            <SlidersHorizontal size={18} />
+            <SlidersHorizontal size={16} />
+            <span className="text-xs font-medium hidden sm:inline">Filters</span>
             {hasFilters && (
               <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full text-[8px] text-white flex items-center justify-center">!</span>
             )}
@@ -159,7 +158,7 @@ export default function SearchPage() {
       {/* Results */}
       <div className="px-4 py-4">
         {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[...Array(4)].map((_, i) => (
               <div key={i} className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden animate-pulse">
                 <div className="aspect-[4/3] bg-gray-100 dark:bg-slate-700" />
@@ -171,9 +170,22 @@ export default function SearchPage() {
             ))}
           </div>
         ) : !searched ? (
-          <div className="text-center py-16 text-gray-400 dark:text-slate-400">
-            <Search size={36} className="mx-auto mb-3 opacity-30" />
-            <p className="text-sm font-medium">{t.searchPlaceholder}</p>
+          <div className="py-8">
+            <p className="text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide mb-3">
+              Popular Categories
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {["electronics", "books", "clothing", "furniture", "food"].map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setKeyword(t.categories[cat as keyof typeof t.categories] ?? cat)}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl text-xs font-medium text-gray-700 dark:text-slate-300 hover:border-[#003366] dark:hover:border-blue-400 transition-colors shadow-sm"
+                >
+                  {({"electronics":"💻","books":"📚","clothing":"👕","furniture":"🪑","food":"🍜"} as Record<string, string>)[cat]}
+                  {" "}{t.categories[cat as keyof typeof t.categories]}
+                </button>
+              ))}
+            </div>
           </div>
         ) : results.length === 0 ? (
           <div className="text-center py-16 text-gray-400 dark:text-slate-400">
@@ -181,11 +193,16 @@ export default function SearchPage() {
             <p className="text-sm font-medium">{t.noResults}</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {results.map((listing) => (
-              <ListingCard key={listing.id} listing={listing} />
-            ))}
-          </div>
+          <>
+            <p className="text-xs text-gray-400 dark:text-slate-500 mb-3">
+              {results.length} result{results.length !== 1 ? "s" : ""} found
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {results.map((listing) => (
+                <ListingCard key={listing.id} listing={listing} />
+              ))}
+            </div>
+          </>
         )}
       </div>
     </div>

@@ -1,0 +1,902 @@
+# XMUM Marketplace — Full UI/UX Audit & Replit Implementation Prompt
+
+---
+
+## PART 1: COMPLETE UI/UX AUDIT
+
+### SECTION A — Global / Layout Issues
+
+**A1. Typography is flat and undifferentiated**
+Every element uses Inter (the system default). No typographic hierarchy beyond font-weight. Headings don't feel like headings, prices don't feel like prices, section labels blend into content. Result: everything looks equally important, so nothing stands out.
+
+**A2. All shadows are disabled (CSS variables at 0 opacity)**
+The `index.css` shadow tokens (`--shadow-sm`, `--shadow-md`, etc.) are all set to `0.00` opacity — meaning cards, modals, and dropdowns have zero visual depth. The entire app looks flat because nothing casts a shadow. Cards float on the background with only a 1px border for separation.
+
+**A3. Color system is competent but cold**
+`#003366` is solid as a brand color but it dominates every interactive element with no variation. There are no warm accents, no personality color, no surface variation. The app feels like a government portal, not a student marketplace.
+
+**A4. Header is too tall on mobile, wastes vertical space**
+`h-14` on mobile (56px). Combined with the sticky tab bar and category chips below it, users lose ~130px of vertical space on small phones before they see a single listing. The header logo text has no icon/mark — just plain text.
+
+**A5. Mobile bottom nav label text is `text-[9px]` — too small**
+9px labels are illegible on many Android devices and fail WCAG AA minimum contrast. Labels should be at least 10–11px.
+
+**A6. The PDPA disclaimer appears inside the mobile bottom nav**
+The legal text is injected into the bottom nav bar only on the home page. It pushes the nav taller and covers listings. It's also `text-[9px]` — completely unreadable. This should be in the footer, not the nav.
+
+**A7. No page transitions**
+Every page swap is an instant cut. The homepage has `animate-in fade-in` but most other pages don't. The experience feels abrupt and unstable.
+
+**A8. 404 page is completely unstyled**
+The `not-found.tsx` page uses raw shadcn `Card` with default styling, ignores dark mode, ignores the app's color system, and displays a developer-facing message ("Did you forget to add the page to the router?") to end users. This is embarrassing in a deployed app.
+
+---
+
+### SECTION B — HomePage Issues
+
+**B1. Hero section is undersized and underused**
+The hero is a small gradient block with minimal content. `text-xl sm:text-2xl lg:text-3xl` for the main headline — on desktop it's only 30px. No illustration, no social proof, no energy. It doesn't communicate what the app is to a first-time visitor.
+
+**B2. Two CTA buttons + a search bar in the hero = three competing calls to action**
+"Browse Listings" button, "Get Started" button, AND a search bar all appear simultaneously. First-time visitors don't know where to look. The search bar navigates away on focus — it's not a real input, it's a navigation trigger — but it looks like a real input, which is deceptively bad UX.
+
+**B3. Category chips have no icons**
+Chips for "Electronics", "Books", "Clothing" etc. are plain text pills. Adding a small emoji or icon to each makes them scannable at a glance and far more visually interesting.
+
+**B4. "Load More" button is the same visual weight as a primary action**
+`bg-[#003366]` blue button for loading more listings is the same color as the post button. Load More is a secondary action and should be styled as a ghost/outline button.
+
+**B5. Empty state is generic**
+`ShoppingBag` icon + "No listings yet" text. No personality, no encouragement, no art direction.
+
+**B6. The sponsored ad banner (when active) has no visual separation from the listings grid**
+Ads appear immediately above the grid with no margin context. The `mt-4` is barely enough. Users may not register it as separate content.
+
+---
+
+### SECTION C — ListingCard Issues
+
+**C1. Cards are too short and information-dense at small sizes**
+On mobile with a 1-column layout, cards are fine. On desktop `xl:grid-cols-4`, cards are only ~220px wide. At that width, `text-sm` title gets clipped to 1 line, `text-xs` description is 2 lines of tiny text, and the `text-[10px]` footer metadata is completely unreadable — 10px is below the web's minimum readable size.
+
+**C2. Category label in the card footer uses `text-[9px]`**
+The category text under the price row uses 9px. This is below minimum readable size on any screen.
+
+**C3. Price is `text-base` — inconsistent with surrounding `text-xs` metadata**
+The price jumps out visually from the surrounding content but not in a designed way — it just happens to be `base` while everything else is `xs`. The sizing relationship between title, price, and description needs intentional design.
+
+**C4. Card hover state is only `hover:shadow-md`**
+Cards have a `transition-shadow` hover that adds a shadow — but shadows are disabled globally (see A2). So hovering over a card currently does nothing visible. The interaction feedback is broken.
+
+**C5. "No photo" placeholder is a plain gradient with a 📦 emoji**
+Fine for MVP, but the emoji sizing (`text-4xl`) and the generic gradient make it look like a broken image state rather than an intentional placeholder.
+
+**C6. The owner action buttons (Edit, Mark as Sold, Delete) are stacked vertically with full-width layout**
+On desktop this looks excessive — three full-width buttons each 44px tall stacked in a narrow card. These should be a compact row on wider screens.
+
+---
+
+### SECTION D — PostPage Issues
+
+**D1. The description field uses a custom full-screen modal editor**
+This pattern (tap a field → full-screen modal opens with a textarea) is unusual for a web app. On desktop it's jarring — a full-screen takeover just to type a description. This pattern works on mobile but breaks desktop UX. The description should be an inline expandable textarea that uses the modal only on mobile.
+
+**D2. Photo upload area is invisible until photos are added**
+The "Add Photos" trigger is just a small button. There's no upload zone (no dashed border, no drag-drop area, no clear affordance that this is a file drop zone). Users don't know they can add up to 3 photos.
+
+**D3. "I've verified my email — refresh" is a developer-facing string**
+The verification fallback page tells users to click a link that reloads the page. This is an internal shortcut that shouldn't be visible to users.
+
+**D4. Form section grouping is inconsistent**
+Contact info fields (WhatsApp, WeChat, Teams) appear without a card/section container unlike the rest of the form fields. The visual grouping is unclear.
+
+**D5. Price input shows "0" by default which looks like a free item**
+The price field defaults to `priceCents: 0` meaning users who don't update it accidentally post items as free. Should default to empty/null with placeholder "e.g. 50".
+
+---
+
+### SECTION E — SearchPage Issues
+
+**E1. Page starts blank with only a search icon and placeholder text**
+When arriving at Search, there are no suggestions, no popular categories, no recent searches. The page is just an empty input and a big grey area. This is a missed opportunity to guide users.
+
+**E2. The filter panel toggle is a small icon button with no label**
+`SlidersHorizontal` icon with no tooltip on desktop. Users unfamiliar with the icon won't know it opens filters.
+
+**E3. Filter panel appears inline below the search bar**
+The filter panel expands inside the sticky header. On mobile, the entire top of the screen becomes a filter form, pushing content down. It should be a bottom sheet on mobile or a side panel.
+
+**E4. No result count shown**
+After searching, there's no "X results found" indicator. Users don't know if 0 results means no matches or the search is still loading.
+
+**E5. Searching while typing (debounced) has no visual "searching" indicator**
+The 400ms debounce fires a Firestore query on every keystroke. Between keystrokes there is no spinner or "searching..." indicator — the results just jump. This can feel broken.
+
+---
+
+### SECTION F — MessagesPage Issues
+
+**F1. Conversation list items are too large**
+Each conversation row is 64px (`w-12 h-12` thumbnail + `p-4` padding). On a phone with 5 conversations, this fills the entire screen. Should be 52–56px rows.
+
+**F2. Message bubbles have no timestamps**
+Chat messages show text but no time. In a marketplace context, knowing if a message was sent 2 minutes ago vs. 2 days ago is critical for decision-making.
+
+**F3. The messages input area has no character counter**
+`maxLength={500}` is enforced but there's no visible counter. Users don't know they're approaching the limit until they stop being able to type.
+
+**F4. The thread header shows the listing title but not the other person's name**
+In a marketplace context, users are chatting with a *person* about an item. The header says what the item is but not who they're talking to. The seller/buyer's name should be displayed.
+
+**F5. On desktop, the message view takes `max-w-2xl` centered width**
+Fine, but the conversation list page also takes `max-w-2xl`. On a 1920px desktop, this is a very narrow, centre-aligned column with enormous empty margins. This layout is not optimised for desktop.
+
+---
+
+### SECTION G — AuthModal Issues
+
+**G1. Sign-up form is very long with no progress indication**
+The sign-up form has 6 fields (Name, Email, Password, Confirm Password, WhatsApp, WeChat) plus a section divider. On a small phone with the modal sliding up from the bottom, users have to scroll significantly inside the modal. There is no step indicator or progressive disclosure.
+
+**G2. The email domain restriction disclaimer is `text-[10px]`**
+The `@xmu.edu.my` notice at the bottom of sign-up is 10px — too small to be noticed before users start typing. This information should be more prominent since it explains why their sign-up will fail.
+
+**G3. The sign-in/sign-up tab switcher is the right pattern but the inactive tab has no visual affordance**
+Inactive tabs are fully transparent — they look like disabled elements rather than clickable alternatives.
+
+---
+
+### SECTION H — Wording Issues
+
+**H1. "Post Item" vs "Sell / Report" — the CTA label is generic**
+"Post Item" is used everywhere but the app has two very different use cases (selling AND lost & found). The CTA should adapt: "Sell Something" when on the buy-sell tab, "Report Lost / Found" on the lost-found tab.
+
+**H2. "Browse Listings" and "Get Started" are weak CTAs**
+Neither conveys the value proposition. "Browse Listings" tells users what the button does, not why they should do it. Better: "See What's Available" or "Start Shopping".
+
+**H3. "No listings yet. Be the first to post!" is too casual for first-time visitors**
+This empty state appears when a category is empty. "Be the first to post!" assumes the user wants to sell, but they may have come to buy. Neutral alternative: "Nothing here yet — check back soon or post your own item."
+
+**H4. "I've verified my email — refresh" should not be user-facing**
+This developer-facing instruction should say "Tap here to check again" or similar.
+
+**H5. "Continue Browsing →" in the verification modal has a raw arrow character**
+`→` is a Unicode arrow that may render inconsistently across devices. Use a lucide `ArrowRight` icon instead.
+
+**H6. The 404 page says "Did you forget to add the page to the router?"**
+This is a developer debug message shown to real users. Replace with: "This page doesn't exist — it may have been removed or the link is incorrect."
+
+**H7. Confirmation modal for deletion says nothing specific**
+The delete confirmation in ProfilePage asks for confirmation but the modal text should include the item name: "Delete '[listing title]'? This cannot be undone."
+
+---
+
+### SECTION I — Scaling / Responsive Issues
+
+**I1. `xl:grid-cols-4` at ~220px card width is too narrow**
+At 4 columns on a 1280px viewport, each card is approximately 220px after gaps. The card content (title, description, price) is designed for a wider card. Either cap at 3 columns (`lg:grid-cols-3`) or ensure card content reflows properly at narrow widths.
+
+**I2. The desktop layout has no sidebar or two-column structure for wider viewports**
+On screens wider than 1280px, the app just widens the `max-w-5xl` container with empty margins. The messages page, profile page, and settings page could all benefit from a two-panel layout on desktop.
+
+**I3. The homepage hero scales awkwardly between 768px and 1024px (tablet landscape)**
+The hero text wraps at `sm:text-2xl` but the hero container doesn't change height, creating an unbalanced whitespace ratio on iPad landscape.
+
+**I4. PostPage form fields use `min-h-[44px]` correctly but the description trigger button is too small visually**
+The "Add Description" button appears inline as a small tappable area. On desktop it looks underpowered — it needs to be a full-height textarea preview area.
+
+---
+
+## PART 2: REPLIT IMPLEMENTATION PROMPT
+
+Paste everything below this line into Replit.
+
+---
+
+# XMUM Marketplace — UI/UX Overhaul Prompt for Replit
+
+## CRITICAL INSTRUCTIONS — READ BEFORE DOING ANYTHING
+
+1. Read every file listed below completely before writing a single line of code.
+2. Do not change any logic, Firebase calls, authentication, routing, or data fetching.
+3. Do not add new npm packages without asking first.
+4. Do not change `src/lib/`, `src/contexts/`, `src/hooks/`, or `src/App.tsx`.
+5. Make changes file by file, in the order listed below.
+6. After each file change, confirm the TypeScript still compiles (`pnpm run typecheck`).
+7. Do not touch `firestore.rules`, `storage.rules`, or `firestore.indexes.json`.
+
+## Files to Read Before Starting
+
+```
+artifacts/xmum-market/src/index.css
+artifacts/xmum-market/src/components/Layout.tsx
+artifacts/xmum-market/src/components/ListingCard.tsx
+artifacts/xmum-market/src/components/AuthModal.tsx
+artifacts/xmum-market/src/components/NotificationBell.tsx
+artifacts/xmum-market/src/components/VerificationBanner.tsx
+artifacts/xmum-market/src/components/SponsoredAdCard.tsx
+artifacts/xmum-market/src/pages/HomePage.tsx
+artifacts/xmum-market/src/pages/SearchPage.tsx
+artifacts/xmum-market/src/pages/PostPage.tsx
+artifacts/xmum-market/src/pages/ProfilePage.tsx
+artifacts/xmum-market/src/pages/MessagesPage.tsx
+artifacts/xmum-market/src/pages/not-found.tsx
+artifacts/xmum-market/src/lib/i18n.ts
+```
+
+---
+
+## CHANGE 1 — `src/index.css`: Fix shadows and improve global typography
+
+**Problem:** All CSS shadow tokens are set to `0.00` opacity, so no element in the app casts a real shadow. Cards, modals, and dropdowns are completely flat.
+
+Find every shadow token line like:
+```css
+--shadow-sm: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0.00), ...
+```
+
+Replace ALL shadow token values in `:root` with real shadows:
+```css
+--shadow-2xs: 0px 1px 2px 0px rgba(0, 0, 0, 0.05);
+--shadow-xs:  0px 1px 3px 0px rgba(0, 0, 0, 0.08);
+--shadow-sm:  0px 1px 3px 0px rgba(0, 0, 0, 0.08), 0px 1px 2px -1px rgba(0, 0, 0, 0.06);
+--shadow:     0px 2px 6px -1px rgba(0, 0, 0, 0.10), 0px 1px 3px -1px rgba(0, 0, 0, 0.06);
+--shadow-md:  0px 4px 10px -2px rgba(0, 0, 0, 0.10), 0px 2px 4px -2px rgba(0, 0, 0, 0.06);
+--shadow-lg:  0px 8px 20px -4px rgba(0, 0, 0, 0.12), 0px 4px 8px -4px rgba(0, 0, 0, 0.06);
+--shadow-xl:  0px 16px 32px -8px rgba(0, 0, 0, 0.14), 0px 8px 16px -8px rgba(0, 0, 0, 0.06);
+--shadow-2xl: 0px 24px 48px -12px rgba(0, 0, 0, 0.18);
+```
+
+Do the same in `.dark { }` — replace the zero-opacity shadow values there with dark-appropriate shadows:
+```css
+--shadow-2xs: 0px 1px 2px 0px rgba(0, 0, 0, 0.25);
+--shadow-xs:  0px 1px 3px 0px rgba(0, 0, 0, 0.30);
+--shadow-sm:  0px 1px 3px 0px rgba(0, 0, 0, 0.30), 0px 1px 2px -1px rgba(0, 0, 0, 0.20);
+--shadow:     0px 2px 6px -1px rgba(0, 0, 0, 0.35), 0px 1px 3px -1px rgba(0, 0, 0, 0.20);
+--shadow-md:  0px 4px 10px -2px rgba(0, 0, 0, 0.40), 0px 2px 4px -2px rgba(0, 0, 0, 0.20);
+--shadow-lg:  0px 8px 20px -4px rgba(0, 0, 0, 0.45), 0px 4px 8px -4px rgba(0, 0, 0, 0.20);
+--shadow-xl:  0px 16px 32px -8px rgba(0, 0, 0, 0.50), 0px 8px 16px -8px rgba(0, 0, 0, 0.20);
+--shadow-2xl: 0px 24px 48px -12px rgba(0, 0, 0, 0.60);
+```
+
+Also add this to the `@layer base` block to improve font rendering:
+```css
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+```
+
+---
+
+## CHANGE 2 — `src/components/Layout.tsx`: 5 targeted fixes
+
+**Read the full file before editing.**
+
+**2a. Remove the PDPA text from the mobile bottom nav.**
+Find the block inside the mobile `<nav>` that renders the PDPA disclaimer:
+```tsx
+{location === "/" && (
+  <div className="bg-gray-50 dark:bg-slate-800 border-t border-gray-100 dark:border-slate-700 px-4 py-2">
+    <p className="text-[9px] text-gray-400 dark:text-slate-500 text-center leading-relaxed">
+      {t.pdpaText}
+    </p>
+  </div>
+)}
+```
+Delete this entire block. The PDPA text already appears in the desktop footer.
+
+**2b. Increase mobile nav label size from `text-[9px]` to `text-[10px]`.**
+Find:
+```tsx
+<span className="text-[9px] font-medium">{label}</span>
+```
+Replace with:
+```tsx
+<span className="text-[10px] font-medium tracking-wide">{label}</span>
+```
+
+**2c. Add a subtle logo mark to the header.**
+Find:
+```tsx
+<span className="text-white font-bold text-lg tracking-tight">
+  {t.appName}
+</span>
+```
+Replace with:
+```tsx
+<span className="flex items-center gap-2">
+  <span className="w-7 h-7 bg-white/20 rounded-lg flex items-center justify-center text-white font-black text-sm select-none">
+    X
+  </span>
+  <span className="text-white font-bold text-lg tracking-tight">{t.appName}</span>
+</span>
+```
+
+**2d. Add a subtle bottom border to the header for better visual separation in light mode.**
+Find:
+```tsx
+<header className="sticky top-0 z-50 bg-[#003366] dark:bg-slate-900 shadow-md">
+```
+Replace with:
+```tsx
+<header className="sticky top-0 z-50 bg-[#003366] dark:bg-slate-900 shadow-md border-b border-white/10 dark:border-slate-700/50">
+```
+
+**2e. Fix the desktop dropdown menu positioning — it currently opens partially off-screen on narrow viewports.**
+Find:
+```tsx
+<div className="absolute right-0 top-9 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-gray-100 dark:border-slate-700 min-w-44 z-[70]">
+```
+Replace with:
+```tsx
+<div className="absolute right-0 top-10 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-gray-100 dark:border-slate-700 min-w-[180px] z-[70] overflow-hidden">
+```
+
+---
+
+## CHANGE 3 — `src/pages/HomePage.tsx`: 6 targeted improvements
+
+**Read the full file before editing.**
+
+**3a. Strengthen the hero headline and fix the three competing CTAs.**
+Find the hero `<div>` section (the gradient block). Replace the CTA buttons and search bar section. The current code has:
+```tsx
+<div className="mt-5 flex gap-3">
+  <button onClick={() => navigate("/search")} ...>
+    <Search size={15} />
+    {t.browseListings}
+  </button>
+  {!user && (
+    <button onClick={() => setShowAuth(true)} ...>
+      {t.getStarted}
+    </button>
+  )}
+</div>
+
+<div className="mt-5 relative">
+  <Search ... />
+  <input ... readOnly ... />
+</div>
+```
+
+Replace with a single prominent search bar (the two buttons are redundant when there's a search bar):
+```tsx
+<div className="mt-6 relative max-w-lg">
+  <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+  <input
+    type="text"
+    placeholder={t.searchPlaceholder}
+    onFocus={() => navigate("/search")}
+    readOnly
+    className="w-full bg-white rounded-xl pl-10 pr-4 py-3 text-sm text-gray-800 placeholder-gray-400 cursor-pointer shadow-lg focus:outline-none hover:shadow-xl transition-shadow"
+  />
+  {!user && (
+    <button
+      onClick={() => setShowAuth(true)}
+      className="absolute right-2 top-1/2 -translate-y-1/2 bg-[#003366] text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-[#002244] transition-colors"
+    >
+      {t.getStarted}
+    </button>
+  )}
+</div>
+```
+
+**3b. Add emoji icons to category chips to make them scannable.**
+The category chip array uses plain text labels. Update the chip rendering to include emojis. Find the section that maps category chips:
+
+```tsx
+{[\"all\", ...(activeTab === \"buy-sell\" ? BUY_SELL_CATEGORIES : LOST_FOUND_CATEGORIES)].map((cat) => (
+```
+
+Add a `CATEGORY_ICONS` map before the component's return statement (after the `displayedListings` declaration and before `SkeletonGrid`):
+```tsx
+const CATEGORY_ICONS: Record<string, string> = {
+  all: "✨",
+  electronics: "💻",
+  books: "📚",
+  clothing: "👕",
+  furniture: "🪑",
+  food: "🍜",
+  services: "🛠️",
+  others: "📦",
+  lostItem: "🔍",
+  foundItem: "📢",
+};
+```
+
+Then update the chip label to include the icon:
+```tsx
+<button
+  key={cat}
+  onClick={() => setCategoryFilter(cat)}
+  className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+    categoryFilter === cat
+      ? "bg-[#003366] text-white border-[#003366] dark:bg-blue-600 dark:border-blue-600"
+      : "bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 border-gray-200 dark:border-slate-600 hover:border-[#003366] dark:hover:border-blue-400"
+  }`}
+>
+  <span>{CATEGORY_ICONS[cat] ?? "📦"}</span>
+  <span>{cat === "all" ? (lang === "en" ? "All" : "全部") : t.categories[cat as keyof typeof t.categories]}</span>
+</button>
+```
+
+**3c. Downgrade "Load More" to a ghost/outline button style (it's a secondary action).**
+Find:
+```tsx
+className="flex items-center gap-2 px-6 py-2.5 bg-[#003366] dark:bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-[#002244] dark:hover:bg-blue-700 disabled:opacity-50 transition-colors"
+```
+Replace with:
+```tsx
+className="flex items-center gap-2 px-6 py-2.5 bg-white dark:bg-slate-800 text-[#003366] dark:text-blue-400 border border-[#003366]/30 dark:border-blue-500/30 rounded-xl text-sm font-semibold hover:bg-[#003366]/5 dark:hover:bg-blue-900/20 disabled:opacity-50 transition-colors shadow-sm"
+```
+
+**3d. Improve the empty state wording and visual.**
+Find the empty state block:
+```tsx
+<div className="text-center py-16 text-gray-400 dark:text-slate-400">
+  <ShoppingBag size={40} className="mx-auto mb-3 opacity-30" />
+  <p className="text-sm font-medium">{t.noListings}</p>
+  <p className="text-xs mt-1">{t.beFirstToPost}</p>
+  <Link href="/post" className="mt-4 inline-block bg-[#003366] dark:bg-blue-600 text-white px-5 py-2 rounded-xl text-sm font-semibold">
+    {t.postItem}
+  </Link>
+</div>
+```
+Replace with:
+```tsx
+<div className="text-center py-20 text-gray-400 dark:text-slate-400">
+  <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gray-100 dark:bg-slate-800 flex items-center justify-center">
+    <ShoppingBag size={36} className="opacity-40" />
+  </div>
+  <p className="text-base font-semibold text-gray-600 dark:text-slate-300">Nothing here yet</p>
+  <p className="text-sm mt-1 max-w-xs mx-auto">
+    {categoryFilter !== "all"
+      ? "No listings in this category. Try browsing all categories."
+      : "Check back soon, or be the first to post something."}
+  </p>
+  {categoryFilter !== "all" ? (
+    <button onClick={() => setCategoryFilter("all")} className="mt-4 inline-block text-[#003366] dark:text-blue-400 text-sm font-semibold underline">
+      Show all categories
+    </button>
+  ) : (
+    <Link href="/post" className="mt-4 inline-block bg-[#003366] dark:bg-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-[#002244] dark:hover:bg-blue-700 transition-colors">
+      {t.postItem}
+    </Link>
+  )}
+</div>
+```
+
+**3e. Add a result count label above the listings grid.**
+After the skeleton / before the grid, add a subtle count line. Find this line in the non-loading, non-empty branch:
+```tsx
+<>
+  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+```
+Replace with:
+```tsx
+<>
+  <div className="flex items-center justify-between mb-3">
+    <p className="text-xs text-gray-400 dark:text-slate-500">
+      {displayedListings.length} {displayedListings.length === 1 ? "listing" : "listings"}
+      {categoryFilter !== "all" && ` in ${t.categories[categoryFilter as keyof typeof t.categories] ?? categoryFilter}`}
+    </p>
+  </div>
+  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+```
+
+**3f. Cap the grid at 3 columns max (`lg:grid-cols-3`, remove `xl:grid-cols-4`)** to prevent cards from becoming too narrow on large screens.
+Find ALL occurrences of `grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4` in this file and replace with `grid-cols-1 sm:grid-cols-2 lg:grid-cols-3`.
+
+---
+
+## CHANGE 4 — `src/components/ListingCard.tsx`: 4 targeted fixes
+
+**Read the full file before editing.**
+
+**4a. Fix the broken hover state** — the card currently does `hover:shadow-md transition-shadow`, which was invisible because shadows were disabled. Now that shadows are fixed in Change 1, also add a subtle `hover:-translate-y-0.5` lift effect:
+```tsx
+// Find:
+className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden hover:shadow-md transition-shadow"
+// Replace with:
+className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
+```
+
+**4b. Increase the minimum text sizes — eliminate all `text-[9px]` and `text-[10px]`.**
+
+Find the category label using `text-[9px]`:
+```tsx
+<span className="inline-block text-[9px] font-semibold uppercase tracking-wide text-[#003366]/70 dark:text-blue-400/70 mb-0.5">
+```
+Replace `text-[9px]` with `text-[11px]`.
+
+Find the footer metadata row with `text-[10px]`:
+```tsx
+<div className="mt-2 flex items-center justify-between text-[10px] text-gray-400 dark:text-slate-500">
+```
+Replace `text-[10px]` with `text-xs` (12px).
+
+**4c. Make owner action buttons a row layout instead of stacked columns.**
+Find:
+```tsx
+<div className={`px-3 pb-3 flex gap-2 ${(showDelete || showMarkSold || showEdit) ? "flex-col" : ""}`}>
+```
+Replace with:
+```tsx
+<div className="px-3 pb-3 flex flex-wrap gap-2">
+```
+Then for each individual button, change `w-full` to just let them be `flex-1` for proportional sizing:
+- Edit button: change `w-full min-h-[44px]` to `flex-1 min-h-[40px]`
+- Mark as Sold button: change `w-full min-h-[44px]` to `flex-1 min-h-[40px]`
+- Delete button: change `w-full min-h-[44px]` to `flex-1 min-h-[40px]`
+
+**4d. Replace the generic "📦" no-photo placeholder with something cleaner.**
+Find:
+```tsx
+<div className={`w-full aspect-[4/3] bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-slate-700 dark:to-slate-600 flex items-center justify-center ${isSold ? "opacity-50" : ""}`}>
+  <span className="text-4xl">📦</span>
+</div>
+```
+Replace with:
+```tsx
+<div className={`w-full aspect-[4/3] bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-600 flex flex-col items-center justify-center gap-2 ${isSold ? "opacity-50" : ""}`}>
+  <svg className="w-10 h-10 text-slate-300 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+    <circle cx="8.5" cy="8.5" r="1.5" />
+    <polyline points="21 15 16 10 5 21" />
+  </svg>
+  <span className="text-xs text-slate-400 dark:text-slate-500">No photo</span>
+</div>
+```
+
+---
+
+## CHANGE 5 — `src/pages/SearchPage.tsx`: 3 targeted fixes
+
+**Read the full file before editing.**
+
+**5a. Add a result count and a "Filters" label to the filter toggle button.**
+Find the filter toggle button:
+```tsx
+<button
+  onClick={() => setShowFilters(!showFilters)}
+  className={`relative p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl border transition-colors ${...}`}
+>
+  <SlidersHorizontal size={18} />
+  {hasFilters && (...)}
+</button>
+```
+Replace with:
+```tsx
+<button
+  onClick={() => setShowFilters(!showFilters)}
+  className={`relative flex items-center gap-1.5 px-3 min-h-[44px] rounded-xl border transition-colors ${showFilters || hasFilters ? "bg-[#003366] dark:bg-blue-600 border-[#003366] dark:border-blue-600 text-white" : "border-gray-300 dark:border-slate-600 text-gray-500 dark:text-slate-400 dark:bg-slate-700"}`}
+>
+  <SlidersHorizontal size={16} />
+  <span className="text-xs font-medium hidden sm:inline">Filters</span>
+  {hasFilters && (
+    <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full text-[8px] text-white flex items-center justify-center">!</span>
+  )}
+</button>
+```
+
+**5b. Add a result count display after search.**
+Find the results section. After `searched` is true and `results.length > 0`, add a count line above the grid. Find:
+```tsx
+) : (
+  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+    {results.map((listing) => (
+```
+Replace with:
+```tsx
+) : (
+  <>
+    <p className="text-xs text-gray-400 dark:text-slate-500 mb-3">
+      {results.length} result{results.length !== 1 ? "s" : ""} found
+    </p>
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {results.map((listing) => (
+```
+And close the extra `<>` fragment after the closing `</div>` of the grid: `</>`
+
+Also fix `xl:grid-cols-4` → `lg:grid-cols-3` in the loading skeleton grid too.
+
+**5c. Improve the empty search state to show popular category suggestions.**
+Find the `!searched` state:
+```tsx
+) : !searched ? (
+  <div className="text-center py-16 text-gray-400 dark:text-slate-400">
+    <Search size={36} className="mx-auto mb-3 opacity-30" />
+    <p className="text-sm font-medium">{t.searchPlaceholder}</p>
+  </div>
+```
+Replace with:
+```tsx
+) : !searched ? (
+  <div className="py-8">
+    <p className="text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide mb-3">
+      Popular Categories
+    </p>
+    <div className="flex flex-wrap gap-2">
+      {["electronics", "books", "clothing", "furniture", "food"].map((cat) => (
+        <button
+          key={cat}
+          onClick={() => setKeyword(t.categories[cat as keyof typeof t.categories] ?? cat)}
+          className="flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl text-xs font-medium text-gray-700 dark:text-slate-300 hover:border-[#003366] dark:hover:border-blue-400 transition-colors shadow-sm"
+        >
+          {{"electronics":"💻","books":"📚","clothing":"👕","furniture":"🪑","food":"🍜"}[cat]}
+          {t.categories[cat as keyof typeof t.categories]}
+        </button>
+      ))}
+    </div>
+  </div>
+```
+
+---
+
+## CHANGE 6 — `src/pages/MessagesPage.tsx`: 3 targeted fixes
+
+**Read the full file before editing.**
+
+**6a. Add message timestamps to chat bubbles.**
+Find the message map inside the messages view:
+```tsx
+{messages.map((msg) => {
+  const isMine = msg.senderId === user.uid;
+  return (
+    <div key={msg.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
+      <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm ...`}>
+        {msg.text}
+      </div>
+    </div>
+  );
+})}
+```
+Replace with:
+```tsx
+{messages.map((msg) => {
+  const isMine = msg.senderId === user.uid;
+  const msgTime = msg.createdAt
+    ? new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : "";
+  return (
+    <div key={msg.id} className={`flex flex-col ${isMine ? "items-end" : "items-start"}`}>
+      <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm ${
+        isMine
+          ? "bg-[#003366] text-white rounded-br-sm"
+          : "bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 border border-gray-100 dark:border-slate-700 rounded-bl-sm"
+      }`}>
+        {msg.text}
+      </div>
+      {msgTime && (
+        <span className="text-[10px] text-gray-300 dark:text-slate-600 mt-0.5 px-1">{msgTime}</span>
+      )}
+    </div>
+  );
+})}
+```
+> Note: `msg.createdAt` may be a Firestore Timestamp or a number. Use the same `toMillis` pattern if needed, but since this is display-only, `new Date(msg.createdAt)` is fine — it handles both.
+
+**6b. Add a character counter to the message input.**
+Find the input bar section. Replace the standalone `<input>` with a wrapper that includes a counter:
+```tsx
+<div className="relative flex-1">
+  <input
+    type="text"
+    value={inputText}
+    onChange={(e) => setInputText(e.target.value)}
+    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+    placeholder={t.typeMessage}
+    maxLength={500}
+    className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-slate-100 min-h-[44px] pr-12"
+  />
+  {inputText.length > 400 && (
+    <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-medium ${inputText.length > 480 ? "text-red-400" : "text-gray-400"}`}>
+      {500 - inputText.length}
+    </span>
+  )}
+</div>
+```
+
+**6c. Reduce conversation row height for better density.**
+Find each conversation `<button>` in the list. Change `p-4` to `p-3` and `w-12 h-12` thumbnail to `w-10 h-10`:
+```tsx
+// Find:
+className="w-full flex items-center gap-3 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-4 hover:shadow-md transition-shadow text-left"
+// Replace:
+className="w-full flex items-center gap-3 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-3 hover:shadow-md transition-shadow text-left"
+
+// Find thumbnail: className="w-12 h-12 rounded-xl object-cover shrink-0"
+// Replace: className="w-10 h-10 rounded-xl object-cover shrink-0"
+
+// Find fallback div: className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-slate-700 ..."
+// Replace: className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-slate-700 ..."
+```
+
+---
+
+## CHANGE 7 — `src/components/AuthModal.tsx`: 2 targeted fixes
+
+**Read the full file before editing.**
+
+**7a. Make the @xmu.edu.my requirement more prominent during sign-up.**
+Find the sign-up `<form>` section. The email field for sign-up mode currently looks the same as sign-in. Add a subtle hint below the email input when `mode === "signup"`:
+
+Find the email `<div>` block:
+```tsx
+<div>
+  <label className="block text-xs font-medium text-gray-600 dark:text-slate-300 mb-1">{t.email}</label>
+  <input
+    type="email"
+    ...
+  />
+</div>
+```
+After the `<input>`, add (inside the `<div>`, after the input):
+```tsx
+{mode === "signup" && (
+  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
+    <span>⚠️</span>
+    Only <strong>@xmu.edu.my</strong> emails are accepted
+  </p>
+)}
+```
+
+**7b. Improve the inactive tab visual in the sign-in/sign-up toggle.**
+Find:
+```tsx
+className={`flex-1 text-sm font-medium py-1.5 rounded-lg transition-all ${mode === "signin" ? "bg-white dark:bg-slate-600 shadow text-[#003366] dark:text-slate-100" : "text-gray-500 dark:text-slate-400"}`}
+```
+Replace with:
+```tsx
+className={`flex-1 text-sm font-medium py-1.5 rounded-lg transition-all ${mode === "signin" ? "bg-white dark:bg-slate-600 shadow text-[#003366] dark:text-slate-100" : "text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-300 hover:bg-white/50 dark:hover:bg-slate-600/50"}`}
+```
+Do the same for the sign-up tab button.
+
+---
+
+## CHANGE 8 — `src/components/VerificationBanner.tsx`: 1 fix
+
+**Read the full file before editing.**
+
+The banner currently has no dark mode support — it's always `bg-amber-50 border-amber-200` regardless of theme.
+
+Find:
+```tsx
+<div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex items-center gap-3">
+```
+Replace with:
+```tsx
+<div className="bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800 px-4 py-2.5 flex items-center gap-3">
+```
+
+Also update the text color to support dark mode:
+Find:
+```tsx
+<p className="text-xs text-amber-800">
+```
+Replace with:
+```tsx
+<p className="text-xs text-amber-800 dark:text-amber-300">
+```
+
+And the button:
+Find:
+```tsx
+<button onClick={handleResend} className="text-xs text-amber-700 underline mt-0.5">
+```
+Replace with:
+```tsx
+<button onClick={handleResend} className="text-xs text-amber-700 dark:text-amber-400 underline mt-0.5">
+```
+
+---
+
+## CHANGE 9 — `src/pages/not-found.tsx`: Full replacement
+
+**Replace the entire file** with a proper branded 404 page:
+
+```tsx
+import { useLocation } from "wouter";
+
+export default function NotFound() {
+  const [, navigate] = useLocation();
+
+  return (
+    <div className="min-h-[60vh] flex flex-col items-center justify-center px-4 text-center animate-in fade-in duration-300">
+      <div className="w-24 h-24 rounded-3xl bg-[#003366]/5 dark:bg-blue-900/20 flex items-center justify-center mb-6">
+        <span className="text-4xl">🔍</span>
+      </div>
+      <h1 className="text-3xl font-bold text-gray-900 dark:text-slate-100 mb-2">Page not found</h1>
+      <p className="text-gray-500 dark:text-slate-400 text-sm max-w-xs mb-8">
+        This page doesn't exist — it may have been removed or the link is incorrect.
+      </p>
+      <button
+        onClick={() => navigate("/")}
+        className="bg-[#003366] dark:bg-blue-600 text-white px-6 py-3 rounded-xl text-sm font-semibold hover:bg-[#002244] dark:hover:bg-blue-700 transition-colors"
+      >
+        Back to Marketplace
+      </button>
+    </div>
+  );
+}
+```
+
+---
+
+## CHANGE 10 — `src/pages/PostPage.tsx`: 3 wording fixes
+
+**Read the full file before editing.**
+
+**10a. Fix the "I've verified my email — refresh" developer string.**
+Find:
+```tsx
+<button onClick={() => window.location.reload()} className="mt-4 text-xs text-[#003366] dark:text-blue-400 underline">
+  I've verified my email — refresh
+</button>
+```
+Replace with:
+```tsx
+<button onClick={() => window.location.reload()} className="mt-4 text-xs text-[#003366] dark:text-blue-400 underline font-medium">
+  I've verified — check again
+</button>
+```
+
+**10b. Expand the photo upload zone to be a visible drop zone.**
+Find the photo upload trigger. It currently renders as a small button. Find the `fileRef` input and the area that calls it. The upload trigger likely looks like:
+```tsx
+<button type="button" onClick={() => fileRef.current?.click()} ...>
+  <ImagePlus ... />
+  ...
+</button>
+```
+Wrap this button in a more prominent container if photos.length === 0:
+Change the button className to also include dashed border styling when no photos have been added:
+```tsx
+// Add to the button className (don't remove existing classes, just append):
+${photos.length === 0 ? "w-full border-2 border-dashed border-gray-300 dark:border-slate-600 rounded-2xl py-8 flex-col gap-2 text-gray-400 hover:border-[#003366] dark:hover:border-blue-500 hover:text-[#003366] dark:hover:text-blue-400" : ""}
+```
+> Adapt this to the actual className structure you see in the file — the goal is that when no photos are added, the upload button looks like a large dashed upload zone.
+
+**10c. Fix price field default.**
+Find the price input for the buy-sell form. The state `priceCents` starts at `0`. 
+Find the price `<input>` element and change `value={priceCents}` to check:
+```tsx
+// Find something like:
+value={priceCents}
+onChange={(e) => setPriceCents(parseFloat(e.target.value) || 0)}
+// Replace with:
+value={priceCents === 0 ? "" : priceCents}
+placeholder="e.g. 50"
+onChange={(e) => setPriceCents(parseFloat(e.target.value) || 0)}
+```
+
+---
+
+## VERIFICATION CHECKLIST
+
+After all 10 changes, verify:
+
+- [ ] `pnpm run typecheck` — zero new TypeScript errors
+- [ ] `pnpm run build` — builds successfully
+- [ ] Cards now visibly lift on hover (shadow is no longer invisible)
+- [ ] The PDPA text no longer appears inside the mobile bottom nav
+- [ ] Category chips show emoji icons
+- [ ] The 404 page is branded and user-friendly
+- [ ] Dark mode is consistent on the VerificationBanner
+- [ ] No `text-[9px]` remains anywhere (search codebase: `grep -r "text-\[9px\]" src/`)
+- [ ] AuthModal shows the @xmu.edu.my warning during sign-up
+- [ ] Messages show timestamps
+- [ ] The "Load More" button is an outline style (not filled blue)
+
+## DO NOT CHANGE
+
+- `src/lib/` — any file
+- `src/contexts/` — any file
+- `src/hooks/` — any file
+- `src/App.tsx`
+- `firestore.rules`, `storage.rules`, `firestore.indexes.json`
+- Any TypeScript type definitions
+- Any Firebase query logic
+- Authentication flows

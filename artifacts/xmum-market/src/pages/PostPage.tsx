@@ -154,8 +154,8 @@ export default function PostPage() {
         <AlertCircle size={40} className="text-amber-400 mb-3" />
         <p className="text-gray-600 dark:text-slate-300 font-medium">{t.verifyToPost}</p>
         <p className="text-xs text-gray-400 dark:text-slate-500 mt-1 max-w-xs">{t.verifyEmailMsg}</p>
-        <button onClick={() => window.location.reload()} className="mt-4 text-xs text-[#003366] dark:text-blue-400 underline">
-          I've verified my email — refresh
+        <button onClick={() => window.location.reload()} className="mt-4 text-xs text-[#003366] dark:text-blue-400 underline font-medium">
+          I've verified — check again
         </button>
       </div>
     );
@@ -292,10 +292,11 @@ export default function PostPage() {
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
-                className="aspect-square rounded-xl border-2 border-dashed border-gray-300 dark:border-slate-600 flex flex-col items-center justify-center text-gray-400 dark:text-slate-500 hover:border-[#003366] dark:hover:border-blue-500 hover:text-[#003366] dark:hover:text-blue-400 transition-colors"
+                className={`rounded-xl border-2 border-dashed border-gray-300 dark:border-slate-600 flex flex-col items-center justify-center text-gray-400 dark:text-slate-500 hover:border-[#003366] dark:hover:border-blue-500 hover:text-[#003366] dark:hover:text-blue-400 transition-colors ${photos.length === 0 ? "col-span-3 py-10 gap-2" : "aspect-square"}`}
               >
-                <ImagePlus size={22} />
-                <span className="text-[10px] mt-1">{t.uploadPhotos}</span>
+                <ImagePlus size={photos.length === 0 ? 28 : 22} />
+                <span className={photos.length === 0 ? "text-xs mt-1" : "text-[10px] mt-1"}>{t.uploadPhotos}</span>
+                {photos.length === 0 && <span className="text-[10px] text-gray-300 dark:text-slate-600">Up to 3 photos · Max 5 MB each</span>}
               </button>
             )}
           </div>
@@ -385,7 +386,8 @@ export default function PostPage() {
               <input
                 type="text"
                 inputMode="numeric"
-                value={(priceCents / 100).toFixed(2)}
+                value={priceCents === 0 ? "" : (priceCents / 100).toFixed(2)}
+                placeholder="0.00"
                 onKeyDown={(e) => {
                   if (e.key >= "0" && e.key <= "9") {
                     e.preventDefault();

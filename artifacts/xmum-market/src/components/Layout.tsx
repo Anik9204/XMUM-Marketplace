@@ -26,12 +26,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-950 flex flex-col">
       {/* ── Header ────────────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-50 bg-[#003366] dark:bg-slate-900 shadow-md">
+      <header className="sticky top-0 z-50 bg-[#003366] dark:bg-slate-900 shadow-md border-b border-white/10 dark:border-slate-700/50">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 shrink-0">
-            <span className="text-white font-bold text-lg tracking-tight">
-              {t.appName}
+            <span className="flex items-center gap-2">
+              <span className="w-7 h-7 bg-white/20 rounded-lg flex items-center justify-center text-white font-black text-sm select-none">X</span>
+              <span className="text-white font-bold text-lg tracking-tight">{t.appName}</span>
             </span>
           </Link>
 
@@ -65,7 +66,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   {menuOpen && (
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-                      <div className="absolute right-0 top-9 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-gray-100 dark:border-slate-700 min-w-44 z-[70]">
+                      <div className="absolute right-0 top-10 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-gray-100 dark:border-slate-700 min-w-[180px] z-[70] overflow-hidden">
                         <Link href="/profile" onClick={() => setMenuOpen(false)} className="block px-4 py-2.5 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-t-xl">{t.myListings}</Link>
                         <Link href="/settings" onClick={() => setMenuOpen(false)} className="block px-4 py-2.5 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700 border-t border-gray-100 dark:border-slate-700">{t.accountSettings}</Link>
                         <button onClick={() => { logOut(); setMenuOpen(false); }} className="block w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-b-xl border-t border-gray-100 dark:border-slate-700">{t.signOut}</button>
@@ -129,18 +130,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 className={`flex-1 flex flex-col items-center justify-center h-12 gap-0.5 transition-colors ${active ? "text-[#003366] dark:text-blue-400" : "text-gray-400 dark:text-slate-500"}`}
               >
                 <Icon size={20} strokeWidth={active ? 2.5 : 1.8} />
-                <span className="text-[9px] font-medium">{label}</span>
+                <span className="text-[10px] font-medium tracking-wide">{label}</span>
               </Link>
             );
           })}
         </div>
-        {location === "/" && (
-          <div className="bg-gray-50 dark:bg-slate-800 border-t border-gray-100 dark:border-slate-700 px-4 py-2">
-            <p className="text-[9px] text-gray-400 dark:text-slate-500 text-center leading-relaxed">
-              {t.pdpaText}
-            </p>
-          </div>
-        )}
       </nav>
 
       {/* Auth modal — global, triggered from header */}

@@ -215,13 +215,13 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
             <div className="flex bg-gray-100 dark:bg-slate-700 rounded-xl p-1 mb-5">
               <button
                 onClick={() => { setMode("signin"); setError(""); setSuccess(""); }}
-                className={`flex-1 text-sm font-medium py-1.5 rounded-lg transition-all ${mode === "signin" ? "bg-white dark:bg-slate-600 shadow text-[#003366] dark:text-slate-100" : "text-gray-500 dark:text-slate-400"}`}
+                className={`flex-1 text-sm font-medium py-1.5 rounded-lg transition-all ${mode === "signin" ? "bg-white dark:bg-slate-600 shadow text-[#003366] dark:text-slate-100" : "text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-300 hover:bg-white/50 dark:hover:bg-slate-600/50"}`}
               >
                 {t.signIn}
               </button>
               <button
                 onClick={() => { setMode("signup"); setError(""); setSuccess(""); }}
-                className={`flex-1 text-sm font-medium py-1.5 rounded-lg transition-all ${mode === "signup" ? "bg-white dark:bg-slate-600 shadow text-[#003366] dark:text-slate-100" : "text-gray-500 dark:text-slate-400"}`}
+                className={`flex-1 text-sm font-medium py-1.5 rounded-lg transition-all ${mode === "signup" ? "bg-white dark:bg-slate-600 shadow text-[#003366] dark:text-slate-100" : "text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-300 hover:bg-white/50 dark:hover:bg-slate-600/50"}`}
               >
                 {t.signUp}
               </button>
@@ -255,6 +255,12 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
                 required
                 className={inputCls}
               />
+              {mode === "signup" && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
+                  <span>⚠️</span>
+                  Only <strong>@xmu.edu.my</strong> emails are accepted
+                </p>
+              )}
             </div>
 
             {mode !== "forgot" && (
