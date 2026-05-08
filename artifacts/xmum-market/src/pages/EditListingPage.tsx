@@ -6,7 +6,7 @@ import { uploadPhoto, updateListing, getListing } from "@/lib/listings";
 import { checkContent } from "@/lib/contentFilter";
 import { auth } from "@/lib/firebase";
 import { ListingType, Condition } from "@/lib/types";
-import { ImagePlus, X, AlertCircle, CheckCircle2, Lock, Edit2, Loader2 } from "lucide-react";
+import { ImagePlus, X, AlertCircle, CheckCircle2, Lock, Edit2, Loader2, Wifi, WifiOff } from "lucide-react";
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
@@ -14,6 +14,23 @@ const BUY_SELL_CATEGORIES = [
   "electronics", "books", "clothing", "furniture", "food", "services", "others",
 ];
 const LOST_FOUND_CATEGORIES = ["lostItem", "foundItem"];
+const JOBS_CATEGORIES = [
+  "tutoring", "freelance_design", "freelance_dev", "language_exchange",
+  "photography", "music_lessons", "fitness_coaching", "other_service",
+];
+const ASSISTANCE_CATEGORIES = [
+  "dorm_moving", "grocery_run", "delivery", "cleaning",
+  "event_setup", "tech_help", "other_assistance",
+];
+
+function getCategoriesForType(type: ListingType): string[] {
+  if (type === "buy-sell") return BUY_SELL_CATEGORIES;
+  if (type === "lost-found") return LOST_FOUND_CATEGORIES;
+  if (type === "jobs") return JOBS_CATEGORIES;
+  return ASSISTANCE_CATEGORIES;
+}
+
+const ALL_TABS: ListingType[] = ["buy-sell", "lost-found", "jobs", "assistance"];
 
 const inputCls =
   "w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 transition min-h-[44px]";
@@ -56,21 +73,11 @@ function DescriptionEditorModal({ value, onChange, onClose }: DescriptionEditorM
   return (
     <div className="fixed inset-0 z-[70] flex flex-col bg-white dark:bg-slate-900">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-slate-700">
-        <button
-          type="button"
-          onClick={onClose}
-          className="text-sm text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200 transition-colors"
-        >
+        <button type="button" onClick={onClose} className="text-sm text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200 transition-colors">
           {t.cancel}
         </button>
-        <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-100">
-          {t.descriptionLabel}
-        </h2>
-        <button
-          type="button"
-          onClick={handleSave}
-          className="text-sm font-semibold text-[#003366] dark:text-blue-400 hover:opacity-75 transition-opacity"
-        >
+        <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-100">{t.descriptionLabel}</h2>
+        <button type="button" onClick={handleSave} className="text-sm font-semibold text-[#003366] dark:text-blue-400 hover:opacity-75 transition-opacity">
           {t.done}
         </button>
       </div>
@@ -117,6 +124,15 @@ export default function EditListingPage() {
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
   const [showDescEditor, setShowDescEditor] = useState(false);
+
+  // Jobs-specific
+  const [jobSubtype, setJobSubtype] = useState<"offering" | "seeking">("offering");
+  const [isRemote, setIsRemote] = useState(false);
+
+  // Assistance-specific
+  const [pricingModel, setPricingModel] = useState<"per_hour" | "per_day" | "per_month" | "fixed">("per_hour");
+  const [availability, setAvailability] = useState("");
+
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -124,10 +140,7 @@ export default function EditListingPage() {
     getListing(id)
       .then((listing) => {
         if (!listing) { setFetchError("Listing not found."); return; }
-        if (listing.userId !== user?.uid) {
-          setFetchError("You don't have permission to edit this listing.");
-          return;
-        }
+        if (listing.userId !== user?.uid) { setFetchError("You don't have permission to edit this listing."); return; }
         setType(listing.type);
         setTitle(listing.title);
         setDescription(listing.description);
@@ -139,6 +152,10 @@ export default function EditListingPage() {
         setTeams(listing.teams ?? "");
         setMeetupSpot(listing.meetupSpot ?? "");
         setExistingPhotos(listing.photos);
+        if (listing.jobSubtype) setJobSubtype(listing.jobSubtype);
+        if (listing.isRemote != null) setIsRemote(listing.isRemote);
+        if (listing.pricingModel) setPricingModel(listing.pricingModel);
+        if (listing.availability) setAvailability(listing.availability);
       })
       .catch(() => setFetchError("Failed to load listing. Please try again."))
       .finally(() => setFetchLoading(false));
@@ -165,7 +182,7 @@ export default function EditListingPage() {
   }
 
   const totalPhotos = existingPhotos.length + photos.length;
-  const categories = type === "buy-sell" ? BUY_SELL_CATEGORIES : LOST_FOUND_CATEGORIES;
+  const categories = getCategoriesForType(type);
 
   function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
     return Promise.race([
@@ -227,10 +244,24 @@ export default function EditListingPage() {
         title, description,
         category, condition,
         photos: [...existingPhotos, ...newUrls],
-        whatsapp, wechat, teams, meetupSpot,
+        whatsapp, wechat, teams,
       };
+
       if (type === "buy-sell") {
         baseData.price = priceCents / 100;
+        baseData.meetupSpot = meetupSpot;
+      } else if (type === "lost-found") {
+        baseData.meetupSpot = meetupSpot;
+      } else if (type === "jobs") {
+        baseData.jobSubtype = jobSubtype;
+        baseData.isRemote = isRemote;
+        if (!isRemote) baseData.meetupSpot = meetupSpot;
+        if (priceCents > 0) baseData.price = priceCents / 100;
+      } else if (type === "assistance") {
+        baseData.price = priceCents / 100;
+        baseData.pricingModel = pricingModel;
+        baseData.meetupSpot = meetupSpot;
+        baseData.availability = availability.trim();
       }
 
       await withTimeout(updateListing(id, baseData as Parameters<typeof updateListing>[1]), 12_000, "update-listing");
@@ -250,21 +281,28 @@ export default function EditListingPage() {
     }
   };
 
+  const tabLabel = (tab: ListingType) => {
+    if (tab === "buy-sell") return t.buySell;
+    if (tab === "lost-found") return t.lostFound;
+    if (tab === "jobs") return t.jobs;
+    return t.assistance;
+  };
+
   return (
     <div className="max-w-lg mx-auto px-4 py-5 pb-28 sm:pb-8 animate-in fade-in duration-200">
       {toast && <SuccessToast message={toast} onDone={() => navigate(`/listing/${id}`)} />}
 
       <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-4">{t.editListingTitle}</h1>
 
-      {/* Type selector — disabled/read-only after posting */}
+      {/* Type selector — read-only, 2×2 grid */}
       <div className="mb-5">
-        <div className="flex bg-gray-100 dark:bg-slate-800 rounded-xl p-1 pointer-events-none opacity-60">
-          {(["buy-sell", "lost-found"] as const).map((tab) => (
+        <div className="grid grid-cols-2 bg-gray-100 dark:bg-slate-800 rounded-xl p-1 pointer-events-none opacity-60 gap-1">
+          {ALL_TABS.map((tab) => (
             <div
               key={tab}
-              className={`flex-1 py-2 min-h-[44px] rounded-lg text-sm font-semibold text-center flex items-center justify-center transition-all ${type === tab ? "bg-white dark:bg-slate-700 shadow text-[#003366] dark:text-slate-100" : "text-gray-500 dark:text-slate-400"}`}
+              className={`py-2 min-h-[44px] rounded-lg text-sm font-semibold text-center flex items-center justify-center transition-all ${type === tab ? "bg-white dark:bg-slate-700 shadow text-[#003366] dark:text-slate-100" : "text-gray-500 dark:text-slate-400"}`}
             >
-              {tab === "buy-sell" ? t.buySell : t.lostFound}
+              {tabLabel(tab)}
             </div>
           ))}
         </div>
@@ -275,18 +313,14 @@ export default function EditListingPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Photos — existing + new */}
+        {/* Photos */}
         <div>
           <label className={labelCls}>{t.photos}</label>
           <div className="grid grid-cols-3 gap-2">
             {existingPhotos.map((src, i) => (
               <div key={`existing-${i}`} className="relative aspect-square rounded-xl overflow-hidden border border-gray-200 dark:border-slate-600">
                 <img src={src} alt="" className="w-full h-full object-cover" />
-                <button
-                  type="button"
-                  onClick={() => removeExistingPhoto(i)}
-                  className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-0.5"
-                >
+                <button type="button" onClick={() => removeExistingPhoto(i)} className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-0.5">
                   <X size={12} />
                 </button>
               </div>
@@ -294,11 +328,7 @@ export default function EditListingPage() {
             {previews.map((src, i) => (
               <div key={`new-${i}`} className="relative aspect-square rounded-xl overflow-hidden border border-blue-200 dark:border-blue-600">
                 <img src={src} alt="" className="w-full h-full object-cover" />
-                <button
-                  type="button"
-                  onClick={() => removeNewPhoto(i)}
-                  className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-0.5"
-                >
+                <button type="button" onClick={() => removeNewPhoto(i)} className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-0.5">
                   <X size={12} />
                 </button>
               </div>
@@ -320,7 +350,9 @@ export default function EditListingPage() {
 
         {/* Title */}
         <div>
-          <label className={labelCls}>{t.title} *</label>
+          <label className={labelCls}>
+            {(type === "jobs" || type === "assistance") ? t.serviceTitle : t.title} *
+          </label>
           <input
             type="text"
             value={title}
@@ -334,7 +366,26 @@ export default function EditListingPage() {
           </div>
         </div>
 
-        {/* Description — tappable preview */}
+        {/* Jobs: subtype selector */}
+        {type === "jobs" && (
+          <div>
+            <label className={labelCls}>{t.jobSubtypeLabel}</label>
+            <div className="flex gap-2">
+              {(["offering", "seeking"] as const).map((sub) => (
+                <button
+                  key={sub}
+                  type="button"
+                  onClick={() => setJobSubtype(sub)}
+                  className={`flex-1 min-h-[44px] py-2 rounded-xl text-sm font-medium border transition-colors ${jobSubtype === sub ? "bg-[#003366] dark:bg-blue-600 text-white border-[#003366] dark:border-blue-600" : "bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600"}`}
+                >
+                  {sub === "offering" ? t.jobSubtypeOffering : t.jobSubtypeSeeking}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Description */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">
             {t.descriptionLabel}
@@ -367,24 +418,26 @@ export default function EditListingPage() {
           </select>
         </div>
 
-        {/* Condition */}
-        <div>
-          <label className={labelCls}>{t.condition}</label>
-          <div className="flex gap-2">
-            {(["new", "used"] as Condition[]).map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => setCondition(c)}
-                className={`flex-1 min-h-[44px] py-2 rounded-xl text-sm font-medium border transition-colors ${condition === c ? "bg-[#003366] dark:bg-blue-600 text-white border-[#003366] dark:border-blue-600" : "bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600"}`}
-              >
-                {c === "new" ? t.conditionNew : t.conditionUsed}
-              </button>
-            ))}
+        {/* Condition — buy-sell only */}
+        {type === "buy-sell" && (
+          <div>
+            <label className={labelCls}>{t.condition}</label>
+            <div className="flex gap-2">
+              {(["new", "used"] as Condition[]).map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setCondition(c)}
+                  className={`flex-1 min-h-[44px] py-2 rounded-xl text-sm font-medium border transition-colors ${condition === c ? "bg-[#003366] dark:bg-blue-600 text-white border-[#003366] dark:border-blue-600" : "bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600"}`}
+                >
+                  {c === "new" ? t.conditionNew : t.conditionUsed}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Price (buy-sell only) */}
+        {/* Price — buy-sell */}
         {type === "buy-sell" && (
           <div>
             <label className={labelCls}>{t.price}</label>
@@ -397,10 +450,7 @@ export default function EditListingPage() {
                 onKeyDown={(e) => {
                   if (e.key >= "0" && e.key <= "9") {
                     e.preventDefault();
-                    setPriceCents((prev) => {
-                      const next = prev * 10 + parseInt(e.key);
-                      return next > 9999999 ? prev : next;
-                    });
+                    setPriceCents((prev) => { const next = prev * 10 + parseInt(e.key); return next > 9999999 ? prev : next; });
                   } else if (e.key === "Backspace") {
                     e.preventDefault();
                     setPriceCents((prev) => Math.floor(prev / 10));
@@ -411,18 +461,124 @@ export default function EditListingPage() {
                 className={`${inputCls} pl-10 text-right font-mono tracking-wide`}
               />
             </div>
-            <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-1">
-              Type digits to enter price — backspace to correct
-            </p>
+            <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-1">Type digits to enter price — backspace to correct</p>
+          </div>
+        )}
+
+        {/* Price — jobs (optional, per hour) */}
+        {type === "jobs" && (
+          <div>
+            <label className={labelCls}>{t.pricePerHour} <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-400 text-sm font-medium">RM</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={priceCents === 0 ? "" : (priceCents / 100).toFixed(2)}
+                placeholder="0.00"
+                onKeyDown={(e) => {
+                  if (e.key >= "0" && e.key <= "9") {
+                    e.preventDefault();
+                    setPriceCents((prev) => { const next = prev * 10 + parseInt(e.key); return next > 9999999 ? prev : next; });
+                  } else if (e.key === "Backspace") {
+                    e.preventDefault();
+                    setPriceCents((prev) => Math.floor(prev / 10));
+                  }
+                }}
+                onFocus={(e) => e.target.select()}
+                readOnly={false}
+                className={`${inputCls} pl-10 text-right font-mono tracking-wide`}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Jobs: Remote toggle */}
+        {type === "jobs" && (
+          <div className="flex items-center justify-between bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl px-4 py-3">
+            <div className="flex items-center gap-2">
+              {isRemote ? <Wifi size={16} className="text-sky-500" /> : <WifiOff size={16} className="text-gray-400" />}
+              <span className="text-sm font-medium text-gray-700 dark:text-slate-300">{t.availableRemotely}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsRemote((prev) => !prev)}
+              className={`relative w-11 h-6 rounded-full transition-colors ${isRemote ? "bg-sky-500" : "bg-gray-300 dark:bg-slate-600"}`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${isRemote ? "translate-x-5" : "translate-x-0"}`} />
+            </button>
+          </div>
+        )}
+
+        {/* Assistance: Pricing model */}
+        {type === "assistance" && (
+          <div>
+            <label className={labelCls}>{t.pricingModelLabel}</label>
+            <div className="grid grid-cols-2 gap-2">
+              {(["per_hour", "per_day", "per_month", "fixed"] as const).map((model) => {
+                const label = model === "per_hour" ? t.pricingModelPerHour : model === "per_day" ? t.pricingModelPerDay : model === "per_month" ? t.pricingModelPerMonth : t.pricingModelFixed;
+                return (
+                  <button
+                    key={model}
+                    type="button"
+                    onClick={() => setPricingModel(model)}
+                    className={`min-h-[44px] py-2 rounded-xl text-sm font-medium border transition-colors ${pricingModel === model ? "bg-[#003366] dark:bg-blue-600 text-white border-[#003366] dark:border-blue-600" : "bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600"}`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Price — assistance (required) */}
+        {type === "assistance" && (
+          <div>
+            <label className={labelCls}>{t.price} *</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-400 text-sm font-medium">RM</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={(priceCents / 100).toFixed(2)}
+                onKeyDown={(e) => {
+                  if (e.key >= "0" && e.key <= "9") {
+                    e.preventDefault();
+                    setPriceCents((prev) => { const next = prev * 10 + parseInt(e.key); return next > 9999999 ? prev : next; });
+                  } else if (e.key === "Backspace") {
+                    e.preventDefault();
+                    setPriceCents((prev) => Math.floor(prev / 10));
+                  }
+                }}
+                onFocus={(e) => e.target.select()}
+                readOnly={false}
+                className={`${inputCls} pl-10 text-right font-mono tracking-wide`}
+              />
+            </div>
+            <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-1">Type digits to enter price — backspace to correct</p>
+          </div>
+        )}
+
+        {/* Assistance: Availability */}
+        {type === "assistance" && (
+          <div>
+            <label className={labelCls}>{t.availability}</label>
+            <input
+              type="text"
+              value={availability}
+              onChange={(e) => setAvailability(e.target.value.slice(0, 80))}
+              placeholder={t.availabilityPlaceholder}
+              maxLength={80}
+              className={inputCls}
+            />
           </div>
         )}
 
         {/* Contact info */}
         <div className="border border-gray-200 dark:border-slate-700 rounded-xl p-4 space-y-3">
           <p className="text-sm font-semibold text-gray-700 dark:text-slate-300">{t.contactInfo}</p>
-          <p className="text-xs text-gray-400 dark:text-slate-500">
-            {t.contactAtLeastOne}
-          </p>
+          <p className="text-xs text-gray-400 dark:text-slate-500">{t.contactAtLeastOne}</p>
           <div>
             <label className="block text-xs text-gray-500 dark:text-slate-400 mb-1">
               {t.whatsapp}
@@ -458,20 +614,22 @@ export default function EditListingPage() {
             <label className="block text-xs text-gray-500 dark:text-slate-400 mb-1">{t.teams}</label>
             <input type="text" value={teams} onChange={(e) => setTeams(e.target.value)} placeholder="student@xmu.edu.my" maxLength={60} className={inputCls} />
           </div>
-          <div>
-            <label className="block text-xs text-gray-500 dark:text-slate-400 mb-1">{t.meetupSpot}</label>
-            <input
-              type="text"
-              value={meetupSpot}
-              onChange={(e) => setMeetupSpot(e.target.value.slice(0, 80))}
-              placeholder={t.meetupSpotPlaceholder}
-              maxLength={80}
-              className={inputCls}
-            />
-            <p className={`text-right text-[10px] mt-0.5 ${meetupSpot.length >= 70 ? "text-amber-500" : "text-gray-400 dark:text-slate-500"}`}>
-              {meetupSpot.length}/80
-            </p>
-          </div>
+          {!(type === "jobs" && isRemote) && (
+            <div>
+              <label className="block text-xs text-gray-500 dark:text-slate-400 mb-1">{t.meetupSpot}</label>
+              <input
+                type="text"
+                value={meetupSpot}
+                onChange={(e) => setMeetupSpot(e.target.value.slice(0, 80))}
+                placeholder={t.meetupSpotPlaceholder}
+                maxLength={80}
+                className={inputCls}
+              />
+              <p className={`text-right text-[10px] mt-0.5 ${meetupSpot.length >= 70 ? "text-amber-500" : "text-gray-400 dark:text-slate-500"}`}>
+                {meetupSpot.length}/80
+              </p>
+            </div>
+          )}
         </div>
 
         {error && (

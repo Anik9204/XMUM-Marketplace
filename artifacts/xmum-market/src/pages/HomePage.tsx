@@ -4,7 +4,7 @@ import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { getListingsPage } from "@/lib/listings";
 import { getActiveAds } from "@/lib/ads";
-import { Listing, SponsoredAd } from "@/lib/types";
+import { Listing, ListingType, SponsoredAd } from "@/lib/types";
 import { QueryDocumentSnapshot } from "firebase/firestore";
 import ListingCard from "@/components/ListingCard";
 import SponsoredAdCard from "@/components/SponsoredAdCard";
@@ -15,6 +15,14 @@ const BUY_SELL_CATEGORIES = [
   "electronics", "books", "clothing", "furniture", "food", "services", "others",
 ];
 const LOST_FOUND_CATEGORIES = ["lostItem", "foundItem"];
+const JOBS_CATEGORIES = [
+  "tutoring", "freelance_design", "freelance_dev", "language_exchange",
+  "photography", "music_lessons", "fitness_coaching", "other_service",
+];
+const ASSISTANCE_CATEGORIES = [
+  "dorm_moving", "grocery_run", "delivery", "cleaning",
+  "event_setup", "tech_help", "other_assistance",
+];
 
 const CATEGORY_ICONS: Record<string, string> = {
   all: "✨",
@@ -27,13 +35,37 @@ const CATEGORY_ICONS: Record<string, string> = {
   others: "📦",
   lostItem: "🔍",
   foundItem: "📢",
+  tutoring: "📖",
+  freelance_design: "🎨",
+  freelance_dev: "💻",
+  language_exchange: "🌐",
+  photography: "📷",
+  music_lessons: "🎵",
+  fitness_coaching: "🏋️",
+  other_service: "🛠️",
+  dorm_moving: "📦",
+  grocery_run: "🛒",
+  delivery: "🚴",
+  cleaning: "🧹",
+  event_setup: "🎉",
+  tech_help: "⚙️",
+  other_assistance: "🤝",
 };
+
+const ALL_TABS: ListingType[] = ["buy-sell", "lost-found", "jobs", "assistance"];
+
+function getCategoriesForTab(tab: ListingType): string[] {
+  if (tab === "buy-sell") return BUY_SELL_CATEGORIES;
+  if (tab === "lost-found") return LOST_FOUND_CATEGORIES;
+  if (tab === "jobs") return JOBS_CATEGORIES;
+  return ASSISTANCE_CATEGORIES;
+}
 
 export default function HomePage() {
   const { t, lang } = useLang();
   const { user, userProfile } = useAuth();
   const [, navigate] = useLocation();
-  const [activeTab, setActiveTab] = useState<"buy-sell" | "lost-found">("buy-sell");
+  const [activeTab, setActiveTab] = useState<ListingType>("buy-sell");
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -43,7 +75,14 @@ export default function HomePage() {
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [ads, setAds] = useState<SponsoredAd[]>([]);
 
-  const loadFirst = useCallback(async (tab: "buy-sell" | "lost-found") => {
+  const tabLabel = (tab: ListingType) => {
+    if (tab === "buy-sell") return t.buySell;
+    if (tab === "lost-found") return t.lostFound;
+    if (tab === "jobs") return t.jobs;
+    return t.assistance;
+  };
+
+  const loadFirst = useCallback(async (tab: ListingType) => {
     setLoading(true);
     setListings([]);
     setCursor(null);
@@ -144,20 +183,20 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Tab bar */}
+      {/* Tab bar — 4 tabs */}
       <div className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 sticky top-14 sm:top-16 z-30">
-        <div className="max-w-5xl mx-auto px-4 flex">
-          {(["buy-sell", "lost-found"] as const).map((tab) => (
+        <div className="max-w-5xl mx-auto px-4 flex overflow-x-auto scrollbar-hide">
+          {ALL_TABS.map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`flex-1 md:flex-none md:px-6 py-3 text-sm font-semibold border-b-2 transition-colors ${
+              className={`flex-1 md:flex-none md:px-5 py-3 text-xs sm:text-sm font-semibold border-b-2 transition-colors whitespace-nowrap shrink-0 ${
                 activeTab === tab
                   ? "border-[#003366] dark:border-blue-400 text-[#003366] dark:text-blue-400"
                   : "border-transparent text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300"
               }`}
             >
-              {tab === "buy-sell" ? t.buySell : t.lostFound}
+              {tabLabel(tab)}
             </button>
           ))}
         </div>
@@ -166,7 +205,7 @@ export default function HomePage() {
       {/* Category chips */}
       <div className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700">
         <div className="max-w-5xl mx-auto px-4 py-2 flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-          {["all", ...(activeTab === "buy-sell" ? BUY_SELL_CATEGORIES : LOST_FOUND_CATEGORIES)].map((cat) => (
+          {["all", ...getCategoriesForTab(activeTab)].map((cat) => (
             <button
               key={cat}
               onClick={() => setCategoryFilter(cat)}

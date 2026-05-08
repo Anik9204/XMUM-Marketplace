@@ -8,6 +8,13 @@ import { Search, SlidersHorizontal, X } from "lucide-react";
 const inputCls =
   "w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 transition";
 
+const ALL_TABS: { value: ListingType; label: (t: any) => string }[] = [
+  { value: "buy-sell", label: (t) => t.buySell },
+  { value: "lost-found", label: (t) => t.lostFound },
+  { value: "jobs", label: (t) => t.jobs },
+  { value: "assistance", label: (t) => t.assistance },
+];
+
 export default function SearchPage() {
   const { t } = useLang();
   const [type, setType] = useState<ListingType>("buy-sell");
@@ -20,6 +27,9 @@ export default function SearchPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [searched, setSearched] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  const showPriceFilter = type === "buy-sell" || type === "jobs" || type === "assistance";
+  const showConditionFilter = type === "buy-sell";
 
   const doSearch = async () => {
     setLoading(true);
@@ -115,15 +125,15 @@ export default function SearchPage() {
           </div>
         )}
 
-        {/* Type tabs */}
-        <div className="flex gap-1 mt-2.5">
-          {(["buy-sell", "lost-found"] as const).map((tab) => (
+        {/* Type tabs — 2x2 grid for 4 tabs */}
+        <div className="grid grid-cols-4 gap-1 mt-2.5">
+          {ALL_TABS.map(({ value, label }) => (
             <button
-              key={tab}
-              onClick={() => setType(tab)}
-              className={`flex-1 py-1.5 min-h-[36px] rounded-lg text-xs font-semibold transition-colors ${type === tab ? "bg-[#003366] dark:bg-blue-600 text-white" : "bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400"}`}
+              key={value}
+              onClick={() => { setType(value); setResults([]); setSearched(false); }}
+              className={`py-1.5 min-h-[36px] rounded-lg text-xs font-semibold transition-colors ${type === value ? "bg-[#003366] dark:bg-blue-600 text-white" : "bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400"}`}
             >
-              {tab === "buy-sell" ? t.buySell : t.lostFound}
+              {label(t)}
             </button>
           ))}
         </div>
@@ -131,7 +141,7 @@ export default function SearchPage() {
         {/* Filters panel */}
         {showFilters && (
           <div className="mt-3 p-3 bg-gray-50 dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 space-y-3">
-            {type === "buy-sell" && (
+            {showPriceFilter && (
               <div>
                 <p className="text-xs font-medium text-gray-600 dark:text-slate-300 mb-1.5">{t.filterPrice}</p>
                 <div className="flex gap-2 items-center">
@@ -156,20 +166,22 @@ export default function SearchPage() {
               </div>
             )}
 
-            <div>
-              <p className="text-xs font-medium text-gray-600 dark:text-slate-300 mb-1.5">{t.filterCondition}</p>
-              <div className="flex gap-2">
-                {["all", "new", "used"].map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => setCondition(c)}
-                    className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${condition === c ? "bg-[#003366] dark:bg-blue-600 text-white" : "bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 text-gray-600 dark:text-slate-300"}`}
-                  >
-                    {c === "all" ? t.allConditions : c === "new" ? t.conditionNew : t.conditionUsed}
-                  </button>
-                ))}
+            {showConditionFilter && (
+              <div>
+                <p className="text-xs font-medium text-gray-600 dark:text-slate-300 mb-1.5">{t.filterCondition}</p>
+                <div className="flex gap-2">
+                  {["all", "new", "used"].map((c) => (
+                    <button
+                      key={c}
+                      onClick={() => setCondition(c)}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${condition === c ? "bg-[#003366] dark:bg-blue-600 text-white" : "bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 text-gray-600 dark:text-slate-300"}`}
+                    >
+                      {c === "all" ? t.allConditions : c === "new" ? t.conditionNew : t.conditionUsed}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             {hasFilters && (
               <button onClick={clearFilters} className="w-full text-xs text-red-500 border border-red-200 dark:border-red-800 rounded-lg py-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">

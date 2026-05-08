@@ -7,14 +7,22 @@ import { checkContent } from "@/lib/contentFilter";
 import { auth } from "@/lib/firebase";
 import { ListingType, Condition } from "@/lib/types";
 import AuthModal from "@/components/AuthModal";
-import { ImagePlus, X, AlertCircle, CheckCircle2, Edit2 } from "lucide-react";
+import { ImagePlus, X, AlertCircle, CheckCircle2, Edit2, Wifi, WifiOff } from "lucide-react";
 
-const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB — matches Firebase Storage security rule
+const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
 const BUY_SELL_CATEGORIES = [
   "electronics", "books", "clothing", "furniture", "food", "services", "others",
 ];
 const LOST_FOUND_CATEGORIES = ["lostItem", "foundItem"];
+const JOBS_CATEGORIES = [
+  "tutoring", "freelance_design", "freelance_dev", "language_exchange",
+  "photography", "music_lessons", "fitness_coaching", "other_service",
+];
+const ASSISTANCE_CATEGORIES = [
+  "dorm_moving", "grocery_run", "delivery", "cleaning",
+  "event_setup", "tech_help", "other_assistance",
+];
 
 const inputCls =
   "w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 transition min-h-[44px]";
@@ -56,7 +64,6 @@ function DescriptionEditorModal({ value, onChange, onClose }: DescriptionEditorM
 
   return (
     <div className="fixed inset-0 z-[70] flex flex-col bg-white dark:bg-slate-900">
-      {/* Header bar */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-slate-700">
         <button
           type="button"
@@ -76,8 +83,6 @@ function DescriptionEditorModal({ value, onChange, onClose }: DescriptionEditorM
           {t.done}
         </button>
       </div>
-
-      {/* Textarea fills remaining height */}
       <div className="flex flex-col flex-1 px-4 py-3 overflow-hidden">
         <textarea
           autoFocus
@@ -87,18 +92,29 @@ function DescriptionEditorModal({ value, onChange, onClose }: DescriptionEditorM
           placeholder={t.descriptionPlaceholder}
           className="flex-1 w-full resize-none bg-transparent text-gray-900 dark:text-slate-100 text-sm leading-relaxed placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none"
         />
-        {/* Character counter */}
-        <div className={`text-right text-xs mt-2 font-medium ${
-          draft.length > 900
-            ? "text-red-500 dark:text-red-400"
-            : "text-gray-400 dark:text-slate-500"
-        }`}>
+        <div className={`text-right text-xs mt-2 font-medium ${draft.length > 900 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
           {draft.length} / 1000
         </div>
       </div>
     </div>
   );
 }
+
+function getCategoriesForType(type: ListingType): string[] {
+  if (type === "buy-sell") return BUY_SELL_CATEGORIES;
+  if (type === "lost-found") return LOST_FOUND_CATEGORIES;
+  if (type === "jobs") return JOBS_CATEGORIES;
+  return ASSISTANCE_CATEGORIES;
+}
+
+function defaultCategoryForType(type: ListingType): string {
+  if (type === "buy-sell") return "electronics";
+  if (type === "lost-found") return "lostItem";
+  if (type === "jobs") return "tutoring";
+  return "dorm_moving";
+}
+
+const ALL_TABS: ListingType[] = ["buy-sell", "lost-found", "jobs", "assistance"];
 
 export default function PostPage() {
   const { t } = useLang();
@@ -122,6 +138,15 @@ export default function PostPage() {
   const [showAuth, setShowAuth] = useState(false);
   const [showDescEditor, setShowDescEditor] = useState(false);
   const [meetupSpot, setMeetupSpot] = useState("");
+
+  // Jobs-specific
+  const [jobSubtype, setJobSubtype] = useState<"offering" | "seeking">("offering");
+  const [isRemote, setIsRemote] = useState(false);
+
+  // Assistance-specific
+  const [pricingModel, setPricingModel] = useState<"per_hour" | "per_day" | "per_month" | "fixed">("per_hour");
+  const [availability, setAvailability] = useState("");
+
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -130,7 +155,6 @@ export default function PostPage() {
     if (userProfile.wechat) setWechat(userProfile.wechat);
   }, [userProfile]);
 
-  // Re-run on type change so the field is populated when switching tabs
   useEffect(() => {
     if (user?.email) setTeams(user.email);
   }, [user, type]);
@@ -161,7 +185,7 @@ export default function PostPage() {
     );
   }
 
-  const categories = type === "buy-sell" ? BUY_SELL_CATEGORIES : LOST_FOUND_CATEGORIES;
+  const categories = getCategoriesForType(type);
 
   function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
     return Promise.race([
@@ -188,7 +212,7 @@ export default function PostPage() {
 
   const handleTypeChange = (newType: ListingType) => {
     setType(newType);
-    setCategory(newType === "buy-sell" ? "electronics" : "lostItem");
+    setCategory(defaultCategoryForType(newType));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -220,21 +244,32 @@ export default function PostPage() {
         }
       }
 
-      // Offline persistence is disabled — createListing either succeeds on the
-      // server immediately or throws a real error. Never swallow this error.
-      // price is omitted entirely for lost-found (Firestore rejects undefined values).
-      const baseData = {
+      const baseData: Record<string, unknown> = {
         type, title, description,
         category, condition, photos: urls,
         userId: user.uid, userEmail: user.email ?? "",
         userName: user.email?.split("@")[0] ?? "",
-        whatsapp, wechat, teams, meetupSpot,
+        whatsapp, wechat, teams,
       };
-      const listingData = type === "buy-sell"
-        ? { ...baseData, price: priceCents / 100 }
-        : baseData;
 
-      await withTimeout(createListing(listingData), 12_000, "create-listing");
+      if (type === "buy-sell") {
+        baseData.price = priceCents / 100;
+        baseData.meetupSpot = meetupSpot;
+      } else if (type === "lost-found") {
+        baseData.meetupSpot = meetupSpot;
+      } else if (type === "jobs") {
+        baseData.jobSubtype = jobSubtype;
+        baseData.isRemote = isRemote;
+        if (!isRemote) baseData.meetupSpot = meetupSpot;
+        if (priceCents > 0) baseData.price = priceCents / 100;
+      } else if (type === "assistance") {
+        baseData.price = priceCents / 100;
+        baseData.pricingModel = pricingModel;
+        baseData.meetupSpot = meetupSpot;
+        if (availability.trim()) baseData.availability = availability.trim();
+      }
+
+      await withTimeout(createListing(baseData as Parameters<typeof createListing>[0]), 12_000, "create-listing");
 
       setToast("Your post has been successfully published.");
     } catch (err: any) {
@@ -252,21 +287,28 @@ export default function PostPage() {
     }
   };
 
+  const tabLabel = (tab: ListingType) => {
+    if (tab === "buy-sell") return t.buySell;
+    if (tab === "lost-found") return t.lostFound;
+    if (tab === "jobs") return t.jobs;
+    return t.assistance;
+  };
+
   return (
     <div className="max-w-lg mx-auto px-4 py-5 pb-28 sm:pb-8 animate-in fade-in duration-200">
       {toast && <SuccessToast message={toast} onDone={() => navigate("/profile")} />}
 
       <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-4">{t.postItem}</h1>
 
-      {/* Type selector */}
-      <div className="flex bg-gray-100 dark:bg-slate-800 rounded-xl p-1 mb-5">
-        {(["buy-sell", "lost-found"] as const).map((tab) => (
+      {/* Type selector — 2×2 grid for 4 tabs */}
+      <div className="grid grid-cols-2 bg-gray-100 dark:bg-slate-800 rounded-xl p-1 mb-5 gap-1">
+        {ALL_TABS.map((tab) => (
           <button
             key={tab}
             onClick={() => handleTypeChange(tab)}
-            className={`flex-1 py-2 min-h-[44px] rounded-lg text-sm font-semibold transition-all ${type === tab ? "bg-white dark:bg-slate-700 shadow text-[#003366] dark:text-slate-100" : "text-gray-500 dark:text-slate-400"}`}
+            className={`py-2 min-h-[44px] rounded-lg text-sm font-semibold transition-all ${type === tab ? "bg-white dark:bg-slate-700 shadow text-[#003366] dark:text-slate-100" : "text-gray-500 dark:text-slate-400"}`}
           >
-            {tab === "buy-sell" ? t.buySell : t.lostFound}
+            {tabLabel(tab)}
           </button>
         ))}
       </div>
@@ -306,25 +348,47 @@ export default function PostPage() {
 
         {/* Title */}
         <div>
-          <label className={labelCls}>{t.title} *</label>
+          <label className={labelCls}>
+            {(type === "jobs" || type === "assistance") ? t.serviceTitle : t.title} *
+          </label>
           <input
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             required
             maxLength={80}
+            placeholder={
+              type === "jobs" ? "e.g. Math Tutor Available" :
+              type === "assistance" ? "e.g. Help Moving Dorm Room" :
+              ""
+            }
             className={inputCls}
           />
-          <div className={`text-right text-xs mt-1 font-medium ${
-            title.length > 70
-              ? "text-red-500 dark:text-red-400"
-              : "text-gray-400 dark:text-slate-500"
-          }`}>
+          <div className={`text-right text-xs mt-1 font-medium ${title.length > 70 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
             {title.length} / 80
           </div>
         </div>
 
-        {/* Description — tappable preview */}
+        {/* Jobs: subtype selector */}
+        {type === "jobs" && (
+          <div>
+            <label className={labelCls}>{t.jobSubtypeLabel}</label>
+            <div className="flex gap-2">
+              {(["offering", "seeking"] as const).map((sub) => (
+                <button
+                  key={sub}
+                  type="button"
+                  onClick={() => setJobSubtype(sub)}
+                  className={`flex-1 min-h-[44px] py-2 rounded-xl text-sm font-medium border transition-colors ${jobSubtype === sub ? "bg-[#003366] dark:bg-blue-600 text-white border-[#003366] dark:border-blue-600" : "bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600"}`}
+                >
+                  {sub === "offering" ? t.jobSubtypeOffering : t.jobSubtypeSeeking}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Description */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">
             {t.descriptionLabel}
@@ -335,10 +399,7 @@ export default function PostPage() {
             onClick={() => setShowDescEditor(true)}
             className="w-full min-h-[80px] text-left bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition flex items-start justify-between gap-2"
           >
-            <span className={description
-              ? "text-gray-900 dark:text-slate-100 line-clamp-3 flex-1"
-              : "text-gray-400 dark:text-slate-500 flex-1"
-            }>
+            <span className={description ? "text-gray-900 dark:text-slate-100 line-clamp-3 flex-1" : "text-gray-400 dark:text-slate-500 flex-1"}>
               {description || t.descriptionPlaceholder}
             </span>
             <Edit2 size={15} className="text-gray-400 dark:text-slate-500 mt-0.5 shrink-0" />
@@ -360,24 +421,26 @@ export default function PostPage() {
           </select>
         </div>
 
-        {/* Condition */}
-        <div>
-          <label className={labelCls}>{t.condition}</label>
-          <div className="flex gap-2">
-            {(["new", "used"] as Condition[]).map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => setCondition(c)}
-                className={`flex-1 min-h-[44px] py-2 rounded-xl text-sm font-medium border transition-colors ${condition === c ? "bg-[#003366] dark:bg-blue-600 text-white border-[#003366] dark:border-blue-600" : "bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600"}`}
-              >
-                {c === "new" ? t.conditionNew : t.conditionUsed}
-              </button>
-            ))}
+        {/* Condition — buy-sell only */}
+        {type === "buy-sell" && (
+          <div>
+            <label className={labelCls}>{t.condition}</label>
+            <div className="flex gap-2">
+              {(["new", "used"] as Condition[]).map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setCondition(c)}
+                  className={`flex-1 min-h-[44px] py-2 rounded-xl text-sm font-medium border transition-colors ${condition === c ? "bg-[#003366] dark:bg-blue-600 text-white border-[#003366] dark:border-blue-600" : "bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600"}`}
+                >
+                  {c === "new" ? t.conditionNew : t.conditionUsed}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Price */}
+        {/* Price — buy-sell */}
         {type === "buy-sell" && (
           <div>
             <label className={labelCls}>{t.price}</label>
@@ -391,10 +454,7 @@ export default function PostPage() {
                 onKeyDown={(e) => {
                   if (e.key >= "0" && e.key <= "9") {
                     e.preventDefault();
-                    setPriceCents((prev) => {
-                      const next = prev * 10 + parseInt(e.key);
-                      return next > 9999999 ? prev : next;
-                    });
+                    setPriceCents((prev) => { const next = prev * 10 + parseInt(e.key); return next > 9999999 ? prev : next; });
                   } else if (e.key === "Backspace") {
                     e.preventDefault();
                     setPriceCents((prev) => Math.floor(prev / 10));
@@ -405,18 +465,125 @@ export default function PostPage() {
                 className={`${inputCls} pl-10 text-right font-mono tracking-wide`}
               />
             </div>
-            <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-1">
-              Type digits to enter price — backspace to correct
-            </p>
+            <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-1">Type digits to enter price — backspace to correct</p>
+          </div>
+        )}
+
+        {/* Price — jobs (optional, per hour) */}
+        {type === "jobs" && (
+          <div>
+            <label className={labelCls}>{t.pricePerHour} <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-400 text-sm font-medium">RM</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={priceCents === 0 ? "" : (priceCents / 100).toFixed(2)}
+                placeholder="0.00"
+                onKeyDown={(e) => {
+                  if (e.key >= "0" && e.key <= "9") {
+                    e.preventDefault();
+                    setPriceCents((prev) => { const next = prev * 10 + parseInt(e.key); return next > 9999999 ? prev : next; });
+                  } else if (e.key === "Backspace") {
+                    e.preventDefault();
+                    setPriceCents((prev) => Math.floor(prev / 10));
+                  }
+                }}
+                onFocus={(e) => e.target.select()}
+                readOnly={false}
+                className={`${inputCls} pl-10 text-right font-mono tracking-wide`}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Jobs: Remote toggle */}
+        {type === "jobs" && (
+          <div className="flex items-center justify-between bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl px-4 py-3">
+            <div className="flex items-center gap-2">
+              {isRemote ? <Wifi size={16} className="text-sky-500" /> : <WifiOff size={16} className="text-gray-400" />}
+              <span className="text-sm font-medium text-gray-700 dark:text-slate-300">{t.availableRemotely}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsRemote((prev) => !prev)}
+              className={`relative w-11 h-6 rounded-full transition-colors ${isRemote ? "bg-sky-500" : "bg-gray-300 dark:bg-slate-600"}`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${isRemote ? "translate-x-5" : "translate-x-0"}`} />
+            </button>
+          </div>
+        )}
+
+        {/* Assistance: Pricing model */}
+        {type === "assistance" && (
+          <div>
+            <label className={labelCls}>{t.pricingModelLabel}</label>
+            <div className="grid grid-cols-2 gap-2">
+              {(["per_hour", "per_day", "per_month", "fixed"] as const).map((model) => {
+                const label = model === "per_hour" ? t.pricingModelPerHour : model === "per_day" ? t.pricingModelPerDay : model === "per_month" ? t.pricingModelPerMonth : t.pricingModelFixed;
+                return (
+                  <button
+                    key={model}
+                    type="button"
+                    onClick={() => setPricingModel(model)}
+                    className={`min-h-[44px] py-2 rounded-xl text-sm font-medium border transition-colors ${pricingModel === model ? "bg-[#003366] dark:bg-blue-600 text-white border-[#003366] dark:border-blue-600" : "bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600"}`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Price — assistance (required) */}
+        {type === "assistance" && (
+          <div>
+            <label className={labelCls}>{t.price} *</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-400 text-sm font-medium">RM</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={priceCents === 0 ? "" : (priceCents / 100).toFixed(2)}
+                placeholder="0.00"
+                onKeyDown={(e) => {
+                  if (e.key >= "0" && e.key <= "9") {
+                    e.preventDefault();
+                    setPriceCents((prev) => { const next = prev * 10 + parseInt(e.key); return next > 9999999 ? prev : next; });
+                  } else if (e.key === "Backspace") {
+                    e.preventDefault();
+                    setPriceCents((prev) => Math.floor(prev / 10));
+                  }
+                }}
+                onFocus={(e) => e.target.select()}
+                readOnly={false}
+                className={`${inputCls} pl-10 text-right font-mono tracking-wide`}
+              />
+            </div>
+            <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-1">Type digits to enter price — backspace to correct</p>
+          </div>
+        )}
+
+        {/* Assistance: Availability */}
+        {type === "assistance" && (
+          <div>
+            <label className={labelCls}>{t.availability}</label>
+            <input
+              type="text"
+              value={availability}
+              onChange={(e) => setAvailability(e.target.value.slice(0, 80))}
+              placeholder={t.availabilityPlaceholder}
+              maxLength={80}
+              className={inputCls}
+            />
           </div>
         )}
 
         {/* Contact info */}
         <div className="border border-gray-200 dark:border-slate-700 rounded-xl p-4 space-y-3">
           <p className="text-sm font-semibold text-gray-700 dark:text-slate-300">{t.contactInfo}</p>
-          <p className="text-xs text-gray-400 dark:text-slate-500">
-            {t.contactAtLeastOne}
-          </p>
+          <p className="text-xs text-gray-400 dark:text-slate-500">{t.contactAtLeastOne}</p>
           <div>
             <label className="block text-xs text-gray-500 dark:text-slate-400 mb-1">
               {t.whatsapp}
@@ -452,20 +619,23 @@ export default function PostPage() {
             <label className="block text-xs text-gray-500 dark:text-slate-400 mb-1">{t.teams}</label>
             <input type="text" value={teams} onChange={(e) => setTeams(e.target.value)} placeholder="student@xmu.edu.my" maxLength={60} className={inputCls} />
           </div>
-          <div>
-            <label className="block text-xs text-gray-500 dark:text-slate-400 mb-1">{t.meetupSpot}</label>
-            <input
-              type="text"
-              value={meetupSpot}
-              onChange={(e) => setMeetupSpot(e.target.value.slice(0, 80))}
-              placeholder={t.meetupSpotPlaceholder}
-              maxLength={80}
-              className={inputCls}
-            />
-            <p className={`text-right text-[10px] mt-0.5 ${meetupSpot.length >= 70 ? "text-amber-500" : "text-gray-400 dark:text-slate-500"}`}>
-              {meetupSpot.length}/80
-            </p>
-          </div>
+          {/* Meetup spot — hidden for remote jobs */}
+          {!(type === "jobs" && isRemote) && (
+            <div>
+              <label className="block text-xs text-gray-500 dark:text-slate-400 mb-1">{t.meetupSpot}</label>
+              <input
+                type="text"
+                value={meetupSpot}
+                onChange={(e) => setMeetupSpot(e.target.value.slice(0, 80))}
+                placeholder={t.meetupSpotPlaceholder}
+                maxLength={80}
+                className={inputCls}
+              />
+              <p className={`text-right text-[10px] mt-0.5 ${meetupSpot.length >= 70 ? "text-amber-500" : "text-gray-400 dark:text-slate-500"}`}>
+                {meetupSpot.length}/80
+              </p>
+            </div>
+          )}
         </div>
 
         {error && (

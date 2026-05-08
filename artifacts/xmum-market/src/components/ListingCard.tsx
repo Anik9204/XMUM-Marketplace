@@ -1,7 +1,7 @@
 import { Link } from "wouter";
 import { Listing } from "@/lib/types";
 import { useLang } from "@/contexts/LanguageContext";
-import { MapPin, Clock, Pencil } from "lucide-react";
+import { MapPin, Clock, Pencil, Wifi } from "lucide-react";
 
 interface Props {
   listing: Listing;
@@ -23,12 +23,23 @@ function relativeTime(ms: number): string {
   return days + "d ago";
 }
 
+function pricingModelSuffix(model: string | undefined, t: any): string {
+  if (model === "per_hour") return t.perHourSuffix;
+  if (model === "per_day") return t.perDaySuffix;
+  if (model === "per_month") return t.perMonthSuffix;
+  if (model === "fixed") return t.fixedSuffix;
+  return "";
+}
+
 export default function ListingCard({ listing, onDelete, showDelete, showMarkSold, onMarkSold, showEdit, onEdit }: Props) {
   const { t } = useLang();
   const isSold = listing.status === "sold";
 
   const catKey = listing.category as keyof typeof t.categories;
   const catLabel = t.categories[catKey] ?? listing.category;
+
+  const isJobs = listing.type === "jobs";
+  const isAssistance = listing.type === "assistance";
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-card border border-gray-100 dark:border-slate-700 overflow-hidden hover:shadow-hover hover:-translate-y-0.5 transition-all duration-200">
@@ -63,18 +74,37 @@ export default function ListingCard({ listing, onDelete, showDelete, showMarkSol
 
           {!isSold && (
             <>
-              {listing.type === "buy-sell" ? (
+              {listing.type === "buy-sell" && (
                 <span className="absolute top-2 left-2 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-300">
                   For Sale
                 </span>
-              ) : (
+              )}
+              {listing.type === "lost-found" && (
                 <span className="absolute top-2 left-2 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300">
                   Lost &amp; Found
                 </span>
               )}
-              <span className={`absolute top-2 right-2 text-xs font-semibold px-2 py-0.5 rounded-full ${listing.condition === "new" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
-                {listing.condition === "new" ? t.conditionNew : t.conditionUsed}
-              </span>
+              {isJobs && listing.jobSubtype && (
+                <span className={`absolute top-2 left-2 text-[10px] font-semibold px-2 py-0.5 rounded-full ${listing.jobSubtype === "offering" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300" : "bg-purple-100 text-purple-700 dark:bg-purple-900/60 dark:text-purple-300"}`}>
+                  {listing.jobSubtype === "offering" ? t.offeringBadge : t.seekingBadge}
+                </span>
+              )}
+              {isJobs && listing.isRemote && (
+                <span className="absolute top-2 right-2 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 dark:bg-sky-900/60 dark:text-sky-300 flex items-center gap-0.5">
+                  <Wifi size={9} />
+                  {t.remoteBadge}
+                </span>
+              )}
+              {isAssistance && (
+                <span className="absolute top-2 left-2 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900/60 dark:text-orange-300">
+                  Assistance
+                </span>
+              )}
+              {listing.type === "buy-sell" && (
+                <span className={`absolute top-2 right-2 text-xs font-semibold px-2 py-0.5 rounded-full ${listing.condition === "new" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
+                  {listing.condition === "new" ? t.conditionNew : t.conditionUsed}
+                </span>
+              )}
             </>
           )}
         </div>
@@ -89,6 +119,18 @@ export default function ListingCard({ listing, onDelete, showDelete, showMarkSol
           {listing.type === "buy-sell" && (
             <p className={`mt-2 text-lg font-bold ${isSold ? "text-gray-400 dark:text-slate-500 line-through" : "text-blue-600 dark:text-blue-400"}`}>
               {listing.price === 0 ? t.free : `${t.rmPrefix} ${listing.price?.toFixed(2)}`}
+            </p>
+          )}
+
+          {isJobs && listing.price != null && listing.price > 0 && (
+            <p className={`mt-2 text-base font-bold ${isSold ? "text-gray-400 dark:text-slate-500 line-through" : "text-emerald-600 dark:text-emerald-400"}`}>
+              {t.rmPrefix} {listing.price.toFixed(2)} {t.perHourSuffix}
+            </p>
+          )}
+
+          {isAssistance && listing.price != null && (
+            <p className={`mt-2 text-base font-bold ${isSold ? "text-gray-400 dark:text-slate-500 line-through" : "text-orange-600 dark:text-orange-400"}`}>
+              {t.rmPrefix} {listing.price.toFixed(2)} {pricingModelSuffix(listing.pricingModel, t)}
             </p>
           )}
 

@@ -1,4 +1,4 @@
-export type ListingType = "buy-sell" | "lost-found";
+export type ListingType = "buy-sell" | "lost-found" | "jobs" | "assistance";
 export type Condition = "new" | "used";
 export type ListingStatus = "active" | "sold";
 
@@ -23,6 +23,10 @@ export interface Listing {
   status?: ListingStatus;
   lastBumpedAt?: number;
   sortKey?: number;
+  jobSubtype?: "offering" | "seeking";
+  pricingModel?: "per_hour" | "per_day" | "per_month" | "fixed";
+  isRemote?: boolean;
+  availability?: string;
 }
 
 export interface AppNotification {
