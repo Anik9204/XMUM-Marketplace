@@ -1,0 +1,1170 @@
+# XMUM Marketplace + Admin Panel — New Replit Session Handoff
+# You are continuing work that was partially done in a previous Replit session.
+# Read this entire document before touching any file.
+
+---
+
+## YOUR ROLE
+
+You are a Senior Full-Stack Developer continuing the XMUM Marketplace project.
+The code has been imported from GitHub. Parts 1–7 of a 10-part implementation are
+already done. You are implementing Parts 8, 9, and 10 only.
+
+Do NOT re-implement anything from Parts 1–7. Do NOT touch any file that already exists
+and is working unless explicitly told to below.
+
+---
+
+## PROJECT STRUCTURE
+
+There are TWO separate apps in this repo:
+
+1. `artifacts/xmum-market/` — the main public marketplace app (COMPLETE, do not touch)
+2. `artifacts/xmum-admin/`  — the admin panel app (PARTIALLY COMPLETE — you finish this)
+
+Both apps share the same Firebase project (same credentials, same Firestore, same Storage).
+
+---
+
+## TECH STACK (both apps)
+
+| Layer     | Technology                                    |
+|-----------|-----------------------------------------------|
+| Frontend  | React 18 + Vite + TypeScript                  |
+| Styling   | Tailwind CSS (dark mode via `class` strategy) |
+| Routing   | wouter v3 — NOT React Router                  |
+| State     | useState / useEffect only                     |
+| Backend   | Firebase v10 (Auth, Firestore, Storage)       |
+| Icons     | lucide-react                                  |
+| Package   | pnpm                                          |
+
+---
+
+## ENVIRONMENT VARIABLES
+
+The admin app needs a `.env` file at `artifacts/xmum-admin/.env`.
+The values are IDENTICAL to the main app's `.env` — same Firebase project.
+
+```
+VITE_FIREBASE_API_KEY=
+VITE_FIREBASE_AUTH_DOMAIN=
+VITE_FIREBASE_PROJECT_ID=
+VITE_FIREBASE_STORAGE_BUCKET=
+VITE_FIREBASE_MESSAGING_SENDER_ID=
+VITE_FIREBASE_APP_ID=
+VITE_FIREBASE_MEASUREMENT_ID=
+```
+
+Ask the user to provide these values if not already present in the repo.
+
+---
+
+## FIREBASE CONFIGURATION FACTS
+
+- Auth: Email/Password provider. Admin users are @xmu.edu.my accounts with `role: "admin"` or `role: "editor"` in their Firestore user document.
+- Firestore: `experimentalAutoDetectLongPolling: true` — this is already set in both firebase.ts files. Never remove it.
+- Collections in use: `users`, `listings`, `ads`, `reports`, `notifications`, `conversations`, `messages`
+- The `reports` collection is NEW — created as part of this implementation.
+
+---
+
+## FIRESTORE SECURITY RULES (already deployed — do not change)
+
+```javascript
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+    function isXmuEmail() {
+      return isSignedIn() &&
+        request.auth.token.email.matches('.*@xmu\\.edu\\.my');
+    }
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    function isAdmin() {
+      return isSignedIn() && getUserRole() == 'admin';
+    }
+    function isEditor() {
+      return isSignedIn() && (getUserRole() == 'editor' || getUserRole() == 'admin');
+    }
+
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if isOwner(userId) || isAdmin();
+    }
+
+    match /listings/{listingId} {
+      allow read: if true;
+      allow create: if isXmuEmail();
+      allow update, delete: if isOwner(resource.data.userId) || isEditor();
+    }
+
+    match /reports/{reportId} {
+      allow create: if isXmuEmail()
+                    && request.resource.data.reportedBy == request.auth.uid
+                    && request.resource.data.reason.size() <= 500;
+      allow read, update: if isEditor();
+      allow delete: if isAdmin();
+    }
+
+    match /ads/{adId} {
+      allow read: if true;
+      allow create, update: if isEditor();
+      allow delete: if isAdmin();
+    }
+
+    match /analytics/{docId} {
+      allow read: if isEditor();
+      allow write: if isAdmin();
+    }
+
+    match /users/{userId}/notifications/{notifId} {
+      allow read: if isOwner(userId);
+      allow write: if isOwner(userId) || isEditor();
+    }
+  }
+}
+```
+
+---
+
+## STORAGE RULES (already deployed — do not change)
+
+```javascript
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /listings/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow create, update: if request.auth != null
+                   && request.auth.token.email.matches('.*@xmu\\.edu\\.my')
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null
+                   && request.auth.uid == userId
+                   && request.auth.token.email.matches('.*@xmu\\.edu\\.my');
+    }
+    match /avatars/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow create, update: if request.auth != null
+                   && request.auth.uid == userId
+                   && request.auth.token.email.matches('.*@xmu\\.edu\\.my')
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null
+                   && request.auth.uid == userId
+                   && request.auth.token.email.matches('.*@xmu\\.edu\\.my');
+    }
+  }
+}
+```
+
+---
+
+## WHAT IS ALREADY DONE (Parts 1–7) — DO NOT REDO THESE
+
+### Main app changes (artifacts/xmum-market/):
+- ✅ `firestore.rules` — updated with role-based rules (shown above)
+- ✅ `src/lib/types.ts` — `role` field added to UserProfile, `ListingReport` and `ReportCategory` types added
+- ✅ `src/components/ReportModal.tsx` — created (report modal for listing detail page)
+- ✅ `src/pages/ListingDetailPage.tsx` — wired up ReportModal with showReport state
+
+### Admin app (artifacts/xmum-admin/):
+- ✅ `package.json`
+- ✅ `vite.config.ts`
+- ✅ `tsconfig.json`
+- ✅ `tailwind.config.js`
+- ✅ `postcss.config.js`
+- ✅ `vercel.json`
+- ✅ `.env.example`
+- ✅ `index.html`
+- ✅ `src/index.css`
+- ✅ `src/lib/firebase.ts`
+- ✅ `src/lib/types.ts`
+- ✅ `src/contexts/AuthContext.tsx`
+- ✅ `src/main.tsx`
+- ✅ `src/App.tsx`
+- ✅ `src/components/Layout.tsx`
+- ✅ `src/pages/LoginPage.tsx`
+
+### What is NOT yet done (your job — Parts 8, 9, 10):
+- ❌ `src/pages/DashboardPage.tsx`
+- ❌ `src/pages/ReportsPage.tsx`
+- ❌ `src/pages/UsersPage.tsx`
+- ❌ `src/pages/AdsPage.tsx`
+- ❌ `pnpm install` on the admin app
+- ❌ Local test run
+- ❌ Vercel deployment
+
+---
+
+## MANDATORY CODE PATTERNS — FOLLOW THESE IN ALL NEW FILES
+
+```typescript
+// 1. All Firestore WRITES use Promise.race with 6s timeout
+await Promise.race([
+  updateDoc(doc(db, "collection", id), data),
+  new Promise<void>((_, reject) =>
+    setTimeout(() => reject(new Error("timeout:op-name")), 6_000)
+  ),
+]);
+
+// 2. Routing — always wouter, never react-router
+import { useLocation, Link } from "wouter";
+
+// 3. Dark mode — always Tailwind dark: variants on every className
+// Every bg, text, border must have a dark: counterpart
+
+// 4. All interactive elements: min-h-[44px] for mobile tap targets
+
+// 5. Card style
+"bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700"
+
+// 6. Input style
+"w-full bg-slate-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600
+ rounded-xl px-4 py-2.5 text-sm min-h-[44px] focus:outline-none
+ focus:ring-2 focus:ring-blue-500 text-slate-800 dark:text-slate-200"
+```
+
+---
+
+## EXISTING ADMIN APP TYPE DEFINITIONS (from src/lib/types.ts)
+
+```typescript
+export type UserRole = "user" | "editor" | "admin";
+export type ReportStatus = "pending" | "reviewed" | "dismissed" | "actioned";
+export type ReportCategory = "spam" | "scam" | "offensive" | "prohibited_item" | "wrong_category" | "other";
+
+export interface AdminUser {
+  uid: string;
+  email: string;
+  displayName: string;
+  fullName: string;
+  avatarUrl?: string;
+  role: UserRole;
+  isBlacklisted: boolean;
+  isFeatured: boolean;
+  createdAt: number;
+  emailVerified: boolean;
+}
+
+export interface ListingReport {
+  id: string;
+  listingId: string;
+  listingTitle: string;
+  listingUserId: string;
+  listingUserEmail: string;
+  reportedBy: string;
+  reportedByEmail: string;
+  reason: string;
+  category: ReportCategory;
+  status: ReportStatus;
+  createdAt: number;
+  reviewedBy?: string;
+  reviewedAt?: number;
+}
+
+export interface SponsoredAd {
+  id: string;
+  businessName: string;
+  tagline: string;
+  imageUrl: string;
+  ctaLabel: string;
+  ctaUrl: string;
+  category?: string;
+  startsAt: number;
+  endsAt: number;
+  isActive: boolean;
+  impressions: number;
+  clicks: number;
+  createdBy: string;
+  createdByEmail: string;
+  updatedAt: number;
+}
+```
+
+---
+
+## EXISTING ADMIN APP AUTH CONTEXT (from src/contexts/AuthContext.tsx)
+
+The AuthContext exposes:
+```typescript
+{ user, adminUser, isAdmin, isEditor, loading }
+```
+- `isAdmin` = true when `adminUser.role === "admin"`
+- `isEditor` = true when role is `"editor"` OR `"admin"`
+- Import with: `import { useAuth } from "../contexts/AuthContext";`
+
+---
+
+## YOUR TASK — IMPLEMENT PARTS 8, 9, AND 10
+
+Work through the files below in order. Create each file exactly as specified.
+After creating all files, run install and test. Do not skip ahead.
+
+---
+
+## PART 8 — Create DashboardPage and ReportsPage
+
+### File 1: `artifacts/xmum-admin/src/pages/DashboardPage.tsx`
+
+```typescript
+import { useEffect, useState } from "react";
+import { collection, getDocs, query, where } from "firebase/firestore";
+import { db } from "../lib/firebase";
+import { Users, Flag, Megaphone, ShoppingBag, TrendingUp } from "lucide-react";
+
+interface Stats {
+  totalUsers: number;
+  totalListings: number;
+  pendingReports: number;
+  activeAds: number;
+  recentSignups: number;
+}
+
+function StatCard({ icon: Icon, label, value, color }:
+  { icon: any; label: string; value: number | string; color: string }) {
+  return (
+    <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 border
+                    border-gray-100 dark:border-slate-700">
+      <div className={`w-10 h-10 ${color} rounded-xl flex items-center
+                       justify-center mb-3`}>
+        <Icon className="w-5 h-5 text-white" />
+      </div>
+      <p className="text-2xl font-bold text-slate-800 dark:text-slate-200">{value}</p>
+      <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{label}</p>
+    </div>
+  );
+}
+
+export default function DashboardPage() {
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const [usersSnap, listingsSnap, reportsSnap, adsSnap] = await Promise.all([
+          getDocs(collection(db, "users")),
+          getDocs(query(collection(db, "listings"), where("isArchived", "==", false))),
+          getDocs(query(collection(db, "reports"), where("status", "==", "pending"))),
+          getDocs(query(collection(db, "ads"), where("isActive", "==", true))),
+        ]);
+        const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        const recentSignups = usersSnap.docs.filter(
+          d => (d.data().createdAt ?? 0) > sevenDaysAgo
+        ).length;
+        setStats({
+          totalUsers:     usersSnap.size,
+          totalListings:  listingsSnap.size,
+          pendingReports: reportsSnap.size,
+          activeAds:      adsSnap.size,
+          recentSignups,
+        });
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
+
+  return (
+    <div className="p-6">
+      <div className="mb-6">
+        <h1 className="text-xl font-bold text-slate-800 dark:text-slate-200">Dashboard</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Platform overview</p>
+      </div>
+
+      {loading ? (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="bg-white dark:bg-slate-800 rounded-2xl p-5 h-28
+                                    animate-pulse border border-gray-100 dark:border-slate-700" />
+          ))}
+        </div>
+      ) : stats ? (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard icon={Users}       label="Total Users"     value={stats.totalUsers}     color="bg-blue-500" />
+          <StatCard icon={ShoppingBag} label="Active Listings" value={stats.totalListings}  color="bg-green-500" />
+          <StatCard icon={Flag}        label="Pending Reports" value={stats.pendingReports} color="bg-red-500" />
+          <StatCard icon={Megaphone}   label="Active Ads"      value={stats.activeAds}      color="bg-amber-500" />
+          <StatCard icon={TrendingUp}  label="New Users (7d)"  value={stats.recentSignups}  color="bg-purple-500" />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+```
+
+### File 2: `artifacts/xmum-admin/src/pages/ReportsPage.tsx`
+
+```typescript
+import { useEffect, useState } from "react";
+import { collection, getDocs, query, orderBy, updateDoc, doc, deleteDoc } from "firebase/firestore";
+import { db } from "../lib/firebase";
+import { useAuth } from "../contexts/AuthContext";
+import { ListingReport, ReportStatus } from "../lib/types";
+import { ExternalLink, Trash2, CheckCircle, XCircle } from "lucide-react";
+
+const STATUS_COLORS: Record<ReportStatus, string> = {
+  pending:   "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300",
+  reviewed:  "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300",
+  dismissed: "bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400",
+  actioned:  "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300",
+};
+
+// ⚠️ Replace this with your actual live main app Vercel URL after deployment
+const MAIN_APP_URL = "https://your-main-app.vercel.app";
+
+export default function ReportsPage() {
+  const { adminUser, isAdmin } = useAuth();
+  const [reports, setReports] = useState<ListingReport[]>([]);
+  const [filter, setFilter] = useState<ReportStatus | "all">("pending");
+  const [loading, setLoading] = useState(true);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const snap = await getDocs(
+        query(collection(db, "reports"), orderBy("createdAt", "desc"))
+      );
+      setReports(snap.docs.map(d => ({ id: d.id, ...d.data() } as ListingReport)));
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  async function updateStatus(id: string, status: ReportStatus) {
+    await Promise.race([
+      updateDoc(doc(db, "reports", id), {
+        status,
+        reviewedBy: adminUser?.uid,
+        reviewedAt: Date.now(),
+      }),
+      new Promise<never>((_, r) => setTimeout(() => r(new Error("timeout")), 6000)),
+    ]);
+    setReports(prev => prev.map(r => r.id === id ? { ...r, status } : r));
+  }
+
+  async function deleteReport(id: string) {
+    if (!isAdmin) return;
+    await deleteDoc(doc(db, "reports", id));
+    setReports(prev => prev.filter(r => r.id !== id));
+  }
+
+  const filtered = filter === "all" ? reports : reports.filter(r => r.status === filter);
+
+  return (
+    <div className="p-6">
+      <div className="mb-5">
+        <h1 className="text-xl font-bold text-slate-800 dark:text-slate-200">Reports</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+          User-submitted listing reports
+        </p>
+      </div>
+
+      <div className="flex gap-2 mb-5 flex-wrap">
+        {(["all", "pending", "reviewed", "actioned", "dismissed"] as const).map(s => (
+          <button key={s} onClick={() => setFilter(s)}
+                  className={`px-4 py-2 rounded-xl text-sm font-medium min-h-[40px]
+                              transition-colors capitalize
+                              ${filter === s
+                                ? "bg-blue-600 text-white"
+                                : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700"}`}>
+            {s}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="space-y-3">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="bg-white dark:bg-slate-800 rounded-2xl h-24
+                                    animate-pulse border border-gray-100 dark:border-slate-700" />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center py-20 text-center">
+          <span className="text-5xl mb-3">🎉</span>
+          <p className="font-semibold text-slate-700 dark:text-slate-300">
+            No {filter !== "all" ? filter : ""} reports
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map(report => (
+            <div key={report.id}
+                 className="bg-white dark:bg-slate-800 rounded-2xl p-5 border
+                            border-gray-100 dark:border-slate-700">
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <span className={`text-[10px] font-semibold uppercase tracking-wide
+                                      px-2 py-0.5 rounded-full ${STATUS_COLORS[report.status]}`}>
+                      {report.status}
+                    </span>
+                    <span className="text-[10px] text-slate-400 capitalize">
+                      {report.category.replace("_", " ")}
+                    </span>
+                  </div>
+                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">
+                    {report.listingTitle}
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Reported by: {report.reportedByEmail}
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Seller: {report.listingUserEmail}
+                  </p>
+                  <p className="text-sm text-slate-700 dark:text-slate-300 mt-2
+                                bg-slate-50 dark:bg-slate-700/50 rounded-xl px-3 py-2">
+                    "{report.reason}"
+                  </p>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    {new Date(report.createdAt).toLocaleString()}
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2 flex-shrink-0">
+                  <a href={`${MAIN_APP_URL}/listing/${report.listingId}`}
+                     target="_blank" rel="noopener noreferrer"
+                     className="flex items-center gap-1.5 text-xs text-blue-600
+                                dark:text-blue-400 border border-blue-200 dark:border-blue-800
+                                rounded-xl px-3 py-2 hover:bg-blue-50 dark:hover:bg-blue-900/20
+                                min-h-[36px]">
+                    <ExternalLink className="w-3 h-3" /> View Listing
+                  </a>
+                  {report.status === "pending" && (
+                    <>
+                      <button onClick={() => updateStatus(report.id, "actioned")}
+                              className="flex items-center gap-1.5 text-xs text-green-600
+                                         border border-green-200 rounded-xl px-3 py-2
+                                         hover:bg-green-50 dark:hover:bg-green-900/20 min-h-[36px]">
+                        <CheckCircle className="w-3 h-3" /> Action
+                      </button>
+                      <button onClick={() => updateStatus(report.id, "dismissed")}
+                              className="flex items-center gap-1.5 text-xs text-slate-500
+                                         border border-gray-200 dark:border-slate-600
+                                         rounded-xl px-3 py-2 hover:bg-slate-50
+                                         dark:hover:bg-slate-700/50 min-h-[36px]">
+                        <XCircle className="w-3 h-3" /> Dismiss
+                      </button>
+                    </>
+                  )}
+                  {isAdmin && (
+                    <button onClick={() => deleteReport(report.id)}
+                            className="flex items-center gap-1.5 text-xs text-red-500
+                                       border border-red-200 rounded-xl px-3 py-2
+                                       hover:bg-red-50 dark:hover:bg-red-900/20 min-h-[36px]">
+                      <Trash2 className="w-3 h-3" /> Delete
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+After creating both files, stop and confirm before continuing.
+
+---
+
+## PART 9 — Create UsersPage and AdsPage
+
+### File 3: `artifacts/xmum-admin/src/pages/UsersPage.tsx`
+
+```typescript
+import { useEffect, useState } from "react";
+import { collection, getDocs, updateDoc, doc, orderBy, query } from "firebase/firestore";
+import { db } from "../lib/firebase";
+import { useAuth } from "../contexts/AuthContext";
+import { AdminUser, UserRole } from "../lib/types";
+import { Ban, CheckCircle } from "lucide-react";
+
+export default function UsersPage() {
+  const { adminUser, isAdmin } = useAuth();
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const snap = await getDocs(
+          query(collection(db, "users"), orderBy("createdAt", "desc"))
+        );
+        setUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() } as AdminUser)));
+      } catch (e) {
+        // fallback without orderBy if index missing
+        const snap = await getDocs(collection(db, "users"));
+        setUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() } as AdminUser)));
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
+
+  async function updateUser(uid: string, data: Partial<AdminUser>) {
+    // Editors cannot change roles — only admins can
+    if (!isAdmin && "role" in data) return;
+    // Prevent self-demotion
+    if (uid === adminUser?.uid && "role" in data) return;
+    await Promise.race([
+      updateDoc(doc(db, "users", uid), data as any),
+      new Promise<never>((_, r) => setTimeout(() => r(new Error("timeout")), 6000)),
+    ]);
+    setUsers(prev => prev.map(u => u.uid === uid ? { ...u, ...data } : u));
+  }
+
+  const filtered = users.filter(u =>
+    u.email?.toLowerCase().includes(search.toLowerCase()) ||
+    u.displayName?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const ROLE_OPTIONS: UserRole[] = ["user", "editor", "admin"];
+
+  return (
+    <div className="p-6">
+      <div className="mb-5">
+        <h1 className="text-xl font-bold text-slate-800 dark:text-slate-200">Users</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+          {users.length} total accounts
+        </p>
+      </div>
+
+      <input value={search} onChange={e => setSearch(e.target.value)}
+             placeholder="Search by name or email…"
+             className="w-full max-w-md bg-white dark:bg-slate-800 border border-gray-200
+                        dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm min-h-[44px]
+                        focus:outline-none focus:ring-2 focus:ring-blue-500 mb-5
+                        text-slate-800 dark:text-slate-200" />
+
+      {loading ? (
+        <div className="space-y-2">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="h-16 bg-white dark:bg-slate-800 rounded-2xl
+                                    animate-pulse border border-gray-100 dark:border-slate-700" />
+          ))}
+        </div>
+      ) : (
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100
+                        dark:border-slate-700 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 dark:border-slate-700 text-left">
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-400
+                                 uppercase tracking-wide">User</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-400
+                                 uppercase tracking-wide">Role</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-400
+                                 uppercase tracking-wide">Status</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-400
+                                 uppercase tracking-wide">Joined</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-400
+                                 uppercase tracking-wide">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50 dark:divide-slate-700/50">
+                {filtered.map(u => (
+                  <tr key={u.uid}
+                      className="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-slate-800 dark:text-slate-200">
+                        {u.displayName || "—"}
+                      </p>
+                      <p className="text-xs text-slate-400">{u.email}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      {isAdmin && u.uid !== adminUser?.uid ? (
+                        <select
+                          value={u.role || "user"}
+                          onChange={e => updateUser(u.uid, { role: e.target.value as UserRole })}
+                          className="bg-slate-50 dark:bg-slate-700 border border-gray-200
+                                     dark:border-slate-600 rounded-lg px-2 py-1.5 text-xs
+                                     text-slate-700 dark:text-slate-300 min-h-[36px]">
+                          {ROLE_OPTIONS.map(r => (
+                            <option key={r} value={r}>{r}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className={`text-xs font-medium capitalize px-2 py-1 rounded-full
+                          ${u.role === "admin"
+                            ? "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
+                            : u.role === "editor"
+                            ? "bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400"
+                            : "bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400"}`}>
+                          {u.role || "user"}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {u.isBlacklisted
+                        ? <span className="text-xs text-red-500 font-medium">Banned</span>
+                        : <span className="text-xs text-green-500 font-medium">Active</span>}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-slate-400">
+                      {u.createdAt
+                        ? new Date(u.createdAt).toLocaleDateString("en-MY", {
+                            month: "short", year: "numeric", day: "numeric"
+                          })
+                        : "—"}
+                    </td>
+                    <td className="px-4 py-3">
+                      {u.uid !== adminUser?.uid && (
+                        <button
+                          onClick={() => updateUser(u.uid, { isBlacklisted: !u.isBlacklisted })}
+                          className={`flex items-center gap-1.5 text-xs rounded-xl px-3 py-1.5
+                                      border min-h-[36px] transition-colors
+                                      ${u.isBlacklisted
+                                        ? "border-green-200 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
+                                        : "border-red-200 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"}`}>
+                          {u.isBlacklisted
+                            ? <><CheckCircle className="w-3 h-3" /> Unban</>
+                            : <><Ban className="w-3 h-3" /> Ban</>}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+### File 4: `artifacts/xmum-admin/src/pages/AdsPage.tsx`
+
+```typescript
+import { useEffect, useState } from "react";
+import { collection, getDocs, addDoc, updateDoc, deleteDoc,
+         doc } from "firebase/firestore";
+import { db } from "../lib/firebase";
+import { useAuth } from "../contexts/AuthContext";
+import { SponsoredAd } from "../lib/types";
+import { Plus, Pencil, Trash2, ToggleLeft, ToggleRight, X, Loader2 } from "lucide-react";
+
+const EMPTY_FORM = {
+  businessName: "", tagline: "", imageUrl: "", ctaLabel: "",
+  ctaUrl: "", category: "", startsAt: "", endsAt: "",
+};
+
+export default function AdsPage() {
+  const { adminUser, isAdmin, isEditor } = useAuth();
+  const [ads, setAds] = useState<SponsoredAd[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const snap = await getDocs(collection(db, "ads"));
+      setAds(snap.docs.map(d => ({ id: d.id, ...d.data() } as SponsoredAd)));
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  function openCreate() {
+    setEditId(null);
+    setForm(EMPTY_FORM);
+    setShowForm(true);
+  }
+
+  function openEdit(ad: SponsoredAd) {
+    setEditId(ad.id);
+    setForm({
+      businessName: ad.businessName,
+      tagline:      ad.tagline,
+      imageUrl:     ad.imageUrl,
+      ctaLabel:     ad.ctaLabel,
+      ctaUrl:       ad.ctaUrl,
+      category:     ad.category || "",
+      startsAt:     new Date(ad.startsAt).toISOString().split("T")[0],
+      endsAt:       new Date(ad.endsAt).toISOString().split("T")[0],
+    });
+    setShowForm(true);
+  }
+
+  async function save() {
+    if (!adminUser) return;
+    setSaving(true);
+    const data = {
+      businessName:   form.businessName.trim(),
+      tagline:        form.tagline.trim(),
+      imageUrl:       form.imageUrl.trim(),
+      ctaLabel:       form.ctaLabel.trim(),
+      ctaUrl:         form.ctaUrl.trim(),
+      category:       form.category.trim(),
+      startsAt:       new Date(form.startsAt).getTime(),
+      endsAt:         new Date(form.endsAt).getTime(),
+      updatedAt:      Date.now(),
+      createdByEmail: adminUser.email,
+    };
+    try {
+      await Promise.race([
+        editId
+          ? updateDoc(doc(db, "ads", editId), data)
+          : addDoc(collection(db, "ads"), {
+              ...data,
+              isActive:   true,
+              impressions: 0,
+              clicks:      0,
+              createdBy:   adminUser.uid,
+              createdAt:   Date.now(),
+            }),
+        new Promise<never>((_, r) => setTimeout(() => r(new Error("timeout")), 6000)),
+      ]);
+      setShowForm(false);
+      await load();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function toggleActive(ad: SponsoredAd) {
+    await Promise.race([
+      updateDoc(doc(db, "ads", ad.id), { isActive: !ad.isActive, updatedAt: Date.now() }),
+      new Promise<never>((_, r) => setTimeout(() => r(new Error("timeout")), 6000)),
+    ]);
+    setAds(prev => prev.map(a => a.id === ad.id ? { ...a, isActive: !a.isActive } : a));
+  }
+
+  async function deleteAd(id: string) {
+    if (!isAdmin) return;
+    if (!confirm("Delete this ad? This cannot be undone.")) return;
+    await deleteDoc(doc(db, "ads", id));
+    setAds(prev => prev.filter(a => a.id !== id));
+  }
+
+  const isValid = form.businessName && form.tagline && form.imageUrl &&
+                  form.ctaLabel && form.ctaUrl && form.startsAt && form.endsAt;
+
+  const FORM_FIELDS = [
+    { key: "businessName", label: "Business Name", placeholder: "e.g. Campus Café" },
+    { key: "tagline",      label: "Tagline",        placeholder: "e.g. Best coffee on campus!" },
+    { key: "imageUrl",     label: "Image URL",      placeholder: "https://example.com/image.jpg" },
+    { key: "ctaLabel",     label: "Button Label",   placeholder: "e.g. Visit Now" },
+    { key: "ctaUrl",       label: "Button URL",     placeholder: "https://..." },
+    { key: "category",     label: "Category (optional)", placeholder: "e.g. Food" },
+  ];
+
+  return (
+    <div className="p-6">
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h1 className="text-xl font-bold text-slate-800 dark:text-slate-200">
+            Sponsored Ads
+          </h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+            Manage ads shown in the main marketplace feed
+          </p>
+        </div>
+        {isEditor && (
+          <button onClick={openCreate}
+                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700
+                             text-white font-medium rounded-xl px-4 min-h-[44px] text-sm
+                             transition-colors">
+            <Plus className="w-4 h-4" /> New Ad
+          </button>
+        )}
+      </div>
+
+      {/* Create / Edit modal */}
+      {showForm && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center
+                        justify-center p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full
+                          max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-5 py-4 border-b
+                            border-gray-100 dark:border-slate-700 sticky top-0
+                            bg-white dark:bg-slate-800 z-10">
+              <h2 className="font-semibold text-slate-800 dark:text-slate-200 text-sm">
+                {editId ? "Edit Ad" : "Create New Ad"}
+              </h2>
+              <button onClick={() => setShowForm(false)}
+                      className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300
+                                 min-h-[44px] flex items-center justify-center w-8">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-3">
+              {FORM_FIELDS.map(({ key, label, placeholder }) => (
+                <div key={key}>
+                  <label className="text-xs font-medium text-slate-600 dark:text-slate-400
+                                    block mb-1">
+                    {label}
+                  </label>
+                  <input
+                    value={(form as any)[key]}
+                    onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                    placeholder={placeholder}
+                    className="w-full bg-slate-50 dark:bg-slate-700 border border-gray-200
+                               dark:border-slate-600 rounded-xl px-3 py-2.5 text-sm
+                               min-h-[44px] focus:outline-none focus:ring-2 focus:ring-blue-500
+                               text-slate-800 dark:text-slate-200"
+                  />
+                </div>
+              ))}
+
+              <div className="grid grid-cols-2 gap-3">
+                {([
+                  { key: "startsAt", label: "Start Date" },
+                  { key: "endsAt",   label: "End Date" },
+                ] as const).map(({ key, label }) => (
+                  <div key={key}>
+                    <label className="text-xs font-medium text-slate-600 dark:text-slate-400
+                                      block mb-1">
+                      {label}
+                    </label>
+                    <input
+                      type="date"
+                      value={(form as any)[key]}
+                      onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                      className="w-full bg-slate-50 dark:bg-slate-700 border border-gray-200
+                                 dark:border-slate-600 rounded-xl px-3 py-2.5 text-sm
+                                 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-blue-500
+                                 text-slate-800 dark:text-slate-200"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <button
+                onClick={save}
+                disabled={saving || !isValid}
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50
+                           disabled:cursor-not-allowed text-white font-semibold
+                           rounded-xl min-h-[44px] flex items-center justify-center
+                           gap-2 text-sm transition-colors mt-2">
+                {saving
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</>
+                  : editId ? "Save Changes" : "Create Ad"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Ads list */}
+      {loading ? (
+        <div className="space-y-3">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="h-24 bg-white dark:bg-slate-800 rounded-2xl
+                                    animate-pulse border border-gray-100 dark:border-slate-700" />
+          ))}
+        </div>
+      ) : ads.length === 0 ? (
+        <div className="flex flex-col items-center py-20 text-center">
+          <span className="text-5xl mb-3">📢</span>
+          <p className="font-semibold text-slate-700 dark:text-slate-300">No ads yet</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+            Create an ad to display it in the marketplace feed
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {ads.map(ad => (
+            <div key={ad.id}
+                 className="bg-white dark:bg-slate-800 rounded-2xl p-4 border
+                            border-gray-100 dark:border-slate-700 flex items-center gap-4">
+              {ad.imageUrl && (
+                <img
+                  src={ad.imageUrl}
+                  alt={ad.businessName}
+                  onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                  className="w-16 h-12 rounded-xl object-cover flex-shrink-0 bg-slate-100"
+                />
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <p className="font-semibold text-sm text-slate-800 dark:text-slate-200">
+                    {ad.businessName}
+                  </p>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium
+                    ${ad.isActive
+                      ? "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400"
+                      : "bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500"}`}>
+                    {ad.isActive ? "Active" : "Paused"}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                  {ad.tagline}
+                </p>
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  {new Date(ad.startsAt).toLocaleDateString()} →{" "}
+                  {new Date(ad.endsAt).toLocaleDateString()}
+                  {" · "}{ad.impressions ?? 0} impressions · {ad.clicks ?? 0} clicks
+                </p>
+              </div>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <button
+                  onClick={() => toggleActive(ad)}
+                  title={ad.isActive ? "Pause ad" : "Activate ad"}
+                  className="text-slate-400 hover:text-blue-500 min-h-[44px]
+                             flex items-center justify-center w-10 transition-colors">
+                  {ad.isActive
+                    ? <ToggleRight className="w-5 h-5 text-green-500" />
+                    : <ToggleLeft className="w-5 h-5" />}
+                </button>
+                {isEditor && (
+                  <button
+                    onClick={() => openEdit(ad)}
+                    title="Edit ad"
+                    className="text-slate-400 hover:text-blue-500 min-h-[44px]
+                               flex items-center justify-center w-10 transition-colors">
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                )}
+                {isAdmin && (
+                  <button
+                    onClick={() => deleteAd(ad.id)}
+                    title="Delete ad"
+                    className="text-slate-400 hover:text-red-500 min-h-[44px]
+                               flex items-center justify-center w-10 transition-colors">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+After creating both files, stop and confirm before continuing.
+
+---
+
+## PART 10 — Install, Test, First Admin Setup, and Deploy
+
+Run these steps in order. Do each step, confirm it works, then move to the next.
+
+### Step 1 — Install dependencies
+```bash
+cd artifacts/xmum-admin
+pnpm install
+```
+
+### Step 2 — Create the .env file
+```bash
+cp .env.example .env
+```
+Open `.env` and fill in all 7 Firebase values. They are the SAME values as the main app's `.env` file — same Firebase project, different app.
+
+### Step 3 — Verify the TypeScript compiles
+```bash
+pnpm build
+```
+Fix any TypeScript errors before moving on. Common issues:
+- Unused import warnings: remove the unused import
+- Missing `as const` on tuple types: add it
+- `orderBy` import missing: add to firestore import list
+
+### Step 4 — Run the dev server
+```bash
+pnpm dev
+```
+Open the local URL. You should see the Login page with the XMUM Admin Panel header and ShieldCheck icon. Do NOT try to log in yet — the first admin hasn't been set.
+
+### Step 5 — Set the first admin in Firestore
+1. Go to https://console.firebase.google.com
+2. Open your Firebase project
+3. Click Firestore Database in the left sidebar
+4. Click the `users` collection
+5. Find the document for the account you want to make admin (match by email or UID)
+6. Click "Add field"
+7. Field name: `role` | Type: string | Value: `admin`
+8. Click Save
+
+### Step 6 — Test the full admin app
+Go back to the local dev URL and sign in with the admin account.
+Verify each page loads:
+- Dashboard: shows stat cards with numbers from Firestore
+- Reports: shows filter tabs, empty state or real reports
+- Users: shows the user table with your account listed
+- Ads: shows empty state with "New Ad" button
+
+### Step 7 — Update the main app URL in ReportsPage
+Open `artifacts/xmum-admin/src/pages/ReportsPage.tsx`
+Find this line:
+```typescript
+const MAIN_APP_URL = "https://your-main-app.vercel.app";
+```
+Replace the URL with your actual live main app URL (the Vercel URL of `artifacts/xmum-market`).
+
+### Step 8 — Deploy to Vercel
+1. Push the full repo to GitHub:
+   ```bash
+   git add .
+   git commit -m "feat: add admin panel and report system"
+   git push
+   ```
+2. Go to https://vercel.com → Add New Project
+3. Import the same GitHub repo
+4. Set **Root Directory** to `artifacts/xmum-admin`
+5. Add all 7 environment variables (same Firebase values)
+6. Click Deploy
+7. The admin panel is now live at its own URL — keep it private
+
+---
+
+## DEVSECOPS RULES — NON-NEGOTIABLE
+
+1. No hardcoded Firebase secrets — all via `import.meta.env.VITE_FIREBASE_*`
+2. Never modify `firestore.rules` or `storage.rules` — they are already deployed
+3. `experimentalAutoDetectLongPolling: true` must stay in firebase.ts — do not remove
+4. Editors CANNOT change roles (enforced in UsersPage updateUser function AND in Firestore rules)
+5. Admins cannot demote themselves (enforced by `uid === adminUser?.uid` check)
+6. The `ads` collection write is now allowed for editors/admins per the deployed rules
+7. Never write to the main app's `src/lib/` files
+
+---
+
+## SUMMARY OF FILES TO CREATE IN THIS SESSION
+
+```
+artifacts/xmum-admin/src/pages/DashboardPage.tsx   ← Part 8
+artifacts/xmum-admin/src/pages/ReportsPage.tsx     ← Part 8
+artifacts/xmum-admin/src/pages/UsersPage.tsx       ← Part 9
+artifacts/xmum-admin/src/pages/AdsPage.tsx         ← Part 9
+```
+
+Then: install → build → dev → set admin in Firestore → test → deploy (Part 10).
+
+That is everything. The main app (artifacts/xmum-market/) requires zero changes in this session.
