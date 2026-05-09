@@ -67,6 +67,11 @@ service cloud.firestore {
       allow read, update, delete: if isAdmin();
     }
 
+    // Saved listings — private per-user wishlist
+    match /users/{userId}/savedListings/{listingId} {
+      allow read, write: if isOwner(userId);
+    }
+
     // Conversations: only participants can read or write
     match /conversations/{convId} {
       allow read: if isSignedIn()

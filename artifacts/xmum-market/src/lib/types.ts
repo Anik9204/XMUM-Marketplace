@@ -130,6 +130,15 @@ export type ReportCategory =
   | "wrong_category"
   | "other";
 
+export interface SavedListing {
+  listingId: string;
+  savedAt: number;
+  listingTitle: string;
+  listingPhoto: string;
+  listingPrice?: number;
+  listingUserId: string;
+}
+
 export interface ListingReport {
   id: string;
   listingId: string;

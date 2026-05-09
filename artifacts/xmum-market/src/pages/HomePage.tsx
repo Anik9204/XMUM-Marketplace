@@ -285,7 +285,7 @@ export default function HomePage() {
             <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {displayedListings.map((listing, i) => (
                 <Fragment key={listing.id}>
-                  <ListingCard listing={listing} />
+                  <ListingCard listing={listing} showSaveButton />
                   {(i + 1) % 6 === 0 && ads[1] && (
                     <>
                       <p className="col-span-full text-[10px] font-medium text-slate-400 uppercase tracking-wide -mb-2">Sponsored</p>

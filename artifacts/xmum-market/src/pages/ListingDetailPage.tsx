@@ -7,11 +7,12 @@ import { getProfile } from "@/lib/userProfile";
 import { Listing, UserProfile } from "@/lib/types";
 import AuthModal from "@/components/AuthModal";
 import ReportModal from "@/components/ReportModal";
-import { ArrowLeft, Clock, Tag, CheckCircle2, MapPin, MessageCircle, Loader2, ShieldAlert, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Clock, Tag, CheckCircle2, MapPin, MessageCircle, Loader2, ShieldAlert, ShieldCheck, Bookmark, BookmarkCheck } from "lucide-react";
 import { getOrCreateConversation } from "@/lib/messaging";
 import { SiWhatsapp, SiWechat } from "react-icons/si";
 import { MdGroups } from "react-icons/md";
 import { useToast } from "@/hooks/use-toast";
+import { saveListing, unsaveListing, isListingSaved } from "@/lib/savedListings";
 
 function relativeTime(ms: number): string {
   const diff = Date.now() - ms;
@@ -53,6 +54,14 @@ export default function ListingDetailPage() {
   const [startingChat, setStartingChat] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
   const [showReport, setShowReport] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
+  const [savingListing, setSavingListing] = useState(false);
+
+  // Check saved state when listing and user are ready
+  useEffect(() => {
+    if (!listing || !user || user.uid === listing.userId) return;
+    isListingSaved(user.uid, listing.id).then(setIsSaved).catch(() => {});
+  }, [listing?.id, user?.uid]);
 
   useEffect(() => {
     if (!params?.id) return;
@@ -116,6 +125,26 @@ export default function ListingDetailPage() {
       }
     } finally {
       setStartingChat(false);
+    }
+  };
+
+  const handleSaveToggle = async () => {
+    if (!user || !listing) return;
+    setSavingListing(true);
+    try {
+      if (isSaved) {
+        await unsaveListing(user.uid, listing.id);
+        setIsSaved(false);
+        toast({ title: "Removed from saved", description: listing.title });
+      } else {
+        await saveListing(user.uid, listing);
+        setIsSaved(true);
+        toast({ title: "Saved to your collection", description: listing.title });
+      }
+    } catch {
+      // silently ignore
+    } finally {
+      setSavingListing(false);
     }
   };
 
@@ -446,6 +475,28 @@ export default function ListingDetailPage() {
                   {chatError}
                 </p>
               )}
+
+              {/* Save listing button — non-owners only */}
+              {user && !isOwner && (
+                <button
+                  onClick={handleSaveToggle}
+                  disabled={savingListing}
+                  className={`w-full min-h-[44px] flex items-center justify-center gap-2 rounded-xl text-sm font-semibold border transition-colors mb-3 disabled:opacity-50 ${
+                    isSaved
+                      ? "bg-[#003366]/8 border-[#003366]/30 dark:border-blue-500/30 text-[#003366] dark:text-blue-400 hover:bg-[#003366]/10"
+                      : "border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"
+                  }`}
+                >
+                  {savingListing
+                    ? <Loader2 size={15} className="animate-spin" />
+                    : isSaved
+                      ? <BookmarkCheck size={15} className="text-[#003366] dark:text-blue-400" />
+                      : <Bookmark size={15} />
+                  }
+                  {isSaved ? "Saved" : "Save Listing"}
+                </button>
+              )}
+
               <p className="text-sm font-semibold text-gray-700 dark:text-slate-200 mb-2">{t.contactSeller}</p>
               {profileLoading ? (
                 <div className="flex flex-col sm:flex-row gap-2">

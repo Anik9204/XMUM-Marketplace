@@ -1,0 +1,77 @@
+You are a senior UI/UX developer working on the XMUM Marketplace app at artifacts/xmum-market/. Read ALL of the following files completely before writing a single line of code:
+
+- src/lib/types.ts
+- src/components/ListingCard.tsx
+- src/pages/ListingDetailPage.tsx
+- src/pages/ProfilePage.tsx
+- src/lib/firebase.ts
+- src/lib/userProfile.ts
+- src/contexts/AuthContext.tsx
+
+TASK: Allow authenticated users to save/pin any listing posted by another user for quick access later. This must feel like Shopee's "Wishlist" or Mudah's "Save" feature.
+
+─── STEP 1 — Data Model ─────────────────────────────────────────
+In Firestore, saved listings will be stored as:
+  users/{uid}/savedListings/{listingId}  →  { listingId, savedAt: timestamp, listingTitle, listingPhoto, listingPrice, listingUserId }
+
+In src/lib/types.ts, add:
+  export interface SavedListing {
+    listingId: string;
+    savedAt: number;
+    listingTitle: string;
+    listingPhoto: string;
+    listingPrice?: number;
+    listingUserId: string;
+  }
+
+─── STEP 2 — Data Functions ─────────────────────────────────────
+Create a new file: src/lib/savedListings.ts with these exported functions:
+
+  export async function saveListing(uid: string, listing: Listing): Promise<void>
+    — writes to users/{uid}/savedListings/{listing.id} with setDoc (idempotent)
+
+  export async function unsaveListing(uid: string, listingId: string): Promise<void>
+    — deletes users/{uid}/savedListings/{listingId}
+
+  export async function getSavedListings(uid: string): Promise<SavedListing[]>
+    — getDocs from users/{uid}/savedListings, ordered by savedAt desc
+
+  export async function isListingSaved(uid: string, listingId: string): Promise<boolean>
+    — getDoc check, returns true if doc exists
+
+─── STEP 3 — Firestore Rules ────────────────────────────────────
+Add this block to the Firestore rules (do not replace existing rules — append it):
+
+  match /users/{userId}/savedListings/{listingId} {
+    allow read, write: if isOwner(userId);
+  }
+
+Show the complete updated rules file.
+
+─── STEP 4 — Save Button in ListingCard ─────────────────────────
+In src/components/ListingCard.tsx:
+  - Add an optional prop: showSaveButton?: boolean (default false)
+  - When showSaveButton is true AND the logged-in user is NOT the listing owner, show a bookmark icon button (Bookmark from lucide-react) in the top-right corner of the card image.
+  - Use local state to track isSaved (boolean). On mount, call isListingSaved() to check. Show BookmarkCheck (filled) if saved, Bookmark (outline) if not.
+  - On click: toggle save/unsave with saveListing / unsaveListing. Show a brief toast: "Saved to your collection" / "Removed from saved".
+  - The button must have z-10 so it sits above the image overlay. It must be min-w-[36px] min-h-[36px], with a semi-transparent white background and rounded-full shape.
+  - Do NOT show the save button on the owner's own listings.
+
+─── STEP 5 — Save Button in ListingDetailPage ────────────────────
+In src/pages/ListingDetailPage.tsx, add a "Save Listing" button in the action bar (next to "Message Seller"), visible only to non-owners. It must show BookmarkCheck/Bookmark icon + text "Saved" / "Save". On click, toggle save state.
+
+─── STEP 6 — Saved Listings Tab in ProfilePage ──────────────────
+In src/pages/ProfilePage.tsx:
+  - Add a 4th tab to the existing tab selector: "Saved" (alongside "active", "sold", "archived").
+  - When active, call getSavedListings(user.uid) and render the results in the same 2-column grid using ListingCard with showSaveButton={true}.
+  - Show an empty state if no saved listings: a bookmark illustration SVG + "No saved listings yet. Tap the bookmark icon on any listing to save it."
+  - Each card in the saved tab must still show the unsave bookmark so users can remove items from the tab directly.
+
+─── STEP 7 — Pass showSaveButton to HomePage and SearchPage ─────
+In src/pages/HomePage.tsx and src/pages/SearchPage.tsx, pass showSaveButton={true} to every <ListingCard> component so users can save from the feed directly.
+
+─── CONSTRAINTS ─────────────────────────────────────────────────
+- Only authenticated users see the save button — if not logged in, clicking it opens the AuthModal.
+- Do NOT show the save button on the user's own listings (check listing.userId !== user?.uid).
+- Do not add any new npm packages.
+- After all edits, show every file changed/created and a summary.

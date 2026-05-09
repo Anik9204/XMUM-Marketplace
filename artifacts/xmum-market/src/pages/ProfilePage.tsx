@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { getUserListings, deleteListing, markAsSold, bumpListing, LISTING_EXPIRY_MS, LISTING_REMINDER_MS } from "@/lib/listings";
+import { getUserListings, deleteListing, markAsSold, bumpListing, getListing, LISTING_EXPIRY_MS, LISTING_REMINDER_MS } from "@/lib/listings";
 import { Listing } from "@/lib/types";
+import { getSavedListings } from "@/lib/savedListings";
 import ListingCard from "@/components/ListingCard";
 import AuthModal from "@/components/AuthModal";
-import { User, CheckCircle, AlertCircle, LogOut, CheckCircle2, Settings, Clock, X, ArrowUp } from "lucide-react";
+import { User, CheckCircle, AlertCircle, LogOut, CheckCircle2, Settings, Clock, X, ArrowUp, Bookmark } from "lucide-react";
 import { logOut } from "@/lib/auth";
 import { useLocation } from "wouter";
 import { addNotification } from "@/lib/notifications";
@@ -25,7 +26,7 @@ function SuccessToast({ message, onDone }: { message: string; onDone: () => void
   );
 }
 
-type ListingTab = "active" | "sold" | "archived";
+type ListingTab = "active" | "sold" | "archived" | "saved";
 
 export default function ProfilePage() {
   const { t, lang } = useLang();
@@ -41,6 +42,10 @@ export default function ProfilePage() {
   const [successToast, setSuccessToast] = useState("");
   const [expiryReminders, setExpiryReminders] = useState<Listing[]>([]);
   const [tab, setTab] = useState<ListingTab>("active");
+
+  const [savedListings, setSavedListings] = useState<Listing[]>([]);
+  const [savedLoading, setSavedLoading] = useState(false);
+  const savedFetched = useRef(false);
 
   const listingsCache = useRef<Listing[]>([]);
 
@@ -87,6 +92,20 @@ export default function ProfilePage() {
       })
       .finally(() => setLoading(false));
   }, [user]);
+
+  // Fetch saved listings when "saved" tab is first activated
+  useEffect(() => {
+    if (tab !== "saved" || !user || savedFetched.current) return;
+    savedFetched.current = true;
+    setSavedLoading(true);
+    getSavedListings(user.uid)
+      .then(async (saved) => {
+        const results = await Promise.all(saved.map(s => getListing(s.listingId).catch(() => null)));
+        setSavedListings(results.filter((l): l is Listing => l !== null));
+      })
+      .catch(() => {})
+      .finally(() => setSavedLoading(false));
+  }, [tab, user]);
 
   if (!user) {
     return (
@@ -189,6 +208,16 @@ export default function ProfilePage() {
     return true;
   });
 
+  const isGridLoading = tab === "saved" ? savedLoading : loading;
+  const gridListings = tab === "saved" ? savedListings : filteredListings;
+
+  const subTabs: { key: ListingTab; label: string }[] = [
+    { key: "active", label: "Active" },
+    { key: "sold", label: "Sold" },
+    { key: "archived", label: "Archived" },
+    { key: "saved", label: "Saved" },
+  ];
+
   return (
     <>
       {successToast && <SuccessToast message={successToast} onDone={() => setSuccessToast("")} />}
@@ -244,25 +273,26 @@ export default function ProfilePage() {
           </button>
         </div>
 
-        {/* Listing sub-tabs: active / sold / archived */}
+        {/* Listing sub-tabs: active / sold / archived / saved */}
         <div className="flex gap-1 bg-slate-100 dark:bg-slate-700/50 rounded-xl p-1 mb-4">
-          {(["active", "sold", "archived"] as ListingTab[]).map(t_ => (
+          {subTabs.map(({ key, label }) => (
             <button
-              key={t_}
-              onClick={() => setTab(t_)}
-              className={`flex-1 rounded-lg py-2 text-sm font-medium min-h-[40px] transition-colors capitalize ${
-                tab === t_
+              key={key}
+              onClick={() => setTab(key)}
+              className={`flex-1 rounded-lg py-2 text-xs font-medium min-h-[40px] transition-colors flex items-center justify-center gap-1 ${
+                tab === key
                   ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm"
                   : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
               }`}
             >
-              {t_}
+              {key === "saved" && <Bookmark size={11} />}
+              {label}
             </button>
           ))}
         </div>
 
-        {/* Expiry reminder banner */}
-        {expiryReminders.length > 0 && (
+        {/* Expiry reminder banner — only for non-saved tabs */}
+        {tab !== "saved" && expiryReminders.length > 0 && (
           <div className="mb-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-2xl p-4 flex items-start gap-3">
             <Clock size={16} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
@@ -292,7 +322,7 @@ export default function ProfilePage() {
         )}
 
         {/* Listings grid */}
-        {loading ? (
+        {isGridLoading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[...Array(3)].map((_, i) => (
               <div key={i} className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden animate-pulse">
@@ -304,9 +334,32 @@ export default function ProfilePage() {
               </div>
             ))}
           </div>
-        ) : filteredListings.length === 0 ? (
-          <div className="text-center py-12 text-gray-400 dark:text-slate-400">
-            <p className="text-sm">{tab === "active" ? t.noListings : `No ${tab} listings.`}</p>
+        ) : gridListings.length === 0 ? (
+          tab === "saved" ? (
+            <div className="flex flex-col items-center py-14 text-center">
+              <svg width="64" height="64" viewBox="0 0 24 24" fill="none" className="text-gray-200 dark:text-slate-600 mb-4">
+                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              <p className="text-sm font-semibold text-gray-600 dark:text-slate-300">No saved listings yet</p>
+              <p className="text-xs text-gray-400 dark:text-slate-500 mt-1 max-w-xs">
+                Tap the bookmark icon on any listing to save it for later.
+              </p>
+            </div>
+          ) : (
+            <div className="text-center py-12 text-gray-400 dark:text-slate-400">
+              <p className="text-sm">{tab === "active" ? t.noListings : `No ${tab} listings.`}</p>
+            </div>
+          )
+        ) : tab === "saved" ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {gridListings.map((l) => (
+              <ListingCard
+                key={l.id}
+                listing={l}
+                showSaveButton
+                onUnsave={() => setSavedListings(prev => prev.filter(x => x.id !== l.id))}
+              />
+            ))}
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
