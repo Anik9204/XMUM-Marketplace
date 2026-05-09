@@ -1,0 +1,52 @@
+You are a senior frontend developer working on the XMUM Marketplace at artifacts/xmum-market/. Read ALL of these files before writing any code:
+- src/pages/HomePage.tsx
+- src/pages/SearchPage.tsx
+- src/components/Layout.tsx
+- src/lib/types.ts
+- src/lib/listings.ts
+- src/lib/i18n.ts
+
+PROBLEM: The current tab system (Buy & Sell, Lost & Found, Jobs, Assistance, Rentals) is rendered as a basic scrollable row with no visual hierarchy. On desktop, it is barely visible. There is no way to filter listings by multiple subcategories simultaneously. The search bar is inside the page body and not prominent enough.
+
+TASK: Redesign the home page navigation and discovery experience.
+
+─── STEP 1 — Sticky Hero Search Bar ─────────────────────────────
+Move the search bar to directly below the sticky header (still above the tabs). It must:
+  - Be visually prominent: large, rounded-xl, with a subtle shadow, full-width on mobile and max-w-xl centered on desktop.
+  - On click/focus, navigate to /search with the typed query as ?q= param.
+  - Show a placeholder: "Search listings, services, rentals..."
+  - Have a magnifier icon on the left inside the input.
+  - Be part of the sticky group: when the user scrolls, both the header AND this search bar scroll together and stay at top.
+
+─── STEP 2 — Tab Redesign ────────────────────────────────────────
+Redesign the 5 main type tabs (Buy & Sell, Lost & Found, Jobs, Assistance, Rentals) as:
+  - On mobile: horizontally scrollable pill tabs with emoji icon + label, flex-shrink-0 on each.
+  - On desktop: a visible tab bar with underline indicator (no pill background), full width up to max-w-5xl.
+  - Each tab must show a small count badge of active listings in that category (fetch these counts once on mount using getDoc on a "counts" summary document if it exists, or run 5 parallel getDocs count queries using Firestore's count() aggregation — import { getCountFromServer } from "firebase/firestore").
+  - Active tab: navy text + navy bottom border on desktop; navy pill on mobile.
+  - Smooth indicator slide animation between tabs.
+
+─── STEP 3 — Category Filter Redesign ───────────────────────────
+Redesign the category filter chips below the tabs:
+  - Each chip: emoji icon + text label, pill shape, min-h-[36px], min-w-fit, px-3.5.
+  - Selected chip: navy fill, white text.
+  - Unselected chip: white/surface fill, grey border, grey text.
+  - The chip row must never wrap — always a single horizontal scrollable row with hidden scrollbar.
+  - Add a subtle left/right scroll shadow gradient on the edges to indicate scrollability.
+
+─── STEP 4 — Price Range Quick Filter ───────────────────────────
+On the search page only, add a quick filter bar below the search bar:
+  - "All Prices" pill | "Under RM50" | "RM50–200" | "RM200–500" | "RM500+" — tappable pills
+  - Only one can be active at a time.
+  - Clicking a range applies it as a filter to the search results without a page reload.
+
+─── STEP 5 — "Near You" Location Context ────────────────────────
+On the home page, below the category chips, add a subtle single-line banner:
+  "📍 XMUM Campus, Sepang" — static text (no geolocation API needed, hard-code this since it's a campus app).
+  Style: small, grey, italic, left-aligned. Only visible on mobile.
+
+─── CONSTRAINTS ─────────────────────────────────────────────────
+- Do NOT change Firestore queries beyond adding the count queries.
+- Do NOT add new npm packages.
+- All changes must be purely in HomePage.tsx and SearchPage.tsx except the count query addition to listings.ts.
+- After all changes, show every file modified.

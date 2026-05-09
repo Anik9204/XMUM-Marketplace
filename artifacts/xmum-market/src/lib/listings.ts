@@ -13,6 +13,7 @@ import {
   startAfter,
   serverTimestamp,
   QueryDocumentSnapshot,
+  getCountFromServer,
 } from "firebase/firestore";
 import {
   ref,
@@ -62,6 +63,28 @@ export async function uploadPhoto(file: File, userId: string): Promise<string> {
   const storageRef = ref(storage, `listings/${userId}/${Date.now()}.${ext}`);
   await uploadBytes(storageRef, file);
   return getDownloadURL(storageRef);
+}
+
+// ── Tab counts — runs 5 parallel count() aggregation queries ──────────────────
+export async function getTabCounts(): Promise<Record<ListingType, number>> {
+  const types: ListingType[] = ["buy-sell", "lost-found", "jobs", "assistance", "rental"];
+  const counts = await Promise.all(
+    types.map(async (type) => {
+      try {
+        const q = query(
+          collection(db, "listings"),
+          where("type", "==", type),
+          where("isArchived", "==", false),
+          where("status", "==", "active")
+        );
+        const snap = await getCountFromServer(q);
+        return snap.data().count;
+      } catch {
+        return 0;
+      }
+    })
+  );
+  return Object.fromEntries(types.map((t, i) => [t, counts[i]])) as Record<ListingType, number>;
 }
 
 // ── MIGRATION NOTE ────────────────────────────────────────────────────────────

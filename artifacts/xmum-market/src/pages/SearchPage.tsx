@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useSearch } from "wouter";
 import { useLang } from "@/contexts/LanguageContext";
 import { searchListings } from "@/lib/listings";
 import { Listing, ListingType } from "@/lib/types";
@@ -16,10 +17,25 @@ const ALL_TABS: { value: ListingType; label: (t: any) => string }[] = [
   { value: "rental", label: (t) => t.rental },
 ];
 
+type PriceRange = "all" | "under50" | "50-200" | "200-500" | "500plus";
+
+const PRICE_RANGE_PILLS: { value: PriceRange; label: string; min?: number; max?: number }[] = [
+  { value: "all",      label: "All Prices" },
+  { value: "under50",  label: "Under RM50",  max: 50 },
+  { value: "50-200",   label: "RM50–200",    min: 50,  max: 200 },
+  { value: "200-500",  label: "RM200–500",   min: 200, max: 500 },
+  { value: "500plus",  label: "RM500+",      min: 500 },
+];
+
 export default function SearchPage() {
   const { t } = useLang();
+  const searchStr = useSearch();
+
   const [type, setType] = useState<ListingType>("buy-sell");
-  const [keyword, setKeyword] = useState("");
+  const [keyword, setKeyword] = useState(() => {
+    const params = new URLSearchParams(searchStr);
+    return params.get("q") ?? "";
+  });
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
   const [condition, setCondition] = useState("all");
@@ -27,10 +43,26 @@ export default function SearchPage() {
   const [loading, setLoading] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [priceRange, setPriceRange] = useState<PriceRange>("all");
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const showPriceFilter = type === "buy-sell" || type === "jobs" || type === "assistance" || type === "rental";
   const showConditionFilter = type === "buy-sell";
+
+  // Pre-populate from ?q= URL param once on mount
+  useEffect(() => {
+    const params = new URLSearchParams(searchStr);
+    const q = params.get("q");
+    if (q) setKeyword(q);
+  }, []);
+
+  const applyPriceRange = (range: PriceRange) => {
+    setPriceRange(range);
+    const pill = PRICE_RANGE_PILLS.find((p) => p.value === range);
+    if (!pill) return;
+    setMinPrice(pill.min != null ? String(pill.min) : "");
+    setMaxPrice(pill.max != null ? String(pill.max) : "");
+  };
 
   const doSearch = async () => {
     setLoading(true);
@@ -60,10 +92,21 @@ export default function SearchPage() {
     return () => clearTimeout(debounceRef.current);
   }, [keyword, type, minPrice, maxPrice, condition]);
 
+  // Reset price range pill if manual min/max inputs change it out of sync
+  useEffect(() => {
+    const matched = PRICE_RANGE_PILLS.find(
+      (p) =>
+        (p.min != null ? String(p.min) : "") === minPrice &&
+        (p.max != null ? String(p.max) : "") === maxPrice
+    );
+    setPriceRange(matched?.value ?? "all");
+  }, [minPrice, maxPrice]);
+
   const clearFilters = () => {
     setMinPrice("");
     setMaxPrice("");
     setCondition("all");
+    setPriceRange("all");
   };
 
   const hasFilters = minPrice || maxPrice || condition !== "all";
@@ -85,6 +128,7 @@ export default function SearchPage() {
     <div className="max-w-6xl mx-auto animate-in fade-in duration-200">
       {/* Search header */}
       <div className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 px-4 py-3 sticky top-14 sm:top-16 z-30">
+        {/* Search input row */}
         <div className="flex gap-2 items-center">
           <div className="relative flex-1">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-400" />
@@ -113,6 +157,28 @@ export default function SearchPage() {
             )}
           </button>
         </div>
+
+        {/* Price range quick filter — shown when price filter is relevant */}
+        {showPriceFilter && (
+          <div className="flex gap-2 mt-2.5 overflow-x-auto scrollbar-hide">
+            {PRICE_RANGE_PILLS.map(({ value, label }) => (
+              <button
+                key={value}
+                onClick={() => applyPriceRange(value)}
+                className={`
+                  flex-shrink-0 px-3 py-1.5 min-h-[34px] rounded-full text-xs font-medium
+                  border transition-colors whitespace-nowrap
+                  ${priceRange === value
+                    ? "bg-[#003366] dark:bg-blue-600 text-white border-[#003366] dark:border-blue-600"
+                    : "bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 border-gray-200 dark:border-slate-600 hover:border-[#003366] dark:hover:border-blue-400"
+                  }
+                `}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Active filter pills */}
         {activeFilterPills.length > 0 && (
