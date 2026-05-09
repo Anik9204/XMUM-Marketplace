@@ -1,0 +1,225 @@
+You are a senior React/Vite developer. The XMUM Marketplace app at artifacts/xmum-market/ is showing a completely white screen on Vercel after recent changes to HomePage.tsx, SearchPage.tsx, and listings.ts. The app works in Replit's dev server but crashes silently on Vercel's production build. You must fix ALL of the following confirmed root causes before touching anything else.
+
+Read ALL of these files completely before writing a single line of code:
+- src/pages/HomePage.tsx
+- src/pages/SearchPage.tsx
+- src/lib/listings.ts
+- src/lib/i18n.ts
+- src/main.tsx
+- src/App.tsx
+- vite.config.ts
+
+════════════════════════════════════
+ROOT CAUSE 1 — useSearch() from wouter is not available in wouter v3
+════════════════════════════════════
+
+In src/pages/SearchPage.tsx, the import:
+  import { useSearch } from "wouter";
+is WRONG. wouter v3 (which this project uses) does NOT export useSearch. This causes a runtime crash that silently white-screens the entire app because the error boundary is not set up.
+
+FIX: Replace useSearch with the standard browser API. Change these lines:
+
+REMOVE:
+  import { useSearch } from "wouter";
+  const searchStr = useSearch();
+
+REPLACE WITH:
+  // no import needed — use browser's location directly
+
+Then change every reference to searchStr from:
+  const params = new URLSearchParams(searchStr);
+to:
+  const params = new URLSearchParams(window.location.search);
+
+This must be changed in TWO places in SearchPage.tsx:
+  1. The initial useState for keyword:
+     const [keyword, setKeyword] = useState(() => {
+       const params = new URLSearchParams(window.location.search);
+       return params.get("q") ?? "";
+     });
+  2. The useEffect that reads the param on mount:
+     useEffect(() => {
+       const params = new URLSearchParams(window.location.search);
+       const q = params.get("q");
+       if (q) setKeyword(q);
+     }, []);
+
+════════════════════════════════════
+ROOT CAUSE 2 — getCountFromServer may not be exported by the firebase version in use
+════════════════════════════════════
+
+The project uses firebase@^12.12.1. getCountFromServer was introduced in firebase 9.8.0 for the Web Modular SDK, but in some build environments the named export is resolved differently. If the import fails at bundle time, the entire listings.ts module fails to load, causing a white screen.
+
+FIX: Wrap the import defensively and make getTabCounts fail gracefully.
+
+In src/lib/listings.ts:
+  1. Keep the existing import as-is BUT wrap the getTabCounts function body in a try/catch that returns all zeros on any error.
+  2. Additionally, guard against the case where getCountFromServer might throw a "requires index" Firestore error in production (the 3-field query on type + isArchived + status requires a composite Firestore index that may not exist in production yet).
+
+Replace the entire getTabCounts function with this safer version:
+
+export async function getTabCounts(): Promise<Partial<Record<ListingType, number>>> {
+  const types: ListingType[] = ["buy-sell", "lost-found", "jobs", "assistance", "rental"];
+  try {
+    const counts = await Promise.all(
+      types.map(async (type) => {
+        try {
+          // Only filter by type — avoids needing a composite index
+          const q = query(
+            collection(db, "listings"),
+            where("type", "==", type)
+          );
+          const snap = await getCountFromServer(q);
+          return snap.data().count;
+        } catch {
+          return 0;
+        }
+      })
+    );
+    return Object.fromEntries(types.map((t, i) => [t, counts[i]])) as Record<ListingType, number>;
+  } catch {
+    // If getCountFromServer is unavailable or fails entirely, return empty
+    // so the tab badges just don't render — the app still works
+    return {};
+  }
+}
+
+Also update the return type in HomePage.tsx to match:
+  const [tabCounts, setTabCounts] = useState<Partial<Record<ListingType, number>>>({});
+(This is likely already correct — just confirm it matches.)
+
+════════════════════════════════════
+ROOT CAUSE 3 — Missing i18n keys referenced in HomePage cause runtime crash
+════════════════════════════════════
+
+HomePage.tsx references t.hero1, t.hero2, t.heroSub, and t.getStarted. If these keys exist in the English translations but are MISSING from the Chinese (zh) translations object in src/lib/i18n.ts, the app crashes in production when the language is set to Chinese.
+
+FIX: Open src/lib/i18n.ts and verify that BOTH the "en" AND "zh" translation objects contain ALL of the following keys. Add any that are missing to the zh object:
+
+In the zh translations object, ensure these keys exist (add if missing):
+  hero1: "买卖与发现",
+  hero2: "在厦大马来西亚社区内",
+  heroSub: "专为厦大马来西亚学生打造的安全学生专属市场。",
+  getStarted: "开始使用",
+  loadMore: "加载更多",
+  noMoreListings: "已经到底啦！",
+  rental: "租赁",
+
+════════════════════════════════════
+ROOT CAUSE 4 — No global error boundary means any runtime crash = blank white screen
+════════════════════════════════════
+
+The app has no React error boundary. When any of the above errors occur at runtime, React unmounts the entire tree silently and shows a blank page. This makes debugging in production impossible.
+
+FIX: Create src/components/ErrorBoundary.tsx:
+
+import { Component, ReactNode } from "react";
+
+interface Props { children: ReactNode; }
+interface State { hasError: boolean; error: Error | null; }
+
+export class ErrorBoundary extends Component<Props, State> {
+  constructor(props: Props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: Error): State {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error("[ErrorBoundary] Caught error:", error, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center px-4 text-center bg-gray-50">
+          <div className="max-w-sm">
+            <div className="text-5xl mb-4">⚠️</div>
+            <h1 className="text-lg font-bold text-gray-800 mb-2">Something went wrong</h1>
+            <p className="text-sm text-gray-500 mb-4">
+              The app encountered an unexpected error. Please refresh the page.
+            </p>
+            <p className="text-xs text-red-400 font-mono bg-red-50 p-2 rounded mb-4 text-left break-all">
+              {this.state.error?.message ?? "Unknown error"}
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="bg-[#003366] text-white px-5 py-2.5 rounded-xl text-sm font-semibold"
+            >
+              Refresh Page
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+Then in src/main.tsx (or src/App.tsx, whichever wraps the app at root level), wrap the entire app tree with <ErrorBoundary>:
+
+  import { ErrorBoundary } from "@/components/ErrorBoundary";
+
+  // In the render:
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>
+
+════════════════════════════════════
+ROOT CAUSE 5 — Vercel environment variables may not be set
+════════════════════════════════════
+
+The app uses import.meta.env.VITE_FIREBASE_* variables. If these are NOT configured in Vercel's project settings, Firebase initialises with undefined values and the app crashes silently on first Firestore/Auth call.
+
+FIX: In src/lib/firebase.ts, add a startup check that throws a clear, human-readable error before Firebase tries to initialise with undefined config:
+
+Add this block BEFORE the initializeApp call:
+
+const requiredEnvVars = [
+  "VITE_FIREBASE_API_KEY",
+  "VITE_FIREBASE_AUTH_DOMAIN",
+  "VITE_FIREBASE_PROJECT_ID",
+  "VITE_FIREBASE_APP_ID",
+];
+const missingVars = requiredEnvVars.filter(
+  (key) => !import.meta.env[key as keyof ImportMeta["env"]]
+);
+if (missingVars.length > 0) {
+  console.error(
+    "[firebase] Missing environment variables:",
+    missingVars.join(", "),
+    "\nMake sure these are set in your Vercel project settings under Settings → Environment Variables."
+  );
+}
+
+This doesn't block the app from loading but prints a clear error in Vercel's function logs so you can identify the problem immediately.
+
+════════════════════════════════════
+VERIFICATION STEPS — Do these after all fixes
+════════════════════════════════════
+
+After making ALL of the above changes:
+
+1. Run: cd artifacts/xmum-market && pnpm build
+   The build MUST complete with 0 errors and 0 TypeScript type errors.
+   If it shows any "Cannot find module", "has no exported member", or TypeScript errors — fix them before proceeding.
+
+2. Check that the dist/ folder was created and contains index.html.
+
+3. Run: pnpm preview
+   Open the preview URL and confirm the home page loads correctly.
+
+4. Confirm in the browser console (F12) that there are zero red errors on page load.
+
+5. Navigate to /search — confirm the search page loads without errors.
+
+═══════════════════════════════════
+CONSTRAINTS
+═══════════════════════════════════
+- Do NOT change any Firestore query logic beyond what is described above.
+- Do NOT change any UI styling or layout.
+- Do NOT add any new npm packages.
+- After completing ALL fixes, show me:
+  a) The exact lines changed in each file
+  b) The result of running pnpm build (paste the terminal output)
+  c) Confirmation that the app loads in pnpm preview

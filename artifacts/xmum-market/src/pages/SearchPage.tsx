@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from "react";
-import { useSearch } from "wouter";
 import { useLang } from "@/contexts/LanguageContext";
 import { searchListings } from "@/lib/listings";
 import { Listing, ListingType } from "@/lib/types";
@@ -29,11 +28,10 @@ const PRICE_RANGE_PILLS: { value: PriceRange; label: string; min?: number; max?:
 
 export default function SearchPage() {
   const { t } = useLang();
-  const searchStr = useSearch();
 
   const [type, setType] = useState<ListingType>("buy-sell");
   const [keyword, setKeyword] = useState(() => {
-    const params = new URLSearchParams(searchStr);
+    const params = new URLSearchParams(window.location.search);
     return params.get("q") ?? "";
   });
   const [minPrice, setMinPrice] = useState("");
@@ -51,7 +49,7 @@ export default function SearchPage() {
 
   // Pre-populate from ?q= URL param once on mount
   useEffect(() => {
-    const params = new URLSearchParams(searchStr);
+    const params = new URLSearchParams(window.location.search);
     const q = params.get("q");
     if (q) setKeyword(q);
   }, []);

@@ -7,6 +7,23 @@ import {
 } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
+const requiredEnvVars = [
+  "VITE_FIREBASE_API_KEY",
+  "VITE_FIREBASE_AUTH_DOMAIN",
+  "VITE_FIREBASE_PROJECT_ID",
+  "VITE_FIREBASE_APP_ID",
+];
+const missingVars = requiredEnvVars.filter(
+  (key) => !import.meta.env[key as keyof ImportMeta["env"]]
+);
+if (missingVars.length > 0) {
+  console.error(
+    "[firebase] Missing environment variables:",
+    missingVars.join(", "),
+    "\nMake sure these are set in your deployment project settings under Settings → Environment Variables."
+  );
+}
+
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
