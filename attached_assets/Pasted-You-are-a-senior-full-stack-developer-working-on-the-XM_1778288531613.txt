@@ -1,0 +1,62 @@
+You are a senior full-stack developer working on the XMUM Marketplace app at artifacts/xmum-market/. Read ALL of the following files completely before writing a single line of code:
+
+- src/pages/ProfilePage.tsx
+- src/lib/listings.ts
+- src/lib/types.ts
+- src/components/ListingCard.tsx
+- src/lib/i18n.ts
+
+TASK: Make the "Bump to Top" button fully functional. Currently it updates the Firestore document but there is no cooldown enforcement, no user feedback, and no visible effect on the feed ordering.
+
+─── STEP 1 — Enforce Bump Cooldown ──────────────────────────────
+The Listing type already has lastBumpedAt?: number. Use this to enforce a 24-hour cooldown.
+
+In src/lib/listings.ts, update the bumpListing function:
+  export async function bumpListing(id: string): Promise<{ success: boolean; nextBumpAt: number }>
+  - Before writing, getDoc the listing and check lastBumpedAt.
+  - If Date.now() - lastBumpedAt < 24 * 60 * 60 * 1000, return { success: false, nextBumpAt: lastBumpedAt + 24h }.
+  - Otherwise, update { lastBumpedAt: now, sortKey: now } and return { success: true, nextBumpAt: now + 24h }.
+
+─── STEP 2 — Update ProfilePage Bump Button ─────────────────────
+In src/pages/ProfilePage.tsx, find the bump button for each active listing.
+  - Replace the current onClick with a proper async handler:
+    async function handleBump(listing: Listing) {
+      const result = await bumpListing(listing.id);
+      if (result.success) {
+        setSuccessToast(`"${listing.title}" has been bumped to the top!`);
+        // Re-sort the local listings array so the bumped listing moves to top visually
+        setListings(prev => {
+          const bumped = prev.find(l => l.id === listing.id);
+          if (!bumped) return prev;
+          const rest = prev.filter(l => l.id !== listing.id);
+          return [{ ...bumped, lastBumpedAt: Date.now(), sortKey: Date.now() }, ...rest];
+        });
+      } else {
+        const hours = Math.ceil((result.nextBumpAt - Date.now()) / 3600000);
+        setSuccessToast(`You can bump this listing again in ${hours} hour${hours === 1 ? "" : "s"}.`);
+      }
+    }
+
+  - Show on the bump button: if listing.lastBumpedAt && Date.now() - listing.lastBumpedAt < 24h, render the button as disabled/greyed with text "Bumped Xh ago". Otherwise show it active in blue with ArrowUp icon.
+  - Add a tooltip or subtitle under the bump button: "Move your listing back to the top of the feed (once every 24 hours)."
+
+─── STEP 3 — Ensure Feed Ordering Respects sortKey ──────────────
+In src/lib/listings.ts, verify that getListingsPage orders by "sortKey" descending. If it currently orders by "createdAt", change it to order by "sortKey" so bumped listings actually appear first in the feed.
+
+In src/pages/HomePage.tsx, after a successful bump (this is triggered from ProfilePage, so no cross-page state needed), the next time the user visits the home page the feed will naturally reload with the correct order. No change needed in HomePage.
+
+─── STEP 4 — ListingCard Bump Badge ─────────────────────────────
+In src/components/ListingCard.tsx:
+  - If listing.lastBumpedAt exists AND Date.now() - listing.lastBumpedAt < 3 * 60 * 60 * 1000 (bumped within last 3 hours), show a small "⬆ Featured" badge in green on the top-left of the card image. This gives users visual confirmation that bumping works.
+
+─── STEP 5 — i18n ───────────────────────────────────────────────
+In src/lib/i18n.ts, add translation keys:
+  bumpSuccess: "Listing bumped to the top!" / "置顶成功！"
+  bumpCooldown: "You can bump again in {hours} hours" / "{hours} 小时后可再次置顶"
+  bumpTooltip: "Move to top of feed (once per 24h)" / "置顶帖子（每24小时一次）"
+  bumpedRecently: "Bumped recently" / "最近已置顶"
+
+─── CONSTRAINTS ─────────────────────────────────────────────────
+- Do NOT add any new npm packages.
+- The cooldown check MUST happen server-side (via getDoc before updateDoc) — do not rely only on client-side state.
+- After all edits, show every file changed and a summary.

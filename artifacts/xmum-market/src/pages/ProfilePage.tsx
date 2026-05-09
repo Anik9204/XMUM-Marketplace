@@ -151,13 +151,29 @@ export default function ProfilePage() {
     }
   };
 
+  const BUMP_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
   const handleBump = async (listing: Listing) => {
     if (listing.status === "sold") return;
     try {
-      await bumpListing(listing.id);
-      setSuccessToast(lang === "en" ? "Listing bumped to top!" : "已置顶！");
+      const result = await bumpListing(listing.id);
+      if (result.success) {
+        const now = Date.now();
+        setSuccessToast(`"${listing.title}" has been bumped to the top!`);
+        const updated = (prev: Listing[]) => {
+          const bumped = prev.find(l => l.id === listing.id);
+          if (!bumped) return prev;
+          const rest = prev.filter(l => l.id !== listing.id);
+          return [{ ...bumped, lastBumpedAt: now, sortKey: now }, ...rest];
+        };
+        setListings(updated);
+        listingsCache.current = updated(listingsCache.current);
+      } else {
+        const hours = Math.ceil((result.nextBumpAt - Date.now()) / 3_600_000);
+        setSuccessToast(`You can bump "${listing.title}" again in ${hours} hour${hours === 1 ? "" : "s"}.`);
+      }
     } catch {
-      // silently ignore
+      setSuccessToast("Bump failed — please check your connection.");
     }
   };
 
@@ -379,15 +395,36 @@ export default function ProfilePage() {
                       ⚠️ Expires soon — Bump to refresh
                     </div>
                   )}
-                  {l.status !== "sold" && (
-                    <button
-                      onClick={() => handleBump(l)}
-                      className="text-xs text-purple-600 border border-purple-200 rounded-lg py-1.5 hover:bg-purple-50 transition-colors w-full min-h-[44px] flex items-center justify-center gap-1.5"
-                    >
-                      <ArrowUp size={13} />
-                      {lang === "en" ? "Bump to Top" : "置顶"}
-                    </button>
-                  )}
+                  {l.status !== "sold" && (() => {
+                    const onCooldown = !!l.lastBumpedAt && Date.now() - l.lastBumpedAt < BUMP_COOLDOWN_MS;
+                    const hoursSince = l.lastBumpedAt
+                      ? Math.floor((Date.now() - l.lastBumpedAt) / 3_600_000)
+                      : null;
+                    return (
+                      <div className="flex flex-col gap-0.5">
+                        <button
+                          onClick={() => handleBump(l)}
+                          disabled={onCooldown}
+                          title={lang === "en" ? "Move to top of feed (once per 24h)" : "置顶帖子（每24小时一次）"}
+                          className={`text-xs border rounded-lg py-1.5 w-full min-h-[44px] flex items-center justify-center gap-1.5 transition-colors ${
+                            onCooldown
+                              ? "text-gray-400 border-gray-200 dark:border-slate-700 cursor-not-allowed opacity-60"
+                              : "text-purple-600 border-purple-200 hover:bg-purple-50 dark:hover:bg-purple-900/20"
+                          }`}
+                        >
+                          <ArrowUp size={13} />
+                          {onCooldown
+                            ? (lang === "en"
+                                ? `Bumped ${hoursSince}h ago`
+                                : `${hoursSince} 小时前已置顶`)
+                            : (lang === "en" ? "Bump to Top" : "置顶")}
+                        </button>
+                        <p className="text-[10px] text-center text-slate-400 dark:text-slate-500">
+                          {lang === "en" ? "Move to top of feed (once per 24h)" : "置顶帖子（每24小时一次）"}
+                        </p>
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })}

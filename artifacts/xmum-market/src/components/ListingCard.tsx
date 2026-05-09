@@ -157,6 +157,13 @@ export default function ListingCard({
               </div>
             )}
 
+            {/* "⬆ Featured" badge — shown for 3 hours after a bump */}
+            {!isSold && listing.lastBumpedAt && Date.now() - listing.lastBumpedAt < 3 * 60 * 60 * 1000 && (
+              <span className="absolute bottom-2 left-2 z-10 inline-flex items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-500 text-white shadow-sm">
+                ⬆ Featured
+              </span>
+            )}
+
             {!isSold && (
               <>
                 {listing.type === "buy-sell" && (

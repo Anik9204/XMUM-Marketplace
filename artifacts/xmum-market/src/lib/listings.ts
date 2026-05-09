@@ -97,17 +97,29 @@ export async function updateListing(
   ]);
 }
 
-export async function bumpListing(id: string): Promise<void> {
+const BUMP_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+export async function bumpListing(
+  id: string
+): Promise<{ success: boolean; nextBumpAt: number }> {
   const now = Date.now();
+  const snap = await getDoc(doc(db, "listings", id));
+  if (snap.exists()) {
+    const lastBumpedAt: number = snap.data()?.lastBumpedAt ?? 0;
+    if (now - lastBumpedAt < BUMP_COOLDOWN_MS) {
+      return { success: false, nextBumpAt: lastBumpedAt + BUMP_COOLDOWN_MS };
+    }
+  }
   await Promise.race([
     updateDoc(doc(db, "listings", id), {
       lastBumpedAt: now,
       sortKey: now,
     }),
-    new Promise<void>((_, reject) =>
+    new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error("timeout:bump-listing")), 6_000)
     ),
   ]);
+  return { success: true, nextBumpAt: now + BUMP_COOLDOWN_MS };
 }
 
 // Race against 6s timeout as a safety net in case of slow server response

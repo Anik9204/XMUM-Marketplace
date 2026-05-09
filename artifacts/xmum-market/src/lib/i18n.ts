@@ -232,6 +232,10 @@ export const translations = {
     rentalLicenceRequired: "Valid driving licence required",
     rentalInsuranceRequired: "Insurance proof required",
     rentalPlateNumber: "Plate Number",
+    bumpSuccess: "Listing bumped to the top!",
+    bumpCooldown: "You can bump again in {hours} hours",
+    bumpTooltip: "Move to top of feed (once per 24h)",
+    bumpedRecently: "Bumped recently",
   },
   zh: {
     appName: "厦大市集",
@@ -464,6 +468,10 @@ export const translations = {
     rentalLicenceRequired: "需有效驾照",
     rentalInsuranceRequired: "需保险证明",
     rentalPlateNumber: "车牌号",
+    bumpSuccess: "置顶成功！",
+    bumpCooldown: "{hours} 小时后可再次置顶",
+    bumpTooltip: "置顶帖子（每24小时一次）",
+    bumpedRecently: "最近已置顶",
   },
 };
 
