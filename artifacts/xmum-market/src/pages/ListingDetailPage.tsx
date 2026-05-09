@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRoute, useLocation, Link } from "wouter";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -7,7 +7,7 @@ import { getProfile } from "@/lib/userProfile";
 import { Listing, UserProfile } from "@/lib/types";
 import AuthModal from "@/components/AuthModal";
 import ReportModal from "@/components/ReportModal";
-import { ArrowLeft, Clock, Tag, CheckCircle2, MapPin, MessageCircle, Loader2, ShieldAlert, ShieldCheck, Bookmark, BookmarkCheck } from "lucide-react";
+import { ArrowLeft, Clock, Tag, CheckCircle2, MapPin, MessageCircle, Loader2, ShieldAlert, ShieldCheck, Bookmark, BookmarkCheck, MoreHorizontal, Flag, Share2 } from "lucide-react";
 import { getOrCreateConversation } from "@/lib/messaging";
 import { SiWhatsapp, SiWechat } from "react-icons/si";
 import { MdGroups } from "react-icons/md";
@@ -56,6 +56,20 @@ export default function ListingDetailPage() {
   const [showReport, setShowReport] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [savingListing, setSavingListing] = useState(false);
+  const [showOverflowMenu, setShowOverflowMenu] = useState(false);
+  const overflowRef = useRef<HTMLDivElement>(null);
+
+  // Close overflow menu on outside click
+  useEffect(() => {
+    if (!showOverflowMenu) return;
+    function handleClick(e: MouseEvent) {
+      if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) {
+        setShowOverflowMenu(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showOverflowMenu]);
 
   // Check saved state when listing and user are ready
   useEffect(() => {
@@ -166,6 +180,26 @@ export default function ListingDetailPage() {
     }
   };
 
+  const handleShareListing = async () => {
+    setShowOverflowMenu(false);
+    const url = window.location.href;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast({ title: "Link copied!", description: "Listing URL copied to clipboard." });
+    } catch {
+      toast({ title: "Could not copy link", variant: "destructive" });
+    }
+  };
+
+  const handleReportClick = () => {
+    setShowOverflowMenu(false);
+    if (!user) {
+      toast({ title: "Sign in to report a listing", variant: "destructive" });
+      return;
+    }
+    setShowReport(true);
+  };
+
   const catKey = listing.category as keyof typeof t.categories;
   const catLabel = t.categories[catKey] ?? listing.category;
   const pre = encodeURIComponent(`Hi, I saw your listing "${listing.title}" on XMUM Market. Is it still available?`);
@@ -192,12 +226,47 @@ export default function ListingDetailPage() {
       )}
 
       <div className="max-w-2xl mx-auto pb-28 md:pb-8 animate-in fade-in duration-200">
-        {/* Back button */}
+        {/* Back button + overflow menu */}
         <div className="sticky top-14 sm:top-16 z-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm border-b border-gray-100 dark:border-slate-700">
-          <button onClick={() => window.history.back()} className="flex items-center gap-2 px-4 py-3 text-sm text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-white min-h-[44px]">
-            <ArrowLeft size={18} />
-            <span>Back</span>
-          </button>
+          <div className="flex items-center justify-between px-4">
+            <button
+              onClick={() => window.history.back()}
+              className="flex items-center gap-2 py-3 text-sm text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-white min-h-[44px]"
+            >
+              <ArrowLeft size={18} />
+              <span>Back</span>
+            </button>
+
+            {/* ⋯ Overflow menu */}
+            <div className="relative" ref={overflowRef}>
+              <button
+                onClick={() => setShowOverflowMenu((v) => !v)}
+                className="flex items-center justify-center w-10 h-10 min-w-[44px] min-h-[44px] rounded-lg text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                aria-label="More options"
+              >
+                <MoreHorizontal size={20} />
+              </button>
+
+              {showOverflowMenu && (
+                <div className="absolute right-0 top-full mt-1 min-w-[200px] bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-gray-100 dark:border-slate-700 z-50 overflow-hidden">
+                  <button
+                    onClick={handleReportClick}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-left min-h-[44px]"
+                  >
+                    <Flag size={15} />
+                    Report this listing
+                  </button>
+                  <button
+                    onClick={handleShareListing}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors text-left border-t border-gray-100 dark:border-slate-700 min-h-[44px]"
+                  >
+                    <Share2 size={15} />
+                    Share listing
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Rental disclaimer banner — shown immediately below back button */}
@@ -252,14 +321,14 @@ export default function ListingDetailPage() {
           )}
         </div>
 
-        {/* Thumbnails */}
+        {/* Thumbnails — horizontally scrollable */}
         {listing.photos.length > 1 && (
-          <div className="flex gap-2 px-4 py-3 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 overflow-x-auto">
+          <div className="flex gap-2 px-4 py-3 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 overflow-x-auto scrollbar-hide">
             {listing.photos.map((src, i) => (
               <button
                 key={i}
                 onClick={() => setActivePhoto(i)}
-                className={`w-14 h-14 rounded-xl overflow-hidden border-2 shrink-0 transition-all ${i === activePhoto ? "border-[#003366] dark:border-blue-400" : "border-transparent"}`}
+                className={`w-14 h-14 flex-shrink-0 rounded-xl overflow-hidden border-2 transition-all ${i === activePhoto ? "border-[#003366] dark:border-blue-400" : "border-transparent"}`}
               >
                 <img src={src} alt={`${listing.title} photo ${i + 1}`} className="w-full h-full object-cover" />
               </button>
@@ -544,22 +613,6 @@ export default function ListingDetailPage() {
               )}
             </div>
           )}
-
-          {/* Report link */}
-          <div className="flex justify-center pt-2">
-            <button
-              onClick={() => {
-                if (!user) {
-                  toast({ title: "Sign in to report a listing", variant: "destructive" });
-                  return;
-                }
-                setShowReport(true);
-              }}
-              className="text-xs text-slate-400 hover:text-red-500 dark:hover:text-red-400 underline mt-4 min-h-[44px] flex items-center"
-            >
-              Report this listing
-            </button>
-          </div>
         </div>
       </div>
 

@@ -166,7 +166,7 @@ export default function MessagesPage() {
         <div className="flex items-center gap-3 px-3 py-2.5 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shrink-0 shadow-card">
           <button
             onClick={() => { setActiveConv(null); setMessages([]); setOtherProfile(null); refreshConversations(); }}
-            className="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 p-1 min-h-[44px] flex items-center shrink-0"
+            className="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 p-1 min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0"
           >
             <ArrowLeft size={20} />
           </button>
@@ -250,7 +250,7 @@ export default function MessagesPage() {
           <button
             onClick={handleSend}
             disabled={sending || !inputText.trim()}
-            className="w-11 h-11 bg-[#003366] dark:bg-blue-600 text-white rounded-full flex items-center justify-center hover:bg-[#002244] dark:hover:bg-blue-700 disabled:opacity-40 transition-colors shrink-0 shadow-sm"
+            className="w-11 h-11 min-w-[44px] min-h-[44px] bg-[#003366] dark:bg-blue-600 text-white rounded-full flex items-center justify-center hover:bg-[#002244] dark:hover:bg-blue-700 disabled:opacity-40 transition-colors shrink-0 shadow-sm"
           >
             {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
           </button>
@@ -295,7 +295,7 @@ export default function MessagesPage() {
               <button
                 key={conv.id}
                 onClick={() => setActiveConv(conv)}
-                className={`w-full flex items-center gap-3 px-4 py-3.5 hover:bg-gray-50 dark:hover:bg-slate-800/60 transition-colors text-left ${unread > 0 ? "bg-blue-50/50 dark:bg-blue-950/20" : "bg-white dark:bg-slate-900"}`}
+                className={`w-full flex items-center gap-3 px-4 py-3.5 hover:bg-gray-50 dark:hover:bg-slate-800/60 transition-colors text-left min-h-[64px] ${unread > 0 ? "bg-blue-50/50 dark:bg-blue-950/20" : "bg-white dark:bg-slate-900"}`}
               >
                 {conv.listingPhoto ? (
                   <img src={conv.listingPhoto} className="w-12 h-12 rounded-xl object-cover shrink-0 border border-gray-100 dark:border-slate-700" alt="" />
@@ -305,11 +305,11 @@ export default function MessagesPage() {
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2 mb-0.5">
-                    <p className={`text-sm truncate ${unread > 0 ? "font-bold text-gray-900 dark:text-slate-50" : "font-semibold text-gray-800 dark:text-slate-100"}`}>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <p className={`text-sm truncate flex-1 min-w-0 ${unread > 0 ? "font-bold text-gray-900 dark:text-slate-50" : "font-semibold text-gray-800 dark:text-slate-100"}`}>
                       {conv.listingTitle}
                     </p>
-                    <span className="text-[10px] text-gray-400 dark:text-slate-500 shrink-0">
+                    <span className="text-[10px] text-gray-400 dark:text-slate-500 shrink-0 ml-auto">
                       {relativeTime(conv.lastMessageAt)}
                     </span>
                   </div>

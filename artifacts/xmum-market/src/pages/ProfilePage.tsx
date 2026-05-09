@@ -226,14 +226,14 @@ export default function ProfilePage() {
         <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-card mb-4">
           <div className="flex items-start gap-4">
             <AvatarDisplay />
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">{displayName}</h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400">{user.email}</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400 truncate">{user.email}</p>
               <div className="flex items-center gap-3 mt-2">
                 <span className="text-xs text-slate-500 dark:text-slate-400">
                   Member since {userProfile ? new Date(userProfile.createdAt).toLocaleDateString("en-MY", { month: "short", year: "numeric" }) : "—"}
                 </span>
-                <span className="w-1 h-1 bg-slate-400 rounded-full" />
+                <span className="w-1 h-1 bg-slate-400 rounded-full shrink-0" />
                 {user.emailVerified ? (
                   <span className="text-xs text-green-600 dark:text-green-400 font-medium flex items-center gap-1">
                     <CheckCircle size={10} /> XMUM Verified
@@ -258,26 +258,26 @@ export default function ProfilePage() {
         {/* Tab bar — My Listings / Settings */}
         <div className="flex border-b border-gray-200 dark:border-slate-700 mb-4">
           <button
-            className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold border-b-2 border-[#003366] dark:border-blue-400 text-[#003366] dark:text-blue-400 -mb-px"
+            className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold border-b-2 border-[#003366] dark:border-blue-400 text-[#003366] dark:text-blue-400 -mb-px min-h-[44px]"
           >
             {t.myListings}
           </button>
           <button
             onClick={() => navigate("/settings")}
-            className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300 transition-colors -mb-px"
+            className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300 transition-colors -mb-px min-h-[44px]"
           >
             <Settings size={14} />
             {t.accountSettings}
           </button>
         </div>
 
-        {/* Listing sub-tabs: active / sold / archived / saved */}
-        <div className="flex gap-1 bg-slate-100 dark:bg-slate-700/50 rounded-xl p-1 mb-4">
+        {/* Listing sub-tabs: active / sold / archived / saved — horizontally scrollable */}
+        <div className="flex gap-1 bg-slate-100 dark:bg-slate-700/50 rounded-xl p-1 mb-4 overflow-x-auto scrollbar-hide">
           {subTabs.map(({ key, label }) => (
             <button
               key={key}
               onClick={() => setTab(key)}
-              className={`flex-1 rounded-lg py-2 text-xs font-medium min-h-[40px] transition-colors flex items-center justify-center gap-1 ${
+              className={`flex-shrink-0 flex-1 min-w-[72px] rounded-lg py-2 text-xs font-medium min-h-[40px] transition-colors flex items-center justify-center gap-1 whitespace-nowrap ${
                 tab === key
                   ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm"
                   : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
@@ -313,7 +313,7 @@ export default function ProfilePage() {
                 })}
               </ul>
             </div>
-            <button onClick={() => setExpiryReminders([])} className="text-amber-500 hover:text-amber-700 dark:hover:text-amber-300 shrink-0">
+            <button onClick={() => setExpiryReminders([])} className="text-amber-500 hover:text-amber-700 dark:hover:text-amber-300 shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center">
               <X size={16} />
             </button>
           </div>

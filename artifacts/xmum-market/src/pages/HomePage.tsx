@@ -192,14 +192,14 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Tab bar — 4 tabs */}
+      {/* Tab bar — horizontally scrollable on mobile */}
       <div className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 sticky top-14 sm:top-16 z-30">
         <div className="max-w-5xl mx-auto px-4 flex overflow-x-auto scrollbar-hide">
           {ALL_TABS.map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`flex-1 md:flex-none md:px-5 py-3 text-xs sm:text-sm font-semibold border-b-2 transition-colors whitespace-nowrap shrink-0 ${
+              className={`flex-shrink-0 md:flex-none md:px-5 py-3 px-4 text-xs sm:text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${
                 activeTab === tab
                   ? "border-[#003366] dark:border-blue-400 text-[#003366] dark:text-blue-400"
                   : "border-transparent text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300"
@@ -211,23 +211,25 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Category chips */}
+      {/* Category chips — horizontally scrollable, no wrapping */}
       <div className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700">
-        <div className="max-w-5xl mx-auto px-4 py-2 flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-          {["all", ...getCategoriesForTab(activeTab)].map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setCategoryFilter(cat)}
-              className={`shrink-0 min-w-fit whitespace-nowrap flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-                categoryFilter === cat
-                  ? "bg-[#003366] text-white border-[#003366] dark:bg-blue-600 dark:border-blue-600"
-                  : "bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 border-gray-200 dark:border-slate-600 hover:border-[#003366] dark:hover:border-blue-400"
-              }`}
-            >
-              <span>{CATEGORY_ICONS[cat] ?? "📦"}</span>
-              <span>{cat === "all" ? (lang === "en" ? "All" : "全部") : t.categories[cat as keyof typeof t.categories]}</span>
-            </button>
-          ))}
+        <div className="max-w-5xl mx-auto">
+          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide -mx-0 px-4 pt-2">
+            {["all", ...getCategoriesForTab(activeTab)].map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setCategoryFilter(cat)}
+                className={`flex-shrink-0 min-h-[36px] px-3.5 whitespace-nowrap flex items-center gap-1.5 rounded-full text-xs font-medium border transition-colors ${
+                  categoryFilter === cat
+                    ? "bg-[#003366] text-white border-[#003366] dark:bg-blue-600 dark:border-blue-600"
+                    : "bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 border-gray-200 dark:border-slate-600 hover:border-[#003366] dark:hover:border-blue-400"
+                }`}
+              >
+                <span>{CATEGORY_ICONS[cat] ?? "📦"}</span>
+                <span>{cat === "all" ? (lang === "en" ? "All" : "全部") : t.categories[cat as keyof typeof t.categories]}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

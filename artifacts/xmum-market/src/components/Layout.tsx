@@ -132,7 +132,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 className={`flex-1 flex flex-col items-center justify-center min-h-[56px] gap-0.5 transition-colors ${active ? "text-blue-600 dark:text-blue-400" : "text-slate-400 dark:text-slate-500"}`}
               >
                 <Icon size={20} strokeWidth={active ? 2.5 : 1.8} />
-                <span className="text-[10px] font-medium">{label}</span>
+                <span className="text-[9px] xs:text-[10px] font-medium leading-none">{label}</span>
               </Link>
             );
           })}

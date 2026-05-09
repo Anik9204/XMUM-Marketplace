@@ -1,0 +1,73 @@
+You are a senior UI/UX developer working on the XMUM Marketplace app at artifacts/xmum-market/. Read ALL of the following files completely before writing a single line of code:
+
+- src/components/ReportModal.tsx
+- src/pages/ListingDetailPage.tsx
+- src/pages/HomePage.tsx
+- src/pages/SearchPage.tsx
+- src/pages/PostPage.tsx
+- src/pages/ProfilePage.tsx
+- src/pages/MessagesPage.tsx
+- src/components/Layout.tsx
+- src/components/ListingCard.tsx
+- src/index.css
+
+TASK A — Fix the Report Button placement and design.
+TASK B — Audit and fix all shaky/misscaled UI across screen sizes.
+
+═══ TASK A: REPORT BUTTON REDESIGN ═════════════════════════════
+
+In src/pages/ListingDetailPage.tsx:
+  - REMOVE the report button from whatever bottom position it is currently in.
+  - ADD a small "⋯" (MoreHorizontal from lucide-react) overflow icon button in the TOP-RIGHT of the listing detail page header, next to the back arrow.
+  - Clicking "⋯" opens a small dropdown/popover menu with these options:
+    1. "Report this listing" (Flag icon, red text)
+    2. "Share listing" (Share2 icon) — copies the listing URL to clipboard using navigator.clipboard.writeText(), shows a toast "Link copied!"
+  - The dropdown must close on outside click (use a useEffect with mousedown listener or a backdrop div).
+  - The ReportModal triggers exactly as before when "Report this listing" is selected.
+  - On mobile, the dropdown must appear below the ⋯ button, right-aligned, with min-w-[200px], rounded-xl, shadow-xl, with proper z-index (z-50).
+
+In src/components/ReportModal.tsx:
+  - Redesign the modal to appear as a BOTTOM SHEET on mobile (slide up from bottom, max-h-[90vh], rounded-t-2xl) and a centered dialog on desktop (max-w-[440px], rounded-2xl).
+  - Add a drag handle bar at the top of the mobile bottom sheet (a 40px wide, 4px tall rounded pill in gray).
+  - The category radio buttons must be replaced with tappable pill-style buttons arranged in a 2-column grid for easy mobile selection.
+  - The submit button must be full-width, min-h-[52px], with loading spinner (Loader2 animated) while submitting.
+  - Add a success state: after successful submit, show a green checkmark animation + "Thank you for your report. Our team will review it shortly." and auto-close after 2.5 seconds.
+
+═══ TASK B: RESPONSIVENESS AUDIT & FIX ════════════════════════
+
+Audit and fix ALL of the following known responsiveness issues:
+
+1. src/pages/HomePage.tsx — Category filter chips:
+   The horizontal scrollable row of category chips must use:
+   className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide -mx-4 px-4"
+   Each chip must have: flex-shrink-0, min-h-[36px], px-3.5, rounded-full.
+   No chip must ever wrap to a second line.
+
+2. src/pages/HomePage.tsx — Tab switcher ("buy-sell" / "lost-found" / new tabs):
+   The tab row must be horizontally scrollable on mobile, not wrapping. Apply the same overflow-x-auto treatment. Each tab pill must be flex-shrink-0.
+
+3. src/pages/PostPage.tsx — Type selector pills:
+   Same fix — flex-shrink-0, overflow-x-auto on the container.
+
+4. src/pages/MessagesPage.tsx — Conversation list on narrow screens:
+   The conversation list items must cap displayName at 1 line with truncate, and lastMessage at 1 line with truncate. The timestamp must never push content off-screen — use ml-auto flex-shrink-0 on the timestamp column.
+
+5. src/components/Layout.tsx — Bottom nav on very small screens (< 360px):
+   Each nav item label must use text-[9px] instead of text-[10px] at xs breakpoint.
+   Each icon must scale down to size={18} at xs. Use inline style for the conditional sizing.
+
+6. src/pages/ProfilePage.tsx — Listing tab selector:
+   The tab buttons ("Active", "Sold", "Archived", and now "Saved") must also be horizontally scrollable, not wrapping. Apply overflow-x-auto flex-shrink-0.
+
+7. src/pages/ListingDetailPage.tsx — Photo gallery on mobile:
+   The thumbnail strip at the bottom of the gallery must be horizontally scrollable. Each thumbnail must be w-14 h-14 flex-shrink-0.
+
+8. Global — Touch targets:
+   Scan ALL buttons, links, and interactive elements across ALL pages and components. Any element that does not already have min-h-[44px] or min-w-[44px] must have it added. This is a hard Apple HIG / Android Material requirement.
+
+─── CONSTRAINTS ─────────────────────────────────────────────────
+- Do NOT change any color scheme or brand colors.
+- Do NOT restructure page layouts — only fix overflow/wrapping/scaling issues.
+- Do NOT add new npm packages.
+- Test mentally that the layout renders correctly at 375px (iPhone SE), 390px (iPhone 14), and 768px (iPad) widths.
+- After all edits, list every file changed with a one-line description of what was fixed.
