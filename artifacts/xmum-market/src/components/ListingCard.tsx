@@ -100,11 +100,16 @@ export default function ListingCard({
         setIsSaved(true);
         setSaveToast("Saved to your collection");
       }
-    } catch {
-      // silently ignore
+    } catch (err: any) {
+      const code: string = err?.code ?? "";
+      if (code === "permission-denied") {
+        setSaveToast("Sign in with your XMUM email to save listings");
+      } else {
+        setSaveToast("Failed to save — check your connection");
+      }
     } finally {
       setSavingInProgress(false);
-      setTimeout(() => setSaveToast(null), 2200);
+      setTimeout(() => setSaveToast(null), 2800);
     }
   };
 

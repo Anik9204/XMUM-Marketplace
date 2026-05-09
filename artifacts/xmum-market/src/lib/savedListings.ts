@@ -1,39 +1,48 @@
 import {
-  collection,
   doc,
-  setDoc,
-  deleteDoc,
-  getDocs,
   getDoc,
-  query,
-  orderBy,
+  setDoc,
+  arrayUnion,
+  arrayRemove,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { Listing, SavedListing } from "./types";
 
+async function getUserSavedIds(uid: string): Promise<string[]> {
+  const snap = await getDoc(doc(db, "users", uid));
+  if (!snap.exists()) return [];
+  const data = snap.data();
+  return Array.isArray(data?.savedListingIds) ? (data.savedListingIds as string[]) : [];
+}
+
 export async function saveListing(uid: string, listing: Listing): Promise<void> {
-  await setDoc(doc(db, "users", uid, "savedListings", listing.id), {
-    listingId: listing.id,
-    savedAt: Date.now(),
-    listingTitle: listing.title,
-    listingPhoto: listing.photos[0] ?? "",
-    listingPrice: listing.price ?? null,
-    listingUserId: listing.userId,
-  });
+  await setDoc(
+    doc(db, "users", uid),
+    { savedListingIds: arrayUnion(listing.id) },
+    { merge: true }
+  );
 }
 
 export async function unsaveListing(uid: string, listingId: string): Promise<void> {
-  await deleteDoc(doc(db, "users", uid, "savedListings", listingId));
+  await setDoc(
+    doc(db, "users", uid),
+    { savedListingIds: arrayRemove(listingId) },
+    { merge: true }
+  );
 }
 
 export async function getSavedListings(uid: string): Promise<SavedListing[]> {
-  const snap = await getDocs(
-    query(collection(db, "users", uid, "savedListings"), orderBy("savedAt", "desc"))
-  );
-  return snap.docs.map((d) => d.data() as SavedListing);
+  const ids = await getUserSavedIds(uid);
+  return ids.map((id) => ({
+    listingId: id,
+    savedAt: 0,
+    listingTitle: "",
+    listingPhoto: "",
+    listingUserId: "",
+  }));
 }
 
 export async function isListingSaved(uid: string, listingId: string): Promise<boolean> {
-  const snap = await getDoc(doc(db, "users", uid, "savedListings", listingId));
-  return snap.exists();
+  const ids = await getUserSavedIds(uid);
+  return ids.includes(listingId);
 }

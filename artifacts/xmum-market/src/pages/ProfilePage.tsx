@@ -45,7 +45,6 @@ export default function ProfilePage() {
 
   const [savedListings, setSavedListings] = useState<Listing[]>([]);
   const [savedLoading, setSavedLoading] = useState(false);
-  const savedFetched = useRef(false);
 
   const listingsCache = useRef<Listing[]>([]);
 
@@ -93,10 +92,9 @@ export default function ProfilePage() {
       .finally(() => setLoading(false));
   }, [user]);
 
-  // Fetch saved listings when "saved" tab is first activated
+  // Fetch saved listings every time the "saved" tab is activated
   useEffect(() => {
-    if (tab !== "saved" || !user || savedFetched.current) return;
-    savedFetched.current = true;
+    if (tab !== "saved" || !user) return;
     setSavedLoading(true);
     getSavedListings(user.uid)
       .then(async (saved) => {
@@ -105,7 +103,7 @@ export default function ProfilePage() {
       })
       .catch(() => {})
       .finally(() => setSavedLoading(false));
-  }, [tab, user]);
+  }, [tab, user?.uid]);
 
   if (!user) {
     return (

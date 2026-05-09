@@ -141,8 +141,13 @@ export default function ListingDetailPage() {
         setIsSaved(true);
         toast({ title: "Saved to your collection", description: listing.title });
       }
-    } catch {
-      // silently ignore
+    } catch (err: any) {
+      const code: string = err?.code ?? "";
+      if (code === "permission-denied") {
+        toast({ title: "Permission denied", description: "Sign in with your XMUM email to save listings.", variant: "destructive" });
+      } else {
+        toast({ title: "Save failed", description: "Check your connection and try again.", variant: "destructive" });
+      }
     } finally {
       setSavingListing(false);
     }
