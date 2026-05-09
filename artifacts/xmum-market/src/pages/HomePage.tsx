@@ -141,11 +141,12 @@ export default function HomePage() {
   const SkeletonGrid = () => (
     <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {[...Array(6)].map((_, i) => (
-        <div key={i} className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden animate-pulse">
-          <div className="aspect-[4/3] bg-gray-100 dark:bg-slate-700" />
-          <div className="p-3 space-y-2">
-            <div className="h-3 bg-gray-100 dark:bg-slate-700 rounded w-3/4" />
-            <div className="h-2 bg-gray-100 dark:bg-slate-700 rounded w-1/2" />
+        <div key={i} className="bg-white dark:bg-[#1E293B] rounded-xl border border-[#E2E8F0] dark:border-slate-700 overflow-hidden animate-pulse">
+          <div className="aspect-[4/3] bg-[#F8FAFC] dark:bg-slate-700" />
+          <div className="p-3 space-y-2.5">
+            <div className="h-2.5 bg-[#E2E8F0] dark:bg-slate-700 rounded-full w-1/3" />
+            <div className="h-3.5 bg-[#E2E8F0] dark:bg-slate-700 rounded w-4/5" />
+            <div className="h-2.5 bg-[#E2E8F0] dark:bg-slate-700 rounded w-3/5" />
           </div>
         </div>
       ))}
@@ -155,7 +156,7 @@ export default function HomePage() {
   return (
     <div className="animate-in fade-in duration-200">
       {/* Hero */}
-      <div className="bg-gradient-to-br from-[#003366] via-[#004488] to-[#0055aa] text-white px-4 pt-8 pb-10">
+      <div className="bg-gradient-to-br from-[#003366] via-[#004488] to-[#0055CC] text-white px-4 pt-8 pb-10">
         <div className="max-w-5xl mx-auto">
           <div className="mb-1 inline-flex items-center gap-1.5 bg-white/10 text-white/80 text-xs px-3 py-1 rounded-full">
             <MapPin size={10} />
@@ -193,16 +194,16 @@ export default function HomePage() {
       </div>
 
       {/* Tab bar — horizontally scrollable on mobile */}
-      <div className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 sticky top-14 sm:top-16 z-30">
+      <div className="bg-white dark:bg-[#1E293B] border-b border-[#E2E8F0] dark:border-slate-700 sticky top-14 sm:top-16 z-30">
         <div className="max-w-5xl mx-auto px-4 flex overflow-x-auto scrollbar-hide">
           {ALL_TABS.map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`flex-shrink-0 md:flex-none md:px-5 py-3 px-4 text-xs sm:text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${
+              className={`flex-shrink-0 md:flex-none md:px-5 py-3 px-4 text-xs sm:text-sm font-semibold border-b-2 transition-all duration-200 whitespace-nowrap ${
                 activeTab === tab
                   ? "border-[#003366] dark:border-blue-400 text-[#003366] dark:text-blue-400"
-                  : "border-transparent text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300"
+                  : "border-transparent text-[#64748B] dark:text-slate-500 hover:text-[#0F172A] dark:hover:text-slate-300"
               }`}
             >
               {tabLabel(tab)}
@@ -212,17 +213,17 @@ export default function HomePage() {
       </div>
 
       {/* Category chips — horizontally scrollable, no wrapping */}
-      <div className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700">
+      <div className="bg-white dark:bg-[#1E293B] border-b border-[#E2E8F0] dark:border-slate-700">
         <div className="max-w-5xl mx-auto">
-          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide -mx-0 px-4 pt-2">
+          <div className="flex gap-2 overflow-x-auto pb-2.5 scrollbar-hide px-4 pt-2.5">
             {["all", ...getCategoriesForTab(activeTab)].map((cat) => (
               <button
                 key={cat}
                 onClick={() => setCategoryFilter(cat)}
-                className={`flex-shrink-0 min-h-[36px] px-3.5 whitespace-nowrap flex items-center gap-1.5 rounded-full text-xs font-medium border transition-colors ${
+                className={`flex-shrink-0 min-h-[36px] px-3.5 whitespace-nowrap flex items-center gap-1.5 rounded-full text-xs font-medium border transition-all duration-150 ${
                   categoryFilter === cat
-                    ? "bg-[#003366] text-white border-[#003366] dark:bg-blue-600 dark:border-blue-600"
-                    : "bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 border-gray-200 dark:border-slate-600 hover:border-[#003366] dark:hover:border-blue-400"
+                    ? "bg-[#003366] text-white border-[#003366] shadow-sm dark:bg-blue-600 dark:border-blue-600"
+                    : "bg-white dark:bg-slate-800 text-[#64748B] dark:text-slate-300 border-[#E2E8F0] dark:border-slate-600 hover:border-[#003366] hover:text-[#003366] dark:hover:border-blue-400"
                 }`}
               >
                 <span>{CATEGORY_ICONS[cat] ?? "📦"}</span>
@@ -304,7 +305,7 @@ export default function HomePage() {
                   <button
                     onClick={handleLoadMore}
                     disabled={loadingMore}
-                    className="flex items-center gap-2 px-6 py-2.5 bg-white dark:bg-slate-800 text-[#003366] dark:text-blue-400 border border-[#003366]/30 dark:border-blue-500/30 rounded-xl text-sm font-semibold hover:bg-[#003366]/5 dark:hover:bg-blue-900/20 disabled:opacity-50 transition-colors shadow-sm"
+                    className="flex items-center gap-2 px-6 py-2.5 min-h-[44px] bg-white dark:bg-[#1E293B] text-[#003366] dark:text-blue-400 border border-[#E2E8F0] dark:border-slate-700 rounded-full text-sm font-semibold hover:border-[#003366] dark:hover:border-blue-500 disabled:opacity-50 transition-all duration-200 shadow-card"
                   >
                     {loadingMore ? (
                       <><Loader2 size={15} className="animate-spin" /> {t.loading}</>

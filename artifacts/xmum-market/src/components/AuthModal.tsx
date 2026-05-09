@@ -26,7 +26,7 @@ interface Props {
 const RESEND_COOLDOWN = 60;
 
 const inputCls =
-  "w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2.5 text-sm min-h-[44px] dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 transition";
+  "w-full bg-white text-gray-900 placeholder-gray-400 border border-[#E2E8F0] rounded-xl px-3 py-3 text-sm min-h-[48px] dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:border-[#0055CC] focus:ring-2 focus:ring-[#0055CC]/10 dark:focus:border-blue-400 dark:focus:ring-blue-400/10 transition";
 
 export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
   const { t } = useLang();
@@ -149,9 +149,9 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
   if (verificationPending) {
     return (
       <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
-        <div className="bg-white dark:bg-slate-800 rounded-t-2xl sm:rounded-2xl shadow-modal w-full sm:max-w-md sm:mx-4 relative max-h-[90dvh] overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)] sm:pb-0">
-          <div className="h-1.5 bg-gradient-to-r from-[#003366] to-[#0055aa]" />
-          <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-slate-200">
+        <div className="bg-white dark:bg-[#1E293B] rounded-t-[20px] sm:rounded-[20px] shadow-modal w-full sm:max-w-md sm:mx-4 relative max-h-[90dvh] overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)] sm:pb-0">
+          <div className="h-1.5 bg-gradient-to-r from-[#003366] to-[#0055CC]" />
+          <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-slate-200 w-11 h-11 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors">
             <X size={20} />
           </button>
           <div className="p-6 text-center">
@@ -194,9 +194,9 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
   // ── Normal Auth View ─────────────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-white dark:bg-slate-800 rounded-t-2xl sm:rounded-2xl shadow-modal w-full sm:max-w-md sm:mx-4 relative max-h-[90dvh] overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)] sm:pb-0">
-        <div className="h-1.5 bg-gradient-to-r from-[#003366] to-[#0055aa]" />
-        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-slate-200 z-10">
+      <div className="bg-white dark:bg-[#1E293B] rounded-t-[20px] sm:rounded-[20px] shadow-modal w-full sm:max-w-md sm:mx-4 relative max-h-[90dvh] overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)] sm:pb-0">
+        <div className="h-1.5 bg-gradient-to-r from-[#003366] to-[#0055CC]" />
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-slate-200 z-10 w-11 h-11 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors">
           <X size={20} />
         </button>
 
@@ -347,7 +347,7 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
             <button
               type="submit"
               disabled={loading || (mode === "forgot" && forgotCooldown > 0)}
-              className="w-full min-h-[44px] bg-[#003366] dark:bg-blue-600 text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-[#002244] dark:hover:bg-blue-700 disabled:opacity-75 disabled:cursor-not-allowed transition-colors mt-1"
+              className="w-full min-h-[48px] bg-[#003366] dark:bg-blue-600 text-white rounded-xl py-3 text-sm font-semibold hover:bg-[#002244] dark:hover:bg-blue-700 disabled:opacity-75 disabled:cursor-not-allowed transition-colors mt-1"
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">

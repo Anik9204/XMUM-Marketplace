@@ -121,7 +121,7 @@ export default function ListingCard({
         </div>
       )}
 
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-card border border-gray-100 dark:border-slate-700 overflow-hidden hover:shadow-hover hover:-translate-y-0.5 transition-all duration-200">
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-gray-100 dark:border-slate-700 overflow-hidden hover:shadow-hover hover:-translate-y-0.5 transition-all duration-200">
         <Link href={`/listing/${listing.id}`}>
           <div className="relative">
             {listing.photos.length > 0 ? (
@@ -150,8 +150,8 @@ export default function ListingCard({
             )}
 
             {isSold && (
-              <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                <span className="text-white text-lg font-bold tracking-widest">
+              <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                <span className="text-white text-xl font-black tracking-[0.2em] uppercase drop-shadow-lg px-4 py-2 border-2 border-white/60 rounded-lg">
                   {listing.type === "lost-found" ? t.resolvedBadge : t.soldBadge}
                 </span>
               </div>
@@ -222,13 +222,13 @@ export default function ListingCard({
           </div>
 
           <div className="p-3">
-            <span className="inline-block text-[11px] font-semibold uppercase tracking-wide text-[#003366]/70 dark:text-blue-400/70 mb-0.5">
+            <span className="inline-block text-[10px] font-semibold uppercase tracking-wider text-[#64748B] dark:text-slate-500 mb-0.5">
               {isRental && listing.vehicleType
                 ? `${VEHICLE_ICONS[listing.vehicleType] ?? ""} ${(t as any)[`rental${listing.vehicleType.charAt(0).toUpperCase() + listing.vehicleType.slice(1)}`] ?? listing.vehicleType}`
                 : catLabel}
             </span>
-            <h3 className={`font-semibold text-sm line-clamp-1 ${isSold ? "text-gray-400 dark:text-slate-500" : "text-gray-900 dark:text-slate-100"}`}>{listing.title}</h3>
-            <p className="text-xs text-gray-500 dark:text-slate-400 line-clamp-2 mt-0.5">{listing.description}</p>
+            <h3 className={`font-semibold text-sm leading-snug line-clamp-1 ${isSold ? "text-[#64748B] dark:text-slate-500" : "text-[#0F172A] dark:text-slate-100"}`}>{listing.title}</h3>
+            <p className="text-xs text-[#64748B] dark:text-slate-400 line-clamp-2 mt-0.5 leading-relaxed">{listing.description}</p>
 
             {listing.type === "buy-sell" && (
               <p className={`mt-2 text-lg font-bold ${isSold ? "text-gray-400 dark:text-slate-500 line-through" : "text-blue-600 dark:text-blue-400"}`}>

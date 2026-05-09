@@ -1,0 +1,39 @@
+You are a senior UI/UX frontend engineer taking over the XMUM Marketplace project at artifacts/xmum-market/. You have just received a design.md file from Google Stitch that defines the complete new visual design system. Your job is to apply the design tokens, typography, spacing, and component styles from design.md to the existing codebase WITHOUT breaking any existing functionality.
+
+Read ALL of these files before writing a single line of code:
+- design.md (the Stitch output — read it fully)
+- src/index.css
+- src/components/Layout.tsx
+- src/components/ListingCard.tsx
+- src/components/AuthModal.tsx
+- src/pages/HomePage.tsx
+- tailwind.config.js (or vite.config.ts if Tailwind is configured there)
+
+─── STEP 1 — Design Tokens in CSS ───────────────────────────────
+In src/index.css, define all CSS custom properties under :root and :root.dark as extracted from design.md. This must include:
+  --color-primary, --color-accent, --color-success, --color-warning, --color-danger,
+  --color-bg, --color-surface, --color-border, --color-text-primary, --color-text-secondary,
+  --radius-sm, --radius-md, --radius-lg, --radius-xl,
+  --shadow-card, --shadow-hover, --shadow-modal, --shadow-sheet,
+  --transition-standard, --transition-spring
+
+─── STEP 2 — Tailwind Config ─────────────────────────────────────
+Extend tailwind.config.js to expose all design tokens as Tailwind utility classes referencing the CSS variables, e.g. bg-brand, text-brand, rounded-card, shadow-card, etc.
+
+─── STEP 3 — Apply to Layout.tsx ────────────────────────────────
+Update the header, bottom nav, desktop nav, and footer in Layout.tsx to match the new design spec from design.md exactly — colors, heights, spacing, font sizes, icon sizes, active states.
+
+─── STEP 4 — Apply to ListingCard.tsx ───────────────────────────
+Update ListingCard to match the new card design: rounded-card corners, shadow-card shadow, new badge pill styles, new typography sizes, updated image aspect ratio handling, updated sold overlay.
+
+─── STEP 5 — Apply to AuthModal.tsx ─────────────────────────────
+Update AuthModal to match the new modal design: spring animation, updated input styles, password strength meter bar, inline validation error styles.
+
+─── STEP 6 — Apply to HomePage.tsx ──────────────────────────────
+Update the tab selector, category chips, skeleton loader, and empty state to match the new design.
+
+─── CONSTRAINTS ─────────────────────────────────────────────────
+- Do NOT change any logic, routing, or Firestore calls.
+- Do NOT add new npm packages.
+- The app must compile and run after every step.
+- After completing, list every file changed with a one-sentence description.
