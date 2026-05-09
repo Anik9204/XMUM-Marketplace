@@ -6,7 +6,7 @@ import { getProfile } from "@/lib/userProfile";
 import { UserProfile } from "@/lib/types";
 import {
   getUserConversations, subscribeToMessages, sendMessage,
-  markConversationRead, Conversation, Message,
+  markConversationRead, markMessagesAsSeen, Conversation, Message,
 } from "@/lib/messaging";
 import { MessageCircle, ArrowLeft, Send, Loader2 } from "lucide-react";
 import AuthModal from "@/components/AuthModal";
@@ -99,12 +99,25 @@ export default function MessagesPage() {
 
   useEffect(() => {
     if (!activeConv || !user) return;
-    markConversationRead(activeConv.id, user.uid);
-    const unsub = subscribeToMessages(activeConv.id, (msgs) => {
+    const convId = activeConv.id;
+    const uid = user.uid;
+    markConversationRead(convId, uid);
+    const unsub = subscribeToMessages(convId, (msgs) => {
       setMessages(msgs);
       setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+      // Mark incoming messages as seen
+      const unseenIds = msgs
+        .filter((m) => m.senderId !== uid && !(m.seenBy ?? []).includes(uid))
+        .map((m) => m.id);
+      if (unseenIds.length > 0) {
+        markMessagesAsSeen(convId, uid, unseenIds);
+        markConversationRead(convId, uid);
+      }
     });
-    return unsub;
+    return () => {
+      unsub();
+      markConversationRead(convId, uid);
+    };
   }, [activeConv?.id, user]);
 
   useEffect(() => {
@@ -205,8 +218,11 @@ export default function MessagesPage() {
               <div className="space-y-1.5">
                 {group.msgs.map((msg) => {
                   const isMine = msg.senderId === user.uid;
+                  const otherUid = activeConv.participants.find((p) => p !== user.uid) ?? "";
+                  const seenBy = msg.seenBy ?? [];
+                  const isSeen = isMine && seenBy.includes(otherUid);
                   return (
-                    <div key={msg.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
+                    <div key={msg.id} className={`flex flex-col ${isMine ? "items-end" : "items-start"}`}>
                       <div className={`relative max-w-[78%] px-3.5 py-2.5 text-sm shadow-card ${
                         isMine
                           ? "bg-[#003366] dark:bg-blue-600 text-white rounded-2xl rounded-br-sm"
@@ -219,6 +235,11 @@ export default function MessagesPage() {
                           {formatTime(msg.createdAt)}
                         </p>
                       </div>
+                      {isMine && (
+                        <span className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 px-1 select-none">
+                          {isSeen ? "✓✓ Seen" : "✓ Sent"}
+                        </span>
+                      )}
                     </div>
                   );
                 })}

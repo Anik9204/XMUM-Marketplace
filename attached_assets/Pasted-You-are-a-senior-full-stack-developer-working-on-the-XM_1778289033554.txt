@@ -1,0 +1,97 @@
+You are a senior full-stack developer working on the XMUM Marketplace app at artifacts/xmum-market/. Read ALL of the following files completely before writing a single line of code:
+
+- src/lib/messaging.ts
+- src/pages/MessagesPage.tsx
+- src/components/Layout.tsx
+- src/lib/notifications.ts
+- src/lib/types.ts
+- src/components/NotificationBell.tsx
+- src/contexts/AuthContext.tsx
+- src/lib/firebase.ts
+
+TASK: Implement three messaging/notification features:
+  A) Real-time unread message badge on the Messages tab in the bottom nav.
+  B) "Seen" read receipt indicator in conversations.
+  C) Daily digest notifications about post views and new messages.
+
+═══ FEATURE A: REAL-TIME UNREAD BADGE ON NAV ═══════════════════
+
+In src/lib/messaging.ts, add a new exported function:
+  export function subscribeToUnreadCount(
+    uid: string,
+    callback: (totalUnread: number) => void
+  ): Unsubscribe
+
+  This function uses onSnapshot on the conversations collection (same query as getUserConversations) and for each snapshot, sums up unreadCount[uid] across all conversations. It calls callback(total) every time the sum changes.
+
+In src/components/Layout.tsx:
+  - Import subscribeToUnreadCount from messaging.ts.
+  - In the Layout component, add state: const [unreadMessages, setUnreadMessages] = useState(0)
+  - In a useEffect that depends on [user], call subscribeToUnreadCount(user.uid, setUnreadMessages). Return the unsubscribe function for cleanup.
+  - In the mobile bottom nav, find the MessageCircle nav item. Add a red badge dot/number on top of the MessageCircle icon:
+    * If unreadMessages > 0, show a small red circle with the count (cap display at "9+" if > 9) positioned absolute top-0 right-0 within the icon's container.
+    * Use: className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-0.5"
+  - In the desktop nav, do the same for the "Messages" link — add the same badge.
+
+In src/pages/MessagesPage.tsx:
+  - When a conversation is opened (setActiveConv), immediately call markConversationRead(conv.id, user.uid).
+  - Also call markConversationRead again when the component unmounts or the active conversation changes, so unread counts are always accurate.
+  - The conversation list items must show the unread count badge per conversation: if conv.unreadCount[user.uid] > 0, show a small filled blue circle with the number on the right side of each conversation row.
+
+═══ FEATURE B: SEEN INDICATOR IN CONVERSATIONS ═════════════════
+
+In src/lib/messaging.ts:
+  - Update the Message interface to include: seenBy?: string[]
+  - Update the sendMessage function — no change needed to the message document itself.
+  - Add a new function:
+    export async function markMessagesAsSeen(convId: string, uid: string, messageIds: string[]): Promise<void>
+    — For each messageId, updateDoc the message with: { seenBy: arrayUnion(uid) }
+    — Use Promise.allSettled so partial failures are tolerated.
+
+In src/pages/MessagesPage.tsx:
+  - After messages load (inside the subscribeToMessages callback), find all messages where:
+    * senderId !== user.uid (i.e. messages sent by the other person)
+    * seenBy array does NOT include user.uid
+    Call markMessagesAsSeen(activeConv.id, user.uid, [these message IDs]) to mark them seen.
+  - In the message bubble render, for messages sent by the current user (senderId === user.uid), show a "Seen" indicator below the bubble IF the seenBy array includes the other participant's UID:
+    * Show: a small grey "✓✓ Seen" text (text-[10px] text-slate-400) below the message bubble on the right side.
+    * If NOT yet seen, show: "✓ Sent" in a lighter grey.
+
+═══ FEATURE C: DAILY DIGEST NOTIFICATIONS ══════════════════════
+
+In src/lib/types.ts, extend the AppNotification type union:
+  type: "listing_deleted" | "listing_sold" | "welcome" | "daily_digest" | "new_message_digest"
+
+In src/lib/notifications.ts, add a new function:
+  export async function sendDailyDigestIfDue(uid: string, listings: Listing[]): Promise<void>
+
+  Logic:
+    1. Check Firestore users/{uid} document for a field: lastDigestSentAt (number timestamp).
+    2. If it does not exist or Date.now() - lastDigestSentAt >= 24 * 60 * 60 * 1000:
+       a. Count total active listings.
+       b. Sum total views across all listings: listings.reduce((sum, l) => sum + (l.viewCount ?? 0), 0). (viewCount will be added in the next step.)
+       c. Get unread message count from getUserConversations (sum unreadCount[uid]).
+       d. Construct a notification:
+          - title: "Your daily marketplace summary"
+          - body: "Your {N} listings received {V} views in the last 24h. You have {M} unread messages."
+          - type: "daily_digest"
+       e. Call addNotification(uid, ...) to write it to the user's notification subcollection.
+       f. Update users/{uid} with { lastDigestSentAt: Date.now() } via updateDoc.
+
+In src/pages/ProfilePage.tsx:
+  - After listings are loaded (inside the .then() of getUserListings), call:
+    sendDailyDigestIfDue(user.uid, data)
+  This is the natural trigger point since ProfilePage is where users review their listings.
+
+BONUS — View Counter:
+  In src/lib/types.ts, add to Listing interface: viewCount?: number
+  In src/pages/ListingDetailPage.tsx, when a listing loads (inside the getListing .then()), if the viewer is NOT the owner, call:
+    updateDoc(doc(db, "listings", listing.id), { viewCount: increment(1) })
+  Import increment from firebase/firestore. This is a non-blocking fire-and-forget call — do NOT await it or show any UI for it.
+
+─── CONSTRAINTS ─────────────────────────────────────────────────
+- The subscribeToUnreadCount listener MUST be unsubscribed on component unmount.
+- The seen indicator must handle the case where seenBy field is undefined (treat as empty array).
+- The daily digest must not send more than once per 24 hours per user — enforce this via the lastDigestSentAt Firestore field check.
+- Do NOT add any new npm packages.
+- After all edits, show every file changed and a summary.

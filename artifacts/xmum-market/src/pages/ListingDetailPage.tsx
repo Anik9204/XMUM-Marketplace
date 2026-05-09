@@ -3,6 +3,8 @@ import { useRoute, useLocation, Link } from "wouter";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { getListing, markAsSold } from "@/lib/listings";
+import { doc, updateDoc, increment } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { getProfile } from "@/lib/userProfile";
 import { Listing, UserProfile } from "@/lib/types";
 import AuthModal from "@/components/AuthModal";
@@ -87,6 +89,10 @@ export default function ListingDetailPage() {
             .then(setSellerProfile)
             .catch(() => setSellerProfile(null))
             .finally(() => setProfileLoading(false));
+          // Non-blocking view counter — fire-and-forget, skip for owner
+          if (user?.uid !== l.userId) {
+            updateDoc(doc(db, "listings", l.id), { viewCount: increment(1) }).catch(() => {});
+          }
         } else {
           setProfileLoading(false);
         }

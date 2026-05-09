@@ -1,6 +1,6 @@
 import {
   collection, doc, getDoc, setDoc, addDoc, getDocs,
-  query, orderBy, limit, onSnapshot, updateDoc,
+  query, orderBy, limit, onSnapshot, updateDoc, arrayUnion,
   serverTimestamp, where, Unsubscribe,
 } from "firebase/firestore";
 import { db } from "./firebase";
@@ -21,6 +21,7 @@ export interface Message {
   senderId: string;
   text: string;
   createdAt: number;
+  seenBy?: string[];
 }
 
 function toMillis(val: unknown): number {
@@ -41,10 +42,6 @@ export async function getOrCreateConversation(
   const convId = getConversationId(myUid, otherUid, listing.id);
   const convRef = doc(db, "conversations", convId);
 
-  // The Firestore read rule checks resource.data.participants, but resource is
-  // null when the document doesn't exist yet — causing a permission-denied on
-  // the read even for legitimate users. We catch that and treat it as
-  // "not exists", then fall through to create the document.
   let exists = false;
   try {
     const snap = await getDoc(convRef);
@@ -81,6 +78,7 @@ export async function sendMessage(
     senderId,
     text: trimmed,
     createdAt: serverTimestamp(),
+    seenBy: [],
   });
 
   const convSnap = await getDoc(convRef);
@@ -103,7 +101,12 @@ export function subscribeToMessages(
   return onSnapshot(q, (snap) => {
     const msgs: Message[] = snap.docs.map((d) => {
       const data = d.data();
-      return { id: d.id, ...data, createdAt: toMillis(data.createdAt) } as Message;
+      return {
+        id: d.id,
+        ...data,
+        createdAt: toMillis(data.createdAt),
+        seenBy: data.seenBy ?? [],
+      } as Message;
     });
     callback(msgs);
   });
@@ -111,7 +114,6 @@ export function subscribeToMessages(
 
 export async function getUserConversations(uid: string): Promise<Conversation[]> {
   try {
-    // No orderBy — avoids needing a composite index. Sort client-side instead.
     const q = query(
       collection(db, "conversations"),
       where("participants", "array-contains", uid),
@@ -138,4 +140,42 @@ export async function markConversationRead(convId: string, uid: string): Promise
   } catch {
     // Silent
   }
+}
+
+export async function markMessagesAsSeen(
+  convId: string,
+  uid: string,
+  messageIds: string[]
+): Promise<void> {
+  if (messageIds.length === 0) return;
+  await Promise.allSettled(
+    messageIds.map((msgId) =>
+      updateDoc(doc(db, "conversations", convId, "messages", msgId), {
+        seenBy: arrayUnion(uid),
+      })
+    )
+  );
+}
+
+// Real-time listener — sums unreadCount[uid] across all the user's conversations.
+export function subscribeToUnreadCount(
+  uid: string,
+  callback: (totalUnread: number) => void
+): Unsubscribe {
+  const q = query(
+    collection(db, "conversations"),
+    where("participants", "array-contains", uid),
+    limit(50)
+  );
+  return onSnapshot(
+    q,
+    (snap) => {
+      const total = snap.docs.reduce((sum, d) => {
+        const count = d.data()?.unreadCount?.[uid] ?? 0;
+        return sum + (typeof count === "number" ? count : 0);
+      }, 0);
+      callback(total);
+    },
+    () => callback(0) // on error, treat as zero
+  );
 }

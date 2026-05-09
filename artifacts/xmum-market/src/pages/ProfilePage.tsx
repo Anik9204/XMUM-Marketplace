@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { getUserListings, deleteListing, markAsSold, bumpListing, getListing, LISTING_EXPIRY_MS, LISTING_REMINDER_MS } from "@/lib/listings";
+import { sendDailyDigestIfDue } from "@/lib/notifications";
 import { Listing } from "@/lib/types";
 import { getSavedListings } from "@/lib/savedListings";
 import ListingCard from "@/components/ListingCard";
@@ -81,6 +82,9 @@ export default function ProfilePage() {
 
         listingsCache.current = active;
         setListings(active);
+
+        // Fire-and-forget — sends at most once per 24h via Firestore check
+        sendDailyDigestIfDue(user.uid, active);
 
         const expiringSoon = active.filter(
           l => l.status === "active" &&

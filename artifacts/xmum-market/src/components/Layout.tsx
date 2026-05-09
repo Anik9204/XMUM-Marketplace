@@ -5,8 +5,9 @@ import { logOut } from "@/lib/auth";
 import AuthModal from "@/components/AuthModal";
 import VerificationBanner from "@/components/VerificationBanner";
 import { Home, Search, PlusSquare, User, Globe, MessageCircle, Plus } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import NotificationBell from "@/components/NotificationBell";
+import { subscribeToUnreadCount } from "@/lib/messaging";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { t, toggleLang, lang } = useLang();
@@ -14,8 +15,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
+  const [unreadMessages, setUnreadMessages] = useState(0);
 
   const isHomePage = location === "/";
+
+  useEffect(() => {
+    if (!user) { setUnreadMessages(0); return; }
+    const unsub = subscribeToUnreadCount(user.uid, setUnreadMessages);
+    return unsub;
+  }, [user?.uid]);
 
   const navItems = [
     { href: "/", icon: Home, label: t.home },
@@ -55,7 +63,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <nav className="hidden md:flex items-center gap-1">
               <Link href="/" className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${location === "/" ? "text-white bg-white/20" : "text-white/70 hover:text-white hover:bg-white/10"}`}>{t.home}</Link>
               <Link href="/search" className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${location === "/search" ? "text-white bg-white/20" : "text-white/70 hover:text-white hover:bg-white/10"}`}>{t.search}</Link>
-              <Link href="/messages" className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${location === "/messages" ? "text-white bg-white/20" : "text-white/70 hover:text-white hover:bg-white/10"}`}>{t.messages}</Link>
+              <Link href="/messages" className={`relative px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${location === "/messages" ? "text-white bg-white/20" : "text-white/70 hover:text-white hover:bg-white/10"}`}>
+                {t.messages}
+                {unreadMessages > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-0.5">
+                    {unreadMessages > 9 ? "9+" : unreadMessages}
+                  </span>
+                )}
+              </Link>
               <Link href="/post" className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${location === "/post" ? "text-white bg-white/20" : "text-white/70 hover:text-white hover:bg-white/10"}`}>{t.post}</Link>
               {user ? (
                 <div className="relative">
@@ -131,7 +146,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 href={href}
                 className={`flex-1 flex flex-col items-center justify-center min-h-[56px] gap-0.5 transition-colors ${active ? "text-blue-600 dark:text-blue-400" : "text-slate-400 dark:text-slate-500"}`}
               >
-                <Icon size={20} strokeWidth={active ? 2.5 : 1.8} />
+                <div className="relative">
+                  <Icon size={20} strokeWidth={active ? 2.5 : 1.8} />
+                  {href === "/messages" && unreadMessages > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-0.5 leading-none">
+                      {unreadMessages > 9 ? "9+" : unreadMessages}
+                    </span>
+                  )}
+                </div>
                 <span className="text-[9px] xs:text-[10px] font-medium leading-none">{label}</span>
               </Link>
             );

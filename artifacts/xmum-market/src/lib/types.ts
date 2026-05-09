@@ -43,6 +43,7 @@ export interface Listing {
   rentalTerms?: string;
   tcAcceptedAt?: number;
   tcAcceptedVersion?: string;
+  viewCount?: number;
 }
 
 export interface RentalListing extends Listing {
@@ -77,7 +78,7 @@ export interface RentalTcAuditLog {
 
 export interface AppNotification {
   id: string;
-  type: "listing_deleted" | "listing_sold" | "welcome";
+  type: "listing_deleted" | "listing_sold" | "welcome" | "daily_digest" | "new_message_digest";
   title: string;
   body: string;
   createdAt: number;
