@@ -182,6 +182,15 @@ export default function ListingCard({ listing, onDelete, showDelete, showMarkSol
         </div>
       </Link>
 
+      {/* Seller attribution — tappable link to seller's public profile */}
+      <Link
+        href={`/seller/${listing.userId}`}
+        onClick={(e: React.MouseEvent) => e.stopPropagation()}
+        className="block px-3 py-1.5 text-[11px] text-gray-400 dark:text-slate-500 hover:text-[#003366] dark:hover:text-blue-400 transition-colors border-t border-gray-50 dark:border-slate-700/50"
+      >
+        by @{listing.userName}
+      </Link>
+
       {(showDelete || showMarkSold || showEdit) && (
         <div className="px-3 pb-3 flex flex-wrap gap-1.5">
           {showEdit && onEdit && !isSold && (

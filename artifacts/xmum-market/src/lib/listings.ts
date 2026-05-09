@@ -267,6 +267,36 @@ export async function deleteListing(listing: Listing): Promise<void> {
   ]);
 }
 
+// ── Public seller storefront query ────────────────────────────────────────────
+// Returns up to 30 active, non-archived listings for a given user UID.
+// Used exclusively by SellerProfilePage — does NOT affect any existing query.
+export async function getListingsByUser(uid: string): Promise<Listing[]> {
+  try {
+    const q = query(
+      collection(db, "listings"),
+      where("userId", "==", uid),
+      where("isArchived", "==", false),
+      where("status", "==", "active"),
+      orderBy("sortKey", "desc"),
+      limit(30)
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(mapDoc);
+  } catch (err: any) {
+    if (err?.code === "failed-precondition" || err?.message?.includes("index")) {
+      console.warn("[listings] getListingsByUser — index not ready, using client-side fallback");
+      const q2 = query(collection(db, "listings"), where("userId", "==", uid), limit(60));
+      const snap = await getDocs(q2);
+      return snap.docs
+        .map(mapDoc)
+        .filter((l) => l.isArchived === false && l.status === "active")
+        .sort((a, b) => (b.sortKey ?? b.createdAt) - (a.sortKey ?? a.createdAt))
+        .slice(0, 30);
+    }
+    throw err;
+  }
+}
+
 export async function searchListings(
   type: ListingType,
   keyword: string,

@@ -14,6 +14,7 @@ import ListingDetailPage from "@/pages/ListingDetailPage";
 import EditListingPage from "@/pages/EditListingPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import MessagesPage from "@/pages/MessagesPage";
+import SellerProfilePage from "@/pages/SellerProfilePage";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -52,6 +53,7 @@ function Router() {
         <Route path="/listing/:id" component={ListingDetailPage} />
         <Route path="/edit/:id" component={EditListingPage} />
         <Route path="/messages" component={MessagesPage} />
+        <Route path="/seller/:uid" component={SellerProfilePage} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

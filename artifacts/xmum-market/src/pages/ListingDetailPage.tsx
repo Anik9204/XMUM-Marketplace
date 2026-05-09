@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useRoute, useLocation } from "wouter";
+import { useRoute, useLocation, Link } from "wouter";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { getListing, markAsSold } from "@/lib/listings";
@@ -390,18 +390,21 @@ export default function ListingDetailPage() {
             </span>
           )}
 
-          {/* Seller info card */}
-          <div className="bg-slate-50 dark:bg-slate-700/50 rounded-2xl p-4 flex items-center gap-3">
-            <img
-              src={sellerProfile?.avatarUrl || avatarFallback}
-              alt={listing.userName}
-              className="w-12 h-12 rounded-full object-cover border-2 border-white dark:border-slate-600"
-            />
-            <div>
-              <p className="font-semibold text-sm text-slate-800 dark:text-slate-200">{listing.userName}</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">XMUM Verified ✓</p>
+          {/* Seller info card — tappable, links to public seller profile */}
+          <Link href={`/seller/${listing.userId}`}>
+            <div className="bg-slate-50 dark:bg-slate-700/50 rounded-2xl p-4 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer">
+              <img
+                src={sellerProfile?.avatarUrl || avatarFallback}
+                alt={listing.userName}
+                className="w-12 h-12 rounded-full object-cover border-2 border-white dark:border-slate-600"
+              />
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm text-slate-800 dark:text-slate-200">{listing.userName}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">XMUM Verified ✓</p>
+              </div>
+              <span className="text-xs text-[#003366] dark:text-blue-400 font-medium shrink-0">View shop →</span>
             </div>
-          </div>
+          </Link>
 
           {/* Owner: Mark as Sold */}
           {isOwner && !isSold && (

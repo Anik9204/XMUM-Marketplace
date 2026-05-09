@@ -1,0 +1,61 @@
+You are a senior full-stack developer and UI/UX engineer working on the XMUM Marketplace app located at artifacts/xmum-market/. Read ALL of the following files completely before writing a single line of code:
+
+- src/App.tsx
+- src/pages/ProfilePage.tsx
+- src/pages/ListingDetailPage.tsx
+- src/components/ListingCard.tsx
+- src/components/Layout.tsx
+- src/lib/listings.ts
+- src/lib/userProfile.ts
+- src/lib/types.ts
+
+TASK: Implement a public Seller/Shop Profile page so any user can tap on a seller's name or avatar anywhere in the app and view that seller's public storefront — similar to how Shopee or Mudah show a shop page.
+
+─── STEP 1 — New Route ───────────────────────────────────────────
+Create a new page file: src/pages/SellerProfilePage.tsx
+Register the route in src/App.tsx as:
+  <Route path="/seller/:uid" component={SellerProfilePage} />
+
+─── STEP 2 — Data Layer ──────────────────────────────────────────
+In src/lib/listings.ts, add a new exported async function:
+  export async function getListingsByUser(uid: string): Promise<Listing[]>
+It must query Firestore: collection "listings", where("userId","==",uid), where("isArchived","==",false), where("status","==","active"), orderBy("sortKey","desc"), limit(30).
+In src/lib/userProfile.ts, confirm getProfile(uid) already returns UserProfile — use it as-is.
+
+─── STEP 3 — SellerProfilePage UI ────────────────────────────────
+The page must render:
+  TOP SECTION (Hero Card):
+  - Avatar (with initials fallback), display name, full name, verified badge (CheckCircle icon in blue if isVerified), member since date, and a star rating display (show rating out of 5 as filled/empty stars, e.g. ★★★★☆).
+  - A subtle "Seller since [month year]" line.
+  - If the viewer is NOT the listing owner, show a "Message Seller" button that calls getOrCreateConversation and navigates to /messages.
+  - If the viewer IS the owner, show an "Edit Profile" button that navigates to /settings.
+  - A stat row showing: total active listings count, and member duration (e.g. "Joined 3 months ago").
+
+  LISTINGS GRID:
+  - Heading: "What [displayName] is selling"
+  - Render all active listings in a responsive grid: 2 columns on mobile, 3 on md+, using the existing <ListingCard> component.
+  - Show a skeleton loading state (4 pulsing cards) while fetching.
+  - If no listings, show an empty state: illustration + "No active listings yet."
+  - Each ListingCard must NOT show delete/edit controls (those are owner-only on ProfilePage).
+
+─── STEP 4 — Link Seller Name Everywhere ────────────────────────
+In src/pages/ListingDetailPage.tsx, find where the seller's name/avatar is displayed and wrap it in:
+  <Link href={`/seller/${listing.userId}`}>
+Do the same in src/components/ListingCard.tsx if seller info is shown there.
+This makes every seller name/avatar tappable across the whole app.
+
+─── STEP 5 — Styling Rules ──────────────────────────────────────
+- Use the existing design tokens: bg-white dark:bg-slate-800, rounded-2xl, shadow-card, border border-gray-100 dark:border-slate-700.
+- The hero card must use a subtle gradient header (from-[#003366] to-[#0055aa]) with white text for the name.
+- All touch targets must be min-h-[44px] or min-w-[44px].
+- The page must be fully responsive: looks correct on 375px iPhone SE and 1280px desktop.
+- Do not create new CSS files — use Tailwind utility classes only.
+
+─── STEP 6 — Firestore Rules ────────────────────────────────────
+No Firestore rule changes are needed — listings already allow public read (allow read: if true).
+
+─── CONSTRAINTS ─────────────────────────────────────────────────
+- Do NOT modify HomePage.tsx, SearchPage.tsx, or listings.ts query logic.
+- Do NOT add any new npm packages.
+- Do NOT break existing routes.
+- After writing all files, show me a summary of every file changed or created.
