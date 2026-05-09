@@ -183,11 +183,26 @@ export default function ListingDetailPage() {
   const handleShareListing = async () => {
     setShowOverflowMenu(false);
     const url = window.location.href;
+    const shareData = {
+      title: listing?.title ?? "Check out this listing on XMUM Market",
+      text: listing?.description
+        ? listing.description.slice(0, 120) + (listing.description.length > 120 ? "…" : "")
+        : "Found on XMUM Market",
+      url,
+    };
+    if (navigator.share && navigator.canShare?.(shareData)) {
+      try {
+        await navigator.share(shareData);
+        return;
+      } catch (err: any) {
+        if (err?.name === "AbortError") return;
+      }
+    }
     try {
       await navigator.clipboard.writeText(url);
-      toast({ title: "Link copied!", description: "Listing URL copied to clipboard." });
+      toast({ title: "Link copied to clipboard!", description: url });
     } catch {
-      toast({ title: "Could not copy link", variant: "destructive" });
+      toast({ title: "Could not copy link", description: "Copy this URL: " + url, variant: "destructive" });
     }
   };
 
