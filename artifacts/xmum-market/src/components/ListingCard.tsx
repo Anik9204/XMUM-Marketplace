@@ -31,6 +31,14 @@ function pricingModelSuffix(model: string | undefined, t: any): string {
   return "";
 }
 
+const VEHICLE_ICONS: Record<string, string> = {
+  car: "🚗",
+  bike: "🏍️",
+  motorcycle: "🏍️",
+  scooter: "🛵",
+  bicycle: "🚲",
+};
+
 export default function ListingCard({ listing, onDelete, showDelete, showMarkSold, onMarkSold, showEdit, onEdit }: Props) {
   const { t } = useLang();
   const isSold = listing.status === "sold";
@@ -40,6 +48,7 @@ export default function ListingCard({ listing, onDelete, showDelete, showMarkSol
 
   const isJobs = listing.type === "jobs";
   const isAssistance = listing.type === "assistance";
+  const isRental = listing.type === "rental";
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-card border border-gray-100 dark:border-slate-700 overflow-hidden hover:shadow-hover hover:-translate-y-0.5 transition-all duration-200">
@@ -55,12 +64,18 @@ export default function ListingCard({ listing, onDelete, showDelete, showMarkSol
             />
           ) : (
             <div className={`w-full aspect-[4/3] bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-600 flex flex-col items-center justify-center gap-2 ${isSold ? "opacity-50" : ""}`}>
-              <svg className="w-10 h-10 text-slate-300 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                <circle cx="8.5" cy="8.5" r="1.5" />
-                <polyline points="21 15 16 10 5 21" />
-              </svg>
-              <span className="text-xs text-slate-400 dark:text-slate-500">No photo</span>
+              {isRental && listing.vehicleType ? (
+                <span className="text-5xl">{VEHICLE_ICONS[listing.vehicleType] ?? "🚗"}</span>
+              ) : (
+                <>
+                  <svg className="w-10 h-10 text-slate-300 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                    <circle cx="8.5" cy="8.5" r="1.5" />
+                    <polyline points="21 15 16 10 5 21" />
+                  </svg>
+                  <span className="text-xs text-slate-400 dark:text-slate-500">No photo</span>
+                </>
+              )}
             </div>
           )}
 
@@ -100,6 +115,11 @@ export default function ListingCard({ listing, onDelete, showDelete, showMarkSol
                   Assistance
                 </span>
               )}
+              {isRental && (
+                <span className="absolute top-2 left-2 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900/60 dark:text-yellow-300 flex items-center gap-0.5">
+                  {listing.vehicleType ? VEHICLE_ICONS[listing.vehicleType] : "🚗"} {t.rentalBadge}
+                </span>
+              )}
               {listing.type === "buy-sell" && (
                 <span className={`absolute top-2 right-2 text-xs font-semibold px-2 py-0.5 rounded-full ${listing.condition === "new" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
                   {listing.condition === "new" ? t.conditionNew : t.conditionUsed}
@@ -111,7 +131,9 @@ export default function ListingCard({ listing, onDelete, showDelete, showMarkSol
 
         <div className="p-3">
           <span className="inline-block text-[11px] font-semibold uppercase tracking-wide text-[#003366]/70 dark:text-blue-400/70 mb-0.5">
-            {catLabel}
+            {isRental && listing.vehicleType
+              ? `${VEHICLE_ICONS[listing.vehicleType] ?? ""} ${(t as any)[`rental${listing.vehicleType.charAt(0).toUpperCase() + listing.vehicleType.slice(1)}`] ?? listing.vehicleType}`
+              : catLabel}
           </span>
           <h3 className={`font-semibold text-sm line-clamp-1 ${isSold ? "text-gray-400 dark:text-slate-500" : "text-gray-900 dark:text-slate-100"}`}>{listing.title}</h3>
           <p className="text-xs text-gray-500 dark:text-slate-400 line-clamp-2 mt-0.5">{listing.description}</p>
@@ -131,6 +153,12 @@ export default function ListingCard({ listing, onDelete, showDelete, showMarkSol
           {isAssistance && listing.price != null && (
             <p className={`mt-2 text-base font-bold ${isSold ? "text-gray-400 dark:text-slate-500 line-through" : "text-orange-600 dark:text-orange-400"}`}>
               {t.rmPrefix} {listing.price.toFixed(2)} {pricingModelSuffix(listing.pricingModel, t)}
+            </p>
+          )}
+
+          {isRental && listing.rentalPricePerDay != null && (
+            <p className={`mt-2 text-base font-bold ${isSold ? "text-gray-400 dark:text-slate-500 line-through" : "text-yellow-700 dark:text-yellow-400"}`}>
+              {t.rmPrefix} {listing.rentalPricePerDay.toFixed(2)}{t.rentalPerDay}
             </p>
           )}
 

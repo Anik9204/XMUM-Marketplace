@@ -7,7 +7,7 @@ import { getProfile } from "@/lib/userProfile";
 import { Listing, UserProfile } from "@/lib/types";
 import AuthModal from "@/components/AuthModal";
 import ReportModal from "@/components/ReportModal";
-import { ArrowLeft, Clock, Tag, CheckCircle2, MapPin, MessageCircle, Loader2 } from "lucide-react";
+import { ArrowLeft, Clock, Tag, CheckCircle2, MapPin, MessageCircle, Loader2, ShieldAlert, ShieldCheck } from "lucide-react";
 import { getOrCreateConversation } from "@/lib/messaging";
 import { SiWhatsapp, SiWechat } from "react-icons/si";
 import { MdGroups } from "react-icons/md";
@@ -22,6 +22,18 @@ function relativeTime(ms: number): string {
   if (hours < 24) return hours + "h ago";
   return days + "d ago";
 }
+
+function formatDate(ms: number): string {
+  return new Date(ms).toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "numeric" });
+}
+
+const VEHICLE_ICONS: Record<string, string> = {
+  car: "🚗",
+  bike: "🏍️",
+  motorcycle: "🏍️",
+  scooter: "🛵",
+  bicycle: "🚲",
+};
 
 export default function ListingDetailPage() {
   const { t } = useLang();
@@ -80,6 +92,8 @@ export default function ListingDetailPage() {
 
   const isSold = listing.status === "sold";
   const isOwner = user?.uid === listing.userId;
+  const isRental = listing.type === "rental";
+  const canViewPlate = isRental && user !== null && user.emailVerified === true;
 
   const handleMessageSeller = async () => {
     if (!user || !listing) return;
@@ -152,6 +166,16 @@ export default function ListingDetailPage() {
           </button>
         </div>
 
+        {/* Rental disclaimer banner — shown immediately below back button */}
+        {isRental && (
+          <div className="flex items-start gap-3 bg-red-50 dark:bg-red-950/50 border-b-2 border-red-300 dark:border-red-700 px-4 py-3">
+            <ShieldAlert size={20} className="text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+            <p className="text-sm text-red-800 dark:text-red-300 leading-snug font-medium">
+              {t.rentalDisclaimerBanner}
+            </p>
+          </div>
+        )}
+
         {/* Photos */}
         <div className="relative bg-black">
           {listing.photos.length > 0 ? (
@@ -182,7 +206,7 @@ export default function ListingDetailPage() {
             </>
           ) : (
             <div className={`w-full h-64 bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-slate-700 dark:to-slate-600 flex items-center justify-center ${isSold ? "opacity-50" : ""}`}>
-              <span className="text-6xl">📦</span>
+              <span className="text-6xl">{isRental && listing.vehicleType ? VEHICLE_ICONS[listing.vehicleType] : "📦"}</span>
               {isSold && (
                 <div className="absolute inset-0 flex items-center justify-center">
                   <span className="bg-black/75 text-white text-2xl font-black tracking-widest px-6 py-3 rounded-2xl rotate-[-8deg] shadow-2xl">
@@ -227,18 +251,132 @@ export default function ListingDetailPage() {
                 {listing.price === 0 ? "Free / Return Item" : `RM ${listing.price?.toFixed(2)}`}
               </p>
             )}
+            {isRental && listing.rentalPricePerDay != null && (
+              <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <p className={`text-3xl font-bold ${isSold ? "text-gray-400 dark:text-slate-500 line-through" : "text-yellow-700 dark:text-yellow-400"}`}>
+                  RM {listing.rentalPricePerDay.toFixed(2)}{t.rentalPerDay}
+                </p>
+                {listing.rentalPricePerHour != null && (
+                  <p className="text-base font-semibold text-yellow-600 dark:text-yellow-500">
+                    RM {listing.rentalPricePerHour.toFixed(2)} / hr
+                  </p>
+                )}
+              </div>
+            )}
             <div className="flex flex-wrap gap-2 mt-3">
-              <span className="inline-flex items-center gap-1 text-xs bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300 px-2 py-1 rounded-full">
-                <Tag size={10} />{catLabel}
-              </span>
-              <span className={`text-xs px-2 py-1 rounded-full font-medium ${listing.condition === "new" ? "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"}`}>
-                {listing.condition === "new" ? t.conditionNew : t.conditionUsed}
-              </span>
+              {isRental && listing.vehicleType ? (
+                <span className="inline-flex items-center gap-1 text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 px-2 py-1 rounded-full font-medium">
+                  {VEHICLE_ICONS[listing.vehicleType]} {t.rentalBadge}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-xs bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300 px-2 py-1 rounded-full">
+                  <Tag size={10} />{catLabel}
+                </span>
+              )}
+              {!isRental && (
+                <span className={`text-xs px-2 py-1 rounded-full font-medium ${listing.condition === "new" ? "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"}`}>
+                  {listing.condition === "new" ? t.conditionNew : t.conditionUsed}
+                </span>
+              )}
               <span className="inline-flex items-center gap-1 text-xs text-gray-400 dark:text-slate-500">
                 <Clock size={10} />Listed {relativeTime(listing.createdAt)}
               </span>
             </div>
           </div>
+
+          {/* Rental: Vehicle info card */}
+          {isRental && (
+            <div className="bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-800 rounded-2xl p-4 space-y-3">
+              <p className="text-sm font-bold text-gray-800 dark:text-slate-200">{t.rentalVehicleInfo}</p>
+
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                {listing.vehicleBrand && (
+                  <div>
+                    <span className="text-xs text-gray-400 dark:text-slate-500 block">{t.rentalBrandLabel}</span>
+                    <span className="font-semibold text-gray-800 dark:text-slate-200">{listing.vehicleBrand}</span>
+                  </div>
+                )}
+                {listing.vehicleModel && (
+                  <div>
+                    <span className="text-xs text-gray-400 dark:text-slate-500 block">{t.rentalModelLabel}</span>
+                    <span className="font-semibold text-gray-800 dark:text-slate-200">{listing.vehicleModel}</span>
+                  </div>
+                )}
+                {listing.vehicleYear && (
+                  <div>
+                    <span className="text-xs text-gray-400 dark:text-slate-500 block">{t.rentalYearLabel}</span>
+                    <span className="font-semibold text-gray-800 dark:text-slate-200">{listing.vehicleYear}</span>
+                  </div>
+                )}
+                <div>
+                  <span className="text-xs text-gray-400 dark:text-slate-500 block">{t.rentalPlateNumber}</span>
+                  {canViewPlate ? (
+                    <span className="font-mono font-bold text-gray-900 dark:text-slate-100 tracking-widest">
+                      {listing.plateNumber}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-blue-600 dark:text-blue-400 italic">
+                      {t.rentalSignInForPlate}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-yellow-200 dark:border-yellow-800">
+                <p className="text-sm font-bold text-gray-800 dark:text-slate-200 mb-2">{t.rentalPricingInfo}</p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                  {listing.rentalPricePerDay != null && (
+                    <div>
+                      <span className="text-xs text-gray-400 dark:text-slate-500 block">Per Day</span>
+                      <span className="font-bold text-yellow-700 dark:text-yellow-400">RM {listing.rentalPricePerDay.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {listing.rentalPricePerHour != null && (
+                    <div>
+                      <span className="text-xs text-gray-400 dark:text-slate-500 block">Per Hour</span>
+                      <span className="font-bold text-yellow-700 dark:text-yellow-400">RM {listing.rentalPricePerHour.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {listing.depositAmount != null && (
+                    <div>
+                      <span className="text-xs text-gray-400 dark:text-slate-500 block">{t.rentalDeposit}</span>
+                      <span className="font-semibold text-gray-800 dark:text-slate-200">RM {listing.depositAmount.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {listing.availableFrom && listing.availableTo && (
+                    <div className="col-span-2">
+                      <span className="text-xs text-gray-400 dark:text-slate-500 block">{t.rentalAvailability}</span>
+                      <span className="font-semibold text-gray-800 dark:text-slate-200">
+                        {formatDate(listing.availableFrom)} — {formatDate(listing.availableTo)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Requirements */}
+              <div className="pt-2 border-t border-yellow-200 dark:border-yellow-800 flex flex-wrap gap-2">
+                {listing.requiresLicense && (
+                  <span className="inline-flex items-center gap-1 text-xs bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-400 px-2 py-1 rounded-full font-medium">
+                    <ShieldCheck size={11} /> {t.rentalLicenceRequired}
+                  </span>
+                )}
+                {listing.requiresInsuranceProof && (
+                  <span className="inline-flex items-center gap-1 text-xs bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-400 px-2 py-1 rounded-full font-medium">
+                    <ShieldCheck size={11} /> {t.rentalInsuranceRequired}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Rental: custom seller terms */}
+          {isRental && listing.rentalTerms && (
+            <div className="border-2 border-dashed border-amber-300 dark:border-amber-700 rounded-xl px-4 py-3">
+              <p className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wide mb-1.5">{t.rentalSellerTerms}</p>
+              <p className="text-sm text-gray-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{listing.rentalTerms}</p>
+            </div>
+          )}
 
           {/* Description */}
           <div>
@@ -248,7 +386,7 @@ export default function ListingDetailPage() {
           {/* Meet-up spot */}
           {listing.meetupSpot && (
             <span className="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg px-3 py-1.5 text-sm">
-              📍 {listing.meetupSpot}
+              <MapPin size={13} /> {listing.meetupSpot}
             </span>
           )}
 
@@ -331,7 +469,7 @@ export default function ListingDetailPage() {
                       <span className="text-sm font-medium">{t.contactViaWeChat}</span>
                     </button>
                   )}
-                  {listing.teams && (
+                  {listing.teams && !isRental && (
                     <button
                       onClick={() => handleContact(() => window.open(`https://teams.microsoft.com/l/chat/0/0?users=${listing.teams}&message=${pre}`, "_blank"))}
                       className="flex items-center justify-center gap-2 w-full sm:w-auto flex-1 bg-[#6264A7]/10 text-[#6264A7] border border-[#6264A7]/20 rounded-xl py-3 min-h-[44px] hover:bg-[#6264A7]/20 transition-colors"
@@ -374,7 +512,9 @@ export default function ListingDetailPage() {
             <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
               {listing.type === "buy-sell"
                 ? (listing.price === 0 ? "Free" : `RM ${listing.price?.toFixed(2)}`)
-                : "Return Item"}
+                : isRental && listing.rentalPricePerDay != null
+                ? `RM ${listing.rentalPricePerDay.toFixed(2)}${t.rentalPerDay}`
+                : "—"}
             </p>
           </div>
           {canShowWhatsApp && listing.whatsapp ? (
@@ -384,7 +524,7 @@ export default function ListingDetailPage() {
               rel="noopener noreferrer"
               className="flex-1 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-xl px-4 min-h-[44px] flex items-center justify-center gap-2"
             >
-              <span>💬</span> WhatsApp Seller
+              <span>💬</span> WhatsApp
             </a>
           ) : (
             <button
@@ -393,7 +533,7 @@ export default function ListingDetailPage() {
               className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl px-4 min-h-[44px] flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {startingChat ? <Loader2 size={16} className="animate-spin" /> : <MessageCircle size={16} />}
-              Message Seller
+              Message
             </button>
           )}
         </div>

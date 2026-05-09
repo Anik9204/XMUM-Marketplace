@@ -57,6 +57,16 @@ service cloud.firestore {
       allow write: if isOwner(userId) || isEditor();
     }
 
+    // ── Rental Audit Logs ──────────────────────────────────────────────────────
+    // Append-only by verified XMUM users for their own records.
+    // Never deleted — persists even if the user deletes their account or listing.
+    // Only admins may read, update, or delete (for compliance review).
+    match /rentalAuditLogs/{logId} {
+      allow create: if isXmuEmail()
+                    && request.resource.data.userId == request.auth.uid;
+      allow read, update, delete: if isAdmin();
+    }
+
     // Conversations: only participants can read or write
     match /conversations/{convId} {
       allow read: if isSignedIn()

@@ -13,6 +13,7 @@ const ALL_TABS: { value: ListingType; label: (t: any) => string }[] = [
   { value: "lost-found", label: (t) => t.lostFound },
   { value: "jobs", label: (t) => t.jobs },
   { value: "assistance", label: (t) => t.assistance },
+  { value: "rental", label: (t) => t.rental },
 ];
 
 export default function SearchPage() {
@@ -28,7 +29,7 @@ export default function SearchPage() {
   const [searched, setSearched] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  const showPriceFilter = type === "buy-sell" || type === "jobs" || type === "assistance";
+  const showPriceFilter = type === "buy-sell" || type === "jobs" || type === "assistance" || type === "rental";
   const showConditionFilter = type === "buy-sell";
 
   const doSearch = async () => {
@@ -125,13 +126,13 @@ export default function SearchPage() {
           </div>
         )}
 
-        {/* Type tabs — 2x2 grid for 4 tabs */}
-        <div className="grid grid-cols-4 gap-1 mt-2.5">
+        {/* Type tabs */}
+        <div className="flex gap-1 mt-2.5 overflow-x-auto scrollbar-hide">
           {ALL_TABS.map(({ value, label }) => (
             <button
               key={value}
               onClick={() => { setType(value); setResults([]); setSearched(false); }}
-              className={`py-1.5 min-h-[36px] rounded-lg text-xs font-semibold transition-colors ${type === value ? "bg-[#003366] dark:bg-blue-600 text-white" : "bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400"}`}
+              className={`flex-shrink-0 px-3 py-1.5 min-h-[36px] rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${type === value ? "bg-[#003366] dark:bg-blue-600 text-white" : "bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400"}`}
             >
               {label(t)}
             </button>

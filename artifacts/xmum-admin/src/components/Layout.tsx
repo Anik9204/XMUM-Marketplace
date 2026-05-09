@@ -1,15 +1,16 @@
 import { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, Flag, Users, Megaphone, LogOut } from "lucide-react";
+import { LayoutDashboard, Flag, Users, Megaphone, FileText, LogOut } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
 
 const NAV = [
-  { href: "/",        label: "Dashboard", icon: LayoutDashboard },
-  { href: "/reports", label: "Reports",   icon: Flag },
-  { href: "/users",   label: "Users",     icon: Users },
-  { href: "/ads",     label: "Ads",       icon: Megaphone },
+  { href: "/",             label: "Dashboard",    icon: LayoutDashboard },
+  { href: "/reports",      label: "Reports",      icon: Flag },
+  { href: "/users",        label: "Users",        icon: Users },
+  { href: "/ads",          label: "Ads",          icon: Megaphone },
+  { href: "/rental-audit", label: "Rental Audit", icon: FileText },
 ];
 
 export default function Layout({ children }: { children: ReactNode }) {

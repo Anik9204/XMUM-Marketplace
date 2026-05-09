@@ -50,14 +50,22 @@ const CATEGORY_ICONS: Record<string, string> = {
   event_setup: "🎉",
   tech_help: "⚙️",
   other_assistance: "🤝",
+  // Rental vehicle types
+  car: "🚗",
+  bike: "🏍️",
+  motorcycle: "🏍️",
+  scooter: "🛵",
+  bicycle: "🚲",
 };
 
-const ALL_TABS: ListingType[] = ["buy-sell", "lost-found", "jobs", "assistance"];
+const RENTAL_VEHICLE_TYPES = ["car", "bike", "motorcycle", "bicycle", "scooter"];
+const ALL_TABS: ListingType[] = ["buy-sell", "lost-found", "jobs", "assistance", "rental"];
 
 function getCategoriesForTab(tab: ListingType): string[] {
   if (tab === "buy-sell") return BUY_SELL_CATEGORIES;
   if (tab === "lost-found") return LOST_FOUND_CATEGORIES;
   if (tab === "jobs") return JOBS_CATEGORIES;
+  if (tab === "rental") return RENTAL_VEHICLE_TYPES;
   return ASSISTANCE_CATEGORIES;
 }
 
@@ -79,6 +87,7 @@ export default function HomePage() {
     if (tab === "buy-sell") return t.buySell;
     if (tab === "lost-found") return t.lostFound;
     if (tab === "jobs") return t.jobs;
+    if (tab === "rental") return t.rental;
     return t.assistance;
   };
 

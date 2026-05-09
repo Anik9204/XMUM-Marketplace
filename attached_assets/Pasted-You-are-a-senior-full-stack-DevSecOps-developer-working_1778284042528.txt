@@ -1,0 +1,144 @@
+You are a senior full-stack DevSecOps developer working on the XMUM Marketplace app at artifacts/xmum-market/. Read ALL of the following files completely before writing a single line of code:
+
+- src/lib/types.ts
+- src/pages/PostPage.tsx
+- src/pages/EditListingPage.tsx
+- src/pages/HomePage.tsx
+- src/components/ListingCard.tsx
+- src/lib/listings.ts
+- src/lib/firebase.ts
+- src/lib/i18n.ts
+
+TASK: Add a "Rentals" section (car and bike rentals) with a legally mandatory T&C acceptance flow, a tamper-proof audit log stored in Firestore, and a public disclaimer banner.
+
+─── STEP 1 — Update Types ───────────────────────────────────────
+In src/lib/types.ts:
+  Add to ListingType: | "rental"
+
+  Add new interface:
+  export interface RentalListing extends Listing {
+    vehicleType: "car" | "bike" | "motorcycle" | "bicycle" | "scooter";
+    brand: string;
+    model: string;
+    year: number;
+    plateNumber: string;         // masked in public view, stored full
+    rentalPricePerDay: number;   // in RM
+    rentalPricePerHour?: number;
+    depositAmount: number;
+    availableFrom: number;       // timestamp
+    availableTo: number;         // timestamp
+    requiresLicense: boolean;
+    requiresInsuranceProof: boolean;
+    terms: string;               // custom terms written by poster
+    tcAcceptedAt: number;        // timestamp of T&C acceptance
+    tcAcceptedVersion: string;   // version string, e.g. "rental-tc-v1"
+  }
+
+  Add new interface:
+  export interface RentalTcAuditLog {
+    id: string;
+    userId: string;
+    userEmail: string;
+    listingId: string;
+    listingTitle: string;
+    tcVersion: string;
+    acceptedAt: number;
+    ipHint?: string;             // partial IP or user-agent hint
+    userAgent: string;
+  }
+
+─── STEP 2 — T&C Modal Component ────────────────────────────────
+Create a new file: src/components/RentalTcModal.tsx
+
+This full-screen modal must:
+  - Be triggered BEFORE the user can submit any rental listing — i.e. when they select the "Rental" tab in PostPage.
+  - Display a non-scrollable header: "Rental Platform Disclaimer — Please Read"
+  - Contain a scrollable body with the full disclaimer text (write it professionally):
+    * XMUM Marketplace is a peer-to-peer platform and is NOT responsible for any vehicle rental transactions.
+    * Both parties (renter and owner) are solely responsible for verifying the other party's driving license, insurance validity, roadworthiness of the vehicle, and compliance with Malaysian traffic laws.
+    * The platform retains a record of this agreement even if the post or account is deleted.
+    * Any dispute arising from the rental is strictly between the two parties involved.
+    * By posting or renting, you agree that XMUM Marketplace may retain your acceptance timestamp, user ID, and device information for legal compliance purposes.
+    * Posting false information, unlicensed vehicles, or engaging in fraudulent activity may result in permanent account suspension and may be reported to authorities.
+  - At the bottom, show a MANDATORY checkbox: "I have read and agree to the Rental Platform Disclaimer. I understand that XMUM Marketplace is not responsible for rental transactions."
+  - A "I Agree & Continue" button (disabled until checkbox is ticked).
+  - A "Cancel" button that brings the user back to the previous tab.
+  - The modal must NOT be dismissible by clicking the backdrop or pressing Escape.
+
+─── STEP 3 — Audit Log Write ────────────────────────────────────
+In src/lib/listings.ts, add a new exported async function:
+  export async function writeRentalTcAuditLog(
+    userId: string,
+    userEmail: string,
+    listingId: string,
+    listingTitle: string
+  ): Promise<void>
+
+  This function must write to Firestore collection "rentalAuditLogs" with:
+    userId, userEmail, listingId, listingTitle,
+    tcVersion: "rental-tc-v1",
+    acceptedAt: Date.now(),
+    userAgent: navigator.userAgent,
+  Use addDoc so each acceptance gets a unique document ID.
+  This function must be called BOTH when the listing is created AND stored with the listing document itself (tcAcceptedAt, tcAcceptedVersion fields).
+
+─── STEP 4 — Update Firestore Rules ─────────────────────────────
+The current Firestore rules do not have a "rentalAuditLogs" collection. Provide the new rules block to ADD (do not replace existing rules):
+
+  match /rentalAuditLogs/{logId} {
+    allow create: if isXmuEmail()
+                  && request.resource.data.userId == request.auth.uid;
+    allow read, update, delete: if isAdmin();
+  }
+
+Show the complete updated rules file so the developer can paste it into Firebase Console → Firestore → Rules.
+
+─── STEP 5 — PostPage Rental Tab ─────────────────────────────────
+In src/pages/PostPage.tsx, add "Rental" as a 5th listing type tab.
+  - When selected, immediately show the RentalTcModal.
+  - If user cancels, revert to the previous tab silently.
+  - If user accepts, dismiss the modal and show the rental-specific fields:
+    * Vehicle Type (select): Car, Bike, Motorcycle, Bicycle, Scooter
+    * Brand (text, required)
+    * Model (text, required)
+    * Year (number, required, 1990–current year)
+    * Plate Number (text, required) — show warning: "Your plate number is stored securely and only shown to verified renters."
+    * Rental Price Per Day (RM, required)
+    * Rental Price Per Hour (RM, optional)
+    * Deposit Amount (RM, required)
+    * Available From (date picker, required)
+    * Available To (date picker, required)
+    * Requires valid driving license (toggle, default ON)
+    * Requires insurance proof (toggle, default ON)
+    * Custom Terms (text area, max 500 chars): "Any additional conditions (e.g. no long distance trips)"
+    * Photos (required for rentals, min 2, max 5): "Upload clear photos of the vehicle including any existing damage."
+    * Contact info (WhatsApp required, WeChat optional)
+
+  - In the submit handler, call writeRentalTcAuditLog AFTER the listing is created and use the returned listing ID.
+
+─── STEP 6 — ListingCard Rental Display ─────────────────────────
+In src/components/ListingCard.tsx, for rental listings:
+  - Show a yellow "Rental" badge.
+  - Show "RM X/day" as the price.
+  - Show vehicle type icon: 🚗 car, 🏍️ bike/motorcycle, 🛵 scooter, 🚲 bicycle.
+  - Do NOT display plate number on the card (only show in ListingDetailPage to logged-in verified users).
+
+─── STEP 7 — ListingDetailPage Rental View ──────────────────────
+In src/pages/ListingDetailPage.tsx, for rental listings:
+  - Show a prominent red/yellow disclaimer banner at the TOP of the page: "⚠️ Peer-to-Peer Rental — XMUM Marketplace is not responsible for this transaction. Verify license, insurance, and vehicle condition before proceeding."
+  - Show all rental fields: vehicle info, pricing, availability dates, deposit, conditions.
+  - Show plate number ONLY if the viewer is signed in AND has a verified email (user.emailVerified === true). Otherwise show "Sign in with verified XMUM email to view plate number."
+  - Show the custom seller terms in a bordered box.
+
+─── STEP 8 — Admin Audit Log Access ─────────────────────────────
+In the admin app (artifacts/xmum-admin/src/), create a new page src/pages/RentalAuditPage.tsx that:
+  - Lists all documents from Firestore "rentalAuditLogs" collection, ordered by acceptedAt desc.
+  - Shows: userId, userEmail, listingId, listingTitle, tcVersion, acceptedAt (formatted), userAgent.
+  - Note: This data is NEVER deleted — even if the user deletes their account or the listing, this collection persists.
+  Add it to the admin App.tsx as route "/rental-audit" and add it to the admin Layout.tsx sidebar navigation.
+
+─── CONSTRAINTS ─────────────────────────────────────────────────
+- The T&C modal must be impossible to bypass — do NOT allow the rental listing form to render unless tcAccepted state is true.
+- The audit log write must happen server-side via Firestore rules (no client-side deletions allowed by anyone other than admin).
+- Do NOT modify existing listing types or their flows.
+- After all edits, show every file changed/created.

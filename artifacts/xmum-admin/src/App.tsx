@@ -5,6 +5,7 @@ import DashboardPage from "./pages/DashboardPage";
 import ReportsPage from "./pages/ReportsPage";
 import UsersPage from "./pages/UsersPage";
 import AdsPage from "./pages/AdsPage";
+import RentalAuditPage from "./pages/RentalAuditPage";
 import Layout from "./components/Layout";
 
 export default function App() {
@@ -28,7 +29,8 @@ export default function App() {
         <Route path="/"          component={DashboardPage} />
         <Route path="/reports"   component={ReportsPage} />
         <Route path="/users"     component={UsersPage} />
-        <Route path="/ads"       component={AdsPage} />
+        <Route path="/ads"            component={AdsPage} />
+        <Route path="/rental-audit"   component={RentalAuditPage} />
         <Route>
           <Redirect to="/" />
         </Route>

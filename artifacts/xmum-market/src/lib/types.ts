@@ -1,4 +1,4 @@
-export type ListingType = "buy-sell" | "lost-found" | "jobs" | "assistance";
+export type ListingType = "buy-sell" | "lost-found" | "jobs" | "assistance" | "rental";
 export type Condition = "new" | "used";
 export type ListingStatus = "active" | "sold";
 
@@ -27,6 +27,52 @@ export interface Listing {
   pricingModel?: "per_hour" | "per_day" | "per_month" | "fixed";
   isRemote?: boolean;
   availability?: string;
+  // Rental-specific fields (populated only when type === "rental")
+  vehicleType?: "car" | "bike" | "motorcycle" | "bicycle" | "scooter";
+  vehicleBrand?: string;
+  vehicleModel?: string;
+  vehicleYear?: number;
+  plateNumber?: string;
+  rentalPricePerDay?: number;
+  rentalPricePerHour?: number;
+  depositAmount?: number;
+  availableFrom?: number;
+  availableTo?: number;
+  requiresLicense?: boolean;
+  requiresInsuranceProof?: boolean;
+  rentalTerms?: string;
+  tcAcceptedAt?: number;
+  tcAcceptedVersion?: string;
+}
+
+export interface RentalListing extends Listing {
+  vehicleType: "car" | "bike" | "motorcycle" | "bicycle" | "scooter";
+  brand: string;
+  model: string;
+  year: number;
+  plateNumber: string;
+  rentalPricePerDay: number;
+  rentalPricePerHour?: number;
+  depositAmount: number;
+  availableFrom: number;
+  availableTo: number;
+  requiresLicense: boolean;
+  requiresInsuranceProof: boolean;
+  terms: string;
+  tcAcceptedAt: number;
+  tcAcceptedVersion: string;
+}
+
+export interface RentalTcAuditLog {
+  id: string;
+  userId: string;
+  userEmail: string;
+  listingId: string;
+  listingTitle: string;
+  tcVersion: string;
+  acceptedAt: number;
+  ipHint?: string;
+  userAgent: string;
 }
 
 export interface AppNotification {

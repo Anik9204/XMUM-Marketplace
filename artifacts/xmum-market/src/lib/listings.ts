@@ -47,9 +47,6 @@ function mapDoc(d: QueryDocumentSnapshot): Listing {
 }
 
 // Extract the Firebase Storage path from a full https:// download URL.
-// ref(storage, fullUrl) only accepts gs:// or storage paths — passing a
-// download URL to it throws. This helper extracts the encoded path portion
-// so deleteObject works correctly.
 function storagePathFromUrl(url: string): string | null {
   try {
     const match = url.match(/\/o\/(.+?)(\?|$)/);
@@ -114,13 +111,32 @@ export async function bumpListing(id: string): Promise<void> {
 }
 
 // Race against 6s timeout as a safety net in case of slow server response
-// in Replit's proxy environment. (Offline persistence is disabled so writes
-// fail fast, but network latency can still cause slow responses.)
+// in Replit's proxy environment.
 export async function markAsSold(id: string): Promise<void> {
   await Promise.race([
     updateDoc(doc(db, "listings", id), { status: "sold" }),
     new Promise<void>((resolve) => setTimeout(resolve, 6_000)),
   ]);
+}
+
+// ── Rental T&C Audit Log ───────────────────────────────────────────────────────
+// This write is append-only — Firestore rules deny update/delete for non-admins.
+// The record persists even if the listing or user account is later deleted.
+export async function writeRentalTcAuditLog(
+  userId: string,
+  userEmail: string,
+  listingId: string,
+  listingTitle: string
+): Promise<void> {
+  await addDoc(collection(db, "rentalAuditLogs"), {
+    userId,
+    userEmail,
+    listingId,
+    listingTitle,
+    tcVersion: "rental-tc-v1",
+    acceptedAt: Date.now(),
+    userAgent: navigator.userAgent,
+  });
 }
 
 // ── Paginated feed for home page ───────────────────────────────────────────────
@@ -204,9 +220,6 @@ export async function getListing(id: string): Promise<Listing | null> {
 }
 
 // Owners see ALL their listings including sold (no status filter).
-// Primary query uses a composite index (userId + isArchived + createdAt DESC).
-// Fallback uses a single equality filter — no composite index required —
-// then filters and sorts client-side.
 export async function getUserListings(userId: string): Promise<Listing[]> {
   try {
     const q = query(
@@ -220,7 +233,6 @@ export async function getUserListings(userId: string): Promise<Listing[]> {
     return snap.docs.map(mapDoc);
   } catch (err: any) {
     if (err?.code === "failed-precondition" || err?.message?.includes("index")) {
-      // Single equality filter — no composite index needed.
       const q2 = query(
         collection(db, "listings"),
         where("userId", "==", userId),
@@ -249,9 +261,6 @@ export async function deleteListing(listing: Listing): Promise<void> {
     );
   }
 
-  // Race against 6s timeout as a safety net in case of slow server response
-  // in Replit's proxy environment. (Offline persistence is disabled so writes
-  // fail fast, but network latency can still cause slow responses.)
   await Promise.race([
     deleteDoc(doc(db, "listings", listing.id)),
     new Promise<void>((resolve) => setTimeout(resolve, 6_000)),
