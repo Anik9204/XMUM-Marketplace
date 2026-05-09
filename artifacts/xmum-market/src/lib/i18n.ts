@@ -236,6 +236,8 @@ export const translations = {
     bumpCooldown: "You can bump again in {hours} hours",
     bumpTooltip: "Move to top of feed (once per 24h)",
     bumpedRecently: "Bumped recently",
+    whatsappFormat: "Include country code, e.g. +60 for Malaysia",
+    whatsappInvalid: "WhatsApp number must start with a country code, e.g. +60123456789",
   },
   zh: {
     appName: "厦大市集",
@@ -472,6 +474,8 @@ export const translations = {
     bumpCooldown: "{hours} 小时后可再次置顶",
     bumpTooltip: "置顶帖子（每24小时一次）",
     bumpedRecently: "最近已置顶",
+    whatsappFormat: "请包含国家代码，例如马来西亚为 +60",
+    whatsappInvalid: "WhatsApp号码必须以国家代码开头，例如 +60123456789",
   },
 };
 

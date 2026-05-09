@@ -7,9 +7,10 @@ import {
   changePassword as doChangePassword,
   deleteAccount,
 } from "@/lib/userProfile";
+import { validateWhatsApp, suggestMalaysianFormat } from "@/lib/validation";
 import AuthModal from "@/components/AuthModal";
 import VerificationBanner from "@/components/VerificationBanner";
-import { User, Camera, CheckCircle2, Trash2, Settings, Palette } from "lucide-react";
+import { User, Camera, CheckCircle2, Trash2, Settings, Palette, AlertCircle } from "lucide-react";
 import { useLocation } from "wouter";
 import { auth } from "@/lib/firebase";
 import { useDarkMode } from "@/hooks/use-dark-mode";
@@ -87,6 +88,7 @@ export default function SettingsPage() {
 
   const [fullName, setFullName] = useState("");
   const [settingsWhatsapp, setSettingsWhatsapp] = useState("");
+  const [settingsWhatsappError, setSettingsWhatsappError] = useState("");
   const [settingsWechat, setSettingsWechat] = useState("");
   const [showWhatsApp, setShowWhatsApp] = useState(true);
   const [showWeChat, setShowWeChat] = useState(true);
@@ -193,6 +195,14 @@ export default function SettingsPage() {
     setProfileError("");
     setProfileSaved(false);
     if (!fullName.trim()) { setProfileError("Full name cannot be empty."); return; }
+    if (settingsWhatsapp.trim()) {
+      const result = validateWhatsApp(settingsWhatsapp);
+      if (!result.valid) {
+        setSettingsWhatsappError(result.error);
+        setProfileError(result.error);
+        return;
+      }
+    }
     setSavingProfile(true);
     try {
       await Promise.race([
@@ -336,7 +346,27 @@ export default function SettingsPage() {
               </div>
               <div>
                 <label className={labelCls}>WhatsApp Number <span className="text-gray-400 dark:text-slate-500">(optional)</span></label>
-                <input type="text" value={settingsWhatsapp} onChange={(e) => setSettingsWhatsapp(e.target.value)} placeholder="+60 12-345 6789" className={inputCls} />
+                <input
+                  type="text"
+                  value={settingsWhatsapp}
+                  onChange={(e) => { setSettingsWhatsapp(e.target.value); setSettingsWhatsappError(""); }}
+                  onBlur={() => {
+                    const result = validateWhatsApp(settingsWhatsapp);
+                    if (!result.valid) {
+                      const suggested = suggestMalaysianFormat(settingsWhatsapp);
+                      setSettingsWhatsappError(suggested !== settingsWhatsapp ? result.error + ` Did you mean ${suggested}?` : result.error);
+                    }
+                  }}
+                  placeholder="+60123456789"
+                  className={inputCls}
+                />
+                {settingsWhatsappError ? (
+                  <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                    <AlertCircle size={12} /> {settingsWhatsappError}
+                  </p>
+                ) : (
+                  <p className="text-xs text-slate-400 mt-1">Include country code, e.g. +60 for Malaysia</p>
+                )}
               </div>
               <div>
                 <label className={labelCls}>WeChat ID <span className="text-gray-400 dark:text-slate-500">(optional)</span></label>

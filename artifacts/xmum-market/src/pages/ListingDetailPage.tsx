@@ -602,11 +602,20 @@ export default function ListingDetailPage() {
                 <div className="flex flex-col sm:flex-row gap-2">
                   {canShowWhatsApp && (
                     <button
-                      onClick={() => handleContact(() => window.open(`https://wa.me/${listing.whatsapp?.replace(/\D/g, "")}?text=${pre}`, "_blank"))}
+                      onClick={() => handleContact(() => {
+                        const wa = listing.whatsapp ?? "";
+                        const num = wa.startsWith("+") ? wa.replace(/\+/, "").replace(/[^0-9]/g, "") : wa.replace(/[^0-9]/g, "");
+                        window.open(`https://wa.me/${num}?text=${pre}`, "_blank");
+                      })}
                       className="flex items-center justify-center gap-2 w-full sm:w-auto flex-1 bg-[#25D366]/10 text-[#25D366] border border-[#25D366]/20 rounded-xl py-3 min-h-[44px] hover:bg-[#25D366]/20 transition-colors"
                     >
                       <SiWhatsapp size={20} />
-                      <span className="text-sm font-medium">{t.contactViaWhatsApp}</span>
+                      <span className="text-sm font-medium">
+                        {t.contactViaWhatsApp}
+                        {listing.whatsapp && !listing.whatsapp.trim().startsWith("+") && (
+                          <span title="This number may be missing a country code." className="ml-1">⚠️</span>
+                        )}
+                      </span>
                     </button>
                   )}
                   {canShowWeChat && (
@@ -652,7 +661,11 @@ export default function ListingDetailPage() {
           </div>
           {canShowWhatsApp && listing.whatsapp ? (
             <a
-              href={`https://wa.me/${listing.whatsapp?.replace(/\D/g, "")}?text=${pre}`}
+              href={(() => {
+                const wa = listing.whatsapp ?? "";
+                const num = wa.startsWith("+") ? wa.replace(/\+/, "").replace(/[^0-9]/g, "") : wa.replace(/[^0-9]/g, "");
+                return `https://wa.me/${num}?text=${pre}`;
+              })()}
               target="_blank"
               rel="noopener noreferrer"
               className="flex-1 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-xl px-4 min-h-[44px] flex items-center justify-center gap-2"

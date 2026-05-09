@@ -6,6 +6,7 @@ import { uploadPhoto, createListing, writeRentalTcAuditLog } from "@/lib/listing
 import { checkContent } from "@/lib/contentFilter";
 import { auth } from "@/lib/firebase";
 import { ListingType, Condition } from "@/lib/types";
+import { validateWhatsApp, suggestMalaysianFormat } from "@/lib/validation";
 import AuthModal from "@/components/AuthModal";
 import RentalTcModal from "@/components/RentalTcModal";
 import { ImagePlus, X, AlertCircle, CheckCircle2, Edit2, Wifi, WifiOff, ShieldCheck, ShieldOff } from "lucide-react";
@@ -169,6 +170,7 @@ export default function PostPage() {
   const [category, setCategory] = useState("electronics");
   const [condition, setCondition] = useState<Condition>("used");
   const [whatsapp, setWhatsapp] = useState("");
+  const [whatsappError, setWhatsappError] = useState("");
   const [wechat, setWechat] = useState("");
   const [teams, setTeams] = useState("");
   const [photos, setPhotos] = useState<File[]>([]);
@@ -332,6 +334,15 @@ export default function PostPage() {
       }
       if (!whatsapp.trim()) {
         setError("WhatsApp is required for rental listings.");
+        setLoading(false);
+        return;
+      }
+    }
+
+    if (whatsapp.trim()) {
+      const result = validateWhatsApp(whatsapp);
+      if (!result.valid) {
+        setError(result.error);
         setLoading(false);
         return;
       }
@@ -892,19 +903,29 @@ export default function PostPage() {
           <div>
             <label className="block text-xs text-gray-500 dark:text-slate-400 mb-1">
               {t.whatsapp} {type === "rental" && <span className="text-red-500">*</span>}
-              <span className="text-amber-500 ml-1 font-medium">{t.whatsappCountryCodeHint}</span>
             </label>
             <input
               type="text"
               value={whatsapp}
-              onChange={(e) => setWhatsapp(e.target.value.slice(0, 20))}
-              placeholder="+60 12-345 6789"
+              onChange={(e) => { setWhatsapp(e.target.value.slice(0, 20)); setWhatsappError(""); }}
+              onBlur={() => {
+                const result = validateWhatsApp(whatsapp);
+                if (!result.valid) {
+                  const suggested = suggestMalaysianFormat(whatsapp);
+                  setWhatsappError(suggested !== whatsapp ? result.error + ` Did you mean ${suggested}?` : result.error);
+                }
+              }}
+              placeholder="+60123456789"
               maxLength={20}
               className={inputCls}
             />
-            <p className={`text-right text-[10px] mt-0.5 ${whatsapp.length >= 18 ? "text-amber-500" : "text-gray-400 dark:text-slate-500"}`}>
-              {whatsapp.length}/20
-            </p>
+            {whatsappError ? (
+              <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                <AlertCircle size={12} /> {whatsappError}
+              </p>
+            ) : (
+              <p className="text-xs text-slate-400 mt-1">{t.whatsappFormat}</p>
+            )}
           </div>
           <div>
             <label className="block text-xs text-gray-500 dark:text-slate-400 mb-1">

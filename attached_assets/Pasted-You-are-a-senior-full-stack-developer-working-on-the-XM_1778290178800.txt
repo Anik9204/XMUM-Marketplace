@@ -1,0 +1,114 @@
+You are a senior full-stack developer working on the XMUM Marketplace app at artifacts/xmum-market/. Read ALL of the following files completely before writing a single line of code:
+
+- src/pages/PostPage.tsx
+- src/pages/EditListingPage.tsx
+- src/pages/SettingsPage.tsx
+- src/lib/i18n.ts
+- src/lib/types.ts
+
+TASK: Enforce that every WhatsApp number entered anywhere in the app includes a valid international country code (e.g. +60 for Malaysia). If it does not, block form submission and show a clear, friendly error.
+
+─── STEP 1 — Validation Utility ─────────────────────────────────
+Create a new file: src/lib/validation.ts
+
+Add the following exported function:
+
+  /**
+   * Validates a WhatsApp number.
+   * Rules:
+   *   - Must start with "+" followed by 1–3 digit country code.
+   *   - Full number must be 7–15 digits (excluding the leading "+").
+   *   - Allowed characters after "+": digits only (no spaces, dashes, parentheses).
+   *   - Examples of VALID:   +60123456789  +1234567890  +447911123456
+   *   - Examples of INVALID: 60123456789  +60  01234567  +60 12-345 6789
+   */
+  export function validateWhatsApp(value: string): { valid: boolean; error: string } {
+    const trimmed = value.trim();
+    if (!trimmed) return { valid: true, error: "" }; // empty is allowed (field is optional unless required)
+    if (!trimmed.startsWith("+")) {
+      return { valid: false, error: "WhatsApp number must start with a country code, e.g. +60123456789" };
+    }
+    const digitsOnly = trimmed.slice(1);
+    if (!/^\d{7,15}$/.test(digitsOnly)) {
+      return { valid: false, error: "Enter a valid international number, e.g. +60123456789 (7–15 digits after the +)" };
+    }
+    return { valid: true, error: "" };
+  }
+
+  Also add a helper for the common Malaysian case:
+  export function suggestMalaysianFormat(value: string): string {
+    const stripped = value.replace(/\D/g, "");
+    if (stripped.startsWith("60")) return "+" + stripped;
+    if (stripped.startsWith("0")) return "+6" + stripped;
+    return value;
+  }
+
+─── STEP 2 — Apply Validation in PostPage ────────────────────────
+In src/pages/PostPage.tsx:
+  - Import validateWhatsApp and suggestMalaysianFormat from src/lib/validation.ts.
+  - Add state: const [whatsappError, setWhatsappError] = useState("")
+  - On the WhatsApp input field:
+    * onChange handler: clear whatsappError when the user types.
+    * onBlur handler:
+        const result = validateWhatsApp(whatsapp);
+        if (!result.valid) {
+          setWhatsappError(result.error);
+          // Auto-suggest the correct format
+          const suggested = suggestMalaysianFormat(whatsapp);
+          if (suggested !== whatsapp) {
+            setWhatsappError(result.error + ` Did you mean ${suggested}?`);
+          }
+        }
+  - In the submit handler, BEFORE the existing contact check:
+      if (whatsapp.trim()) {
+        const result = validateWhatsApp(whatsapp);
+        if (!result.valid) {
+          setError(result.error);
+          setLoading(false);
+          return;
+        }
+      }
+  - Under the WhatsApp input, show the error in red if whatsappError is non-empty:
+      {whatsappError && (
+        <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+          <AlertCircle size={12} /> {whatsappError}
+        </p>
+      )}
+  - Add a grey helper text BELOW the WhatsApp input (always visible, not just on error):
+      <p className="text-xs text-slate-400 mt-1">Include country code, e.g. +60 for Malaysia</p>
+
+─── STEP 3 — Apply Validation in EditListingPage ─────────────────
+In src/pages/EditListingPage.tsx:
+  - Apply the exact same pattern as PostPage:
+    * Import validateWhatsApp
+    * Add whatsappError state
+    * onBlur validation with auto-suggest
+    * Pre-submit validation guard
+    * Error display under the field
+    * Helper text under the field
+
+─── STEP 4 — Apply Validation in SettingsPage ────────────────────
+In src/pages/SettingsPage.tsx:
+  - Find the WhatsApp number input field in the profile settings form.
+  - Apply the same onBlur validation pattern.
+  - In the save/submit handler, validate WhatsApp before calling the profile update function.
+  - Show error text under the field in the same style.
+
+─── STEP 5 — Update i18n ────────────────────────────────────────
+In src/lib/i18n.ts, add translation keys:
+  whatsappFormat: "Include country code, e.g. +60 for Malaysia" / "请包含国家代码，例如马来西亚为 +60"
+  whatsappInvalid: "WhatsApp number must start with a country code, e.g. +60123456789" / "WhatsApp号码必须以国家代码开头，例如 +60123456789"
+
+─── STEP 6 — Validate Existing Data Display ─────────────────────
+In src/pages/ListingDetailPage.tsx, when displaying the seller's WhatsApp contact button:
+  - If the stored whatsapp value does NOT start with "+", display it but add a warning icon (⚠️) next to the number and a tooltip: "This number may be missing a country code."
+  - The WhatsApp href must be: href={"https://wa.me/" + whatsapp.replace(/[^0-9]/g, "")}
+  - If the number starts with "+", use: href={"https://wa.me/" + whatsapp.replace(/\+/, "").replace(/[^0-9]/g, "")}
+  This ensures the WhatsApp link always works correctly for international numbers.
+
+─── CONSTRAINTS ─────────────────────────────────────────────────
+- The validation must be client-side only — no backend calls.
+- Do NOT make the WhatsApp field required if it was previously optional. Keep it optional but validated IF a value is entered.
+- Do NOT block form submission if the WhatsApp field is blank (only block if it has an invalid value).
+- The suggestMalaysianFormat helper must never overwrite the field automatically — only show the suggestion in the error message. The user must type the correction themselves.
+- After all edits, show every file changed and a one-line summary of each change.
