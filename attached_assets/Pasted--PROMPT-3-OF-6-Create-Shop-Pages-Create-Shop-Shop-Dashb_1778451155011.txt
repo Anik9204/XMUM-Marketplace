@@ -1,0 +1,97 @@
+# PROMPT 3 OF 6 — Create Shop Pages (Create Shop + Shop Dashboard + Shop Public Page)
+ 
+You are a senior full-stack developer + UI/UX designer on the XMUM Marketplace project. Prompts 1 and 2 are complete. Now build the Shop pages. The app uses React + Vite + TailwindCSS + Wouter routing. Brand color is `#003366`.
+ 
+---
+ 
+### STEP 1 — Create `src/pages/CreateShopPage.tsx`
+ 
+This page lets a verified XMUM student create a new shop. Requirements:
+ 
+- Only accessible to logged-in users with a verified email (`@xmu.edu.my`)
+- If not logged in: show a message and sign-in button
+- Form fields:
+  - **Shop Name** (max 60 chars, required)
+  - **Shop URL slug** — auto-generated from name, editable, validated for uniqueness (use `isSlugAvailable` from `@/lib/shops`), shown as `campusmarket.app/shop/[slug]` preview
+  - **Category** — dropdown with all `ShopCategory` options from types.ts
+  - **Bio / Description** (max 300 chars)
+  - **WhatsApp** (optional)
+  - **WeChat** (optional)
+- On submit: call `createShop()` from `@/lib/shops`, then redirect to `/shop-dashboard/[shopId]`
+- Show loading state during submission
+- Show success toast on completion
+- Design: clean, mobile-first, uses the existing Tailwind + shadcn component style of the app (card with rounded-2xl, brand color buttons, dark mode support)
+---
+ 
+### STEP 2 — Create `src/pages/ShopDashboardPage.tsx`
+ 
+This is the owner/editor management page for a shop. Route: `/shop-dashboard/:shopId`
+ 
+Tabs inside this page:
+ 
+**Tab 1: Listings**
+- List all shop listings with title, price, status
+- "Add New Listing" button → opens an inline form or modal with fields: title, description, price, pricingModel (fixed/per_hour/per_day/negotiable), category (ShopCategory), photos (up to 4, use `uploadShopListingPhoto`)
+- Each listing row has Edit and Delete (soft-delete via `deleteShopListing`) buttons
+- Only owner and editors can see this tab
+**Tab 2: Inquiries**
+- List all inquiries received (buyer name, listing title, status badge, date, note)
+- Status buttons: "Confirm" (pending → confirmed), "Complete" (confirmed → completed), "Cancel"
+- Completed inquiries with `reviewLeft: false` show a "Review left: No" tag
+**Tab 3: Editors** (owner only — hide this tab from editors)
+- Show current editors list (display their UID — note: in a future prompt we will show display names)
+- "Add Editor" input field: enter a user's email, look them up in `/users` collection by email, add their UID via `addShopEditor`
+- Remove editor button per editor row
+**Tab 4: Shop Settings**
+- Edit shop name, bio, category, whatsapp, wechat
+- Upload/change banner image and logo
+- "Delete Shop" button (owner only) with confirmation dialog
+Access control: if `user.uid !== shop.ownerId && !shop.editorIds.includes(user.uid)` → show "Access Denied"
+ 
+---
+ 
+### STEP 3 — Create `src/pages/ShopPublicPage.tsx`
+ 
+This is the public-facing shop profile. Route: `/shop/:slug`
+ 
+Sections:
+1. **Banner** — full-width banner image (or gradient fallback with brand color)
+2. **Shop header** — logo/avatar, shop name, category badge, star rating, review count, bio
+3. **Contact buttons** — WhatsApp, WeChat (if provided)
+4. **Listings grid** — show all active shop listings as cards (photo, title, price, pricing model)
+5. **Reviews section** — list of shop reviews with stars, reviewer name, comment, date
+6. If the viewing user is the owner/editor: show a "Manage Shop →" button linking to `/shop-dashboard/[shopId]`
+Clicking a listing card → opens a **listing detail sheet/modal** showing:
+- Full photos
+- Title, description, price
+- "Send Inquiry" button → opens inquiry form (note field, quantity field)
+- Calls `createInquiry()` from `@/lib/shops`
+- After successful inquiry: show success message
+---
+ 
+### STEP 4 — Add routes to `src/App.tsx`
+ 
+```tsx
+const CreateShopPage    = lazy(() => import("@/pages/CreateShopPage"));
+const ShopDashboardPage = lazy(() => import("@/pages/ShopDashboardPage"));
+const ShopPublicPage    = lazy(() => import("@/pages/ShopPublicPage"));
+```
+ 
+Add routes:
+```tsx
+<Route path="/create-shop" component={CreateShopPage} />
+<Route path="/shop-dashboard/:shopId" component={ShopDashboardPage} />
+<Route path="/shop/:slug" component={ShopPublicPage} />
+```
+ 
+---
+ 
+### STEP 5 — Run typecheck
+ 
+```bash
+cd artifacts/xmum-market && pnpm run typecheck
+```
+ 
+Fix all errors. When done, tell me: ✅ Prompt 3 complete — shop pages built.
+ 
+---

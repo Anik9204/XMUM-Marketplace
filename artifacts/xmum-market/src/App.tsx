@@ -17,6 +17,9 @@ const EditListingPage   = lazy(() => import("@/pages/EditListingPage"));
 const ResetPasswordPage = lazy(() => import("@/pages/ResetPasswordPage"));
 const MessagesPage      = lazy(() => import("@/pages/MessagesPage"));
 const SellerProfilePage = lazy(() => import("@/pages/SellerProfilePage"));
+const CreateShopPage    = lazy(() => import("@/pages/CreateShopPage"));
+const ShopDashboardPage = lazy(() => import("@/pages/ShopDashboardPage"));
+const ShopPublicPage    = lazy(() => import("@/pages/ShopPublicPage"));
 const NotFound          = lazy(() => import("@/pages/not-found"));
 
 const queryClient = new QueryClient();
@@ -61,6 +64,9 @@ function Router() {
           <Route path="/edit/:id" component={EditListingPage} />
           <Route path="/messages" component={MessagesPage} />
           <Route path="/seller/:uid" component={SellerProfilePage} />
+          <Route path="/create-shop" component={CreateShopPage} />
+          <Route path="/shop-dashboard/:shopId" component={ShopDashboardPage} />
+          <Route path="/shop/:slug" component={ShopPublicPage} />
           <Route component={NotFound} />
         </Switch>
       </Suspense>
