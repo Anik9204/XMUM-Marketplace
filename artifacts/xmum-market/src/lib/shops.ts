@@ -119,37 +119,44 @@ export async function createShopListing(data: Omit<ShopListing, "id" | "viewCoun
 }
 
 export async function getShopListings(shopId: string): Promise<ShopListing[]> {
+  // Single equality filter — no composite index needed; filter + sort client-side
   const q = query(
     collection(db, "shopListings"),
     where("shopId", "==", shopId),
-    where("isActive", "==", true),
-    orderBy("createdAt", "desc")
   );
   const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ShopListing));
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() } as ShopListing))
+    .filter((l) => l.isActive !== false)
+    .sort((a, b) => b.createdAt - a.createdAt);
 }
 
 export async function getAllShopListings(limitCount = 40): Promise<ShopListing[]> {
+  // orderBy on single field uses auto-created single-field index; filter isActive client-side
   const q = query(
     collection(db, "shopListings"),
-    where("isActive", "==", true),
     orderBy("createdAt", "desc"),
-    limit(limitCount)
+    limit(limitCount * 2),
   );
   const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ShopListing));
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() } as ShopListing))
+    .filter((l) => l.isActive !== false)
+    .slice(0, limitCount);
 }
 
 export async function getShopListingsByCategory(category: string, limitCount = 40): Promise<ShopListing[]> {
+  // Single equality filter — no composite index needed; filter + sort client-side
   const q = query(
     collection(db, "shopListings"),
-    where("isActive", "==", true),
     where("category", "==", category),
-    orderBy("createdAt", "desc"),
-    limit(limitCount)
   );
   const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ShopListing));
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() } as ShopListing))
+    .filter((l) => l.isActive !== false)
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, limitCount);
 }
 
 export async function updateShopListing(listingId: string, data: Partial<ShopListing>): Promise<void> {
@@ -296,23 +303,27 @@ export async function submitShopAd(data: Omit<ShopAd, "id" | "impressions" | "cl
 
 export async function getApprovedShopAds(): Promise<ShopAd[]> {
   const now = Date.now();
+  // Single equality filter only — filter date range client-side
   const q = query(
     collection(db, "shopAds"),
     where("status", "==", "approved"),
-    where("startDate", "<=", now),
-    where("endDate", ">=", now)
   );
   const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ShopAd));
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() } as ShopAd))
+    .filter((ad) => ad.startDate <= now && ad.endDate >= now);
 }
 
 export async function getAllShops(limitCount = 50): Promise<Shop[]> {
+  // orderBy on single field uses auto-created single-field index; filter isActive client-side
   const q = query(
     collection(db, "shops"),
-    where("isActive", "==", true),
     orderBy("createdAt", "desc"),
-    limit(limitCount)
+    limit(limitCount * 2),
   );
   const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Shop));
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() } as Shop))
+    .filter((s) => s.isActive !== false)
+    .slice(0, limitCount);
 }

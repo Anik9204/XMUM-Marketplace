@@ -196,7 +196,10 @@ export default function ShopDashboardPage() {
           setShowAdd={setShowAddListing}
           onRefresh={() => {
             setLoadingListings(true);
-            getShopListings(shopId).then(setListings).finally(() => setLoadingListings(false));
+            getShopListings(shopId)
+              .then(setListings)
+              .catch((err) => console.error("[listings] fetch failed:", err))
+              .finally(() => setLoadingListings(false));
           }}
         />
       )}
