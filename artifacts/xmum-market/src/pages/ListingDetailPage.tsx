@@ -2,14 +2,19 @@ import { useState, useEffect, useRef } from "react";
 import { useRoute, useLocation, Link } from "wouter";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { getListing, markAsSold } from "@/lib/listings";
+import { getListing, markAsSold, getSimilarListings } from "@/lib/listings";
 import { doc, updateDoc, increment } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { getProfile } from "@/lib/userProfile";
 import { Listing, UserProfile } from "@/lib/types";
 import AuthModal from "@/components/AuthModal";
 import ReportModal from "@/components/ReportModal";
-import { ArrowLeft, Clock, Tag, CheckCircle2, MapPin, MessageCircle, Loader2, ShieldAlert, ShieldCheck, Bookmark, BookmarkCheck, MoreHorizontal, Flag, Share2 } from "lucide-react";
+import {
+  ArrowLeft, Clock, Tag, CheckCircle2, MapPin, MessageCircle,
+  Loader2, ShieldAlert, ShieldCheck, Bookmark, BookmarkCheck,
+  MoreHorizontal, Flag, Share2, ChevronLeft, ChevronRight, X, Star,
+  ArrowRight,
+} from "lucide-react";
 import { getOrCreateConversation } from "@/lib/messaging";
 import { SiWhatsapp, SiWechat } from "react-icons/si";
 import { MdGroups } from "react-icons/md";
@@ -30,6 +35,10 @@ function formatDate(ms: number): string {
   return new Date(ms).toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "numeric" });
 }
 
+function memberSince(ms: number): string {
+  return new Date(ms).toLocaleDateString("en-MY", { month: "long", year: "numeric" });
+}
+
 const VEHICLE_ICONS: Record<string, string> = {
   car: "🚗",
   bike: "🏍️",
@@ -38,12 +47,27 @@ const VEHICLE_ICONS: Record<string, string> = {
   bicycle: "🚲",
 };
 
+function StarRating({ rating }: { rating: number }) {
+  return (
+    <span className="flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <Star
+          key={i}
+          size={12}
+          className={i <= Math.round(rating) ? "fill-yellow-400 text-yellow-400" : "fill-gray-200 text-gray-200 dark:fill-slate-600 dark:text-slate-600"}
+        />
+      ))}
+    </span>
+  );
+}
+
 export default function ListingDetailPage() {
   const { t } = useLang();
   const { user } = useAuth();
   const [, params] = useRoute("/listing/:id");
   const [, navigate] = useLocation();
   const { toast } = useToast();
+
   const [listing, setListing] = useState<Listing | null>(null);
   const [loading, setLoading] = useState(true);
   const [activePhoto, setActivePhoto] = useState(0);
@@ -61,6 +85,21 @@ export default function ListingDetailPage() {
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
   const overflowRef = useRef<HTMLDivElement>(null);
 
+  // Lightbox state
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxPhoto, setLightboxPhoto] = useState(0);
+
+  // Touch-swipe state for hero image
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+
+  // Touch-swipe state for lightbox
+  const lbTouchStartX = useRef<number | null>(null);
+
+  // Similar listings
+  const [similarListings, setSimilarListings] = useState<Listing[]>([]);
+  const [similarLoading, setSimilarLoading] = useState(false);
+
   // Close overflow menu on outside click
   useEffect(() => {
     if (!showOverflowMenu) return;
@@ -72,6 +111,16 @@ export default function ListingDetailPage() {
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, [showOverflowMenu]);
+
+  // Lock body scroll when lightbox is open
+  useEffect(() => {
+    if (lightboxOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => { document.body.style.overflow = ""; };
+  }, [lightboxOpen]);
 
   // Check saved state when listing and user are ready
   useEffect(() => {
@@ -89,12 +138,19 @@ export default function ListingDetailPage() {
             .then(setSellerProfile)
             .catch(() => setSellerProfile(null))
             .finally(() => setProfileLoading(false));
-          // Non-blocking view counter — fire-and-forget, skip for owner
           if (user?.uid !== l.userId) {
             updateDoc(doc(db, "listings", l.id), { viewCount: increment(1) }).catch(() => {});
           }
         } else {
           setProfileLoading(false);
+        }
+        // Fetch similar listings
+        if (l) {
+          setSimilarLoading(true);
+          getSimilarListings(l.type, l.category, l.id)
+            .then(setSimilarListings)
+            .catch(() => setSimilarListings([]))
+            .finally(() => setSimilarLoading(false));
         }
       })
       .finally(() => setLoading(false));
@@ -123,6 +179,42 @@ export default function ListingDetailPage() {
   const isOwner = user?.uid === listing.userId;
   const isRental = listing.type === "rental";
   const canViewPlate = isRental && user !== null && user.emailVerified === true;
+
+  // Hero photo swipe handlers
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  };
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null || touchStartY.current === null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX.current;
+    const dy = e.changedTouches[0].clientY - touchStartY.current;
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
+      if (dx < 0) setActivePhoto((p) => Math.min(p + 1, listing.photos.length - 1));
+      else setActivePhoto((p) => Math.max(p - 1, 0));
+    }
+    touchStartX.current = null;
+    touchStartY.current = null;
+  };
+
+  // Lightbox swipe handlers
+  const handleLbTouchStart = (e: React.TouchEvent) => {
+    lbTouchStartX.current = e.touches[0].clientX;
+  };
+  const handleLbTouchEnd = (e: React.TouchEvent) => {
+    if (lbTouchStartX.current === null) return;
+    const dx = e.changedTouches[0].clientX - lbTouchStartX.current;
+    if (Math.abs(dx) > 50) {
+      if (dx < 0) setLightboxPhoto((p) => Math.min(p + 1, listing.photos.length - 1));
+      else setLightboxPhoto((p) => Math.max(p - 1, 0));
+    }
+    lbTouchStartX.current = null;
+  };
+
+  const openLightbox = (idx: number) => {
+    setLightboxPhoto(idx);
+    setLightboxOpen(true);
+  };
 
   const handleMessageSeller = async () => {
     if (!user || !listing) return;
@@ -237,6 +329,12 @@ export default function ListingDetailPage() {
 
   const avatarFallback = `https://ui-avatars.com/api/?name=${encodeURIComponent(listing.userName)}&background=003366&color=fff`;
 
+  const whatsappUrl = (() => {
+    const wa = listing.whatsapp ?? "";
+    const num = wa.startsWith("+") ? wa.replace(/\+/, "").replace(/[^0-9]/g, "") : wa.replace(/[^0-9]/g, "");
+    return `https://wa.me/${num}?text=${pre}`;
+  })();
+
   return (
     <>
       {soldToast && (
@@ -246,7 +344,64 @@ export default function ListingDetailPage() {
         </div>
       )}
 
-      <div className="max-w-2xl mx-auto pb-28 md:pb-8 animate-in fade-in duration-200">
+      {/* ── Lightbox overlay ─────────────────────────────────────────────── */}
+      {lightboxOpen && listing.photos.length > 0 && (
+        <div
+          className="fixed inset-0 z-[200] bg-black flex items-center justify-center"
+          onTouchStart={handleLbTouchStart}
+          onTouchEnd={handleLbTouchEnd}
+        >
+          <img
+            src={listing.photos[lightboxPhoto]}
+            alt={listing.title}
+            className="max-w-full max-h-full object-contain select-none"
+            draggable={false}
+          />
+
+          {/* Close */}
+          <button
+            onClick={() => setLightboxOpen(false)}
+            className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+          >
+            <X size={22} />
+          </button>
+
+          {/* Left arrow */}
+          {lightboxPhoto > 0 && (
+            <button
+              onClick={() => setLightboxPhoto((p) => p - 1)}
+              className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+            >
+              <ChevronLeft size={24} />
+            </button>
+          )}
+
+          {/* Right arrow */}
+          {lightboxPhoto < listing.photos.length - 1 && (
+            <button
+              onClick={() => setLightboxPhoto((p) => p + 1)}
+              className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+            >
+              <ChevronRight size={24} />
+            </button>
+          )}
+
+          {/* Dot indicators */}
+          {listing.photos.length > 1 && (
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2">
+              {listing.photos.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setLightboxPhoto(i)}
+                  className={`rounded-full transition-all ${i === lightboxPhoto ? "w-4 h-2 bg-white" : "w-2 h-2 border-2 border-white/60 bg-transparent"}`}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="max-w-2xl mx-auto pb-32 md:pb-8 animate-in fade-in duration-200">
         {/* Back button + overflow menu */}
         <div className="sticky top-14 sm:top-16 z-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm border-b border-gray-100 dark:border-slate-700">
           <div className="flex items-center justify-between px-4">
@@ -258,7 +413,6 @@ export default function ListingDetailPage() {
               <span>Back</span>
             </button>
 
-            {/* ⋯ Overflow menu */}
             <div className="relative" ref={overflowRef}>
               <button
                 onClick={() => setShowOverflowMenu((v) => !v)}
@@ -290,7 +444,7 @@ export default function ListingDetailPage() {
           </div>
         </div>
 
-        {/* Rental disclaimer banner — shown immediately below back button */}
+        {/* Rental disclaimer banner */}
         {isRental && (
           <div className="flex items-start gap-3 bg-red-50 dark:bg-red-950/50 border-b-2 border-red-300 dark:border-red-700 px-4 py-3">
             <ShieldAlert size={20} className="text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
@@ -300,29 +454,35 @@ export default function ListingDetailPage() {
           </div>
         )}
 
-        {/* Photos */}
-        <div className="relative bg-black">
+        {/* ── Photo Gallery ─────────────────────────────────────────────────── */}
+        <div
+          className="relative bg-black overflow-hidden select-none"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
           {listing.photos.length > 0 ? (
             <>
+              {/* Hero image — tappable to open lightbox */}
               <img
                 src={listing.photos[activePhoto]}
                 alt={listing.title}
-                className={`w-full h-64 sm:h-80 md:h-96 object-contain ${isSold ? "opacity-50" : ""}`}
+                className={`w-full h-64 sm:h-80 md:h-96 object-contain cursor-zoom-in transition-opacity duration-150 ${isSold ? "opacity-50" : ""}`}
+                onClick={() => openLightbox(activePhoto)}
               />
               {isSold && (
-                <div className="absolute inset-0 flex items-center justify-center">
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                   <span className="bg-black/75 text-white text-2xl font-black tracking-widest px-6 py-3 rounded-2xl rotate-[-8deg] shadow-2xl">
                     {listing.type === "lost-found" ? t.resolvedBadge : t.soldBadge}
                   </span>
                 </div>
               )}
+              {/* Dot indicators */}
               {listing.photos.length > 1 && (
-                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 pointer-events-none">
                   {listing.photos.map((_, i) => (
-                    <button
+                    <span
                       key={i}
-                      onClick={() => setActivePhoto(i)}
-                      className={`h-2 rounded-full transition-all ${i === activePhoto ? "bg-white w-4" : "bg-white/50 w-2"}`}
+                      className={`rounded-full transition-all ${i === activePhoto ? "w-4 h-2 bg-white" : "w-2 h-2 border-2 border-white/60 bg-transparent"}`}
                     />
                   ))}
                 </div>
@@ -342,14 +502,14 @@ export default function ListingDetailPage() {
           )}
         </div>
 
-        {/* Thumbnails — horizontally scrollable */}
+        {/* Thumbnail strip — 56×56px, active = navy ring */}
         {listing.photos.length > 1 && (
           <div className="flex gap-2 px-4 py-3 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 overflow-x-auto scrollbar-hide">
             {listing.photos.map((src, i) => (
               <button
                 key={i}
                 onClick={() => setActivePhoto(i)}
-                className={`w-14 h-14 flex-shrink-0 rounded-xl overflow-hidden border-2 transition-all ${i === activePhoto ? "border-[#003366] dark:border-blue-400" : "border-transparent"}`}
+                className={`w-14 h-14 flex-shrink-0 rounded-xl overflow-hidden border-2 transition-all ${i === activePhoto ? "border-[#003366] dark:border-blue-400 ring-2 ring-[#003366]/30" : "border-transparent"}`}
               >
                 <img src={src} alt={`${listing.title} photo ${i + 1}`} className="w-full h-full object-cover" />
               </button>
@@ -412,7 +572,6 @@ export default function ListingDetailPage() {
           {isRental && (
             <div className="bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-800 rounded-2xl p-4 space-y-3">
               <p className="text-sm font-bold text-gray-800 dark:text-slate-200">{t.rentalVehicleInfo}</p>
-
               <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                 {listing.vehicleBrand && (
                   <div>
@@ -478,7 +637,6 @@ export default function ListingDetailPage() {
                 </div>
               </div>
 
-              {/* Requirements */}
               <div className="pt-2 border-t border-yellow-200 dark:border-yellow-800 flex flex-wrap gap-2">
                 {listing.requiresLicense && (
                   <span className="inline-flex items-center gap-1 text-xs bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-400 px-2 py-1 rounded-full font-medium">
@@ -514,21 +672,55 @@ export default function ListingDetailPage() {
             </span>
           )}
 
-          {/* Seller info card — tappable, links to public seller profile */}
-          <Link href={`/seller/${listing.userId}`}>
-            <div className="bg-slate-50 dark:bg-slate-700/50 rounded-2xl p-4 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer">
-              <img
-                src={sellerProfile?.avatarUrl || avatarFallback}
-                alt={listing.userName}
-                className="w-12 h-12 rounded-full object-cover border-2 border-white dark:border-slate-600"
-              />
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-sm text-slate-800 dark:text-slate-200">{listing.userName}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">XMUM Verified ✓</p>
+          {/* ── Seller Card ────────────────────────────────────────────────── */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden border-t-4 border-t-[#003366]">
+            <div className="p-4">
+              <div className="flex items-center gap-3">
+                <img
+                  src={sellerProfile?.avatarUrl || avatarFallback}
+                  alt={listing.userName}
+                  className="w-12 h-12 rounded-full object-cover border-2 border-white dark:border-slate-600 shadow-sm shrink-0"
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm text-slate-900 dark:text-slate-100 truncate">{listing.userName}</p>
+                  {sellerProfile?.isVerified && (
+                    <p className="text-[11px] text-teal-600 dark:text-teal-400 font-medium flex items-center gap-1">
+                      <ShieldCheck size={11} /> Verified XMUM Student
+                    </p>
+                  )}
+                  <div className="flex items-center gap-2 mt-0.5">
+                    {sellerProfile?.rating != null && sellerProfile.rating > 0 && (
+                      <StarRating rating={sellerProfile.rating} />
+                    )}
+                    {sellerProfile?.createdAt && (
+                      <span className="text-[11px] text-gray-400 dark:text-slate-500">
+                        Member since {memberSince(sellerProfile.createdAt)}
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
-              <span className="text-xs text-[#003366] dark:text-blue-400 font-medium shrink-0">View shop →</span>
+
+              <div className="flex gap-2 mt-4">
+                {!isOwner && user && user.emailVerified && (
+                  <button
+                    onClick={handleMessageSeller}
+                    disabled={startingChat}
+                    className="flex-1 flex items-center justify-center gap-2 bg-[#003366] dark:bg-blue-600 text-white text-sm font-semibold rounded-xl py-2.5 min-h-[44px] hover:bg-[#002244] dark:hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  >
+                    {startingChat ? <Loader2 size={15} className="animate-spin" /> : <MessageCircle size={15} />}
+                    Message
+                  </button>
+                )}
+                <Link
+                  href={`/seller/${listing.userId}`}
+                  className="flex-1 flex items-center justify-center gap-2 border-2 border-[#003366] dark:border-blue-500 text-[#003366] dark:text-blue-400 text-sm font-semibold rounded-xl py-2.5 min-h-[44px] hover:bg-[#003366]/5 dark:hover:bg-blue-500/10 transition-colors"
+                >
+                  View Shop <ArrowRight size={14} />
+                </Link>
+              </div>
             </div>
-          </Link>
+          </div>
 
           {/* Owner: Mark as Sold */}
           {isOwner && !isSold && (
@@ -552,19 +744,9 @@ export default function ListingDetailPage() {
             </div>
           )}
 
-          {/* Contact buttons */}
+          {/* Contact buttons (in-page, desktop-friendly) */}
           {!isSold && (
             <div>
-              {user && user.emailVerified && user.uid !== listing.userId && (
-                <button
-                  onClick={handleMessageSeller}
-                  disabled={startingChat}
-                  className="w-full min-h-[48px] flex items-center justify-center gap-2 bg-[#003366] dark:bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-[#002244] dark:hover:bg-blue-700 disabled:opacity-50 transition-colors mb-3"
-                >
-                  {startingChat ? <Loader2 size={16} className="animate-spin" /> : <MessageCircle size={16} />}
-                  {t.messageSeller}
-                </button>
-              )}
               {chatError && (
                 <p className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl px-3 py-2 mb-2">
                   {chatError}
@@ -643,47 +825,126 @@ export default function ListingDetailPage() {
               )}
             </div>
           )}
+
+          {/* ── Similar Listings ──────────────────────────────────────────── */}
+          {(similarLoading || similarListings.length >= 2) && (
+            <div className="pt-2">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-base font-bold text-gray-900 dark:text-slate-100">
+                  More in {catLabel}
+                </h2>
+                <Link
+                  href={`/search?category=${listing.category}&type=${listing.type}`}
+                  className="flex items-center gap-1 text-xs text-[#003366] dark:text-blue-400 font-medium hover:underline"
+                >
+                  See all <ArrowRight size={12} />
+                </Link>
+              </div>
+
+              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-4 px-4">
+                {similarLoading
+                  ? Array.from({ length: 3 }).map((_, i) => (
+                      <div key={i} className="flex-shrink-0 w-40 md:w-48 rounded-xl bg-gray-100 dark:bg-slate-800 animate-pulse aspect-[3/4]" />
+                    ))
+                  : similarListings.map((sl) => (
+                      <Link
+                        key={sl.id}
+                        href={`/listing/${sl.id}`}
+                        className="flex-shrink-0 w-40 md:w-48 rounded-xl overflow-hidden border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-200"
+                      >
+                        {sl.photos.length > 0 ? (
+                          <img
+                            src={sl.photos[0]}
+                            alt={sl.title}
+                            className="w-full aspect-[4/3] object-cover"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="w-full aspect-[4/3] bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-3xl">
+                            📦
+                          </div>
+                        )}
+                        <div className="p-2">
+                          <p className="text-xs font-semibold text-gray-900 dark:text-slate-100 line-clamp-2 leading-snug">{sl.title}</p>
+                          {sl.price != null && sl.type === "buy-sell" && (
+                            <p className="text-xs font-bold text-blue-600 dark:text-blue-400 mt-1">
+                              {sl.price === 0 ? "Free" : `RM ${sl.price.toFixed(2)}`}
+                            </p>
+                          )}
+                          {sl.type === "rental" && sl.rentalPricePerDay != null && (
+                            <p className="text-xs font-bold text-yellow-700 dark:text-yellow-400 mt-1">
+                              RM {sl.rentalPricePerDay.toFixed(2)}/day
+                            </p>
+                          )}
+                        </div>
+                      </Link>
+                    ))
+                }
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Sticky bottom bar — mobile only */}
-      {!isSold && !isOwner && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between gap-3 md:hidden">
-          <div>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Price</p>
-            <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
-              {listing.type === "buy-sell"
-                ? (listing.price === 0 ? "Free" : `RM ${listing.price?.toFixed(2)}`)
-                : isRental && listing.rentalPricePerDay != null
-                ? `RM ${listing.rentalPricePerDay.toFixed(2)}${t.rentalPerDay}`
-                : "—"}
+      {/* ── Sticky Bottom Contact Bar — mobile only ───────────────────────── */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 md:hidden">
+        {isSold ? (
+          /* Sold state */
+          <div className="bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700 shadow-sheet px-4 py-3 flex items-center justify-between gap-3">
+            <p className="text-sm text-gray-500 dark:text-slate-400 font-medium flex-1">
+              This listing is no longer available
             </p>
+            <Link
+              href={`/search?category=${listing.category}&type=${listing.type}`}
+              className="shrink-0 px-4 py-2 bg-[#003366] text-white text-sm font-semibold rounded-xl hover:bg-[#002244] transition-colors"
+            >
+              See Similar
+            </Link>
           </div>
-          {canShowWhatsApp && listing.whatsapp ? (
-            <a
-              href={(() => {
-                const wa = listing.whatsapp ?? "";
-                const num = wa.startsWith("+") ? wa.replace(/\+/, "").replace(/[^0-9]/g, "") : wa.replace(/[^0-9]/g, "");
-                return `https://wa.me/${num}?text=${pre}`;
-              })()}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex-1 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-xl px-4 min-h-[44px] flex items-center justify-center gap-2"
-            >
-              <span>💬</span> WhatsApp
-            </a>
-          ) : (
-            <button
-              onClick={handleMessageSeller}
-              disabled={startingChat || !user}
-              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl px-4 min-h-[44px] flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              {startingChat ? <Loader2 size={16} className="animate-spin" /> : <MessageCircle size={16} />}
-              Message
-            </button>
-          )}
-        </div>
-      )}
+        ) : isOwner ? null : (
+          /* Active listing — non-owner */
+          <div className="bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] px-4 pt-2 pb-4">
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 text-center mb-2">
+              Usually replies within a day
+            </p>
+            <div className="flex items-center gap-2">
+              {/* Primary: Chat with Seller */}
+              <button
+                onClick={() => {
+                  if (!user) { setShowAuth(true); return; }
+                  if (!user.emailVerified) { setContactBlocked("verify"); return; }
+                  handleMessageSeller();
+                }}
+                disabled={startingChat}
+                className="flex-[3] flex items-center justify-center gap-2 bg-[#003366] dark:bg-blue-600 text-white font-semibold rounded-xl min-h-[52px] hover:bg-[#002244] dark:hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm"
+              >
+                {startingChat
+                  ? <Loader2 size={16} className="animate-spin" />
+                  : <span>💬</span>
+                }
+                Chat with Seller
+              </button>
+
+              {/* Secondary: WhatsApp icon (only if available) */}
+              {canShowWhatsApp && (
+                <a
+                  href={whatsappUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => {
+                    if (!user) { e.preventDefault(); setShowAuth(true); return; }
+                    if (!user.emailVerified) { e.preventDefault(); setContactBlocked("verify"); return; }
+                  }}
+                  className="flex-[1] flex items-center justify-center w-10 h-[52px] bg-[#25D366] hover:bg-[#1EB855] text-white rounded-full transition-colors"
+                  aria-label="WhatsApp"
+                >
+                  <SiWhatsapp size={22} />
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
 
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
       {showReport && listing && (

@@ -358,3 +358,47 @@ export async function searchListings(
     return matchKeyword && matchMin && matchMax && matchCond;
   });
 }
+
+// ── Similar listings ───────────────────────────────────────────────────────────
+// Returns up to 6 active listings with the same type and category, excluding
+// the current listing ID. Falls back to client-side filter on index errors.
+export async function getSimilarListings(
+  type: ListingType,
+  category: string,
+  excludeId: string
+): Promise<Listing[]> {
+  try {
+    const q = query(
+      collection(db, "listings"),
+      where("type", "==", type),
+      where("category", "==", category),
+      where("isArchived", "==", false),
+      where("status", "==", "active"),
+      orderBy("sortKey", "desc"),
+      limit(7)
+    );
+    const snap = await getDocs(q);
+    return snap.docs
+      .map(mapDoc)
+      .filter((l) => l.id !== excludeId)
+      .slice(0, 6);
+  } catch (err: any) {
+    if (err?.code === "failed-precondition" || err?.message?.includes("index")) {
+      const fallback = await getDocs(
+        query(collection(db, "listings"), orderBy("createdAt", "desc"), limit(80))
+      );
+      return fallback.docs
+        .map(mapDoc)
+        .filter(
+          (l) =>
+            l.id !== excludeId &&
+            l.type === type &&
+            l.category === category &&
+            l.isArchived === false &&
+            l.status === "active"
+        )
+        .slice(0, 6);
+    }
+    return [];
+  }
+}

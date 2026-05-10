@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { Listing } from "@/lib/types";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { MapPin, Clock, Pencil, Wifi, Bookmark, BookmarkCheck } from "lucide-react";
+import { MapPin, Clock, Pencil, Wifi, Bookmark, BookmarkCheck, Eye } from "lucide-react";
 import AuthModal from "@/components/AuthModal";
 import { saveListing, unsaveListing, isListingSaved } from "@/lib/savedListings";
 
@@ -43,6 +43,22 @@ const VEHICLE_ICONS: Record<string, string> = {
   motorcycle: "🏍️",
   scooter: "🛵",
   bicycle: "🚲",
+};
+
+const TYPE_BORDER_COLOR: Record<string, string> = {
+  "buy-sell":   "#003366",
+  "lost-found": "#0D9488",
+  "jobs":       "#7C3AED",
+  "assistance": "#EA580C",
+  "rental":     "#D97706",
+};
+
+const TYPE_BADGE: Record<string, { bg: string; text: string; label: string }> = {
+  "buy-sell":   { bg: "bg-[#003366]",  text: "text-white", label: "Buy & Sell" },
+  "lost-found": { bg: "bg-teal-600",   text: "text-white", label: "Lost & Found" },
+  "jobs":       { bg: "bg-purple-600", text: "text-white", label: "Jobs" },
+  "assistance": { bg: "bg-orange-600", text: "text-white", label: "Assistance" },
+  "rental":     { bg: "bg-amber-600",  text: "text-white", label: "Rental" },
 };
 
 export default function ListingCard({
@@ -113,6 +129,9 @@ export default function ListingCard({
     }
   };
 
+  const typeBadge = TYPE_BADGE[listing.type];
+  const borderColor = TYPE_BORDER_COLOR[listing.type] ?? "#003366";
+
   return (
     <>
       {saveToast && (
@@ -121,7 +140,10 @@ export default function ListingCard({
         </div>
       )}
 
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-gray-100 dark:border-slate-700 overflow-hidden hover:shadow-hover hover:-translate-y-0.5 transition-all duration-200">
+      <div
+        className="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-gray-100 dark:border-slate-700 overflow-hidden hover:shadow-hover hover:scale-[1.015] transition-all duration-200 border-l-4"
+        style={{ borderLeftColor: borderColor }}
+      >
         <Link href={`/listing/${listing.id}`}>
           <div className="relative">
             {listing.photos.length > 0 ? (
@@ -157,9 +179,16 @@ export default function ListingCard({
               </div>
             )}
 
+            {/* Type badge — bottom-left of image */}
+            {!isSold && typeBadge && (
+              <span className={`absolute bottom-2 left-2 z-10 inline-flex items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm ${typeBadge.bg} ${typeBadge.text}`}>
+                {isRental && listing.vehicleType ? `${VEHICLE_ICONS[listing.vehicleType] ?? "🚗"} ${typeBadge.label}` : typeBadge.label}
+              </span>
+            )}
+
             {/* "⬆ Featured" badge — shown for 3 hours after a bump */}
             {!isSold && listing.lastBumpedAt && Date.now() - listing.lastBumpedAt < 3 * 60 * 60 * 1000 && (
-              <span className="absolute bottom-2 left-2 z-10 inline-flex items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-500 text-white shadow-sm">
+              <span className="absolute bottom-7 left-2 z-10 inline-flex items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-500 text-white shadow-sm">
                 ⬆ Featured
               </span>
             )}
@@ -205,17 +234,17 @@ export default function ListingCard({
               </>
             )}
 
-            {/* Save / Bookmark button — bottom-right of image, z-10 */}
+            {/* Save / Bookmark button — top-right corner, 40×40 with dark backdrop */}
             {showSaveButton && !isOwnListing && (
               <button
                 onClick={handleSaveToggle}
                 disabled={savingInProgress}
-                className="absolute bottom-2 right-2 z-10 w-9 h-9 min-w-[36px] min-h-[36px] rounded-full bg-white/90 dark:bg-slate-800/90 shadow-md flex items-center justify-center hover:bg-white dark:hover:bg-slate-700 transition-colors disabled:opacity-60"
+                className="absolute top-2 right-2 z-10 w-10 h-10 min-w-[40px] min-h-[40px] rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center hover:bg-black/50 transition-colors disabled:opacity-60"
                 aria-label={isSaved ? "Remove from saved" : "Save listing"}
               >
                 {isSaved
-                  ? <BookmarkCheck size={16} className="text-[#003366] dark:text-blue-400" />
-                  : <Bookmark size={16} className="text-gray-500 dark:text-slate-400" />
+                  ? <BookmarkCheck size={16} className="text-white" />
+                  : <Bookmark size={16} className="text-white" />
                 }
               </button>
             )}
@@ -228,7 +257,23 @@ export default function ListingCard({
                 : catLabel}
             </span>
             <h3 className={`font-semibold text-sm leading-snug line-clamp-1 ${isSold ? "text-[#64748B] dark:text-slate-500" : "text-[#0F172A] dark:text-slate-100"}`}>{listing.title}</h3>
+
+            {/* View count */}
+            {typeof listing.viewCount === "number" && listing.viewCount > 0 && (
+              <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
+                <Eye size={10} />
+                {listing.viewCount}
+              </span>
+            )}
+
             <p className="text-xs text-[#64748B] dark:text-slate-400 line-clamp-2 mt-0.5 leading-relaxed">{listing.description}</p>
+
+            {/* Jobs: Offering / Seeking subtitle */}
+            {isJobs && listing.jobSubtype && (
+              <p className="mt-1 text-[11px] font-semibold text-purple-600 dark:text-purple-400">
+                {listing.jobSubtype === "offering" ? "▶ Offering" : "◀ Seeking"}
+              </p>
+            )}
 
             {listing.type === "buy-sell" && (
               <p className={`mt-2 text-lg font-bold ${isSold ? "text-gray-400 dark:text-slate-500 line-through" : "text-blue-600 dark:text-blue-400"}`}>
@@ -248,9 +293,10 @@ export default function ListingCard({
               </p>
             )}
 
+            {/* Rental: 🚗 RM X/day format */}
             {isRental && listing.rentalPricePerDay != null && (
               <p className={`mt-2 text-base font-bold ${isSold ? "text-gray-400 dark:text-slate-500 line-through" : "text-yellow-700 dark:text-yellow-400"}`}>
-                {t.rmPrefix} {listing.rentalPricePerDay.toFixed(2)}{t.rentalPerDay}
+                {listing.vehicleType ? VEHICLE_ICONS[listing.vehicleType] : "🚗"} {t.rmPrefix} {listing.rentalPricePerDay.toFixed(2)}/day
               </p>
             )}
 

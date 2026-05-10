@@ -1,0 +1,65 @@
+You are a senior UI/UX developer working on the XMUM Marketplace at artifacts/xmum-market/. Read ALL of these files before writing any code:
+- src/components/ListingCard.tsx
+- src/pages/ListingDetailPage.tsx
+- src/lib/types.ts
+- src/lib/savedListings.ts
+- src/lib/listings.ts
+- src/lib/i18n.ts
+
+PROBLEM AREAS:
+  1. ListingCard has no hover effect that signals interactivity clearly.
+  2. There is no visual distinction between listing types on the card — all cards look the same.
+  3. ListingDetailPage's photo gallery has no swipe gesture and no zoom.
+  4. The seller card on ListingDetailPage is plain and doesn't encourage visiting their shop.
+  5. The contact action bar on mobile is too plain and doesn't communicate urgency or trust signals.
+  6. There is no "similar listings" section at the bottom of the detail page.
+
+─── FIX 1 — ListingCard Upgrades ────────────────────────────────
+- Add a colored left-border accent (4px) on each card based on listing type:
+    buy-sell → #003366 (navy), lost-found → teal (#0D9488), jobs → purple (#7C3AED),
+    assistance → orange (#EA580C), rental → amber (#D97706)
+- Add hover: scale(1.015) + shadow-hover transition (200ms ease).
+- Add the listing type badge (colored pill) to the bottom-left of the image overlay.
+- Show a small eye icon + view count (e.g. "👁 12") below the title if viewCount > 0.
+- For jobs: show "Offering" or "Seeking" badge in the subtitle area.
+- For rental: show "🚗 RM X/day" format for the price.
+- Ensure the save/bookmark button in the top-right of the image is always 40×40px with bg-black/30 backdrop.
+
+─── FIX 2 — ListingDetailPage Photo Gallery ─────────────────────
+Replace the current static photo display with a proper interactive gallery:
+  - Implement swipe-left / swipe-right gestures using onTouchStart / onTouchEnd handlers (track deltaX, switch photo if |deltaX| > 50px).
+  - Add smooth CSS transition: transform translateX for the swipe.
+  - Dot indicators below the hero image (filled dot = active, empty ring = inactive).
+  - Clicking/tapping the hero image opens a full-screen lightbox overlay (fixed inset-0, black background, image centered, X close button, left/right arrow buttons, swipeable).
+  - Thumbnail strip below: horizontally scrollable, each thumbnail 56×56px, active thumbnail has a navy border ring.
+
+─── FIX 3 — Seller Card Redesign ────────────────────────────────
+In ListingDetailPage, redesign the seller information section:
+  - White card with navy top border (4px).
+  - Avatar (48px) + display name + "Verified XMUM Student" subtitle if isVerified.
+  - Star rating displayed as filled yellow stars.
+  - "Member since [month year]" in grey.
+  - Two buttons: "Message" (navy, filled) + "View Shop" (outlined, navy) side by side.
+  - Clicking either must still navigate to their respective destinations (messages and /seller/:uid).
+
+─── FIX 4 — Contact Action Bar ──────────────────────────────────
+Redesign the sticky bottom contact bar on mobile:
+  - White bar with top border and soft shadow-sheet.
+  - Primary button: "💬 Chat with Seller" (navy, 60% width, rounded-xl, min-h-[52px]).
+  - Secondary button: green WhatsApp icon button (40px, rounded-full, remaining width).
+  - If listing is sold: replace with a grey "This listing is no longer available" banner + "See Similar" button.
+  - Add a small "Usually replies in X" trust signal above the bar (hard-code as "Usually replies within a day" — this can be dynamic later).
+
+─── FIX 5 — Similar Listings Section ────────────────────────────
+At the bottom of ListingDetailPage, after the main listing content, add a "You might also like" section:
+  - Fetch up to 6 listings with the same type and same category as the current listing, excluding the current listing ID.
+  - Use a horizontal scrollable row of listing cards (each card width: 160px on mobile, 200px on desktop).
+  - Section heading: "More in [categoryLabel]" with an arrow link to /search?category=[category]&type=[type].
+  - If fewer than 2 listings found, hide the section entirely.
+  - Show skeleton loaders while fetching.
+
+─── CONSTRAINTS ─────────────────────────────────────────────────
+- Do NOT add new npm packages for gestures — use native touch events.
+- Do NOT use react-image-lightbox or any external gallery library.
+- Do NOT modify listing queries in listings.ts except adding the "similar listings" query.
+- After all changes, list every file modified.
