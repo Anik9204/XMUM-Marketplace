@@ -35,7 +35,26 @@ export async function getShops(limitCount = 100) {
     limit(limitCount),
   );
   const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  return snap.docs.map((d) => {
+    const data = d.data();
+    return {
+      id: d.id,
+      shopName:          data.name          ?? data.shopName ?? "",
+      shopSlug:          data.slug          ?? data.shopSlug ?? "",
+      shopBio:           data.bio           ?? data.shopBio  ?? "",
+      shopCategories:    data.category
+                           ? [data.category]
+                           : (data.shopCategories ?? []),
+      shopBannerUrl:     data.bannerUrl     ?? data.shopBannerUrl ?? "",
+      ownerEmail:        data.ownerEmail    ?? "",
+      ownerUid:          data.ownerId       ?? data.ownerUid ?? "",
+      activeListingCount: data.totalListings ?? data.activeListingCount ?? 0,
+      inquiryCount:      data.totalInquiries ?? data.inquiryCount ?? 0,
+      rating:            data.rating        ?? null,
+      totalReviews:      data.reviewCount   ?? data.totalReviews ?? 0,
+      createdAt:         data.createdAt     ?? 0,
+    };
+  });
 }
 
 export async function getPendingShopAds() {
