@@ -6,7 +6,8 @@ import { getProfile } from "@/lib/userProfile";
 import { getOrCreateConversation } from "@/lib/messaging";
 import { Listing, UserProfile } from "@/lib/types";
 import ListingCard from "@/components/ListingCard";
-import { CheckCircle2, MessageCircle, Settings, ArrowLeft, Loader2, ShoppingBag } from "lucide-react";
+import { CheckCircle2, MessageCircle, Settings, ArrowLeft, Loader2, ShoppingBag, Share2, ExternalLink } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 function memberDuration(createdAt: number): string {
   const diff = Date.now() - createdAt;
@@ -70,6 +71,7 @@ export default function SellerProfilePage() {
   const { user } = useAuth();
   const [, params] = useRoute("/seller/:uid");
   const [, navigate] = useLocation();
+  const { toast } = useToast();
 
   const uid = params?.uid ?? "";
   const isOwnProfile = !!user && user.uid === uid;
@@ -121,6 +123,23 @@ export default function SellerProfilePage() {
     }
   };
 
+  const handleShare = async () => {
+    const url = window.location.href;
+    const data = {
+      title: `${profile?.displayName || "Seller"} on XMUM Market`,
+      url,
+    };
+    if (navigator.share && navigator.canShare?.(data)) {
+      try { await navigator.share(data); return; } catch (err: any) { if (err?.name === "AbortError") return; }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      toast({ title: "Link copied!", description: url });
+    } catch {
+      toast({ title: "Could not copy link", description: url, variant: "destructive" });
+    }
+  };
+
   // ── Loading skeleton ─────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -167,6 +186,7 @@ export default function SellerProfilePage() {
   )}&background=003366&color=fff&size=128`;
 
   const displayName = profile.displayName || profile.fullName || profile.email?.split("@")[0] || "Seller";
+  const isVerifiedShop = profile.verificationStatus === "approved" && !!profile.shopSlug;
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 pb-24 sm:pb-8 animate-in fade-in duration-200">
@@ -185,41 +205,62 @@ export default function SellerProfilePage() {
         <div className="h-24 sm:h-32 bg-gradient-to-br from-[#003366] via-[#004488] to-[#0055aa]" />
 
         <div className="px-5 pb-5">
-          {/* Avatar row + CTA button */}
-          <div className="-mt-10 mb-3 flex items-end justify-between gap-3">
+          {/* Avatar row + CTA buttons */}
+          <div className="-mt-10 mb-3 flex items-end justify-between gap-3 flex-wrap">
             <img
               src={profile.avatarUrl || avatarFallback}
               alt={displayName}
               className="w-20 h-20 rounded-full object-cover border-4 border-white dark:border-slate-800 shadow-md shrink-0"
             />
 
-            {isOwnProfile ? (
-              <Link href="/settings">
-                <button className="flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl border border-gray-300 dark:border-slate-600 text-sm font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
-                  <Settings size={14} />
-                  Edit Profile
+            <div className="flex items-center gap-2 pb-1 flex-wrap">
+              {/* Share button */}
+              <button
+                onClick={handleShare}
+                className="flex items-center gap-1.5 min-h-[44px] px-3 py-2 rounded-xl border border-gray-300 dark:border-slate-600 text-sm font-medium text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+              >
+                <Share2 size={14} />
+                Share
+              </button>
+
+              {/* Visit Shop button (for verified sellers) */}
+              {isVerifiedShop && (
+                <Link href={`/shop/${profile.shopSlug}`}>
+                  <button className="flex items-center gap-1.5 min-h-[44px] px-4 py-2 rounded-xl border border-[#003366] dark:border-blue-500 text-sm font-semibold text-[#003366] dark:text-blue-400 hover:bg-[#003366]/5 dark:hover:bg-blue-500/10 transition-colors">
+                    <ExternalLink size={14} />
+                    Visit Shop →
+                  </button>
+                </Link>
+              )}
+
+              {isOwnProfile ? (
+                <Link href="/settings">
+                  <button className="flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl border border-gray-300 dark:border-slate-600 text-sm font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
+                    <Settings size={14} />
+                    Edit Profile
+                  </button>
+                </Link>
+              ) : user ? (
+                <button
+                  onClick={handleMessage}
+                  disabled={startingChat}
+                  className="flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl bg-[#003366] dark:bg-blue-600 text-white text-sm font-semibold hover:bg-[#002244] dark:hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-sm"
+                >
+                  {startingChat
+                    ? <Loader2 size={15} className="animate-spin" />
+                    : <MessageCircle size={15} />}
+                  Message
                 </button>
-              </Link>
-            ) : user ? (
-              <button
-                onClick={handleMessage}
-                disabled={startingChat}
-                className="flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl bg-[#003366] dark:bg-blue-600 text-white text-sm font-semibold hover:bg-[#002244] dark:hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-sm"
-              >
-                {startingChat
-                  ? <Loader2 size={15} className="animate-spin" />
-                  : <MessageCircle size={15} />}
-                Message Seller
-              </button>
-            ) : (
-              <button
-                onClick={() => navigate("/")}
-                className="flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl bg-[#003366] dark:bg-blue-600 text-white text-sm font-semibold hover:bg-[#002244] dark:hover:bg-blue-700 transition-colors shadow-sm"
-              >
-                <MessageCircle size={15} />
-                Sign in to Message
-              </button>
-            )}
+              ) : (
+                <button
+                  onClick={() => navigate("/")}
+                  className="flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl bg-[#003366] dark:bg-blue-600 text-white text-sm font-semibold hover:bg-[#002244] dark:hover:bg-blue-700 transition-colors shadow-sm"
+                >
+                  <MessageCircle size={15} />
+                  Sign in to Message
+                </button>
+              )}
+            </div>
           </div>
 
           {chatError && (
@@ -239,24 +280,26 @@ export default function SellerProfilePage() {
                 XMUM Verified
               </span>
             )}
+            {isVerifiedShop && (
+              <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950 px-2 py-0.5 rounded-full">
+                <CheckCircle2 size={11} />
+                Verified Seller
+              </span>
+            )}
           </div>
 
-          {/* Full name (if different from display name) */}
           {profile.fullName && profile.displayName && profile.displayName !== profile.fullName && (
             <p className="text-sm text-gray-500 dark:text-slate-400 mb-0.5">{profile.fullName}</p>
           )}
 
-          {/* Member since */}
           <p className="text-xs text-gray-400 dark:text-slate-500 mb-3">
             Seller since {memberSince(profile.createdAt)}
           </p>
 
-          {/* Star rating */}
           <div className="mb-4">
             <StarRating rating={profile.rating ?? 0} />
           </div>
 
-          {/* Stats row */}
           <div className="flex items-center gap-6 pt-3 border-t border-gray-100 dark:border-slate-700">
             <div>
               <p className="text-2xl font-bold text-gray-900 dark:text-slate-100 leading-tight">
@@ -304,7 +347,7 @@ export default function SellerProfilePage() {
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           {listings.map((listing) => (
-            <ListingCard key={listing.id} listing={listing} />
+            <ListingCard key={listing.id} listing={listing} sellerVerified={isVerifiedShop} />
           ))}
         </div>
       )}

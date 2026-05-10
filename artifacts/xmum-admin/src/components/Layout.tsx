@@ -1,21 +1,31 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, Flag, Users, Megaphone, FileText, LogOut } from "lucide-react";
+import { LayoutDashboard, Flag, Users, Megaphone, FileText, LogOut, GraduationCap } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
-
-const NAV = [
-  { href: "/",             label: "Dashboard",    icon: LayoutDashboard },
-  { href: "/reports",      label: "Reports",      icon: Flag },
-  { href: "/users",        label: "Users",        icon: Users },
-  { href: "/ads",          label: "Ads",          icon: Megaphone },
-  { href: "/rental-audit", label: "Rental Audit", icon: FileText },
-];
+import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { db } from "../lib/firebase";
 
 export default function Layout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const { adminUser } = useAuth();
+  const [pendingCount, setPendingCount] = useState(0);
+
+  useEffect(() => {
+    const q = query(collection(db, "users"), where("verificationStatus", "==", "pending"));
+    const unsub = onSnapshot(q, (snap) => setPendingCount(snap.size), () => {});
+    return unsub;
+  }, []);
+
+  const NAV = [
+    { href: "/",             label: "Dashboard",    icon: LayoutDashboard, badge: 0 },
+    { href: "/reports",      label: "Reports",      icon: Flag,            badge: 0 },
+    { href: "/users",        label: "Users",        icon: Users,           badge: 0 },
+    { href: "/ads",          label: "Ads",          icon: Megaphone,       badge: 0 },
+    { href: "/rental-audit", label: "Rental Audit", icon: FileText,        badge: 0 },
+    { href: "/verifications",label: "Verifications",icon: GraduationCap,   badge: pendingCount },
+  ];
 
   return (
     <div className="flex h-screen bg-slate-50 dark:bg-slate-900">
@@ -31,7 +41,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-1">
-          {NAV.map(({ href, label, icon: Icon }) => {
+          {NAV.map(({ href, label, icon: Icon, badge }) => {
             const active = location === href;
             return (
               <Link key={href} href={href}>
@@ -40,8 +50,13 @@ export default function Layout({ children }: { children: ReactNode }) {
                     ? "bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400"
                     : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50"
                 }`}>
-                  <Icon className="w-4 h-4" />
-                  {label}
+                  <Icon className="w-4 h-4 shrink-0" />
+                  <span className="flex-1">{label}</span>
+                  {badge > 0 && (
+                    <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-amber-500 text-white text-[10px] font-bold">
+                      {badge}
+                    </span>
+                  )}
                 </a>
               </Link>
             );

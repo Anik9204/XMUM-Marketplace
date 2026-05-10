@@ -3,14 +3,15 @@ import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   updateProfile,
-  uploadAvatar,
   changePassword as doChangePassword,
   deleteAccount,
 } from "@/lib/userProfile";
 import { validateWhatsApp, suggestMalaysianFormat } from "@/lib/validation";
 import AuthModal from "@/components/AuthModal";
 import VerificationBanner from "@/components/VerificationBanner";
-import { User, Camera, CheckCircle2, Trash2, Settings, Palette, AlertCircle } from "lucide-react";
+import AvatarCropModal from "@/components/AvatarCropModal";
+import ShopSetupModal from "@/components/ShopSetupModal";
+import { User, Camera, CheckCircle2, Trash2, Settings, AlertCircle, Eye, Pencil, ExternalLink, Store } from "lucide-react";
 import { useLocation } from "wouter";
 import { auth } from "@/lib/firebase";
 import { useDarkMode } from "@/hooks/use-dark-mode";
@@ -97,8 +98,7 @@ export default function SettingsPage() {
   const [profileError, setProfileError] = useState("");
 
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  const [avatarError, setAvatarError] = useState("");
+  const [cropFile, setCropFile] = useState<File | null>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   const [currentPass, setCurrentPass] = useState("");
@@ -114,6 +114,10 @@ export default function SettingsPage() {
   const [deleteError, setDeleteError] = useState("");
   const deletingAccountRef = useRef(false);
 
+  // Shop modal
+  const [showShopModal, setShowShopModal] = useState(false);
+  const [shopModalStep, setShopModalStep] = useState<1 | 2>(1);
+
   useEffect(() => {
     if (!userProfile) return;
     setFullName(userProfile.fullName ?? "");
@@ -121,7 +125,6 @@ export default function SettingsPage() {
     setSettingsWechat(userProfile.wechat ?? "");
     setShowWhatsApp(userProfile.showWhatsApp ?? true);
     setShowWeChat(userProfile.showWeChat ?? true);
-    if (!uploadingAvatar) setAvatarPreview(null);
   }, [userProfile]);
 
   if (!user) {
@@ -158,37 +161,24 @@ export default function SettingsPage() {
     );
   }
 
-  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
-    setAvatarError("");
-    if (!file.type.startsWith("image/")) { setAvatarError("Only image files are allowed (JPG, PNG, WebP, etc.)."); return; }
-    if (file.size > 5 * 1024 * 1024) { setAvatarError(t.imageTooLarge); return; }
+    if (!file.type.startsWith("image/")) return;
+    if (file.size > 5 * 1024 * 1024) return;
+    setCropFile(file);
+  };
 
-    const localPreviewUrl = URL.createObjectURL(file);
-    setAvatarPreview(localPreviewUrl);
-    setAvatarOverride(localPreviewUrl);
-    setUploadingAvatar(true);
-
-    try {
-      await uploadAvatar(file, user.uid);
-      await refetchProfile();
-      setAvatarOverride(null);
-      URL.revokeObjectURL(localPreviewUrl);
-      setAvatarPreview(null);
-    } catch (err: any) {
-      setAvatarPreview(null);
-      setAvatarOverride(null);
-      URL.revokeObjectURL(localPreviewUrl);
-      const code: string = err?.code ?? "";
-      if (code === "storage/unauthorized" || code === "permission-denied") setAvatarError("Upload blocked. Ensure your file is an image under 5 MB and you are signed in with your XMUM email.");
-      else if (code === "storage/quota-exceeded") setAvatarError("Storage quota exceeded. Please contact support.");
-      else if (code === "storage/retry-limit-exceeded" || code === "storage/canceled") setAvatarError("Upload failed due to a connection issue. Please try again.");
-      else setAvatarError("Upload failed. Please try again.");
-    } finally {
-      setUploadingAvatar(false);
-    }
+  const handleCropSuccess = async (url: string) => {
+    setCropFile(null);
+    setAvatarPreview(url);
+    setAvatarOverride(url);
+    await updateProfile(user.uid, { avatarUrl: url }).catch(() => {});
+    await refetchProfile().catch(() => {});
+    setAvatarOverride(null);
+    setAvatarPreview(null);
+    setSuccessToast("Profile photo updated.");
   };
 
   const handleSaveProfile = async () => {
@@ -278,6 +268,7 @@ export default function SettingsPage() {
   };
 
   const avatarSrc = avatarPreview ?? userProfile?.avatarUrl;
+  const verStatus = userProfile?.verificationStatus ?? "none";
 
   const AvatarDisplay = () =>
     avatarSrc ? (
@@ -288,10 +279,32 @@ export default function SettingsPage() {
       </div>
     );
 
+  const formatDate = (ts?: number) => {
+    if (!ts) return "—";
+    return new Date(ts).toLocaleDateString("en-MY", { day: "numeric", month: "long", year: "numeric" });
+  };
+
   return (
     <>
       {successToast && <SuccessToast message={successToast} onDone={() => setSuccessToast("")} />}
       {!user.emailVerified && <VerificationBanner />}
+
+      {cropFile && (
+        <AvatarCropModal
+          file={cropFile}
+          uid={user.uid}
+          onSuccess={handleCropSuccess}
+          onCancel={() => setCropFile(null)}
+        />
+      )}
+
+      {showShopModal && (
+        <ShopSetupModal
+          initialStep={shopModalStep}
+          onClose={() => setShowShopModal(false)}
+          onSuccess={() => { refetchProfile().catch(() => {}); setSuccessToast("Shop details updated."); }}
+        />
+      )}
 
       <div className="max-w-5xl mx-auto px-4 py-5 pb-24 sm:pb-8 animate-in fade-in duration-200">
         {/* Tab bar */}
@@ -316,27 +329,25 @@ export default function SettingsPage() {
             <div className="flex items-center gap-4 mb-4">
               <div className="relative shrink-0">
                 <AvatarDisplay />
-                {uploadingAvatar && (
-                  <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center">
-                    <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  </div>
-                )}
               </div>
               <div>
+                {/* Preview public profile button */}
+                <a
+                  href={`/seller/${user.uid}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-400 hover:text-[#003366] dark:hover:text-blue-400 mb-2 transition-colors"
+                >
+                  <Eye size={12} /> Preview my public profile
+                </a>
                 <button
-                  onClick={() => { setAvatarError(""); avatarInputRef.current?.click(); }}
-                  disabled={uploadingAvatar}
-                  className="flex items-center gap-1.5 text-sm text-[#003366] dark:text-blue-400 border border-[#003366]/30 dark:border-blue-500/30 px-3 min-h-[44px] py-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50 transition-colors"
+                  onClick={() => { avatarInputRef.current?.click(); }}
+                  className="flex items-center gap-1.5 text-sm text-[#003366] dark:text-blue-400 border border-[#003366]/30 dark:border-blue-500/30 px-3 min-h-[44px] py-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
                 >
                   <Camera size={14} />
-                  {uploadingAvatar ? "Uploading…" : "Change Photo"}
+                  Change Photo
                 </button>
                 <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-1.5">JPG, PNG or WebP · Max 5 MB</p>
-                {avatarError && (
-                  <p className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 rounded-lg px-2.5 py-1.5 mt-2 max-w-[220px] leading-snug">
-                    {avatarError}
-                  </p>
-                )}
               </div>
             </div>
             <div className="space-y-3">
@@ -381,8 +392,118 @@ export default function SettingsPage() {
                 {savingProfile ? "Saving…" : profileSaved ? "Saved!" : "Save Changes"}
               </button>
             </div>
-            <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
+            <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarFileSelect} />
           </SectionCard>
+
+          {/* ── Shop & Verification Section ───────────────────────────────────── */}
+          <div id="shop-verification">
+            <SectionCard label="Shop & Verification">
+              {verStatus === "none" && (
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/40 dark:to-indigo-950/40 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Store size={18} className="text-[#003366] dark:text-blue-400 shrink-0" />
+                    <h4 className="text-sm font-bold text-gray-900 dark:text-slate-100">Free Account</h4>
+                  </div>
+                  <p className="text-xs text-gray-600 dark:text-slate-300 mb-3">You are currently on the free plan.</p>
+                  <ul className="text-xs text-gray-500 dark:text-slate-400 space-y-1 mb-4">
+                    <li>✓ Post up to 5 Buy & Sell / Lost & Found listings</li>
+                    <li className="text-gray-300 dark:text-slate-600 line-through">Post Jobs, Assistance &amp; Rental listings</li>
+                    <li className="text-gray-300 dark:text-slate-600 line-through">Verified badge on all your listings</li>
+                    <li className="text-gray-300 dark:text-slate-600 line-through">Shop page visible to all users</li>
+                  </ul>
+                  <button
+                    onClick={() => { setShopModalStep(1); setShowShopModal(true); }}
+                    className="w-full min-h-[44px] bg-[#003366] dark:bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-[#002244] dark:hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                  >
+                    Become a Verified Seller →
+                  </button>
+                </div>
+              )}
+
+              {verStatus === "pending" && (
+                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-4">
+                  <h4 className="text-sm font-bold text-amber-800 dark:text-amber-300 mb-1">⏳ Verification Under Review</h4>
+                  <p className="text-xs text-amber-700 dark:text-amber-400 mb-2">
+                    Your shop application was submitted on {formatDate(userProfile?.verificationSubmittedAt)}.
+                    Our admin team will review it within 24–48 hours.
+                  </p>
+                  {userProfile?.shopName && (
+                    <p className="text-xs text-amber-700 dark:text-amber-400 mb-3 font-medium">
+                      Shop name: {userProfile.shopName}
+                    </p>
+                  )}
+                  <button
+                    onClick={() => { setShopModalStep(2); setShowShopModal(true); }}
+                    className="text-xs text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-600 px-3 py-2 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors min-h-[40px]"
+                  >
+                    Edit Shop Details
+                  </button>
+                </div>
+              )}
+
+              {verStatus === "approved" && userProfile && (
+                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 size={18} className="text-green-600 dark:text-green-400 shrink-0" />
+                    <h4 className="text-sm font-bold text-green-800 dark:text-green-300">✓ Verified Shop</h4>
+                  </div>
+                  <div className="text-xs text-green-700 dark:text-green-400 space-y-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-medium">Shop Name:</span>
+                      <span>{userProfile.shopName}</span>
+                      <button onClick={() => { setShopModalStep(2); setShowShopModal(true); }} className="ml-auto p-1 hover:bg-green-100 dark:hover:bg-green-900/40 rounded-lg transition-colors">
+                        <Pencil size={12} />
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-medium">Shop URL:</span>
+                      <a href={`/shop/${userProfile.shopSlug}`} target="_blank" rel="noreferrer" className="underline hover:opacity-75 flex items-center gap-0.5">
+                        /shop/{userProfile.shopSlug}
+                        <ExternalLink size={10} />
+                      </a>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-medium">Active Listings:</span>
+                      <span>{userProfile.activeListingCount ?? 0} / 30 used</span>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <a
+                      href={`/shop/${userProfile.shopSlug}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex-1 min-h-[40px] text-xs bg-green-600 text-white rounded-lg font-semibold flex items-center justify-center gap-1.5 hover:bg-green-700 transition-colors"
+                    >
+                      <ExternalLink size={12} /> Preview Shop →
+                    </a>
+                    <button
+                      onClick={() => { setShopModalStep(2); setShowShopModal(true); }}
+                      className="flex-1 min-h-[40px] text-xs border border-green-300 dark:border-green-600 text-green-700 dark:text-green-400 rounded-lg font-medium flex items-center justify-center gap-1.5 hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors"
+                    >
+                      Edit Shop Details
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {verStatus === "rejected" && (
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4">
+                  <h4 className="text-sm font-bold text-red-700 dark:text-red-400 mb-1">✗ Verification Rejected</h4>
+                  {userProfile?.verificationRejectionReason && (
+                    <p className="text-xs text-red-600 dark:text-red-400 mb-3">
+                      Reason: {userProfile.verificationRejectionReason}
+                    </p>
+                  )}
+                  <button
+                    onClick={() => { setShopModalStep(1); setShowShopModal(true); }}
+                    className="text-xs bg-red-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-600 transition-colors min-h-[40px]"
+                  >
+                    Reapply
+                  </button>
+                </div>
+              )}
+            </SectionCard>
+          </div>
 
           {/* Privacy section */}
           <SectionCard label="Privacy">
@@ -483,8 +604,8 @@ export default function SettingsPage() {
               </button>
               <button
                 onClick={handleDeleteAccount}
-                disabled={deletingAccount}
-                className="flex-1 min-h-[44px] bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50"
+                disabled={deletingAccount || !deletePassword}
+                className="flex-1 min-h-[44px] bg-red-500 text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50"
               >
                 {deletingAccount ? "Deleting…" : "Delete Account"}
               </button>

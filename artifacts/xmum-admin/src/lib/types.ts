@@ -2,6 +2,7 @@ export type UserRole = "user" | "editor" | "admin";
 export type ReportStatus = "pending" | "reviewed" | "dismissed" | "actioned";
 export type ReportCategory = "spam" | "scam" | "offensive" | "prohibited_item" | "wrong_category" | "other";
 export type ListingType = "buy-sell" | "lost-found";
+export type VerificationStatus = "none" | "pending" | "approved" | "rejected";
 
 export interface AdminUser {
   uid: string;
@@ -14,6 +15,17 @@ export interface AdminUser {
   isFeatured: boolean;
   createdAt: number;
   emailVerified: boolean;
+  isVerified?: boolean;
+  verificationStatus?: VerificationStatus;
+  verificationSubmittedAt?: number;
+  verificationReviewedAt?: number;
+  verificationRejectionReason?: string;
+  shopName?: string;
+  shopSlug?: string;
+  shopBio?: string;
+  shopCategories?: string[];
+  shopBannerUrl?: string;
+  activeListingCount?: number;
 }
 
 export interface ListingReport {

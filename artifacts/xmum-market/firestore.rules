@@ -29,7 +29,11 @@ service cloud.firestore {
 
     match /listings/{listingId} {
       allow read: if true;
-      allow create: if isXmuEmail();
+      allow create: if isXmuEmail()
+                    && (
+                      request.resource.data.type in ["buy-sell", "lost-found"]
+                      || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.verificationStatus == "approved"
+                    );
       allow update, delete: if isOwner(resource.data.userId) || isEditor();
     }
 
@@ -58,13 +62,28 @@ service cloud.firestore {
     }
 
     // ── Rental Audit Logs ──────────────────────────────────────────────────────
-    // Append-only by verified XMUM users for their own records.
-    // Never deleted — persists even if the user deletes their account or listing.
-    // Only admins may read, update, or delete (for compliance review).
     match /rentalAuditLogs/{logId} {
       allow create: if isXmuEmail()
                     && request.resource.data.userId == request.auth.uid;
       allow read, update, delete: if isAdmin();
+    }
+
+    // ── Seller T&C Audit Logs — permanent, admin-read-only ────────────────────
+    match /sellerTcAuditLogs/{logId} {
+      allow create: if isXmuEmail()
+                    && request.resource.data.userId == request.auth.uid;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // ── Reviews ───────────────────────────────────────────────────────────────
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isXmuEmail()
+                    && request.resource.data.reviewerId == request.auth.uid
+                    && request.resource.data.rating >= 1
+                    && request.resource.data.rating <= 5
+                    && request.resource.data.comment.size() <= 300;
+      allow delete: if isAdmin();
     }
 
     // Saved listings — private per-user wishlist
@@ -81,7 +100,6 @@ service cloud.firestore {
       allow update: if isSignedIn()
                     && request.auth.uid in resource.data.participants;
 
-      // Messages subcollection: participants only
       match /messages/{messageId} {
         allow read: if isSignedIn()
                     && request.auth.uid in get(/databases/$(database)/documents/conversations/$(convId)).data.participants;

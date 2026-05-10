@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { Listing } from "@/lib/types";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { MapPin, Clock, Pencil, Wifi, Bookmark, BookmarkCheck, Eye } from "lucide-react";
+import { MapPin, Clock, Pencil, Wifi, Bookmark, BookmarkCheck, Eye, CheckCircle2 } from "lucide-react";
 import AuthModal from "@/components/AuthModal";
 import { saveListing, unsaveListing, isListingSaved } from "@/lib/savedListings";
 
@@ -17,6 +17,7 @@ interface Props {
   onEdit?: () => void;
   showSaveButton?: boolean;
   onUnsave?: () => void;
+  sellerVerified?: boolean;
 }
 
 function relativeTime(ms: number): string {
@@ -71,6 +72,7 @@ export default function ListingCard({
   onEdit,
   showSaveButton = false,
   onUnsave,
+  sellerVerified = false,
 }: Props) {
   const { t } = useLang();
   const { user } = useAuth();
@@ -179,14 +181,12 @@ export default function ListingCard({
               </div>
             )}
 
-            {/* Type badge — bottom-left of image */}
             {!isSold && typeBadge && (
               <span className={`absolute bottom-2 left-2 z-10 inline-flex items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm ${typeBadge.bg} ${typeBadge.text}`}>
                 {isRental && listing.vehicleType ? `${VEHICLE_ICONS[listing.vehicleType] ?? "🚗"} ${typeBadge.label}` : typeBadge.label}
               </span>
             )}
 
-            {/* "⬆ Featured" badge — shown for 3 hours after a bump */}
             {!isSold && listing.lastBumpedAt && Date.now() - listing.lastBumpedAt < 3 * 60 * 60 * 1000 && (
               <span className="absolute bottom-7 left-2 z-10 inline-flex items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-500 text-white shadow-sm">
                 ⬆ Featured
@@ -234,7 +234,6 @@ export default function ListingCard({
               </>
             )}
 
-            {/* Save / Bookmark button — top-right corner, 40×40 with dark backdrop */}
             {showSaveButton && !isOwnListing && (
               <button
                 onClick={handleSaveToggle}
@@ -258,7 +257,6 @@ export default function ListingCard({
             </span>
             <h3 className={`font-semibold text-sm leading-snug line-clamp-1 ${isSold ? "text-[#64748B] dark:text-slate-500" : "text-[#0F172A] dark:text-slate-100"}`}>{listing.title}</h3>
 
-            {/* View count */}
             {typeof listing.viewCount === "number" && listing.viewCount > 0 && (
               <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
                 <Eye size={10} />
@@ -268,7 +266,6 @@ export default function ListingCard({
 
             <p className="text-xs text-[#64748B] dark:text-slate-400 line-clamp-2 mt-0.5 leading-relaxed">{listing.description}</p>
 
-            {/* Jobs: Offering / Seeking subtitle */}
             {isJobs && listing.jobSubtype && (
               <p className="mt-1 text-[11px] font-semibold text-purple-600 dark:text-purple-400">
                 {listing.jobSubtype === "offering" ? "▶ Offering" : "◀ Seeking"}
@@ -293,7 +290,6 @@ export default function ListingCard({
               </p>
             )}
 
-            {/* Rental: 🚗 RM X/day format */}
             {isRental && listing.rentalPricePerDay != null && (
               <p className={`mt-2 text-base font-bold ${isSold ? "text-gray-400 dark:text-slate-500 line-through" : "text-yellow-700 dark:text-yellow-400"}`}>
                 {listing.vehicleType ? VEHICLE_ICONS[listing.vehicleType] : "🚗"} {t.rmPrefix} {listing.rentalPricePerDay.toFixed(2)}/day
@@ -320,13 +316,17 @@ export default function ListingCard({
           </div>
         </Link>
 
-        {/* Seller attribution — tappable link to seller's public profile */}
         <Link
           href={`/seller/${listing.userId}`}
           onClick={(e: React.MouseEvent) => e.stopPropagation()}
           className="block px-3 py-1.5 text-[11px] text-gray-400 dark:text-slate-500 hover:text-[#003366] dark:hover:text-blue-400 transition-colors border-t border-gray-50 dark:border-slate-700/50"
         >
-          by @{listing.userName}
+          <span className="flex items-center gap-1">
+            by @{listing.userName}
+            {sellerVerified && (
+              <CheckCircle2 size={11} className="text-teal-500 dark:text-teal-400 shrink-0" />
+            )}
+          </span>
         </Link>
 
         {(showDelete || showMarkSold || showEdit) && (

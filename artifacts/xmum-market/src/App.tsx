@@ -15,12 +15,11 @@ import EditListingPage from "@/pages/EditListingPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import MessagesPage from "@/pages/MessagesPage";
 import SellerProfilePage from "@/pages/SellerProfilePage";
+import ShopPage from "@/pages/ShopPage";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
 
-// Intercepts Firebase Auth action URLs (?mode=resetPassword&oobCode=...)
-// and redirects them to the dedicated in-app route before any page renders.
 function FirebaseActionHandler() {
   const [, navigate] = useLocation();
 
@@ -54,6 +53,7 @@ function Router() {
         <Route path="/edit/:id" component={EditListingPage} />
         <Route path="/messages" component={MessagesPage} />
         <Route path="/seller/:uid" component={SellerProfilePage} />
+        <Route path="/shop/:slug" component={ShopPage} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

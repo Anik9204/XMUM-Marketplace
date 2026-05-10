@@ -27,7 +27,6 @@ export interface Listing {
   pricingModel?: "per_hour" | "per_day" | "per_month" | "fixed";
   isRemote?: boolean;
   availability?: string;
-  // Rental-specific fields (populated only when type === "rental")
   vehicleType?: "car" | "bike" | "motorcycle" | "bicycle" | "scooter";
   vehicleBrand?: string;
   vehicleModel?: string;
@@ -76,6 +75,29 @@ export interface RentalTcAuditLog {
   userAgent: string;
 }
 
+export interface SellerTcAuditLog {
+  id: string;
+  userId: string;
+  userEmail: string;
+  shopName: string;
+  tcVersion: string;
+  acceptedAt: number;
+  userAgent: string;
+}
+
+export interface Review {
+  id: string;
+  reviewerId: string;
+  reviewerName: string;
+  reviewerAvatar?: string;
+  sellerId: string;
+  listingId: string;
+  listingTitle: string;
+  rating: number;
+  comment: string;
+  createdAt: number;
+}
+
 export interface AppNotification {
   id: string;
   type: "listing_deleted" | "listing_sold" | "welcome" | "daily_digest" | "new_message_digest";
@@ -121,6 +143,19 @@ export interface UserProfile {
   showWeChat: boolean;
   createdAt: number;
   role?: "user" | "editor" | "admin";
+  shopName?: string;
+  shopSlug?: string;
+  shopBio?: string;
+  shopBannerUrl?: string;
+  shopCategories?: string[];
+  verificationStatus?: "none" | "pending" | "approved" | "rejected";
+  verificationSubmittedAt?: number;
+  verificationReviewedAt?: number;
+  verificationRejectionReason?: string;
+  sellerTcAcceptedAt?: number;
+  sellerTcVersion?: string;
+  activeListingCount?: number;
+  totalListingCount?: number;
 }
 
 export type ReportCategory =

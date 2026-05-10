@@ -7,7 +7,7 @@ import { Listing } from "@/lib/types";
 import { getSavedListings } from "@/lib/savedListings";
 import ListingCard from "@/components/ListingCard";
 import AuthModal from "@/components/AuthModal";
-import { User, CheckCircle, AlertCircle, LogOut, CheckCircle2, Settings, Clock, X, ArrowUp, Bookmark } from "lucide-react";
+import { User, CheckCircle, AlertCircle, LogOut, CheckCircle2, Settings, Clock, X, ArrowUp, Bookmark, Store } from "lucide-react";
 import { logOut } from "@/lib/auth";
 import { useLocation } from "wouter";
 import { addNotification } from "@/lib/notifications";
@@ -82,8 +82,6 @@ export default function ProfilePage() {
 
         listingsCache.current = active;
         setListings(active);
-
-        // Fire-and-forget — sends at most once per 24h via Firestore check
         sendDailyDigestIfDue(user.uid, active);
 
         const expiringSoon = active.filter(
@@ -96,7 +94,6 @@ export default function ProfilePage() {
       .finally(() => setLoading(false));
   }, [user]);
 
-  // Fetch saved listings every time the "saved" tab is activated
   useEffect(() => {
     if (tab !== "saved" || !user) return;
     setSavedLoading(true);
@@ -236,6 +233,14 @@ export default function ProfilePage() {
     { key: "saved", label: "Saved" },
   ];
 
+  // Stats
+  const activeCount = listings.filter(l => !l.isArchived && l.status !== "sold").length;
+  const soldCount = listings.filter(l => l.status === "sold").length;
+  const viewCount = listings.reduce((sum, l) => sum + (l.viewCount ?? 0), 0);
+  const savedCount = savedListings.length;
+
+  const isVerifiedShop = userProfile?.verificationStatus === "approved" && !!userProfile?.shopSlug;
+
   return (
     <>
       {successToast && <SuccessToast message={successToast} onDone={() => setSuccessToast("")} />}
@@ -249,7 +254,7 @@ export default function ProfilePage() {
             <div className="flex-1 min-w-0">
               <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">{displayName}</h2>
               <p className="text-sm text-slate-500 dark:text-slate-400 truncate">{user.email}</p>
-              <div className="flex items-center gap-3 mt-2">
+              <div className="flex items-center gap-3 mt-2 flex-wrap">
                 <span className="text-xs text-slate-500 dark:text-slate-400">
                   Member since {userProfile ? new Date(userProfile.createdAt).toLocaleDateString("en-MY", { month: "short", year: "numeric" }) : "—"}
                 </span>
@@ -273,6 +278,46 @@ export default function ProfilePage() {
               {t.signOut}
             </button>
           </div>
+
+          {/* Stats row */}
+          <div className="mt-4 grid grid-cols-4 divide-x divide-gray-100 dark:divide-slate-700 border-t border-gray-100 dark:border-slate-700 pt-4">
+            <div className="text-center px-2">
+              <p className="text-lg font-bold text-gray-900 dark:text-slate-100">{activeCount}</p>
+              <p className="text-[11px] text-gray-400 dark:text-slate-500">Active</p>
+            </div>
+            <div className="text-center px-2">
+              <p className="text-lg font-bold text-gray-900 dark:text-slate-100">{soldCount}</p>
+              <p className="text-[11px] text-gray-400 dark:text-slate-500">Sold</p>
+            </div>
+            <div className="text-center px-2">
+              <p className="text-lg font-bold text-gray-900 dark:text-slate-100">{viewCount}</p>
+              <p className="text-[11px] text-gray-400 dark:text-slate-500">Views</p>
+            </div>
+            <button
+              className="text-center px-2 hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-xl transition-colors"
+              onClick={() => setTab("saved")}
+            >
+              <p className="text-lg font-bold text-gray-900 dark:text-slate-100">{savedCount}</p>
+              <p className="text-[11px] text-gray-400 dark:text-slate-500">Saved</p>
+            </button>
+          </div>
+
+          {/* Shop banner for verified sellers */}
+          {isVerifiedShop && userProfile && (
+            <div
+              className="mt-4 bg-[#003366] dark:bg-blue-900/60 rounded-xl px-4 py-3 flex items-center justify-between gap-2 cursor-pointer hover:bg-[#002244] dark:hover:bg-blue-900/80 transition-colors"
+              onClick={() => navigate(`/shop/${userProfile.shopSlug}`)}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <Store size={16} className="text-white shrink-0" />
+                <span className="text-sm font-semibold text-white truncate">
+                  {userProfile.shopName}
+                </span>
+                <span className="text-xs text-blue-200 shrink-0">· Verified Shop</span>
+              </div>
+              <span className="text-xs font-semibold text-blue-200 shrink-0">View Shop →</span>
+            </div>
+          )}
         </div>
 
         {/* Tab bar — My Listings / Settings */}
@@ -291,7 +336,7 @@ export default function ProfilePage() {
           </button>
         </div>
 
-        {/* Listing sub-tabs: active / sold / archived / saved — horizontally scrollable */}
+        {/* Listing sub-tabs */}
         <div className="flex gap-1 bg-slate-100 dark:bg-slate-700/50 rounded-xl p-1 mb-4 overflow-x-auto scrollbar-hide">
           {subTabs.map(({ key, label }) => (
             <button
@@ -309,7 +354,7 @@ export default function ProfilePage() {
           ))}
         </div>
 
-        {/* Expiry reminder banner — only for non-saved tabs */}
+        {/* Expiry reminder banner */}
         {tab !== "saved" && expiryReminders.length > 0 && (
           <div className="mb-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-2xl p-4 flex items-start gap-3">
             <Clock size={16} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
@@ -436,7 +481,7 @@ export default function ProfilePage() {
         )}
       </div>
 
-      {/* Delete listing confirmation modal */}
+      {/* Delete confirmation modal */}
       {deleteTarget && (
         <div className="fixed inset-0 z-[60] flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 w-full max-w-sm">

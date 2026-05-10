@@ -4,12 +4,13 @@ import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { uploadPhoto, createListing, writeRentalTcAuditLog } from "@/lib/listings";
 import { checkContent } from "@/lib/contentFilter";
-import { auth } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
+import { doc, updateDoc, increment } from "firebase/firestore";
 import { ListingType, Condition } from "@/lib/types";
 import { validateWhatsApp, suggestMalaysianFormat } from "@/lib/validation";
 import AuthModal from "@/components/AuthModal";
 import RentalTcModal from "@/components/RentalTcModal";
-import { ImagePlus, X, AlertCircle, CheckCircle2, Edit2, Wifi, WifiOff, ShieldCheck, ShieldOff } from "lucide-react";
+import { ImagePlus, X, AlertCircle, CheckCircle2, Edit2, Wifi, WifiOff, ShieldCheck, ShieldOff, Lock } from "lucide-react";
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
@@ -35,6 +36,9 @@ const selectCls =
   "w-full bg-white text-gray-900 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600 dark:[color-scheme:dark] focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 transition min-h-[44px]";
 
 const labelCls = "block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-1";
+
+const FREE_LIMIT = 5;
+const VERIFIED_LIMIT = 30;
 
 function SuccessToast({ message, onDone }: { message: string; onDone: () => void }) {
   const [visible, setVisible] = useState(true);
@@ -157,11 +161,16 @@ function CentsInput({
 }
 
 const ALL_TABS: ListingType[] = ["buy-sell", "lost-found", "jobs", "assistance", "rental"];
+const VERIFIED_ONLY_TABS: ListingType[] = ["jobs", "assistance", "rental"];
 
 export default function PostPage() {
   const { t } = useLang();
   const { user, userProfile } = useAuth();
   const [, navigate] = useLocation();
+
+  const isVerified = userProfile?.verificationStatus === "approved";
+  const activeListingCount = userProfile?.activeListingCount ?? 0;
+  const listingLimit = isVerified ? VERIFIED_LIMIT : FREE_LIMIT;
 
   const [type, setType] = useState<ListingType>("buy-sell");
   const [title, setTitle] = useState("");
@@ -182,20 +191,16 @@ export default function PostPage() {
   const [showDescEditor, setShowDescEditor] = useState(false);
   const [meetupSpot, setMeetupSpot] = useState("");
 
-  // Jobs-specific
   const [jobSubtype, setJobSubtype] = useState<"offering" | "seeking">("offering");
   const [isRemote, setIsRemote] = useState(false);
 
-  // Assistance-specific
   const [pricingModel, setPricingModel] = useState<"per_hour" | "per_day" | "per_month" | "fixed">("per_hour");
   const [availability, setAvailability] = useState("");
 
-  // Rental T&C state
   const [tcAccepted, setTcAccepted] = useState(false);
   const [showTcModal, setShowTcModal] = useState(false);
   const [prevType, setPrevType] = useState<ListingType>("buy-sell");
 
-  // Rental-specific fields
   const [vehicleType, setVehicleType] = useState<VehicleType>("car");
   const [vehicleBrand, setVehicleBrand] = useState("");
   const [vehicleModel, setVehicleModel] = useState("");
@@ -279,6 +284,9 @@ export default function PostPage() {
   };
 
   const handleTypeChange = (newType: ListingType) => {
+    // Block verified-only tabs for non-verified users
+    if (VERIFIED_ONLY_TABS.includes(newType) && !isVerified) return;
+
     if (newType === "rental" && !tcAccepted) {
       setPrevType(type);
       setShowTcModal(true);
@@ -297,7 +305,6 @@ export default function PostPage() {
 
   const handleTcCancelled = () => {
     setShowTcModal(false);
-    // type stays as prevType — no change
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -305,7 +312,17 @@ export default function PostPage() {
     setError("");
     setLoading(true);
 
-    // Rental-specific early validation
+    // Check listing limit
+    if (activeListingCount >= listingLimit) {
+      setError(
+        isVerified
+          ? `You have reached the maximum of ${VERIFIED_LIMIT} active listings for Verified Sellers.`
+          : `Free accounts can have up to ${FREE_LIMIT} active listings. Become a Verified Seller to post more.`
+      );
+      setLoading(false);
+      return;
+    }
+
     if (type === "rental") {
       if (photos.length < 2) {
         setError("Please upload at least 2 photos of the vehicle.");
@@ -360,6 +377,7 @@ export default function PostPage() {
       setLoading(false);
       return;
     }
+
     try {
       await withTimeout(auth.currentUser?.getIdToken(true) ?? Promise.resolve(""), 10_000, "token-refresh");
 
@@ -398,7 +416,7 @@ export default function PostPage() {
         baseData.meetupSpot = meetupSpot;
         if (availability.trim()) baseData.availability = availability.trim();
       } else if (type === "rental") {
-        baseData.category = vehicleType; // vehicleType doubles as category
+        baseData.category = vehicleType;
         baseData.vehicleType = vehicleType;
         baseData.vehicleBrand = vehicleBrand.trim();
         baseData.vehicleModel = vehicleModel.trim();
@@ -417,6 +435,15 @@ export default function PostPage() {
       }
 
       const listingId = await withTimeout(createListing(baseData as Parameters<typeof createListing>[0]), 12_000, "create-listing");
+
+      // Increment activeListingCount
+      try {
+        await updateDoc(doc(db, "users", user.uid), {
+          activeListingCount: increment(1),
+        });
+      } catch (err) {
+        console.warn("[PostPage] Failed to increment activeListingCount:", err);
+      }
 
       if (type === "rental") {
         try {
@@ -460,29 +487,66 @@ export default function PostPage() {
 
   const currentYear = new Date().getFullYear();
 
+  const isAtLimit = activeListingCount >= listingLimit;
+
   return (
     <div className="max-w-lg mx-auto px-4 py-5 pb-28 sm:pb-8 animate-in fade-in duration-200">
       {toast && <SuccessToast message={toast} onDone={() => navigate("/profile")} />}
 
-      {/* T&C modal — rendered at root level so it overlays everything */}
       {showTcModal && (
         <RentalTcModal onAccept={handleTcAccepted} onCancel={handleTcCancelled} />
       )}
 
       <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-4">{t.postItem}</h1>
 
-      {/* Type selector — flex scroll row for 5 tabs */}
+      {/* Listing limit notice */}
+      {isAtLimit && (
+        <div className="mb-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl px-4 py-3 flex items-start gap-3">
+          <AlertCircle size={16} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-800 dark:text-amber-300">
+            {isVerified
+              ? `You've reached the ${VERIFIED_LIMIT}-listing limit for Verified Sellers.`
+              : `Free accounts are limited to ${FREE_LIMIT} active listings. `}
+            {!isVerified && (
+              <a href="/settings#shop-verification" className="underline font-semibold">Become a Verified Seller</a>
+            )}
+            {!isVerified && " for up to 30."}
+          </p>
+        </div>
+      )}
+
+      {/* Tier notice for non-verified */}
+      {!isVerified && !isAtLimit && (
+        <div className="mb-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl px-3 py-2 text-xs text-blue-700 dark:text-blue-400">
+          Free account: <strong>{activeListingCount} / {FREE_LIMIT}</strong> listings used.{" "}
+          <a href="/settings#shop-verification" className="underline font-semibold">Upgrade to Verified</a> for 30 listings + all post types.
+        </div>
+      )}
+
+      {/* Type selector */}
       <div className="flex bg-gray-100 dark:bg-slate-800 rounded-xl p-1 mb-5 gap-1 overflow-x-auto scrollbar-hide">
-        {ALL_TABS.map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            onClick={() => handleTypeChange(tab)}
-            className={`flex-1 min-w-[72px] py-2 min-h-[44px] rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${type === tab ? "bg-white dark:bg-slate-700 shadow text-[#003366] dark:text-slate-100" : "text-gray-500 dark:text-slate-400"}`}
-          >
-            {tabLabel(tab)}
-          </button>
-        ))}
+        {ALL_TABS.map((tab) => {
+          const locked = VERIFIED_ONLY_TABS.includes(tab) && !isVerified;
+          return (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => handleTypeChange(tab)}
+              disabled={locked}
+              title={locked ? "Verified Sellers only — upgrade in Settings" : undefined}
+              className={`flex-1 min-w-[72px] py-2 min-h-[44px] rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap relative ${
+                type === tab
+                  ? "bg-white dark:bg-slate-700 shadow text-[#003366] dark:text-slate-100"
+                  : locked
+                  ? "text-gray-300 dark:text-slate-600 cursor-not-allowed"
+                  : "text-gray-500 dark:text-slate-400"
+              }`}
+            >
+              {locked && <Lock size={9} className="inline mb-0.5 mr-0.5 text-gray-400" />}
+              {tabLabel(tab)}
+            </button>
+          );
+        })}
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -565,350 +629,270 @@ export default function PostPage() {
                   key={sub}
                   type="button"
                   onClick={() => setJobSubtype(sub)}
-                  className={`flex-1 min-h-[44px] py-2 rounded-xl text-sm font-medium border transition-colors ${jobSubtype === sub ? "bg-[#003366] dark:bg-blue-600 text-white border-[#003366] dark:border-blue-600" : "bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600"}`}
+                  className={`flex-1 min-h-[44px] py-2.5 rounded-xl text-sm font-semibold border transition-colors ${
+                    jobSubtype === sub
+                      ? "bg-[#003366] dark:bg-blue-600 text-white border-[#003366] dark:border-blue-600"
+                      : "bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600 hover:border-[#003366] dark:hover:border-blue-500"
+                  }`}
                 >
-                  {sub === "offering" ? t.jobSubtypeOffering : t.jobSubtypeSeeking}
+                  {sub === "offering" ? `▶ ${t.offeringLabel}` : `◀ ${t.seekingLabel}`}
                 </button>
               ))}
             </div>
           </div>
         )}
 
+        {/* Remote toggle for jobs */}
+        {type === "jobs" && (
+          <div className="flex items-center justify-between bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-3 min-h-[56px]">
+            <div>
+              <p className="text-sm font-semibold text-gray-700 dark:text-slate-200">{t.remoteToggle}</p>
+              <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">{t.remoteToggleDesc}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsRemote(!isRemote)}
+              className={`relative w-11 h-6 rounded-full transition-colors ${isRemote ? "bg-[#003366] dark:bg-blue-600" : "bg-gray-200 dark:bg-slate-500"}`}
+            >
+              <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${isRemote ? "left-6" : "left-1"}`} />
+            </button>
+          </div>
+        )}
+
         {/* Description */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">
-            {t.descriptionLabel}
-            <span className="text-red-500 ml-0.5">*</span>
+          <label className={labelCls}>
+            {(type === "jobs" || type === "assistance") ? t.serviceDesc : t.descriptionLabel} *
           </label>
           <button
             type="button"
             onClick={() => setShowDescEditor(true)}
-            className="w-full min-h-[80px] text-left bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition flex items-start justify-between gap-2"
+            className={`w-full text-left border border-gray-300 dark:border-slate-600 rounded-xl px-3 py-2.5 text-sm min-h-[80px] bg-white dark:bg-slate-700 ${
+              description ? "text-gray-900 dark:text-slate-100" : "text-gray-400 dark:text-slate-500"
+            }`}
           >
-            <span className={description ? "text-gray-900 dark:text-slate-100 line-clamp-3 flex-1" : "text-gray-400 dark:text-slate-500 flex-1"}>
-              {description || t.descriptionPlaceholder}
-            </span>
-            <Edit2 size={15} className="text-gray-400 dark:text-slate-500 mt-0.5 shrink-0" />
+            {description ? (
+              <div className="flex items-start justify-between gap-2">
+                <span className="line-clamp-3 leading-relaxed whitespace-pre-wrap">{description}</span>
+                <Edit2 size={14} className="text-gray-400 dark:text-slate-500 shrink-0 mt-0.5" />
+              </div>
+            ) : (
+              <span>{t.descriptionPlaceholder}</span>
+            )}
           </button>
           {description && (
-            <p className="text-xs text-gray-400 dark:text-slate-500 mt-1 text-right">
+            <div className={`text-right text-xs mt-1 font-medium ${description.length > 900 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
               {description.length} / 1000
-            </p>
+            </div>
           )}
         </div>
+        {showDescEditor && (
+          <DescriptionEditorModal
+            value={description}
+            onChange={setDescription}
+            onClose={() => setShowDescEditor(false)}
+          />
+        )}
 
-        {/* ── Rental-specific fields ────────────────────────────────────────── */}
+        {/* Category */}
+        <div>
+          <label className={labelCls}>{t.category}</label>
+          <select value={category} onChange={(e) => setCategory(e.target.value)} className={selectCls}>
+            {categories.map((cat) => (
+              <option key={cat} value={cat}>
+                {(t.categories as any)[cat] ?? cat}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Rental: Vehicle details */}
         {type === "rental" && (
           <>
-            {/* Vehicle Details */}
-            <div className="border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20 rounded-xl p-4 space-y-3">
-              <p className="text-sm font-bold text-gray-700 dark:text-slate-200">{t.rentalVehicleInfo}</p>
-
-              <div>
-                <label className={labelCls}>{t.rentalVehicleTypeLabel} *</label>
-                <div className="flex flex-wrap gap-2">
-                  {RENTAL_VEHICLE_TYPES.map((vt) => (
-                    <button
-                      key={vt}
-                      type="button"
-                      onClick={() => { setVehicleType(vt); setCategory(vt); }}
-                      className={`flex-1 min-w-[80px] min-h-[44px] py-2 rounded-xl text-sm font-medium border transition-colors ${vehicleType === vt ? "bg-amber-600 text-white border-amber-600" : "bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600"}`}
-                    >
-                      {vehicleTypeLabel(vt)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={labelCls}>{t.rentalBrandLabel} *</label>
-                  <input
-                    type="text"
-                    value={vehicleBrand}
-                    onChange={(e) => setVehicleBrand(e.target.value.slice(0, 30))}
-                    required
-                    placeholder="e.g. Honda"
-                    maxLength={30}
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label className={labelCls}>{t.rentalModelLabel} *</label>
-                  <input
-                    type="text"
-                    value={vehicleModel}
-                    onChange={(e) => setVehicleModel(e.target.value.slice(0, 40))}
-                    required
-                    placeholder="e.g. City 1.5"
-                    maxLength={40}
-                    className={inputCls}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className={labelCls}>{t.rentalYearLabel} *</label>
-                <select
-                  value={vehicleYear}
-                  onChange={(e) => setVehicleYear(Number(e.target.value))}
-                  className={selectCls}
-                >
-                  {Array.from({ length: currentYear - 1989 }, (_, i) => currentYear - i).map((yr) => (
-                    <option key={yr} value={yr}>{yr}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className={labelCls}>{t.rentalPlateLabel} *</label>
-                <input
-                  type="text"
-                  value={plateNumber}
-                  onChange={(e) => setPlateNumber(e.target.value.toUpperCase().slice(0, 10))}
-                  required
-                  placeholder="e.g. VBG 1234"
-                  maxLength={10}
-                  className={`${inputCls} font-mono tracking-widest`}
-                />
-                <div className="mt-1.5 flex items-start gap-1.5 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2">
-                  <span className="text-blue-500 text-sm mt-0.5">🔒</span>
-                  <p className="text-xs text-blue-700 dark:text-blue-400">{t.rentalPlateSafetyNote}</p>
-                </div>
+            <div>
+              <label className={labelCls}>Vehicle Type *</label>
+              <div className="grid grid-cols-5 gap-1.5">
+                {RENTAL_VEHICLE_TYPES.map((vt) => (
+                  <button
+                    key={vt}
+                    type="button"
+                    onClick={() => setVehicleType(vt)}
+                    className={`py-2 rounded-xl text-xs font-semibold border min-h-[44px] flex flex-col items-center justify-center gap-0.5 transition-colors ${
+                      vehicleType === vt
+                        ? "bg-[#003366] dark:bg-blue-600 text-white border-transparent"
+                        : "bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600"
+                    }`}
+                  >
+                    <span className="text-lg">{vt === "car" ? "🚗" : vt === "bicycle" ? "🚲" : vt === "scooter" ? "🛵" : "🏍️"}</span>
+                    <span className="text-[9px] capitalize">{vt}</span>
+                  </button>
+                ))}
               </div>
             </div>
-
-            {/* Pricing & Availability */}
-            <div className="border border-gray-200 dark:border-slate-700 rounded-xl p-4 space-y-3">
-              <p className="text-sm font-bold text-gray-700 dark:text-slate-200">{t.rentalPricingInfo}</p>
-
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className={labelCls}>{t.rentalPricePerDayLabel}</label>
-                <CentsInput value={rentalPricePerDayCents} onChange={setRentalPricePerDayCents} />
-                <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-1">Type digits — backspace to correct</p>
+                <label className={labelCls}>{t.rentalBrandLabel} *</label>
+                <input type="text" value={vehicleBrand} onChange={(e) => setVehicleBrand(e.target.value)} placeholder="e.g. Honda" className={inputCls} />
               </div>
-
               <div>
-                <label className={labelCls}>{t.rentalPricePerHourLabel} <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
+                <label className={labelCls}>{t.rentalModelLabel} *</label>
+                <input type="text" value={vehicleModel} onChange={(e) => setVehicleModel(e.target.value)} placeholder="e.g. City" className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>{t.rentalYearLabel}</label>
+                <input type="number" value={vehicleYear} onChange={(e) => setVehicleYear(Number(e.target.value))} min={1990} max={currentYear + 1} className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>{t.rentalPlateNumber} *</label>
+                <input type="text" value={plateNumber} onChange={(e) => setPlateNumber(e.target.value.toUpperCase())} placeholder="e.g. PBJ 1234" className={`${inputCls} uppercase font-mono tracking-widest`} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>Per Day (RM) *</label>
+                <CentsInput value={rentalPricePerDayCents} onChange={setRentalPricePerDayCents} />
+              </div>
+              <div>
+                <label className={labelCls}>Per Hour (RM) <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
                 <CentsInput value={rentalPricePerHourCents} onChange={setRentalPricePerHourCents} />
               </div>
-
               <div>
-                <label className={labelCls}>{t.rentalDepositLabel}</label>
+                <label className={labelCls}>{t.rentalDeposit} (RM) *</label>
                 <CentsInput value={depositCents} onChange={setDepositCents} />
               </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={labelCls}>{t.rentalAvailableFromLabel}</label>
-                  <input
-                    type="date"
-                    value={availableFrom}
-                    onChange={(e) => setAvailableFrom(e.target.value)}
-                    min={new Date().toISOString().split("T")[0]}
-                    required
-                    className={selectCls}
-                  />
-                </div>
-                <div>
-                  <label className={labelCls}>{t.rentalAvailableToLabel}</label>
-                  <input
-                    type="date"
-                    value={availableTo}
-                    onChange={(e) => setAvailableTo(e.target.value)}
-                    min={availableFrom || new Date().toISOString().split("T")[0]}
-                    required
-                    className={selectCls}
-                  />
-                </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>{t.rentalAvailFrom}</label>
+                <input type="date" value={availableFrom} onChange={(e) => setAvailableFrom(e.target.value)} className={inputCls} min={new Date().toISOString().split("T")[0]} />
+              </div>
+              <div>
+                <label className={labelCls}>{t.rentalAvailTo}</label>
+                <input type="date" value={availableTo} onChange={(e) => setAvailableTo(e.target.value)} className={inputCls} min={availableFrom || new Date().toISOString().split("T")[0]} />
               </div>
             </div>
-
-            {/* Requirements & Terms */}
-            <div className="border border-gray-200 dark:border-slate-700 rounded-xl p-4 space-y-3">
-              <p className="text-sm font-bold text-gray-700 dark:text-slate-200">Requirements</p>
-
-              <div className="flex items-center justify-between bg-gray-50 dark:bg-slate-800 rounded-xl px-4 py-3">
-                <div className="flex items-center gap-2">
-                  {requiresLicense
-                    ? <ShieldCheck size={16} className="text-green-500" />
-                    : <ShieldOff size={16} className="text-gray-400" />}
-                  <span className="text-sm font-medium text-gray-700 dark:text-slate-300">{t.rentalRequiresLicenseLabel}</span>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-3 min-h-[52px]">
+                <div>
+                  <p className="text-sm font-semibold text-gray-700 dark:text-slate-200">{t.rentalLicenceRequired}</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setRequiresLicense((p) => !p)}
-                  className={`relative w-11 h-6 rounded-full transition-colors ${requiresLicense ? "bg-green-500" : "bg-gray-300 dark:bg-slate-600"}`}
-                >
-                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${requiresLicense ? "translate-x-5" : "translate-x-0"}`} />
+                <button type="button" onClick={() => setRequiresLicense(!requiresLicense)} className={`relative w-11 h-6 rounded-full transition-colors ${requiresLicense ? "bg-[#003366] dark:bg-blue-600" : "bg-gray-200 dark:bg-slate-500"}`}>
+                  <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${requiresLicense ? "left-6" : "left-1"}`} />
                 </button>
               </div>
-
-              <div className="flex items-center justify-between bg-gray-50 dark:bg-slate-800 rounded-xl px-4 py-3">
-                <div className="flex items-center gap-2">
-                  {requiresInsuranceProof
-                    ? <ShieldCheck size={16} className="text-blue-500" />
-                    : <ShieldOff size={16} className="text-gray-400" />}
-                  <span className="text-sm font-medium text-gray-700 dark:text-slate-300">{t.rentalRequiresInsuranceLabel}</span>
+              <div className="flex items-center justify-between bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-3 min-h-[52px]">
+                <div>
+                  <p className="text-sm font-semibold text-gray-700 dark:text-slate-200">{t.rentalInsuranceRequired}</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setRequiresInsuranceProof((p) => !p)}
-                  className={`relative w-11 h-6 rounded-full transition-colors ${requiresInsuranceProof ? "bg-blue-500" : "bg-gray-300 dark:bg-slate-600"}`}
-                >
-                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${requiresInsuranceProof ? "translate-x-5" : "translate-x-0"}`} />
+                <button type="button" onClick={() => setRequiresInsuranceProof(!requiresInsuranceProof)} className={`relative w-11 h-6 rounded-full transition-colors ${requiresInsuranceProof ? "bg-[#003366] dark:bg-blue-600" : "bg-gray-200 dark:bg-slate-500"}`}>
+                  <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${requiresInsuranceProof ? "left-6" : "left-1"}`} />
                 </button>
               </div>
-
-              <div>
-                <label className={labelCls}>
-                  {t.rentalCustomTermsLabel} <span className="text-gray-400 font-normal text-xs">(optional)</span>
-                </label>
-                <textarea
-                  value={rentalTerms}
-                  onChange={(e) => setRentalTerms(e.target.value.slice(0, 500))}
-                  maxLength={500}
-                  placeholder={t.rentalCustomTermsPlaceholder}
-                  rows={3}
-                  className={`${inputCls} resize-none min-h-[80px]`}
-                />
-                <div className={`text-right text-xs mt-1 ${rentalTerms.length > 450 ? "text-amber-500" : "text-gray-400 dark:text-slate-500"}`}>
-                  {rentalTerms.length} / 500
-                </div>
-              </div>
+            </div>
+            <div>
+              <label className={labelCls}>{t.rentalSellerTerms} <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
+              <textarea value={rentalTerms} onChange={(e) => setRentalTerms(e.target.value.slice(0, 500))} rows={3} className={`${inputCls} resize-none`} placeholder={t.rentalTermsPlaceholder} />
             </div>
           </>
         )}
 
-        {/* ── Non-rental fields ─────────────────────────────────────────────── */}
-        {type !== "rental" && (
-          <>
-            {/* Category */}
-            <div>
-              <label className={labelCls}>{t.category}</label>
-              <select value={category} onChange={(e) => setCategory(e.target.value)} className={selectCls}>
-                {categories.map((c) => (
-                  <option key={c} value={c}>{t.categories[c as keyof typeof t.categories]}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Condition — buy-sell only */}
-            {type === "buy-sell" && (
-              <div>
-                <label className={labelCls}>{t.condition}</label>
-                <div className="flex gap-2">
-                  {(["new", "used"] as Condition[]).map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => setCondition(c)}
-                      className={`flex-1 min-h-[44px] py-2 rounded-xl text-sm font-medium border transition-colors ${condition === c ? "bg-[#003366] dark:bg-blue-600 text-white border-[#003366] dark:border-blue-600" : "bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600"}`}
-                    >
-                      {c === "new" ? t.conditionNew : t.conditionUsed}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Price — buy-sell */}
-            {type === "buy-sell" && (
-              <div>
-                <label className={labelCls}>{t.price}</label>
-                <CentsInput value={priceCents} onChange={setPriceCents} />
-                <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-1">Type digits to enter price — backspace to correct</p>
-              </div>
-            )}
-
-            {/* Price — jobs (optional, per hour) */}
-            {type === "jobs" && (
-              <div>
-                <label className={labelCls}>{t.pricePerHour} <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
-                <CentsInput value={priceCents} onChange={setPriceCents} />
-              </div>
-            )}
-
-            {/* Jobs: Remote toggle */}
-            {type === "jobs" && (
-              <div className="flex items-center justify-between bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl px-4 py-3">
-                <div className="flex items-center gap-2">
-                  {isRemote ? <Wifi size={16} className="text-sky-500" /> : <WifiOff size={16} className="text-gray-400" />}
-                  <span className="text-sm font-medium text-gray-700 dark:text-slate-300">{t.availableRemotely}</span>
-                </div>
+        {/* Condition — Buy & Sell only */}
+        {type === "buy-sell" && (
+          <div>
+            <label className={labelCls}>{t.condition}</label>
+            <div className="flex gap-2">
+              {(["used", "new"] as Condition[]).map((c) => (
                 <button
+                  key={c}
                   type="button"
-                  onClick={() => setIsRemote((prev) => !prev)}
-                  className={`relative w-11 h-6 rounded-full transition-colors ${isRemote ? "bg-sky-500" : "bg-gray-300 dark:bg-slate-600"}`}
+                  onClick={() => setCondition(c)}
+                  className={`flex-1 min-h-[44px] py-2.5 rounded-xl text-sm font-semibold border transition-colors ${
+                    condition === c
+                      ? "bg-[#003366] dark:bg-blue-600 text-white border-[#003366] dark:border-blue-600"
+                      : "bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600 hover:border-[#003366] dark:hover:border-blue-500"
+                  }`}
                 >
-                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${isRemote ? "translate-x-5" : "translate-x-0"}`} />
+                  {c === "new" ? t.conditionNew : t.conditionUsed}
                 </button>
-              </div>
-            )}
+              ))}
+            </div>
+          </div>
+        )}
 
-            {/* Assistance: Pricing model */}
+        {/* Price */}
+        {(type === "buy-sell" || type === "assistance") && (
+          <div>
+            <label className={labelCls}>
+              {type === "buy-sell" ? t.price : t.serviceRate}
+              {type === "buy-sell" && <span className="ml-1 text-xs text-gray-400 font-normal">(enter 0 for free)</span>}
+            </label>
             {type === "assistance" && (
-              <div>
-                <label className={labelCls}>{t.pricingModelLabel}</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {(["per_hour", "per_day", "per_month", "fixed"] as const).map((model) => {
-                    const label = model === "per_hour" ? t.pricingModelPerHour : model === "per_day" ? t.pricingModelPerDay : model === "per_month" ? t.pricingModelPerMonth : t.pricingModelFixed;
-                    return (
-                      <button
-                        key={model}
-                        type="button"
-                        onClick={() => setPricingModel(model)}
-                        className={`min-h-[44px] py-2 rounded-xl text-sm font-medium border transition-colors ${pricingModel === model ? "bg-[#003366] dark:bg-blue-600 text-white border-[#003366] dark:border-blue-600" : "bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600"}`}
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
-                </div>
+              <div className="flex gap-2 mb-2">
+                {(["per_hour", "per_day", "per_month", "fixed"] as const).map((model) => (
+                  <button
+                    key={model}
+                    type="button"
+                    onClick={() => setPricingModel(model)}
+                    className={`flex-1 min-h-[40px] py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                      pricingModel === model
+                        ? "bg-orange-500 text-white border-orange-500"
+                        : "bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600"
+                    }`}
+                  >
+                    {(t as any)[`${model}Label`] ?? model}
+                  </button>
+                ))}
               </div>
             )}
+            <CentsInput value={priceCents} onChange={setPriceCents} />
+          </div>
+        )}
 
-            {/* Price — assistance (required) */}
-            {type === "assistance" && (
-              <div>
-                <label className={labelCls}>{t.price} *</label>
-                <CentsInput value={priceCents} onChange={setPriceCents} />
-                <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-1">Type digits to enter price — backspace to correct</p>
-              </div>
-            )}
+        {/* Jobs: rate (optional) */}
+        {type === "jobs" && (
+          <div>
+            <label className={labelCls}>{t.hourlyRate} <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
+            <CentsInput value={priceCents} onChange={setPriceCents} />
+          </div>
+        )}
 
-            {/* Assistance: Availability */}
-            {type === "assistance" && (
-              <div>
-                <label className={labelCls}>{t.availability}</label>
-                <input
-                  type="text"
-                  value={availability}
-                  onChange={(e) => setAvailability(e.target.value.slice(0, 80))}
-                  placeholder={t.availabilityPlaceholder}
-                  maxLength={80}
-                  className={inputCls}
-                />
-              </div>
-            )}
-          </>
+        {/* Availability (Assistance) */}
+        {type === "assistance" && (
+          <div>
+            <label className={labelCls}>{t.availability} <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
+            <input type="text" value={availability} onChange={(e) => setAvailability(e.target.value)} placeholder={t.availabilityPlaceholder} className={inputCls} />
+          </div>
+        )}
+
+        {/* Meetup spot */}
+        {(type !== "rental" && !(type === "jobs" && isRemote)) && (
+          <div>
+            <label className={labelCls}>
+              {t.meetupSpot} <span className="text-gray-400 font-normal text-xs">(optional)</span>
+            </label>
+            <input
+              type="text"
+              value={meetupSpot}
+              onChange={(e) => setMeetupSpot(e.target.value)}
+              placeholder={type === "jobs" || type === "assistance" ? "e.g. Library, Block A, etc." : t.meetupSpotPlaceholder}
+              className={inputCls}
+            />
+          </div>
         )}
 
         {/* Contact info */}
-        <div className="border border-gray-200 dark:border-slate-700 rounded-xl p-4 space-y-3">
-          <p className="text-sm font-semibold text-gray-700 dark:text-slate-300">{t.contactInfo}</p>
-          <p className="text-xs text-gray-400 dark:text-slate-500">
-            {type === "rental" ? "WhatsApp is required for rental listings." : t.contactAtLeastOne}
-          </p>
+        <div className="bg-white dark:bg-slate-700/50 border border-gray-200 dark:border-slate-600 rounded-2xl p-4 space-y-3">
+          <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">{t.contactInfo}</p>
           <div>
-            <label className="block text-xs text-gray-500 dark:text-slate-400 mb-1">
-              {t.whatsapp} {type === "rental" && <span className="text-red-500">*</span>}
+            <label className={labelCls}>
+              WhatsApp {type === "rental" ? <span className="text-red-500">*</span> : <span className="text-gray-400 font-normal">(optional)</span>}
             </label>
             <input
               type="text"
               value={whatsapp}
-              onChange={(e) => { setWhatsapp(e.target.value.slice(0, 20)); setWhatsappError(""); }}
+              onChange={(e) => { setWhatsapp(e.target.value); setWhatsappError(""); }}
               onBlur={() => {
+                if (!whatsapp.trim()) return;
                 const result = validateWhatsApp(whatsapp);
                 if (!result.valid) {
                   const suggested = suggestMalaysianFormat(whatsapp);
@@ -916,80 +900,53 @@ export default function PostPage() {
                 }
               }}
               placeholder="+60123456789"
-              maxLength={20}
               className={inputCls}
             />
             {whatsappError ? (
-              <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                <AlertCircle size={12} /> {whatsappError}
-              </p>
+              <p className="text-xs text-red-500 mt-1 flex items-center gap-1"><AlertCircle size={12} /> {whatsappError}</p>
             ) : (
-              <p className="text-xs text-slate-400 mt-1">{t.whatsappFormat}</p>
+              <p className="text-xs text-slate-400 mt-1">Include country code, e.g. +60 for Malaysia</p>
             )}
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 dark:text-slate-400 mb-1">
-              {t.wechat} <span className="text-gray-400 font-normal">(optional{type === "rental" ? "" : ""})</span>
-            </label>
-            <input
-              type="text"
-              value={wechat}
-              onChange={(e) => setWechat(e.target.value.slice(0, 30))}
-              placeholder="WeChat ID"
-              maxLength={30}
-              className={inputCls}
-            />
-            <p className={`text-right text-[10px] mt-0.5 ${wechat.length >= 27 ? "text-amber-500" : "text-gray-400 dark:text-slate-500"}`}>
-              {wechat.length}/30
-            </p>
           </div>
           {type !== "rental" && (
             <div>
-              <label className="block text-xs text-gray-500 dark:text-slate-400 mb-1">{t.teams}</label>
-              <input type="text" value={teams} onChange={(e) => setTeams(e.target.value)} placeholder="student@xmu.edu.my" maxLength={60} className={inputCls} />
+              <label className={labelCls}>WeChat ID <span className="text-gray-400 font-normal">(optional)</span></label>
+              <input type="text" value={wechat} onChange={(e) => setWechat(e.target.value)} placeholder="WeChat ID" className={inputCls} />
             </div>
           )}
-          {/* Meetup spot — hidden for remote jobs and rental */}
-          {!(type === "jobs" && isRemote) && type !== "rental" && (
+          {type !== "rental" && (
             <div>
-              <label className="block text-xs text-gray-500 dark:text-slate-400 mb-1">{t.meetupSpot}</label>
-              <input
-                type="text"
-                value={meetupSpot}
-                onChange={(e) => setMeetupSpot(e.target.value.slice(0, 80))}
-                placeholder={t.meetupSpotPlaceholder}
-                maxLength={80}
-                className={inputCls}
-              />
-              <p className={`text-right text-[10px] mt-0.5 ${meetupSpot.length >= 70 ? "text-amber-500" : "text-gray-400 dark:text-slate-500"}`}>
-                {meetupSpot.length}/80
-              </p>
+              <label className={labelCls}>Microsoft Teams <span className="text-gray-400 font-normal">(optional)</span></label>
+              <input type="text" value={teams} onChange={(e) => setTeams(e.target.value)} placeholder="your@xmu.edu.my" className={inputCls} />
             </div>
           )}
         </div>
 
         {error && (
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl px-4 py-3">
-            <p className="text-xs text-red-700 dark:text-red-400 leading-relaxed">{error}</p>
+          <div className="flex items-start gap-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl px-3 py-2.5">
+            <AlertCircle size={14} className="text-red-500 dark:text-red-400 shrink-0 mt-0.5" />
+            <p className="text-xs text-red-700 dark:text-red-300">{error}</p>
           </div>
         )}
 
         <button
           type="submit"
-          disabled={loading || !title.trim() || !description.trim()}
-          className="w-full min-h-[48px] bg-[#003366] dark:bg-blue-600 hover:bg-[#002244] dark:hover:bg-blue-700 text-white rounded-xl font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-md"
+          disabled={loading || isAtLimit}
+          className="w-full min-h-[52px] bg-[#003366] dark:bg-blue-600 text-white rounded-xl text-sm font-bold py-3 hover:bg-[#002244] dark:hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2 shadow"
         >
-          {loading ? t.submitting : t.submit}
+          {loading ? (
+            <>
+              <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              {t.posting}
+            </>
+          ) : (
+            t.postItem
+          )}
         </button>
       </form>
-
-      {showDescEditor && (
-        <DescriptionEditorModal
-          value={description}
-          onChange={setDescription}
-          onClose={() => setShowDescEditor(false)}
-        />
-      )}
     </div>
   );
 }

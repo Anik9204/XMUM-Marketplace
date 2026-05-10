@@ -1,0 +1,541 @@
+You are a senior full-stack DevSecOps developer working on the XMUM Marketplace app at artifacts/xmum-market/ and artifacts/xmum-admin/. Read ALL of the following files COMPLETELY before writing a single line of code:
+
+- src/lib/types.ts
+- src/lib/userProfile.ts
+- src/lib/listings.ts
+- src/lib/firebase.ts
+- src/pages/SettingsPage.tsx
+- src/pages/SellerProfilePage.tsx
+- src/pages/PostPage.tsx
+- src/pages/ProfilePage.tsx
+- src/contexts/AuthContext.tsx
+- firestore.rules
+- storage.rules
+- artifacts/xmum-admin/src/pages/UsersPage.tsx
+- artifacts/xmum-admin/src/App.tsx
+- artifacts/xmum-admin/src/components/Layout.tsx
+
+This part implements a two-tier seller system: Free Sellers (unverified, limited) and Verified Shops (ID-verified, full access). This is a core platform feature — implement it completely and correctly.
+
+═══════════════════════════════════════════════════════════
+STEP 1 — UPDATE TYPES
+═══════════════════════════════════════════════════════════
+
+In src/lib/types.ts, make the following additions:
+
+1. Extend UserProfile with these new fields:
+   shopName?: string;               // custom shop name, separate from displayName
+   shopSlug?: string;               // URL-safe slug e.g. "john-laptop-shop"
+   shopBio?: string;                // short shop description, max 200 chars
+   shopBannerUrl?: string;          // Firebase Storage URL for banner image
+   shopCategories?: string[];       // e.g. ["electronics", "books"]
+   verificationStatus?: "none" | "pending" | "approved" | "rejected";
+   verificationSubmittedAt?: number;
+   verificationReviewedAt?: number;
+   verificationRejectionReason?: string;
+   sellerTcAcceptedAt?: number;     // timestamp of Seller T&C acceptance
+   sellerTcVersion?: string;        // e.g. "seller-tc-v1"
+   activeListingCount?: number;     // maintained by the app on each post/delete
+   totalListingCount?: number;
+
+2. Add a new interface:
+   export interface SellerTcAuditLog {
+     id: string;
+     userId: string;
+     userEmail: string;
+     shopName: string;
+     tcVersion: string;
+     acceptedAt: number;
+     userAgent: string;
+   }
+
+3. Add a new interface:
+   export interface Review {
+     id: string;
+     reviewerId: string;
+     reviewerName: string;
+     reviewerAvatar?: string;
+     sellerId: string;
+     listingId: string;
+     listingTitle: string;
+     rating: number;
+     comment: string;
+     createdAt: number;
+   }
+
+═══════════════════════════════════════════════════════════
+STEP 2 — LISTING TIER LIMITS
+═══════════════════════════════════════════════════════════
+
+The platform enforces these rules:
+
+FREE SELLER (verificationStatus !== "approved"):
+  - May post: "buy-sell" and "lost-found" only.
+  - Maximum 5 active listings at any time.
+  - No shop page, no shop name.
+
+VERIFIED SHOP (verificationStatus === "approved"):
+  - May post: all 5 types including "jobs", "assistance", "rental".
+  - Maximum 30 active listings at any time.
+  - Gets public shop page at /shop/:shopSlug.
+
+In src/pages/PostPage.tsx:
+  - Read userProfile.verificationStatus from AuthContext.
+  - In the listing type tab selector:
+    * "buy-sell" and "lost-found": always enabled.
+    * "jobs", "assistance", "rental": if NOT verified, render the tab with a 🔒 lock icon overlay and grey-out the pill. Clicking it shows an inline banner: "Verified Shops only — Verify your student ID to unlock this." with an "Open Shop Setup" button that navigates to /settings#shop-verification.
+  - Before the submit handler writes to Firestore, check userProfile.activeListingCount:
+    * Free seller: if activeListingCount >= 5, block submit and show error: "You've reached the 5-listing limit for free accounts. Verify your student ID to unlock up to 30 listings."
+    * Verified seller: if activeListingCount >= 30, block submit and show: "You've reached the 30-listing limit."
+  - After a successful createListing call, increment users/{uid}.activeListingCount by 1 using Firestore increment().
+
+In src/lib/listings.ts:
+  - In the deleteListing function, after deleteDoc, call updateDoc(doc(db,"users",userId), { activeListingCount: increment(-1) }) so the count stays accurate when listings are deleted.
+  - In the updateListing function, when status changes to "sold" or isArchived becomes true, also decrement activeListingCount.
+
+═══════════════════════════════════════════════════════════
+STEP 3 — SELLER VERIFICATION & SHOP SETUP FLOW
+═══════════════════════════════════════════════════════════
+
+Create a new file: src/components/ShopSetupModal.tsx
+
+This is a guided 4-step modal. It is triggered by:
+  - Clicking "Become a Verified Seller" in SettingsPage.
+  - Clicking "Open Shop Setup" from the locked listing type tabs in PostPage.
+
+The modal is full-screen on mobile (fixed inset-0, z-50, bg-white/dark:bg-slate-900) and a large centered dialog on desktop (max-w-lg, rounded-2xl). It CANNOT be dismissed by clicking the backdrop. Only by completing or explicitly cancelling.
+
+STEP INDICATOR at the top: 4 dots or a progress bar showing steps 1–4.
+
+── STEP 1: Upload Student ID ──────────────────────────────────
+Title: "Verify Your Student ID"
+Subtitle: "Upload clear photos of your XMUM student ID card. Your information is kept private and only reviewed by admin."
+
+Two upload areas side by side:
+  - Left: "Front of ID card" — dashed border box, tap to select image, shows thumbnail when selected.
+  - Right: "Back of ID card" — same.
+
+Both are required. Accepted formats: image/jpeg, image/png, image/webp. Max 5MB each.
+A privacy notice below: "🔒 Your student ID photos are stored securely and are only accessible to XMUM Market administrators. They are never shared with other users."
+
+"Next →" button (disabled until both photos are selected).
+
+── STEP 2: Set Up Your Shop ───────────────────────────────────
+Title: "Create Your Shop"
+Subtitle: "This is how other students will find and recognise your shop."
+
+Fields:
+  1. Shop Name (text input, required, max 50 chars):
+     - Label: "Shop Name *"
+     - Placeholder: e.g. "John's Tech Corner"
+     - Real-time slug preview below: "Your shop URL: xmummarket.com/shop/john-s-tech-corner" (auto-generated from shop name: lowercase, spaces to hyphens, strip special chars).
+     - Validate uniqueness: on blur, query Firestore users collection where shopSlug == generatedSlug. If taken: show error "This shop name is already taken. Try adding your student ID number."
+
+  2. Shop Bio (textarea, optional, max 200 chars):
+     - Label: "Short Description"
+     - Placeholder: "What do you sell? e.g. Second-hand laptops, textbooks, and phone accessories."
+     - Character counter: "X / 200"
+
+  3. Shop Categories (multi-select chips, optional):
+     - Label: "Main Categories (pick up to 3)"
+     - Show all available category chips from the platform: Electronics, Books, Clothing, Furniture, Food, Services, Jobs/Tutoring, Assistance, Rentals.
+     - Max 3 selectable. Selected chips turn navy.
+
+  4. Shop Banner (optional):
+     - A wide rectangular upload area (aspect-ratio 3:1), tap to upload.
+     - Accepted: image/jpeg, image/png. Max 3MB.
+     - Shows preview after selection.
+     - Hint: "Recommended size: 900×300px"
+
+"← Back" and "Next →" buttons.
+
+── STEP 3: Accept Seller Terms ────────────────────────────────
+Title: "Seller Terms & Conditions"
+Subtitle: "Please read before opening your shop."
+
+Scrollable text body (max-h-[40vh] overflow-y-auto, with border) containing these terms (write them professionally):
+  1. You must be a currently enrolled student at Xiamen University Malaysia.
+  2. All listings must be honest and accurate. Misleading listings will result in account suspension.
+  3. You are solely responsible for all transactions conducted through your shop.
+  4. XMUM Market does not guarantee the quality, safety, or legality of any item sold.
+  5. Prohibited items (weapons, drugs, counterfeit goods, stolen property) will result in immediate permanent ban.
+  6. XMUM Market reserves the right to remove any listing or suspend any shop without notice.
+  7. Your shop verification details and T&C acceptance are stored permanently for legal compliance, even if you delete your account.
+  8. By opening a shop, you agree to resolve disputes directly with buyers in good faith.
+
+At the bottom of the scrollable area, show a "scroll down" indicator arrow that disappears when user reaches the bottom (use onScroll to detect scrollTop + clientHeight >= scrollHeight - 10).
+
+Mandatory checkbox: "I have read and agree to the Seller Terms & Conditions."
+"I Agree & Continue" button (disabled until checkbox is ticked AND user has scrolled to the bottom).
+"← Back" button.
+
+── STEP 4: Confirmation ───────────────────────────────────────
+Title: "Application Submitted! 🎉"
+Body text:
+  "Your shop verification is under review. Our admin team will review your student ID within 24–48 hours.
+  You'll receive a notification once it's approved.
+  In the meantime, you can still post Buy & Sell and Lost & Found listings."
+
+A summary card showing:
+  - Shop name chosen
+  - Categories chosen (as badges)
+  - Submission timestamp
+
+"Close" button (closes modal).
+
+── ON SUBMIT (transitioning from step 3 to step 4) ────────────
+Perform these actions IN ORDER:
+  1. Upload front ID photo to Firebase Storage: studentIds/{uid}/front.{ext}
+  2. Upload back ID photo to Firebase Storage: studentIds/{uid}/back.{ext}
+  3. Upload shop banner (if provided) to Firebase Storage: shopBanners/{uid}/banner.{ext}
+  4. Generate shopSlug from shopName (lowercase, spaces → hyphens, strip non-alphanumeric except hyphens).
+  5. Write to Firestore users/{uid}:
+     {
+       shopName,
+       shopSlug,
+       shopBio,
+       shopCategories,
+       shopBannerUrl (if uploaded),
+       verificationStatus: "pending",
+       verificationSubmittedAt: Date.now(),
+       sellerTcAcceptedAt: Date.now(),
+       sellerTcVersion: "seller-tc-v1",
+     }
+  6. Write audit log to Firestore collection "sellerTcAuditLogs":
+     { userId, userEmail, shopName, tcVersion: "seller-tc-v1", acceptedAt: Date.now(), userAgent: navigator.userAgent }
+  7. Write a notification to users/{uid}/notifications:
+     { type: "welcome", title: "Shop application submitted!", body: "We'll review your student ID within 24–48 hours.", createdAt: Date.now(), read: false }
+
+If ANY step fails, show an inline error in the modal (do not close it) and allow retry.
+
+═══════════════════════════════════════════════════════════
+STEP 4 — UPDATE SETTINGS PAGE
+═══════════════════════════════════════════════════════════
+
+In src/pages/SettingsPage.tsx, replace the existing simple VerificationBanner component and any existing verification UI with a new dedicated section: "Shop & Verification".
+
+This section shows ONE of these states depending on userProfile.verificationStatus:
+
+STATE A — "none" (never applied):
+  A card with:
+  - Navy left border (4px).
+  - Title: "🏪 Open Your Verified Shop"
+  - Body: "Verified sellers get a shop page, custom shop name, and can post Jobs, Assistance, and Rental listings. Verification takes 24–48 hours."
+  - Feature bullet list:
+    * ✓ Custom shop name and URL
+    * ✓ Post Jobs, Assistance & Rentals
+    * ✓ Up to 30 active listings (vs 5 for free accounts)
+    * ✓ Verified badge on all your listings
+    * ✓ Shop page visible to all users
+  - "Become a Verified Seller →" button (full-width, navy) that opens ShopSetupModal.
+
+STATE B — "pending":
+  An amber card:
+  - Title: "⏳ Verification Under Review"
+  - Body: "Your shop application was submitted on [date]. Our admin team will review it within 24–48 hours."
+  - Submitted shop name shown.
+  - "Edit Shop Details" button (opens ShopSetupModal at step 2 only — allow updating shop name/bio/banner but not re-uploading ID).
+
+STATE C — "approved":
+  A green card:
+  - Title: "✓ Verified Shop"
+  - "Shop Name: [shopName]" with an edit pencil icon.
+  - "Shop URL: /shop/[shopSlug]" as a clickable link.
+  - "Preview Shop →" button that opens /shop/[shopSlug] in a new tab.
+  - "Edit Shop Details" button.
+  - Active listing count: "X / 30 listings used."
+
+STATE D — "rejected":
+  A red card:
+  - Title: "✗ Verification Rejected"
+  - Body: "Reason: [verificationRejectionReason]"
+  - "Reapply" button that opens ShopSetupModal from step 1 (fresh upload).
+
+Also add the "Preview my public profile" button at the top of the PROFILE section (below the avatar):
+  - "👁 Preview my public profile" — outlined button, opens /seller/{user.uid} in new tab.
+
+═══════════════════════════════════════════════════════════
+STEP 5 — UPGRADE THE SHOP PROFILE PAGE (/shop/:shopSlug)
+═══════════════════════════════════════════════════════════
+
+Create src/pages/ShopPage.tsx (in addition to the existing SellerProfilePage at /seller/:uid).
+Register the route in src/App.tsx: <Route path="/shop/:slug" component={ShopPage} />
+
+In ShopPage.tsx:
+  - On mount, query Firestore users collection where shopSlug == slug param to get the seller's uid and profile.
+  - If no user found with that slug, show 404: "This shop doesn't exist or has been removed."
+
+SHOP HEADER (full-width):
+  - BANNER IMAGE: if shopBannerUrl exists, show a full-width image (aspect-ratio 3:1, object-cover). If not, show a default gradient (from-[#003366] to-[#0055CC]).
+  - SHOP INFO CARD overlapping the bottom of the banner (negative margin-top, white card, rounded-2xl, shadow):
+    * Avatar (80px, rounded-full, border-4 border-white, positioned to overlap the banner bottom).
+    * Shop name (large, bold, dark) — this is shopName, not displayName.
+    * "by [displayName]" in grey italic below the shop name.
+    * "✓ Verified XMUM Shop" badge (green pill, CheckCircle2 icon) — shown only if verificationStatus === "approved".
+    * Star rating row.
+    * Shop bio (grey, smaller text).
+    * Shop category badges (colored pills from shopCategories array).
+    * Stats row: "[N] listings" | "Member [memberSince]" | "[N] reviews"
+    * BUTTONS ROW:
+      - If viewer is NOT the owner: "Message" button (navy) + "Share" button (outlined, Share2 icon).
+      - If viewer IS the owner: "Edit Shop" button → navigate to /settings#shop-verification.
+
+LISTINGS SECTION:
+  - Heading: "Our Listings" (if owner) / "Listings from [shopName]" (if viewer).
+  - Use the existing 2/3-column ListingCard grid.
+  - Skeleton + empty state as usual.
+
+REVIEWS SECTION (below listings):
+  - Same as the reviews section described in the original Part 5 Fix 3 — fetch from "reviews" collection where sellerId == uid, render cards, "Leave a Review" button for eligible viewers.
+
+Add a "Shop" link to SellerProfilePage as well: if the seller has an approved shop (verificationStatus === "approved" && shopSlug), show a "Visit Shop →" button that navigates to /shop/[shopSlug].
+
+═══════════════════════════════════════════════════════════
+STEP 6 — REVIEWS SYSTEM (src/lib/reviews.ts)
+═══════════════════════════════════════════════════════════
+
+Create src/lib/reviews.ts:
+
+import { collection, addDoc, getDocs, query, where, orderBy, limit, updateDoc, doc, getDoc, increment } from "firebase/firestore";
+import { db } from "./firebase";
+import { Review } from "./types";
+
+export async function leaveReview(
+  sellerId: string,
+  review: Omit<Review, "id" | "createdAt">
+): Promise<void> {
+  await addDoc(collection(db, "reviews"), {
+    ...review,
+    createdAt: Date.now(),
+  });
+  const sellerRef = doc(db, "users", sellerId);
+  const sellerSnap = await getDoc(sellerRef);
+  const data = sellerSnap.data();
+  const currentRating = data?.rating ?? 0;
+  const totalReviews = data?.totalReviews ?? 0;
+  const newRating = (currentRating * totalReviews + review.rating) / (totalReviews + 1);
+  await updateDoc(sellerRef, {
+    rating: Math.round(newRating * 10) / 10,
+    totalReviews: increment(1),
+  });
+}
+
+export async function getReviews(sellerId: string, count = 20): Promise<Review[]> {
+  const q = query(
+    collection(db, "reviews"),
+    where("sellerId", "==", sellerId),
+    orderBy("createdAt", "desc"),
+    limit(count)
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Review));
+}
+
+export async function hasReviewed(reviewerId: string, sellerId: string): Promise<boolean> {
+  const q = query(
+    collection(db, "reviews"),
+    where("reviewerId", "==", reviewerId),
+    where("sellerId", "==", sellerId),
+    limit(1)
+  );
+  const snap = await getDocs(q);
+  return !snap.empty;
+}
+
+═══════════════════════════════════════════════════════════
+STEP 7 — LISTING CARD & DETAIL PAGE: SHOW VERIFIED BADGE
+═══════════════════════════════════════════════════════════
+
+In src/components/ListingCard.tsx:
+  - The listing already has userName. We need to show a "✓" badge next to the seller name if the seller is verified.
+  - Since ListingCard doesn't currently fetch the seller's profile, add an optional prop: sellerVerified?: boolean.
+  - In places where ListingCard is rendered and the seller profile IS available (SellerProfilePage, ShopPage), pass sellerVerified={profile.verificationStatus === "approved"}.
+  - On the card, if sellerVerified is true, show a small teal "✓" badge (CheckCircle2, size 11) next to the userName text.
+
+In src/pages/ListingDetailPage.tsx:
+  - When fetching the listing, also getProfile(listing.userId).
+  - In the seller card section, if seller.verificationStatus === "approved":
+    * Show a green "✓ Verified Shop" pill badge prominently.
+    * Show "Shop: [shopName]" as a clickable link → /shop/[shopSlug].
+  - If seller.verificationStatus !== "approved":
+    * Show no badge (existing behavior).
+
+═══════════════════════════════════════════════════════════
+STEP 8 — FIRESTORE & STORAGE RULES
+═══════════════════════════════════════════════════════════
+
+Show the COMPLETE updated firestore.rules file. Add these blocks (do not remove existing rules):
+
+  // Reviews
+  match /reviews/{reviewId} {
+    allow read: if true;
+    allow create: if isXmuEmail()
+                  && request.resource.data.reviewerId == request.auth.uid
+                  && request.resource.data.rating >= 1
+                  && request.resource.data.rating <= 5
+                  && request.resource.data.comment.size() <= 300;
+    allow delete: if isAdmin();
+  }
+
+  // Seller T&C audit logs — permanent, admin-read-only
+  match /sellerTcAuditLogs/{logId} {
+    allow create: if isXmuEmail()
+                  && request.resource.data.userId == request.auth.uid;
+    allow read, update, delete: if isAdmin();
+  }
+
+  // Listings rule update — restrict Jobs/Assistance/Rental to verified sellers
+  // Update the existing listings create rule to add:
+  //   For types jobs, assistance, rental:
+  //   && (request.resource.data.type in ["buy-sell","lost-found"]
+  //       || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.verificationStatus == "approved")
+  // The full updated listings create rule should be:
+  match /listings/{listingId} {
+    allow read: if true;
+    allow create: if isXmuEmail()
+                  && (
+                    request.resource.data.type in ["buy-sell", "lost-found"]
+                    || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.verificationStatus == "approved"
+                  );
+    allow update, delete: if isOwner(resource.data.userId) || isEditor();
+  }
+
+Show the COMPLETE updated storage.rules file. Add:
+
+  // Student ID uploads — owner write, admin read only
+  match /studentIds/{userId}/{allPaths=**} {
+    allow write: if request.auth != null && request.auth.uid == userId
+                 && request.resource.size < 5 * 1024 * 1024
+                 && request.resource.contentType.matches("image/.*");
+    allow read: if request.auth != null
+                && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+  }
+
+  // Shop banners — owner write, public read
+  match /shopBanners/{userId}/{allPaths=**} {
+    allow write: if request.auth != null && request.auth.uid == userId
+                 && request.resource.size < 3 * 1024 * 1024
+                 && request.resource.contentType.matches("image/.*");
+    allow read: if true;
+  }
+
+═══════════════════════════════════════════════════════════
+STEP 9 — ADMIN: VERIFICATION REVIEW PAGE
+═══════════════════════════════════════════════════════════
+
+In artifacts/xmum-admin/src/, create src/pages/VerificationPage.tsx:
+
+LAYOUT: Same card/table style as existing admin pages.
+HEADING: "Shop Verification Requests"
+BADGE: Show count of pending verifications next to heading.
+
+FETCH: Query Firestore users collection where verificationStatus == "pending", orderBy verificationSubmittedAt desc. Use onSnapshot for real-time updates.
+
+Each request card shows:
+  - User uid, email, displayName.
+  - Submitted shop name, bio, categories.
+  - Submission date/time.
+  - TWO clickable image thumbnails: "Front ID" and "Back ID" — clicking opens the image in a new tab (use Firebase Storage getDownloadURL to resolve the URL from studentIds/{uid}/front.* and back.*).
+  - Three action buttons:
+    * "✓ Approve" (green): updateDoc users/{uid} with { verificationStatus: "approved", isVerified: true, verificationReviewedAt: Date.now() }. Then write a notification to users/{uid}/notifications: { type: "welcome", title: "Shop approved! 🎉", body: `Your shop "${shopName}" is now live. You can post all listing types.`, createdAt: Date.now(), read: false }.
+    * "✗ Reject" (red): opens a small modal asking for a rejection reason (text input, required, max 200 chars). On confirm: updateDoc users/{uid} with { verificationStatus: "rejected", verificationRejectionReason: reason, verificationReviewedAt: Date.now() }. Write notification: { title: "Shop verification rejected", body: `Reason: ${reason}. You can reapply from Settings.` }.
+    * "View Profile" (outlined): navigates to the admin user detail or opens /seller/{uid} in new tab.
+
+Add to admin App.tsx as route "/verifications".
+Add to admin Layout.tsx sidebar as "🎓 Verifications" with a live pending-count badge (use onSnapshot for real-time count).
+
+═══════════════════════════════════════════════════════════
+STEP 10 — PROFILE PAGE STATS ROW & SHARE
+═══════════════════════════════════════════════════════════
+
+In src/pages/ProfilePage.tsx, add below the avatar/name card:
+
+STATS ROW: Four stat cells separated by vertical dividers:
+  - "X Active" — count of listings where status !== "sold" and isArchived !== true.
+  - "X Sold" — count where status === "sold".
+  - "X Views" — sum of listing.viewCount across all fetched listings (default 0 if undefined).
+  - "X Saved" — count from getSavedListings(user.uid).length.
+  Each cell: bold number on top, grey label below. Tapping "Saved" switches the active tab to "saved".
+
+SHOP BANNER (for verified sellers only):
+  If userProfile.verificationStatus === "approved", show a small navy banner below the stats row:
+  "🏪 [shopName] · Verified Shop  |  View Shop →" (clicking navigates to /shop/[shopSlug]).
+
+In src/pages/SellerProfilePage.tsx, add a Share button (Share2 icon) to the header action row:
+  - navigator.share if available, else clipboard copy + toast "Link copied!"
+
+═══════════════════════════════════════════════════════════
+CONSTRAINTS
+═══════════════════════════════════════════════════════════
+- Do NOT add any new npm packages.
+- Do NOT use any external ID verification service — this is a manual admin-review flow.
+- The ShopSetupModal must not be closeable by backdrop click during steps 1–3. Only by the explicit Cancel button (which prompts "Are you sure? Your progress will be lost.").
+- The slug uniqueness check must be debounced (500ms) to avoid Firestore read spam.
+- The sellerTcAuditLogs write must happen even if the subsequent profile update fails — wrap them in separate try/catch blocks.
+- After all files are written, show: (a) every file created or modified, (b) the complete firestore.rules, (c) the complete storage.rules.
+
+─── ADDITIONAL FIX — Avatar Crop on Upload ───────────────────────────────────
+
+In src/pages/SettingsPage.tsx, replace the current direct avatar upload flow with
+a canvas-based crop modal. Do NOT add any external library — use only the native
+HTML Canvas API.
+
+Create a new component inside SettingsPage.tsx (or as a separate file
+src/components/AvatarCropModal.tsx if it gets large):
+
+TRIGGER:
+  When the user selects a file via the avatar camera/upload button, instead of
+  uploading immediately, open the AvatarCropModal with the selected File object.
+
+MODAL STRUCTURE:
+  - Full-screen on mobile (fixed inset-0, z-50, bg-black).
+  - Centered dialog on desktop (max-w-sm, rounded-2xl, bg-white/dark:bg-slate-800).
+  - Header: "Crop Profile Photo" title + X cancel button.
+
+CROP UI:
+  - Display the selected image using a <canvas> element at full available width.
+  - Draw a circular crop overlay: fill the entire canvas with rgba(0,0,0,0.5),
+    then use ctx.globalCompositeOperation = "destination-out" to punch a circular
+    hole in the centre showing the image beneath. Reset compositeOperation to
+    "source-over" after. This gives the standard circular crop look.
+  - The crop circle diameter = min(canvasWidth, canvasHeight) * 0.85.
+  - Show a grey instruction text below the canvas: "Drag to reposition · Pinch or
+    scroll to zoom"
+
+INTERACTIONS (implement with native pointer/mouse/touch events):
+  - Drag to pan: track pointerdown / pointermove / pointerup on the canvas element.
+    On move, offset the image draw position by (deltaX, deltaY). Clamp so the image
+    never exposes the canvas background inside the crop circle.
+  - Scroll to zoom: on wheel event, increase/decrease a scale factor (min 1.0,
+    max 4.0, step 0.1 per wheel tick). Re-draw on every change.
+  - On touch: use two-finger pinch (track distance between touch[0] and touch[1]
+    on touchmove) to adjust scale. Re-draw on every change.
+
+SAVE BUTTON:
+  - Label: "Use This Photo" (full-width, navy, min-h-[52px]).
+  - On click:
+    1. Create an offscreen canvas: 256 × 256 px.
+    2. Use ctx.arc(128, 128, 128, 0, Math.PI * 2) + ctx.clip() to clip to a circle.
+    3. Draw the image onto the offscreen canvas applying the current pan offset and
+       scale, centred, so the result matches what the user sees in the crop UI.
+    4. Call offscreenCanvas.toBlob((blob) => { ... }, "image/jpeg", 0.82) to export.
+    5. Convert the blob to a File object: new File([blob], "avatar.jpg", { type: "image/jpeg" }).
+    6. Call uploadAvatar(file, user.uid) from userProfile.ts.
+    7. On success: call updateProfile(uid, { avatarUrl: downloadUrl }) and update
+       the local state in SettingsPage so the avatar preview updates immediately.
+    8. Show the existing SuccessToast: "Profile photo updated."
+    9. Close the modal.
+  - Show a Loader2 spinner inside the button while uploading.
+
+CANCEL BUTTON:
+  - "Cancel" link below the Save button (text-sm, text-slate-400).
+  - Closes modal without uploading. Clears the file input value so the same file
+    can be re-selected.
+
+CONSTRAINTS:
+  - Do NOT use react-image-crop, react-easy-crop, or any cropping library.
+  - The offscreen canvas output must always be exactly 256×256 pixels regardless
+    of the original image size — this enforces the upload size limit.
+  - The modal must clean up the object URL created by URL.createObjectURL() on
+    unmount or cancel to prevent memory leaks.
+  - After this fix is complete, show the modified files.

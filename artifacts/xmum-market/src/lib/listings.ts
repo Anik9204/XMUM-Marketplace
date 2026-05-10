@@ -14,6 +14,7 @@ import {
   serverTimestamp,
   QueryDocumentSnapshot,
   getCountFromServer,
+  increment,
 } from "firebase/firestore";
 import {
   ref,
@@ -26,10 +27,9 @@ import { Listing, ListingType } from "./types";
 
 const PAGE_SIZE = 12;
 
-export const LISTING_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-export const LISTING_REMINDER_MS = 23 * 24 * 60 * 60 * 1000; // 23 days (7-day warning)
+export const LISTING_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000;
+export const LISTING_REMINDER_MS = 23 * 24 * 60 * 60 * 1000;
 
-// Convert a Firestore Timestamp (or plain number) to milliseconds.
 function toMillis(val: unknown): number {
   if (typeof val === "number") return val;
   if (val && typeof (val as any).toMillis === "function") return (val as any).toMillis();
@@ -47,7 +47,6 @@ function mapDoc(d: QueryDocumentSnapshot): Listing {
   } as Listing;
 }
 
-// Extract the Firebase Storage path from a full https:// download URL.
 function storagePathFromUrl(url: string): string | null {
   try {
     const match = url.match(/\/o\/(.+?)(\?|$)/);
@@ -65,20 +64,13 @@ export async function uploadPhoto(file: File, userId: string): Promise<string> {
   return getDownloadURL(storageRef);
 }
 
-// ── Tab counts — runs 5 parallel count() aggregation queries ──────────────────
-// Only filters by type to avoid requiring a composite Firestore index.
-// Wrapped in an outer try/catch so a missing getCountFromServer export
-// (or any build-time resolution failure) returns {} rather than crashing.
 export async function getTabCounts(): Promise<Partial<Record<ListingType, number>>> {
   const types: ListingType[] = ["buy-sell", "lost-found", "jobs", "assistance", "rental"];
   try {
     const counts = await Promise.all(
       types.map(async (type) => {
         try {
-          const q = query(
-            collection(db, "listings"),
-            where("type", "==", type)
-          );
+          const q = query(collection(db, "listings"), where("type", "==", type));
           const snap = await getCountFromServer(q);
           return snap.data().count;
         } catch {
@@ -92,13 +84,6 @@ export async function getTabCounts(): Promise<Partial<Record<ListingType, number
   }
 }
 
-// ── MIGRATION NOTE ────────────────────────────────────────────────────────────
-// Existing listing documents do NOT have a sortKey field.
-// Before deploying to production, run a one-time migration script that sets
-// sortKey = createdAt for all existing documents, or the new sortKey-based
-// index/query will return inconsistent results.
-// New listings created after this deployment will have sortKey set automatically.
-// ──────────────────────────────────────────────────────────────────────────────
 export async function createListing(
   data: Omit<Listing, "id" | "createdAt" | "isArchived" | "status">
 ): Promise<string> {
@@ -115,17 +100,27 @@ export async function createListing(
 
 export async function updateListing(
   id: string,
+  userId: string,
   data: Partial<Omit<Listing, "id" | "createdAt" | "userId" | "userEmail" | "userName">>
 ): Promise<void> {
+  const shouldDecrement =
+    data.status === "sold" || data.isArchived === true;
+
   await Promise.race([
     updateDoc(doc(db, "listings", id), data),
     new Promise<void>((_, reject) =>
       setTimeout(() => reject(new Error("timeout:update-listing")), 6_000)
     ),
   ]);
+
+  if (shouldDecrement && userId) {
+    updateDoc(doc(db, "users", userId), {
+      activeListingCount: increment(-1),
+    }).catch(() => {});
+  }
 }
 
-const BUMP_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
+const BUMP_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 export async function bumpListing(
   id: string
@@ -150,8 +145,6 @@ export async function bumpListing(
   return { success: true, nextBumpAt: now + BUMP_COOLDOWN_MS };
 }
 
-// Race against 6s timeout as a safety net in case of slow server response
-// in Replit's proxy environment.
 export async function markAsSold(id: string): Promise<void> {
   await Promise.race([
     updateDoc(doc(db, "listings", id), { status: "sold" }),
@@ -159,9 +152,6 @@ export async function markAsSold(id: string): Promise<void> {
   ]);
 }
 
-// ── Rental T&C Audit Log ───────────────────────────────────────────────────────
-// This write is append-only — Firestore rules deny update/delete for non-admins.
-// The record persists even if the listing or user account is later deleted.
 export async function writeRentalTcAuditLog(
   userId: string,
   userEmail: string,
@@ -179,7 +169,6 @@ export async function writeRentalTcAuditLog(
   });
 }
 
-// ── Paginated feed for home page ───────────────────────────────────────────────
 export async function getListingsPage(
   type: ListingType,
   cursor?: QueryDocumentSnapshot | null
@@ -203,11 +192,7 @@ export async function getListingsPage(
     if (err?.code === "failed-precondition" || err?.message?.includes("index")) {
       console.warn("[listings] Composite index not ready — using client-side fallback");
       const fallbackSnap = await getDocs(
-        query(
-          collection(db, "listings"),
-          orderBy("createdAt", "desc"),
-          limit(PAGE_SIZE * 4)
-        )
+        query(collection(db, "listings"), orderBy("createdAt", "desc"), limit(PAGE_SIZE * 4))
       );
       const allDocs = fallbackSnap.docs.map(mapDoc);
       const filtered = allDocs.filter(
@@ -220,7 +205,6 @@ export async function getListingsPage(
   }
 }
 
-// ── Full list for search (used by searchListings) ──────────────────────────────
 export async function getListings(type: ListingType): Promise<Listing[]> {
   try {
     const q = query(
@@ -237,11 +221,7 @@ export async function getListings(type: ListingType): Promise<Listing[]> {
     if (err?.code === "failed-precondition" || err?.message?.includes("index")) {
       console.warn("[listings] Composite index not ready — using client-side fallback for search");
       const snap = await getDocs(
-        query(
-          collection(db, "listings"),
-          orderBy("createdAt", "desc"),
-          limit(160)
-        )
+        query(collection(db, "listings"), orderBy("createdAt", "desc"), limit(160))
       );
       const docs = snap.docs.map(mapDoc);
       return docs.filter(
@@ -259,7 +239,6 @@ export async function getListing(id: string): Promise<Listing | null> {
   return { id: snap.id, ...data, createdAt: toMillis(data.createdAt) } as Listing;
 }
 
-// Owners see ALL their listings including sold (no status filter).
 export async function getUserListings(userId: string): Promise<Listing[]> {
   try {
     const q = query(
@@ -273,11 +252,7 @@ export async function getUserListings(userId: string): Promise<Listing[]> {
     return snap.docs.map(mapDoc);
   } catch (err: any) {
     if (err?.code === "failed-precondition" || err?.message?.includes("index")) {
-      const q2 = query(
-        collection(db, "listings"),
-        where("userId", "==", userId),
-        limit(40)
-      );
+      const q2 = query(collection(db, "listings"), where("userId", "==", userId), limit(40));
       const snap = await getDocs(q2);
       const docs = snap.docs.map(mapDoc);
       return docs
@@ -305,11 +280,14 @@ export async function deleteListing(listing: Listing): Promise<void> {
     deleteDoc(doc(db, "listings", listing.id)),
     new Promise<void>((resolve) => setTimeout(resolve, 6_000)),
   ]);
+
+  if (listing.userId && listing.status !== "sold" && !listing.isArchived) {
+    updateDoc(doc(db, "users", listing.userId), {
+      activeListingCount: increment(-1),
+    }).catch(() => {});
+  }
 }
 
-// ── Public seller storefront query ────────────────────────────────────────────
-// Returns up to 30 active, non-archived listings for a given user UID.
-// Used exclusively by SellerProfilePage — does NOT affect any existing query.
 export async function getListingsByUser(uid: string): Promise<Listing[]> {
   try {
     const q = query(
@@ -359,9 +337,6 @@ export async function searchListings(
   });
 }
 
-// ── Similar listings ───────────────────────────────────────────────────────────
-// Returns up to 6 active listings with the same type and category, excluding
-// the current listing ID. Falls back to client-side filter on index errors.
 export async function getSimilarListings(
   type: ListingType,
   category: string,
