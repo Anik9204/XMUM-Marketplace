@@ -8,7 +8,7 @@ import { Listing } from "@/lib/types";
 import { getSavedListings } from "@/lib/savedListings";
 import ListingCard from "@/components/ListingCard";
 import AuthModal from "@/components/AuthModal";
-import { User, CheckCircle, AlertCircle, LogOut, CheckCircle2, Settings, Clock, X, ArrowUp, Bookmark, Store } from "lucide-react";
+import { User, CheckCircle, AlertCircle, LogOut, CheckCircle2, Settings, Clock, X, ArrowUp, Bookmark } from "lucide-react";
 import { logOut } from "@/lib/auth";
 import { useLocation } from "wouter";
 import { addNotification } from "@/lib/notifications";
@@ -244,8 +244,6 @@ export default function ProfilePage() {
     { key: "saved",    label: "Saved",    count: savedCount },
   ];
 
-  const isVerifiedShop = userProfile?.verificationStatus === "approved" && !!userProfile?.shopSlug;
-
   return (
     <>
       {successToast && <SuccessToast message={successToast} onDone={() => setSuccessToast("")} />}
@@ -311,22 +309,6 @@ export default function ProfilePage() {
             </button>
           </div>
 
-          {/* Shop banner for verified sellers */}
-          {isVerifiedShop && userProfile && (
-            <div
-              className="mt-4 bg-[#003366] dark:bg-blue-900/60 rounded-xl px-4 py-3 flex items-center justify-between gap-2 cursor-pointer hover:bg-[#002244] dark:hover:bg-blue-900/80 transition-colors"
-              onClick={() => navigate(`/shop/${userProfile.shopSlug}`)}
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                <Store size={16} className="text-white shrink-0" />
-                <span className="text-sm font-semibold text-white truncate">
-                  {userProfile.shopName}
-                </span>
-                <span className="text-xs text-blue-200 shrink-0">· Verified Shop</span>
-              </div>
-              <span className="text-xs font-semibold text-blue-200 shrink-0">View Shop →</span>
-            </div>
-          )}
         </div>
 
         {/* Tab bar — My Listings / Settings */}

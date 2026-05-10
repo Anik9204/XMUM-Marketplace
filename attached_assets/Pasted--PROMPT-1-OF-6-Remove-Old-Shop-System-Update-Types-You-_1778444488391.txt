@@ -1,0 +1,373 @@
+# PROMPT 1 OF 6 — Remove Old Shop System & Update Types
+ 
+You are a senior full-stack developer working on the XMUM Marketplace project (React + Vite + Firebase/Firestore, deployed on Vercel). The main app lives at `artifacts/xmum-market/`.
+ 
+## TASK: Safely remove the old shop system and update data types
+ 
+The old shop system was tied to user verification (student ID → admin approval → shop). We are replacing it with a new independent Shop system (like Facebook Pages). Do the following **exactly** in this order:
+ 
+---
+ 
+### STEP 1 — Update `src/lib/types.ts`
+ 
+Replace the entire file with this content:
+ 
+```typescript
+export type ListingType = "buy-sell" | "lost-found" | "jobs" | "assistance" | "rental" | "shop-listing";
+export type Condition = "new" | "used";
+export type ListingStatus = "active" | "sold";
+ 
+export type ShopCategory =
+  | "Food & Beverage"
+  | "Tutoring & Education"
+  | "Fashion & Apparel"
+  | "Electronics"
+  | "Beauty & Wellness"
+  | "Transport & Rental"
+  | "Handmade & Custom"
+  | "Books & Stationery"
+  | "Services"
+  | "Travel & Lifestyle"
+  | "Others";
+ 
+export interface Shop {
+  id: string;
+  ownerId: string;
+  ownerEmail: string;
+  name: string;
+  slug: string;
+  bio: string;
+  category: ShopCategory;
+  bannerUrl?: string;
+  logoUrl?: string;
+  whatsapp?: string;
+  wechat?: string;
+  createdAt: number;
+  isActive: boolean;
+  editorIds: string[]; // max 3 editor UIDs
+  totalListings: number;
+  totalInquiries: number;
+  rating: number;
+  reviewCount: number;
+}
+ 
+export interface ShopListing {
+  id: string;
+  shopId: string;
+  shopName: string;
+  shopSlug: string;
+  shopOwnerId: string;
+  title: string;
+  description: string;
+  price?: number;
+  pricingModel?: "fixed" | "per_hour" | "per_day" | "negotiable";
+  category: ShopCategory;
+  photos: string[];
+  isActive: boolean;
+  createdAt: number;
+  viewCount: number;
+  inquiryCount: number;
+}
+ 
+export type InquiryStatus = "pending" | "confirmed" | "completed" | "cancelled";
+ 
+export interface ShopInquiry {
+  id: string;
+  shopId: string;
+  shopName: string;
+  shopListingId: string;
+  listingTitle: string;
+  buyerId: string;
+  buyerName: string;
+  buyerEmail: string;
+  quantity?: number;
+  note: string;
+  status: InquiryStatus;
+  createdAt: number;
+  updatedAt: number;
+  reviewLeft?: boolean;
+}
+ 
+export interface ShopReview {
+  id: string;
+  shopId: string;
+  inquiryId: string;
+  reviewerId: string;
+  reviewerName: string;
+  reviewerAvatar?: string;
+  listingTitle: string;
+  rating: number;
+  comment: string;
+  createdAt: number;
+}
+ 
+export type ShopAdStatus = "pending" | "approved" | "rejected";
+ 
+export interface ShopAd {
+  id: string;
+  shopId: string;
+  shopName: string;
+  shopOwnerId: string;
+  imageUrl: string;
+  tagline: string;
+  ctaLabel: string;
+  ctaUrl: string;
+  pricePerDay: number;
+  startDate: number;
+  endDate: number;
+  status: ShopAdStatus;
+  adminNote?: string;
+  impressions: number;
+  clicks: number;
+  submittedAt: number;
+  reviewedAt?: number;
+  reviewedBy?: string;
+}
+ 
+export interface Listing {
+  id: string;
+  type: ListingType;
+  title: string;
+  description: string;
+  price?: number;
+  category: string;
+  condition: Condition;
+  photos: string[];
+  userId: string;
+  userEmail: string;
+  userName: string;
+  whatsapp?: string;
+  wechat?: string;
+  teams?: string;
+  meetupSpot?: string;
+  createdAt: number;
+  isArchived: boolean;
+  status?: ListingStatus;
+  lastBumpedAt?: number;
+  sortKey?: number;
+  jobSubtype?: "offering" | "seeking";
+  pricingModel?: "per_hour" | "per_day" | "per_month" | "fixed";
+  isRemote?: boolean;
+  availability?: string;
+  vehicleType?: "car" | "bike" | "motorcycle" | "bicycle" | "scooter";
+  vehicleBrand?: string;
+  vehicleModel?: string;
+  vehicleYear?: number;
+  plateNumber?: string;
+  rentalPricePerDay?: number;
+  rentalPricePerHour?: number;
+  depositAmount?: number;
+  availableFrom?: number;
+  availableTo?: number;
+  requiresLicense?: boolean;
+  requiresInsuranceProof?: boolean;
+  rentalTerms?: string;
+  tcAcceptedAt?: number;
+  tcAcceptedVersion?: string;
+  viewCount?: number;
+}
+ 
+export interface RentalListing extends Listing {
+  vehicleType: "car" | "bike" | "motorcycle" | "bicycle" | "scooter";
+  brand: string;
+  model: string;
+  year: number;
+  plateNumber: string;
+  rentalPricePerDay: number;
+  rentalPricePerHour?: number;
+  depositAmount: number;
+  availableFrom: number;
+  availableTo: number;
+  requiresLicense: boolean;
+  requiresInsuranceProof: boolean;
+  terms: string;
+  tcAcceptedAt: number;
+  tcAcceptedVersion: string;
+}
+ 
+export interface RentalTcAuditLog {
+  id: string;
+  userId: string;
+  userEmail: string;
+  listingId: string;
+  listingTitle: string;
+  tcVersion: string;
+  acceptedAt: number;
+  ipHint?: string;
+  userAgent: string;
+}
+ 
+export interface Review {
+  id: string;
+  reviewerId: string;
+  reviewerName: string;
+  reviewerAvatar?: string;
+  sellerId: string;
+  listingId: string;
+  listingTitle: string;
+  rating: number;
+  comment: string;
+  createdAt: number;
+}
+ 
+export interface AppNotification {
+  id: string;
+  type:
+    | "listing_deleted"
+    | "listing_sold"
+    | "welcome"
+    | "daily_digest"
+    | "new_message_digest"
+    | "new_message"
+    | "bump_available"
+    | "review_received"
+    | "listing_expiring"
+    | "shop_inquiry_received"
+    | "shop_inquiry_confirmed"
+    | "shop_inquiry_completed"
+    | "shop_ad_approved"
+    | "shop_ad_rejected";
+  title: string;
+  body: string;
+  createdAt: number;
+  read: boolean;
+  listingId?: string;
+  shopId?: string;
+  inquiryId?: string;
+}
+ 
+export interface SponsoredAd {
+  id: string;
+  businessName: string;
+  tagline: string;
+  imageUrl: string;
+  ctaLabel: string;
+  ctaUrl: string;
+  category?: string;
+  startsAt: number;
+  endsAt: number;
+  isActive: boolean;
+  impressions: number;
+  clicks: number;
+  timesPerHour: number;
+  durationHours: number;
+}
+ 
+export interface UserProfile {
+  uid: string;
+  email: string;
+  displayName: string;
+  fullName: string;
+  avatarUrl?: string;
+  whatsapp?: string;
+  wechat?: string;
+  emailVerified: boolean;
+  isVerified: boolean;
+  rating: number;
+  isBlacklisted: boolean;
+  isFeatured: boolean;
+  showEmail: boolean;
+  showWhatsApp: boolean;
+  showWeChat: boolean;
+  createdAt: number;
+  role?: "user" | "editor" | "admin";
+  activeListingCount?: number;
+  totalListingCount?: number;
+  myShopIds?: string[]; // shops the user owns
+  editorShopIds?: string[]; // shops the user is an editor of
+}
+ 
+export type ReportCategory =
+  | "spam"
+  | "scam"
+  | "offensive"
+  | "prohibited_item"
+  | "wrong_category"
+  | "other";
+ 
+export interface SavedListing {
+  listingId: string;
+  savedAt: number;
+  listingTitle: string;
+  listingPhoto: string;
+  listingPrice?: number;
+  listingUserId: string;
+}
+ 
+export interface ListingReport {
+  id: string;
+  listingId: string;
+  listingTitle: string;
+  listingUserId: string;
+  listingUserEmail: string;
+  reportedBy: string;
+  reportedByEmail: string;
+  reason: string;
+  category: ReportCategory;
+  status: "pending" | "reviewed" | "dismissed" | "actioned";
+  createdAt: number;
+  reviewedBy?: string;
+  reviewedAt?: number;
+}
+```
+ 
+---
+ 
+### STEP 2 — Delete the old shop component
+ 
+Delete the file: `src/components/ShopSetupModal.tsx`
+ 
+---
+ 
+### STEP 3 — Clean references in `src/pages/SettingsPage.tsx`
+ 
+Find and remove:
+- The import line: `import ShopSetupModal from "@/components/ShopSetupModal";`
+- Any JSX block that renders `<ShopSetupModal ... />`
+- Any state variable named `showShopSetup` or similar
+- Any UI section referencing `userProfile?.shopName`, `userProfile?.shopSlug`, `userProfile?.verificationStatus`, `verStatus`, or "Seller Verification"
+Do NOT remove anything else in SettingsPage.
+ 
+---
+ 
+### STEP 4 — Clean references in `src/pages/ProfilePage.tsx`
+ 
+Find and remove:
+- The `isVerifiedShop` variable
+- The JSX block rendering the "Shop banner for verified sellers" section (the entire block that checks `isVerifiedShop`)
+Do NOT remove anything else in ProfilePage.
+ 
+---
+ 
+### STEP 5 — Clean references in `src/pages/SellerProfilePage.tsx`
+ 
+Find and remove:
+- The `isVerifiedShop` variable
+- Any JSX block that links to `/shop/${profile.shopSlug}`
+- Any reference to `profile.shopName`, `profile.shopSlug`, `profile.verificationStatus` (in the context of verified shop display)
+---
+ 
+### STEP 6 — Clean references in `src/pages/ListingDetailPage.tsx`
+ 
+Find and remove:
+- Any JSX block that shows "Shop: [shopName] →" linking to `/shop/[shopSlug]`
+- Any reference to `sellerProfile?.verificationStatus === "approved"` used for shop display
+---
+ 
+### STEP 7 — Remove ShopPage route from `src/App.tsx`
+ 
+- Remove the import: `const ShopPage = lazy(() => import("@/pages/ShopPage"));`
+- Remove the route: `<Route path="/shop/:slug" component={ShopPage} />`
+- Delete the file: `src/pages/ShopPage.tsx`
+---
+ 
+### STEP 8 — After all changes, run this to verify no TypeScript errors:
+ 
+```bash
+cd artifacts/xmum-market && pnpm run typecheck
+```
+ 
+Fix any TypeScript errors before proceeding. If `shopSlug`, `shopName`, `shopBio`, `shopBannerUrl`, `shopCategories`, `verificationStatus`, `sellerTcAcceptedAt`, `sellerTcVersion` still appear in UserProfile references in any file, remove them — they no longer exist on UserProfile.
+ 
+When done, tell me: ✅ Prompt 1 complete — old shop system removed, types updated.
+ 

@@ -189,7 +189,7 @@ export default function PostPage() {
   const { user, userProfile } = useAuth();
   const [, navigate] = useLocation();
 
-  const isVerified = userProfile?.verificationStatus === "approved";
+  const isVerified = userProfile?.isVerified === true;
   const activeListingCount = userProfile?.activeListingCount ?? 0;
   const listingLimit = isVerified ? VERIFIED_LIMIT : FREE_LIMIT;
 

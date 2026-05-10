@@ -64,6 +64,7 @@ const TAB_ICONS: Record<ListingType, string> = {
   "jobs": "💼",
   "assistance": "🤝",
   "rental": "🚗",
+  "shop-listing": "🏪",
 };
 
 const ALL_TABS: ListingType[] = ["buy-sell", "lost-found", "jobs", "assistance", "rental"];

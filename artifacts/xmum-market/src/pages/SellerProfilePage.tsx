@@ -6,7 +6,7 @@ import { getProfile } from "@/lib/userProfile";
 import { getOrCreateConversation } from "@/lib/messaging";
 import { Listing, UserProfile } from "@/lib/types";
 import ListingCard from "@/components/ListingCard";
-import { CheckCircle2, MessageCircle, Settings, ArrowLeft, Loader2, ShoppingBag, Share2, ExternalLink } from "lucide-react";
+import { CheckCircle2, MessageCircle, Settings, ArrowLeft, Loader2, ShoppingBag, Share2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 function memberDuration(createdAt: number): string {
@@ -186,7 +186,6 @@ export default function SellerProfilePage() {
   )}&background=003366&color=fff&size=128`;
 
   const displayName = profile.displayName || profile.fullName || profile.email?.split("@")[0] || "Seller";
-  const isVerifiedShop = profile.verificationStatus === "approved" && !!profile.shopSlug;
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 pb-24 sm:pb-8 animate-in fade-in duration-200">
@@ -222,16 +221,6 @@ export default function SellerProfilePage() {
                 <Share2 size={14} />
                 Share
               </button>
-
-              {/* Visit Shop button (for verified sellers) */}
-              {isVerifiedShop && (
-                <Link href={`/shop/${profile.shopSlug}`}>
-                  <button className="flex items-center gap-1.5 min-h-[44px] px-4 py-2 rounded-xl border border-[#003366] dark:border-blue-500 text-sm font-semibold text-[#003366] dark:text-blue-400 hover:bg-[#003366]/5 dark:hover:bg-blue-500/10 transition-colors">
-                    <ExternalLink size={14} />
-                    Visit Shop →
-                  </button>
-                </Link>
-              )}
 
               {isOwnProfile ? (
                 <Link href="/settings">
@@ -278,12 +267,6 @@ export default function SellerProfilePage() {
               <span className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950 px-2 py-0.5 rounded-full">
                 <CheckCircle2 size={11} />
                 XMUM Verified
-              </span>
-            )}
-            {isVerifiedShop && (
-              <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950 px-2 py-0.5 rounded-full">
-                <CheckCircle2 size={11} />
-                Verified Seller
               </span>
             )}
           </div>
@@ -347,7 +330,7 @@ export default function SellerProfilePage() {
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           {listings.map((listing) => (
-            <ListingCard key={listing.id} listing={listing} sellerVerified={isVerifiedShop} />
+            <ListingCard key={listing.id} listing={listing} />
           ))}
         </div>
       )}

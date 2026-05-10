@@ -1,6 +1,113 @@
-export type ListingType = "buy-sell" | "lost-found" | "jobs" | "assistance" | "rental";
+export type ListingType = "buy-sell" | "lost-found" | "jobs" | "assistance" | "rental" | "shop-listing";
 export type Condition = "new" | "used";
 export type ListingStatus = "active" | "sold";
+
+export type ShopCategory =
+  | "Food & Beverage"
+  | "Tutoring & Education"
+  | "Fashion & Apparel"
+  | "Electronics"
+  | "Beauty & Wellness"
+  | "Transport & Rental"
+  | "Handmade & Custom"
+  | "Books & Stationery"
+  | "Services"
+  | "Travel & Lifestyle"
+  | "Others";
+
+export interface Shop {
+  id: string;
+  ownerId: string;
+  ownerEmail: string;
+  name: string;
+  slug: string;
+  bio: string;
+  category: ShopCategory;
+  bannerUrl?: string;
+  logoUrl?: string;
+  whatsapp?: string;
+  wechat?: string;
+  createdAt: number;
+  isActive: boolean;
+  editorIds: string[]; // max 3 editor UIDs
+  totalListings: number;
+  totalInquiries: number;
+  rating: number;
+  reviewCount: number;
+}
+
+export interface ShopListing {
+  id: string;
+  shopId: string;
+  shopName: string;
+  shopSlug: string;
+  shopOwnerId: string;
+  title: string;
+  description: string;
+  price?: number;
+  pricingModel?: "fixed" | "per_hour" | "per_day" | "negotiable";
+  category: ShopCategory;
+  photos: string[];
+  isActive: boolean;
+  createdAt: number;
+  viewCount: number;
+  inquiryCount: number;
+}
+
+export type InquiryStatus = "pending" | "confirmed" | "completed" | "cancelled";
+
+export interface ShopInquiry {
+  id: string;
+  shopId: string;
+  shopName: string;
+  shopListingId: string;
+  listingTitle: string;
+  buyerId: string;
+  buyerName: string;
+  buyerEmail: string;
+  quantity?: number;
+  note: string;
+  status: InquiryStatus;
+  createdAt: number;
+  updatedAt: number;
+  reviewLeft?: boolean;
+}
+
+export interface ShopReview {
+  id: string;
+  shopId: string;
+  inquiryId: string;
+  reviewerId: string;
+  reviewerName: string;
+  reviewerAvatar?: string;
+  listingTitle: string;
+  rating: number;
+  comment: string;
+  createdAt: number;
+}
+
+export type ShopAdStatus = "pending" | "approved" | "rejected";
+
+export interface ShopAd {
+  id: string;
+  shopId: string;
+  shopName: string;
+  shopOwnerId: string;
+  imageUrl: string;
+  tagline: string;
+  ctaLabel: string;
+  ctaUrl: string;
+  pricePerDay: number;
+  startDate: number;
+  endDate: number;
+  status: ShopAdStatus;
+  adminNote?: string;
+  impressions: number;
+  clicks: number;
+  submittedAt: number;
+  reviewedAt?: number;
+  reviewedBy?: string;
+}
 
 export interface Listing {
   id: string;
@@ -75,16 +182,6 @@ export interface RentalTcAuditLog {
   userAgent: string;
 }
 
-export interface SellerTcAuditLog {
-  id: string;
-  userId: string;
-  userEmail: string;
-  shopName: string;
-  tcVersion: string;
-  acceptedAt: number;
-  userAgent: string;
-}
-
 export interface Review {
   id: string;
   reviewerId: string;
@@ -110,13 +207,18 @@ export interface AppNotification {
     | "bump_available"
     | "review_received"
     | "listing_expiring"
-    | "shop_approved"
-    | "shop_rejected";
+    | "shop_inquiry_received"
+    | "shop_inquiry_confirmed"
+    | "shop_inquiry_completed"
+    | "shop_ad_approved"
+    | "shop_ad_rejected";
   title: string;
   body: string;
   createdAt: number;
   read: boolean;
   listingId?: string;
+  shopId?: string;
+  inquiryId?: string;
 }
 
 export interface SponsoredAd {
@@ -154,19 +256,10 @@ export interface UserProfile {
   showWeChat: boolean;
   createdAt: number;
   role?: "user" | "editor" | "admin";
-  shopName?: string;
-  shopSlug?: string;
-  shopBio?: string;
-  shopBannerUrl?: string;
-  shopCategories?: string[];
-  verificationStatus?: "none" | "pending" | "approved" | "rejected";
-  verificationSubmittedAt?: number;
-  verificationReviewedAt?: number;
-  verificationRejectionReason?: string;
-  sellerTcAcceptedAt?: number;
-  sellerTcVersion?: string;
   activeListingCount?: number;
   totalListingCount?: number;
+  myShopIds?: string[]; // shops the user owns
+  editorShopIds?: string[]; // shops the user is an editor of
 }
 
 export type ReportCategory =

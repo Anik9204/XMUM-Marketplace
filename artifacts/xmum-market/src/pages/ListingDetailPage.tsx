@@ -685,22 +685,7 @@ export default function ListingDetailPage() {
                 />
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm text-slate-900 dark:text-slate-100 truncate">{listing.userName}</p>
-                  {/* Verified Shop badge — shown if seller is approved */}
-                  {sellerProfile?.verificationStatus === "approved" ? (
-                    <div className="flex flex-col gap-0.5 mt-0.5">
-                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-green-700 dark:text-green-400">
-                        <CheckCircle2 size={11} /> Verified Shop
-                      </span>
-                      {sellerProfile.shopName && sellerProfile.shopSlug && (
-                        <Link
-                          href={`/shop/${sellerProfile.shopSlug}`}
-                          className="text-[11px] text-[#003366] dark:text-blue-400 hover:underline font-medium"
-                        >
-                          Shop: {sellerProfile.shopName} →
-                        </Link>
-                      )}
-                    </div>
-                  ) : sellerProfile?.isVerified ? (
+                  {sellerProfile?.isVerified ? (
                     <p className="text-[11px] text-teal-600 dark:text-teal-400 font-medium flex items-center gap-1">
                       <ShieldCheck size={11} /> Verified XMUM Student
                     </p>
