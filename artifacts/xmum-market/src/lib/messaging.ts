@@ -14,6 +14,7 @@ export interface Conversation {
   lastMessage: string;
   lastMessageAt: number;
   unreadCount: Record<string, number>;
+  typing?: Record<string, boolean>;
 }
 
 export interface Message {
@@ -59,6 +60,7 @@ export async function getOrCreateConversation(
       lastMessage: "",
       lastMessageAt: Date.now(),
       unreadCount: { [myUid]: 0, [otherUid]: 0 },
+      typing: {},
     });
   }
   return convId;
@@ -112,6 +114,68 @@ export function subscribeToMessages(
   });
 }
 
+// ── Real-time conversation list ────────────────────────────────────────────────
+export function subscribeToConversations(
+  uid: string,
+  callback: (convs: Conversation[]) => void
+): Unsubscribe {
+  const q = query(
+    collection(db, "conversations"),
+    where("participants", "array-contains", uid),
+    limit(50)
+  );
+  return onSnapshot(
+    q,
+    (snap) => {
+      const convs = snap.docs
+        .map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            ...data,
+            lastMessageAt: toMillis(data.lastMessageAt),
+          } as Conversation;
+        })
+        .sort((a, b) => b.lastMessageAt - a.lastMessageAt);
+      callback(convs);
+    },
+    () => callback([])
+  );
+}
+
+// ── Typing indicator ───────────────────────────────────────────────────────────
+export async function setTypingStatus(
+  convId: string,
+  uid: string,
+  isTyping: boolean
+): Promise<void> {
+  try {
+    await updateDoc(doc(db, "conversations", convId), {
+      [`typing.${uid}`]: isTyping,
+    });
+  } catch {
+    // silent — typing indicator is best-effort
+  }
+}
+
+export function subscribeToTyping(
+  convId: string,
+  _uid: string,
+  otherUid: string,
+  callback: (isTyping: boolean) => void
+): Unsubscribe {
+  return onSnapshot(
+    doc(db, "conversations", convId),
+    (snap) => {
+      if (!snap.exists()) { callback(false); return; }
+      const typing = snap.data()?.typing ?? {};
+      callback(typing[otherUid] === true);
+    },
+    () => callback(false)
+  );
+}
+
+// ── Legacy one-time fetch (kept for compatibility) ─────────────────────────────
 export async function getUserConversations(uid: string): Promise<Conversation[]> {
   try {
     const q = query(
@@ -176,6 +240,6 @@ export function subscribeToUnreadCount(
       }, 0);
       callback(total);
     },
-    () => callback(0) // on error, treat as zero
+    () => callback(0)
   );
 }

@@ -1,15 +1,19 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLang } from "@/contexts/LanguageContext";
 import { getProfile } from "@/lib/userProfile";
 import { UserProfile } from "@/lib/types";
 import {
-  getUserConversations, subscribeToMessages, sendMessage,
-  markConversationRead, markMessagesAsSeen, Conversation, Message,
+  subscribeToConversations, subscribeToMessages, sendMessage,
+  markConversationRead, markMessagesAsSeen, setTypingStatus,
+  subscribeToTyping, Conversation, Message,
 } from "@/lib/messaging";
-import { MessageCircle, ArrowLeft, Send, Loader2 } from "lucide-react";
+import { MessageCircle, ArrowLeft, Send, Loader2, Search, X } from "lucide-react";
 import AuthModal from "@/components/AuthModal";
+
+const MAX_CHARS = 1000;
+const CHAR_WARN = 800;
 
 function formatTime(ts: number): string {
   const d = new Date(ts);
@@ -37,43 +41,71 @@ function relativeTime(ts: number): string {
   return days + "d";
 }
 
-function AvatarFallback({ name, avatarUrl, size = 10 }: { name: string; avatarUrl?: string; size?: number }) {
+function Avatar({ name, avatarUrl, size = 48 }: { name: string; avatarUrl?: string; size?: number }) {
   const initials = name.split(" ").slice(0, 2).map(w => w[0] ?? "").join("").toUpperCase() || "?";
-  const px = size * 4;
-  const fs = size * 1.5;
   if (avatarUrl) {
-    return <img src={avatarUrl} alt={name} style={{ width: px + "px", height: px + "px" }} className="rounded-full object-cover border-2 border-white/20 shrink-0" />;
+    return (
+      <img
+        src={avatarUrl}
+        alt={name}
+        style={{ width: size, height: size }}
+        className="rounded-full object-cover border-2 border-white dark:border-slate-700 shrink-0"
+      />
+    );
   }
   return (
-    <div className="rounded-full bg-gradient-to-br from-[#003366] to-[#0055aa] flex items-center justify-center text-white font-semibold shrink-0" style={{ width: px + "px", height: px + "px", fontSize: fs + "px" }}>
+    <div
+      className="rounded-full bg-gradient-to-br from-[#003366] to-[#0055aa] flex items-center justify-center text-white font-semibold shrink-0"
+      style={{ width: size, height: size, fontSize: size * 0.33 }}
+    >
       {initials}
     </div>
+  );
+}
+
+function TypingDots() {
+  return (
+    <span className="inline-flex items-end gap-[3px] h-4">
+      <span className="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-slate-500 animate-typing-dot" style={{ animationDelay: "0ms" }} />
+      <span className="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-slate-500 animate-typing-dot" style={{ animationDelay: "160ms" }} />
+      <span className="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-slate-500 animate-typing-dot" style={{ animationDelay: "320ms" }} />
+    </span>
   );
 }
 
 export default function MessagesPage() {
   const { user } = useAuth();
   const { t } = useLang();
-  const [, ] = useLocation();
+  const [, navigate] = useLocation();
   const [showAuth, setShowAuth] = useState(false);
+
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loadingConvs, setLoadingConvs] = useState(true);
   const [activeConv, setActiveConv] = useState<Conversation | null>(null);
-  const [otherProfile, setOtherProfile] = useState<UserProfile | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
   const [sending, setSending] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [otherProfile, setOtherProfile] = useState<UserProfile | null>(null);
+  const [participantProfiles, setParticipantProfiles] = useState<Record<string, UserProfile | null>>({});
+  const [otherIsTyping, setOtherIsTyping] = useState(false);
 
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Real-time conversation list ─────────────────────────────────────────────
   useEffect(() => {
     if (!user) return;
     setLoadingConvs(true);
-    getUserConversations(user.uid)
-      .then(setConversations)
-      .finally(() => setLoadingConvs(false));
-  }, [user]);
+    const unsub = subscribeToConversations(user.uid, (convs) => {
+      setConversations(convs);
+      setLoadingConvs(false);
+    });
+    return unsub;
+  }, [user?.uid]);
 
+  // ── Deep-link: auto-open conversation from URL ?conv= ────────────────────────
   useEffect(() => {
     if (loadingConvs || conversations.length === 0) return;
     const params = new URLSearchParams(window.location.search);
@@ -88,15 +120,35 @@ export default function MessagesPage() {
     }
   }, [loadingConvs, conversations]);
 
+  // ── Lazy-fetch participant profiles for conversation rows ────────────────────
+  useEffect(() => {
+    if (!user || conversations.length === 0) return;
+    const uids = conversations
+      .map((c) => c.participants.find((p) => p !== user.uid))
+      .filter((uid): uid is string => !!uid && !(uid in participantProfiles));
+    if (uids.length === 0) return;
+    const deduplicated = [...new Set(uids)];
+    deduplicated.forEach((uid) => {
+      setParticipantProfiles((prev) => ({ ...prev, [uid]: null }));
+      getProfile(uid)
+        .then((profile) => setParticipantProfiles((prev) => ({ ...prev, [uid]: profile })))
+        .catch(() => {});
+    });
+  }, [conversations.length, user?.uid]);
+
+  // ── Other user's profile when chat is active ─────────────────────────────────
   useEffect(() => {
     if (!activeConv || !user) { setOtherProfile(null); return; }
     const otherUid = activeConv.participants.find((p) => p !== user.uid);
     if (!otherUid) return;
+    const cached = participantProfiles[otherUid];
+    if (cached) { setOtherProfile(cached); return; }
     getProfile(otherUid)
       .then(setOtherProfile)
       .catch(() => setOtherProfile(null));
-  }, [activeConv?.id, user]);
+  }, [activeConv?.id, user?.uid]);
 
+  // ── Subscribe to messages when active conversation changes ───────────────────
   useEffect(() => {
     if (!activeConv || !user) return;
     const convId = activeConv.id;
@@ -105,7 +157,6 @@ export default function MessagesPage() {
     const unsub = subscribeToMessages(convId, (msgs) => {
       setMessages(msgs);
       setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
-      // Mark incoming messages as seen
       const unseenIds = msgs
         .filter((m) => m.senderId !== uid && !(m.seenBy ?? []).includes(uid))
         .map((m) => m.id);
@@ -118,32 +169,111 @@ export default function MessagesPage() {
       unsub();
       markConversationRead(convId, uid);
     };
-  }, [activeConv?.id, user]);
+  }, [activeConv?.id, user?.uid]);
 
+  // ── Typing indicator subscription ────────────────────────────────────────────
+  useEffect(() => {
+    if (!activeConv || !user) return;
+    const otherUid = activeConv.participants.find((p) => p !== user.uid);
+    if (!otherUid) return;
+    const unsub = subscribeToTyping(activeConv.id, user.uid, otherUid, setOtherIsTyping);
+    return () => {
+      unsub();
+      setOtherIsTyping(false);
+    };
+  }, [activeConv?.id, user?.uid]);
+
+  // ── Clean up typing status on unmount or conv change ────────────────────────
+  useEffect(() => {
+    if (!activeConv || !user) return;
+    const convId = activeConv.id;
+    const uid = user.uid;
+    return () => {
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      setTypingStatus(convId, uid, false);
+    };
+  }, [activeConv?.id, user?.uid]);
+
+  // ── Focus input when draft is set ───────────────────────────────────────────
   useEffect(() => {
     if (inputText && activeConv) {
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [activeConv?.id]);
 
-  const refreshConversations = () => {
-    if (!user) return;
-    getUserConversations(user.uid).then(setConversations);
-  };
+  // ── Handlers ─────────────────────────────────────────────────────────────────
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value.slice(0, MAX_CHARS);
+    setInputText(val);
+    if (!activeConv || !user) return;
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    if (val.trim()) {
+      setTypingStatus(activeConv.id, user.uid, true);
+      typingTimeoutRef.current = setTimeout(() => {
+        setTypingStatus(activeConv.id!, user.uid, false);
+      }, 3000);
+    } else {
+      setTypingStatus(activeConv.id, user.uid, false);
+    }
+  }, [activeConv?.id, user?.uid]);
 
-  const handleSend = async () => {
-    if (!inputText.trim() || !activeConv || !user) return;
-    setSending(true);
+  const handleInputBlur = useCallback(() => {
+    if (!activeConv || !user) return;
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    setTypingStatus(activeConv.id, user.uid, false);
+  }, [activeConv?.id, user?.uid]);
+
+  const handleSend = useCallback(async () => {
+    if (!inputText.trim() || !activeConv || !user || sending) return;
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    setTypingStatus(activeConv.id, user.uid, false);
     const otherUid = activeConv.participants.find((p) => p !== user.uid) ?? "";
+    const text = inputText;
+    setInputText("");
+    setSending(true);
     try {
-      await sendMessage(activeConv.id, user.uid, inputText, otherUid);
-      setInputText("");
+      await sendMessage(activeConv.id, user.uid, text, otherUid);
       inputRef.current?.focus();
+    } catch {
+      setInputText(text);
     } finally {
       setSending(false);
     }
+  }, [inputText, activeConv?.id, user?.uid, sending]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  }, [handleSend]);
+
+  const openConv = (conv: Conversation) => {
+    setActiveConv(conv);
+    setMessages([]);
+    setOtherIsTyping(false);
+    setInputText("");
   };
 
+  const closeConv = () => {
+    setActiveConv(null);
+    setMessages([]);
+    setOtherProfile(null);
+    setOtherIsTyping(false);
+  };
+
+  // ── Filtered conversations ────────────────────────────────────────────────────
+  const filteredConversations = searchQuery.trim()
+    ? conversations.filter((c) => {
+        const q = searchQuery.toLowerCase();
+        const otherUid = c.participants.find((p) => p !== user?.uid);
+        const profile = otherUid ? participantProfiles[otherUid] : null;
+        const name = (profile?.fullName || profile?.displayName || "").toLowerCase();
+        return c.listingTitle.toLowerCase().includes(q) || name.includes(q);
+      })
+    : conversations;
+
+  // ── Not signed in ────────────────────────────────────────────────────────────
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 text-center">
@@ -160,111 +290,252 @@ export default function MessagesPage() {
     );
   }
 
-  // ── Active chat view ─────────────────────────────────────────────────────────
-  if (activeConv) {
-    const otherName = otherProfile?.fullName || otherProfile?.displayName || "User";
-    const otherEmail = otherProfile?.email ?? "";
-    const groups: { date: string; msgs: Message[] }[] = [];
-    messages.forEach((msg) => {
-      const label = formatDate(msg.createdAt);
-      const last = groups[groups.length - 1];
-      if (last?.date === label) last.msgs.push(msg);
-      else groups.push({ date: label, msgs: [msg] });
-    });
+  // ── Conversation list panel content ──────────────────────────────────────────
+  const conversationListContent = (
+    <>
+      {/* Header */}
+      <div className="px-4 pt-4 pb-3 border-b border-gray-100 dark:border-slate-800 shrink-0">
+        <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100 flex items-center gap-2">
+          <MessageCircle size={20} className="text-[#003366] dark:text-blue-400" />
+          {t.messages}
+        </h1>
+      </div>
 
-    return (
-      <div className="flex flex-col h-[calc(100dvh-104px)] sm:h-[calc(100dvh-112px)] md:h-[calc(100dvh-64px)] max-w-2xl mx-auto w-full animate-in fade-in duration-150">
-
-        {/* Header */}
-        <div className="flex items-center gap-3 px-3 py-2.5 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shrink-0 shadow-card">
-          <button
-            onClick={() => { setActiveConv(null); setMessages([]); setOtherProfile(null); refreshConversations(); }}
-            className="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 p-1 min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0"
-          >
-            <ArrowLeft size={20} />
-          </button>
-
-          <AvatarFallback name={otherName} avatarUrl={otherProfile?.avatarUrl} size={10} />
-
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate leading-tight">{otherName}</p>
-            {otherEmail && <p className="text-xs text-slate-400 dark:text-slate-500 truncate">{otherEmail}</p>}
+      {/* Search bar — only when 3+ conversations */}
+      {conversations.length >= 3 && (
+        <div className="px-3 py-2 border-b border-gray-100 dark:border-slate-800 shrink-0">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search conversations..."
+              className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl pl-8 pr-8 py-2 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
+                <X size={14} />
+              </button>
+            )}
           </div>
+        </div>
+      )}
 
-          {activeConv.listingPhoto && (
-            <div className="shrink-0 flex items-center gap-1.5 bg-slate-100 dark:bg-slate-700 rounded-xl px-2 py-1 max-w-[110px]">
-              <img src={activeConv.listingPhoto} className="w-6 h-6 rounded object-cover shrink-0" alt="" />
-              <p className="text-[9px] text-slate-500 dark:text-slate-400 truncate">{activeConv.listingTitle}</p>
-            </div>
-          )}
+      {/* List */}
+      <div className="flex-1 overflow-y-auto">
+        {loadingConvs ? (
+          <div className="flex flex-col divide-y divide-gray-50 dark:divide-slate-800">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="flex items-center gap-3 px-4 py-3.5 animate-pulse">
+                <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-slate-700 shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-3 bg-gray-100 dark:bg-slate-700 rounded w-1/2" />
+                  <div className="h-2.5 bg-gray-100 dark:bg-slate-700 rounded w-3/4" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : filteredConversations.length === 0 ? (
+          <div className="flex flex-col items-center py-12 text-center px-4">
+            <span className="text-4xl mb-3">💬</span>
+            <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+              {searchQuery ? "No matching conversations" : "No messages yet"}
+            </p>
+            {!searchQuery && (
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t.noMessages}</p>
+            )}
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-100 dark:divide-slate-800">
+            {filteredConversations.map((conv) => {
+              const unread = conv.unreadCount?.[user.uid] ?? 0;
+              const otherUid = conv.participants.find((p) => p !== user.uid) ?? "";
+              const profile = participantProfiles[otherUid];
+              const displayName = profile?.fullName || profile?.displayName || "User";
+              const isActive = activeConv?.id === conv.id;
+
+              return (
+                <button
+                  key={conv.id}
+                  onClick={() => openConv(conv)}
+                  className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-800/60 transition-colors text-left min-h-[72px] ${
+                    isActive
+                      ? "bg-blue-50 dark:bg-slate-700"
+                      : unread > 0
+                        ? "bg-blue-50/40 dark:bg-blue-950/20"
+                        : "bg-white dark:bg-slate-900"
+                  }`}
+                >
+                  {/* Left: other participant's avatar */}
+                  <Avatar name={displayName} avatarUrl={profile?.avatarUrl} size={48} />
+
+                  {/* Middle: name + listing + last message */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-1 mb-0.5">
+                      <p className={`text-sm truncate ${unread > 0 ? "font-bold text-gray-900 dark:text-slate-50" : "font-semibold text-gray-800 dark:text-slate-100"}`}>
+                        {displayName}
+                      </p>
+                      <span className="text-[10px] text-gray-400 dark:text-slate-500 shrink-0">
+                        {relativeTime(conv.lastMessageAt)}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 dark:text-slate-500 italic truncate leading-tight mb-0.5">
+                      {conv.listingTitle}
+                    </p>
+                    <p className={`text-xs truncate leading-tight ${unread > 0 ? "font-semibold text-gray-700 dark:text-slate-200" : "text-gray-500 dark:text-slate-400"}`}>
+                      {conv.lastMessage || t.noMessages}
+                    </p>
+                  </div>
+
+                  {/* Right: listing thumbnail + unread badge */}
+                  <div className="flex flex-col items-end gap-1.5 shrink-0">
+                    {conv.listingPhoto ? (
+                      <img
+                        src={conv.listingPhoto}
+                        className="w-10 h-10 rounded-lg object-cover border border-gray-100 dark:border-slate-600"
+                        alt=""
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0">
+                        <MessageCircle size={16} className="text-slate-400" />
+                      </div>
+                    )}
+                    {unread > 0 && (
+                      <span className="min-w-[20px] h-5 bg-[#003366] dark:bg-blue-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1.5">
+                        {unread > 99 ? "99+" : unread}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </>
+  );
+
+  // ── Active chat view ──────────────────────────────────────────────────────────
+  const otherName = otherProfile?.fullName || otherProfile?.displayName || "User";
+  const otherEmail = otherProfile?.email ?? "";
+
+  const groups: { date: string; msgs: Message[] }[] = [];
+  messages.forEach((msg) => {
+    const label = formatDate(msg.createdAt);
+    const last = groups[groups.length - 1];
+    if (last?.date === label) last.msgs.push(msg);
+    else groups.push({ date: label, msgs: [msg] });
+  });
+
+  const chatContent = activeConv ? (
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Chat header */}
+      <div className="flex items-center gap-3 px-3 py-2.5 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shrink-0 shadow-sm">
+        <button
+          onClick={closeConv}
+          className="md:hidden text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 p-1 min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0"
+        >
+          <ArrowLeft size={20} />
+        </button>
+
+        <Avatar name={otherName} avatarUrl={otherProfile?.avatarUrl} size={40} />
+
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate leading-tight">{otherName}</p>
+          {otherEmail && <p className="text-xs text-slate-400 dark:text-slate-500 truncate">{otherEmail}</p>}
         </div>
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1 bg-gray-50 dark:bg-slate-950">
-          {messages.length === 0 && (
-            <div className="flex justify-center mt-6">
-              <span className="bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 text-gray-500 dark:text-slate-400 text-xs px-4 py-2 rounded-full shadow-sm">
-                Say hi about &ldquo;{activeConv.listingTitle}&rdquo;
+        {activeConv.listingPhoto && (
+          <div className="shrink-0 flex items-center gap-1.5 bg-slate-100 dark:bg-slate-700 rounded-xl px-2 py-1 max-w-[120px]">
+            <img src={activeConv.listingPhoto} className="w-6 h-6 rounded object-cover shrink-0" alt="" />
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">{activeConv.listingTitle}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1 bg-gray-50 dark:bg-slate-950">
+        {messages.length === 0 && (
+          <div className="flex justify-center mt-6">
+            <span className="bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 text-gray-500 dark:text-slate-400 text-xs px-4 py-2 rounded-full shadow-sm">
+              Say hi about &ldquo;{activeConv.listingTitle}&rdquo;
+            </span>
+          </div>
+        )}
+
+        {groups.map((group) => (
+          <div key={group.date}>
+            <div className="flex justify-center my-3">
+              <span className="bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 text-gray-500 dark:text-slate-400 text-[10px] font-medium px-3 py-1 rounded-full shadow-sm">
+                {group.date}
               </span>
             </div>
-          )}
-          {groups.map((group) => (
-            <div key={group.date}>
-              <div className="flex justify-center my-3">
-                <span className="bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 text-gray-500 dark:text-slate-400 text-[10px] font-medium px-3 py-1 rounded-full shadow-sm">
-                  {group.date}
-                </span>
-              </div>
-              <div className="space-y-1.5">
-                {group.msgs.map((msg) => {
-                  const isMine = msg.senderId === user.uid;
-                  const otherUid = activeConv.participants.find((p) => p !== user.uid) ?? "";
-                  const seenBy = msg.seenBy ?? [];
-                  const isSeen = isMine && seenBy.includes(otherUid);
-                  return (
-                    <div key={msg.id} className={`flex flex-col ${isMine ? "items-end" : "items-start"}`}>
-                      <div className={`relative max-w-[78%] px-3.5 py-2.5 text-sm shadow-card ${
-                        isMine
-                          ? "bg-[#003366] dark:bg-blue-600 text-white rounded-2xl rounded-br-sm"
-                          : "bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 border border-gray-100 dark:border-slate-700 rounded-2xl rounded-bl-sm"
-                      }`}>
-                        <p className="leading-snug whitespace-pre-wrap break-words">{msg.text}</p>
-                        <p className={`text-[10px] mt-1 text-right select-none ${
-                          isMine ? "text-white/50" : "text-gray-400 dark:text-slate-500"
-                        }`}>
-                          {formatTime(msg.createdAt)}
-                        </p>
-                      </div>
-                      {isMine && (
-                        <span className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 px-1 select-none">
-                          {isSeen ? "✓✓ Seen" : "✓ Sent"}
-                        </span>
-                      )}
+            <div className="space-y-1.5">
+              {group.msgs.map((msg) => {
+                const isMine = msg.senderId === user.uid;
+                const otherUid = activeConv.participants.find((p) => p !== user.uid) ?? "";
+                const seenBy = msg.seenBy ?? [];
+                const isSeen = isMine && seenBy.includes(otherUid);
+                return (
+                  <div key={msg.id} className={`flex flex-col ${isMine ? "items-end" : "items-start"}`}>
+                    <div className={`relative max-w-[78%] px-3.5 py-2.5 text-sm shadow-sm ${
+                      isMine
+                        ? "bg-[#003366] dark:bg-blue-600 text-white rounded-2xl rounded-br-sm"
+                        : "bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 border border-gray-100 dark:border-slate-700 rounded-2xl rounded-bl-sm"
+                    }`}>
+                      <p className="leading-snug whitespace-pre-wrap break-words">{msg.text}</p>
+                      <p className={`text-[10px] mt-1 text-right select-none ${isMine ? "text-white/50" : "text-gray-400 dark:text-slate-500"}`}>
+                        {formatTime(msg.createdAt)}
+                      </p>
                     </div>
-                  );
-                })}
-              </div>
+                    {isMine && (
+                      <span className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 px-1 select-none">
+                        {isSeen ? "✓✓ Seen" : "✓ Sent"}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-          ))}
-          <div ref={messagesEndRef} />
-        </div>
+          </div>
+        ))}
 
-        {/* Input bar */}
-        <div className="shrink-0 flex items-center gap-2 px-3 py-3 bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-700">
+        {/* Typing indicator */}
+        {otherIsTyping && (
+          <div className="flex items-center gap-2 px-1 pb-1">
+            <Avatar name={otherName} avatarUrl={otherProfile?.avatarUrl} size={24} />
+            <div className="bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-2xl rounded-bl-sm px-3.5 py-2.5 shadow-sm">
+              <TypingDots />
+            </div>
+            <span className="text-[10px] text-slate-400 dark:text-slate-500">{otherName} is typing…</span>
+          </div>
+        )}
+
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Input bar */}
+      <div className="shrink-0 px-3 py-3 bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-700">
+        <div className="flex items-end gap-2">
           <div className="relative flex-1">
-            <input
+            <textarea
               ref={inputRef}
-              type="text"
               value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+              onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
+              onBlur={handleInputBlur}
               placeholder={t.typeMessage}
-              maxLength={500}
-              className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-2xl px-4 py-2.5 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 min-h-[44px] pr-12 transition"
+              rows={1}
+              style={{ resize: "none" }}
+              className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-2xl px-4 py-2.5 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 min-h-[44px] max-h-32 overflow-y-auto transition pr-14 leading-relaxed"
             />
-            {inputText.length > 400 && (
-              <span className={`absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-medium pointer-events-none ${inputText.length > 480 ? "text-red-400" : "text-gray-400"}`}>
-                {500 - inputText.length}
+            {inputText.length > CHAR_WARN && (
+              <span className={`absolute right-3 bottom-2.5 text-[10px] font-medium pointer-events-none ${inputText.length >= MAX_CHARS ? "text-red-500" : "text-slate-400"}`}>
+                {inputText.length} / {MAX_CHARS}
               </span>
             )}
           </div>
@@ -277,77 +548,46 @@ export default function MessagesPage() {
           </button>
         </div>
       </div>
-    );
-  }
-
-  // ── Conversation list ───────────────────────────────────────────────────────
-  return (
-    <div className="max-w-2xl mx-auto pb-24 sm:pb-8 animate-in fade-in duration-200">
-      <div className="px-4 pt-5 pb-3 border-b border-gray-100 dark:border-slate-800">
-        <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100 flex items-center gap-2">
-          <MessageCircle size={22} className="text-[#003366] dark:text-blue-400" />
-          {t.messages}
-        </h1>
-      </div>
-
-      {loadingConvs ? (
-        <div className="flex flex-col divide-y divide-gray-50 dark:divide-slate-800">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="flex items-center gap-3 px-4 py-3.5 animate-pulse">
-              <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-slate-700 shrink-0" />
-              <div className="flex-1 space-y-2">
-                <div className="h-3 bg-gray-100 dark:bg-slate-700 rounded w-1/2" />
-                <div className="h-2.5 bg-gray-100 dark:bg-slate-700 rounded w-3/4" />
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : conversations.length === 0 ? (
-        <div className="flex flex-col items-center py-16 text-center px-4">
-          <span className="text-5xl mb-4">💬</span>
-          <p className="text-base font-semibold text-slate-700 dark:text-slate-300">No messages yet</p>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{t.noMessages}</p>
-        </div>
-      ) : (
-        <div className="divide-y divide-gray-100 dark:divide-slate-800">
-          {conversations.map((conv) => {
-            const unread = conv.unreadCount?.[user.uid] ?? 0;
-            return (
-              <button
-                key={conv.id}
-                onClick={() => setActiveConv(conv)}
-                className={`w-full flex items-center gap-3 px-4 py-3.5 hover:bg-gray-50 dark:hover:bg-slate-800/60 transition-colors text-left min-h-[64px] ${unread > 0 ? "bg-blue-50/50 dark:bg-blue-950/20" : "bg-white dark:bg-slate-900"}`}
-              >
-                {conv.listingPhoto ? (
-                  <img src={conv.listingPhoto} className="w-12 h-12 rounded-xl object-cover shrink-0 border border-gray-100 dark:border-slate-700" alt="" />
-                ) : (
-                  <div className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0">
-                    <MessageCircle size={20} className="text-slate-400" />
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <p className={`text-sm truncate flex-1 min-w-0 ${unread > 0 ? "font-bold text-gray-900 dark:text-slate-50" : "font-semibold text-gray-800 dark:text-slate-100"}`}>
-                      {conv.listingTitle}
-                    </p>
-                    <span className="text-[10px] text-gray-400 dark:text-slate-500 shrink-0 ml-auto">
-                      {relativeTime(conv.lastMessageAt)}
-                    </span>
-                  </div>
-                  <p className={`text-xs truncate ${unread > 0 ? "font-semibold text-gray-700 dark:text-slate-200" : "text-gray-500 dark:text-slate-400"}`}>
-                    {conv.lastMessage || t.noMessages}
-                  </p>
-                </div>
-                {unread > 0 && (
-                  <span className="shrink-0 min-w-[20px] h-5 bg-[#003366] dark:bg-blue-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1.5">
-                    {unread}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      )}
     </div>
+  ) : null;
+
+  // ── Empty state for desktop right panel ──────────────────────────────────────
+  const emptyState = (
+    <div className="flex flex-col items-center justify-center h-full text-center px-8">
+      <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4">
+        <MessageCircle size={32} className="text-slate-300 dark:text-slate-600" />
+      </div>
+      <p className="text-base font-semibold text-slate-600 dark:text-slate-300">Select a conversation</p>
+      <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">Choose a chat to start messaging</p>
+    </div>
+  );
+
+  // ── Two-panel layout ──────────────────────────────────────────────────────────
+  return (
+    <>
+      <style>{`
+        @keyframes typingDot {
+          0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+          30% { transform: translateY(-4px); opacity: 1; }
+        }
+        .animate-typing-dot {
+          animation: typingDot 1.2s infinite ease-in-out;
+        }
+      `}</style>
+
+      <div className="flex h-[calc(100dvh-56px)] sm:h-[calc(100dvh-64px)] overflow-hidden">
+
+        {/* Left panel: conversation list */}
+        <div className={`flex flex-col border-r border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden w-full md:w-80 md:shrink-0 ${activeConv ? "hidden md:flex" : "flex"}`}>
+          {conversationListContent}
+        </div>
+
+        {/* Right panel: active chat or empty state */}
+        <div className={`flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-slate-950 ${activeConv ? "flex" : "hidden md:flex"}`}>
+          {activeConv ? chatContent : emptyState}
+        </div>
+
+      </div>
+    </>
   );
 }

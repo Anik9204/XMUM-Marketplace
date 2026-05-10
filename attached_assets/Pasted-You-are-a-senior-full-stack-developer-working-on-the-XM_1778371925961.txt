@@ -1,0 +1,82 @@
+You are a senior full-stack developer working on the XMUM Marketplace at artifacts/xmum-market/. Read ALL of these files before writing any code:
+- src/pages/MessagesPage.tsx
+- src/lib/messaging.ts
+- src/components/Layout.tsx
+- src/lib/types.ts
+- src/contexts/AuthContext.tsx
+
+CURRENT PROBLEMS:
+  1. getUserConversations uses getDocs (one-time fetch) — conversation list does NOT update in real time.
+  2. There is no way to search conversations.
+  3. On desktop, the messages page is single-panel (should be two-panel like WhatsApp Web).
+  4. There is no typing indicator.
+  5. The message input has no character limit display and no ability to send with Enter key.
+  6. Conversation list doesn't show listing thumbnail.
+  7. Deleted or unavailable listings still show in conversations.
+
+─── FIX 1 — Real-Time Conversation List ─────────────────────────
+In src/lib/messaging.ts, add a new exported function:
+  export function subscribeToConversations(uid: string, callback: (convs: Conversation[]) => void): Unsubscribe
+  — Uses onSnapshot on the conversations collection with where("participants","array-contains", uid).
+  — Sorts client-side by lastMessageAt desc.
+  — Calls callback on every update.
+
+In src/pages/MessagesPage.tsx, replace the getDocs call with subscribeToConversations. Unsubscribe on unmount.
+
+─── FIX 2 — Conversation Search ─────────────────────────────────
+Add a search bar at the top of the conversation list panel:
+  - Controlled input: "Search conversations..."
+  - Filters conversations client-side by listingTitle or other participant's display name (fetch names lazily).
+  - Clears with an X button.
+  - Only shows when there are 3+ conversations.
+
+─── FIX 3 — Two-Panel Desktop Layout ────────────────────────────
+On screens md+ (768px+):
+  - Left panel (320px fixed width): conversation list with search bar.
+  - Right panel (flex-1): active chat view.
+  - When no conversation is selected: right panel shows a centered empty state: chat icon + "Select a conversation to start messaging".
+  - Left panel always visible, right panel switches content based on activeConv.
+  - On mobile: full-screen list, then full-screen chat (existing behavior, keep it).
+
+─── FIX 4 — Typing Indicator ────────────────────────────────────
+In src/lib/messaging.ts, add:
+  export async function setTypingStatus(convId: string, uid: string, isTyping: boolean): Promise<void>
+  — updateDoc the conversation with { [`typing.${uid}`]: isTyping }
+
+  export function subscribeToTyping(convId: string, uid: string, otherUid: string, callback: (isTyping: boolean) => void): Unsubscribe
+  — onSnapshot on the conversation document, reads typing[otherUid] field, calls callback.
+
+In MessagesPage.tsx:
+  - On input onChange: debounce setTypingStatus(convId, user.uid, true) by 500ms.
+  - On input blur or empty: setTypingStatus(convId, user.uid, false).
+  - Subscribe to the other user's typing status.
+  - Show below the message list: "[name] is typing..." with 3-dot pulse animation (CSS keyframes) if otherIsTyping is true.
+
+─── FIX 5 — Input Improvements ─────────────────────────────────
+  - Max 1000 characters per message. Show counter "X / 1000" when > 800 chars.
+  - Enter key sends message (Shift+Enter adds newline). Handle via onKeyDown.
+  - After sending, clear input and reset typing status immediately.
+  - Disable send button if input is empty or only whitespace.
+
+─── FIX 6 — Conversation Row Redesign ───────────────────────────
+Each conversation list row:
+  - Left: avatar of other participant (48px, with initials fallback).
+  - Middle: display name (bold if unread), listing title in grey italic, last message truncated to 1 line.
+  - Right: listing thumbnail (40×40px, rounded-lg), timestamp, unread badge.
+  - Unread row: subtle blue-50/slate-800 background tint.
+  - Active row: navy-50 / slate-700 background.
+
+─── FIX 7 — Message Firestore Rules Update ──────────────────────
+Update the messages subcollection rule to allow update (for seenBy):
+  match /messages/{messageId} {
+    allow read: if isSignedIn() && request.auth.uid in get(...).data.participants;
+    allow create: if isSignedIn() && request.auth.uid in get(...).data.participants && request.auth.uid == request.resource.data.senderId;
+    allow update: if isSignedIn() && request.auth.uid in get(...).data.participants;
+  }
+Show the complete updated firestore.rules file.
+
+─── CONSTRAINTS ─────────────────────────────────────────────────
+- Do NOT add socket.io or any external realtime library.
+- Do NOT add new npm packages.
+- Typing status must be cleaned up (set to false) on component unmount.
+- After all changes, list every file modified.
