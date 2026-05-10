@@ -69,6 +69,7 @@ export async function getOrCreateConversation(
 export async function sendMessage(
   convId: string,
   senderId: string,
+  senderName: string,
   text: string,
   otherUid: string
 ): Promise<void> {
@@ -89,6 +90,14 @@ export async function sendMessage(
     lastMessageAt: Date.now(),
     [`unreadCount.${otherUid}`]: (convSnap.data()?.unreadCount?.[otherUid] ?? 0) + 1,
   });
+
+  try {
+    await sendNewMessageNotification(
+      otherUid,
+      senderName,
+      convSnap.data()?.listingTitle ?? "a listing"
+    );
+  } catch {}
 }
 
 export function subscribeToMessages(
@@ -219,6 +228,21 @@ export async function markMessagesAsSeen(
       })
     )
   );
+}
+
+export async function sendNewMessageNotification(
+  recipientUid: string,
+  senderName: string,
+  listingTitle: string
+): Promise<void> {
+  try {
+    const { addNotification } = await import("./notifications");
+    await addNotification(recipientUid, {
+      type: "new_message",
+      title: `New message from ${senderName}`,
+      body: `Re: ${listingTitle}`,
+    });
+  } catch {}
 }
 
 // Real-time listener — sums unreadCount[uid] across all the user's conversations.

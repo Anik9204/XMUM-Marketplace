@@ -1,0 +1,143 @@
+You are a senior full-stack developer working on the XMUM Marketplace.
+Read ALL of these files completely before writing any code:
+  cat artifacts/xmum-market/src/lib/messaging.ts
+  cat artifacts/xmum-market/src/pages/MessagesPage.tsx
+  cat artifacts/xmum-market/src/lib/notifications.ts
+
+═══════════════════════════════════════════════
+BUG 1 — sendMessage DOES NOT TRIGGER new_message NOTIFICATION
+═══════════════════════════════════════════════
+PROBLEM: The sendNewMessageNotification function was planned for
+Part 7 but was never wired into sendMessage in messaging.ts. When
+user A messages user B, user B receives NO notification. The
+notification bell never shows a "New message from..." alert.
+
+FIX: In artifacts/xmum-market/src/lib/messaging.ts:
+
+  1. Add the sendNewMessageNotification function at the bottom:
+
+     export async function sendNewMessageNotification(
+       recipientUid: string,
+       senderName: string,
+       listingTitle: string
+     ): Promise<void> {
+       try {
+         const { addNotification } = await import("./notifications");
+         await addNotification(recipientUid, {
+           type: "new_message",
+           title: `New message from ${senderName}`,
+           body: `Re: ${listingTitle}`,
+         });
+       } catch {}
+     }
+
+  2. In the sendMessage function, after the updateDoc call that
+     updates the conversation's lastMessage and unreadCount, add:
+
+     // Notify the recipient (the other participant)
+     const conv = conversations are fetched inside sendMessage
+     // Actually: read the conversation to get participants and title
+     // sendMessage currently takes (convId, senderId, text)
+     // We need to update the signature to also take senderName
+
+     Update the sendMessage function signature to:
+       export async function sendMessage(
+         convId: string,
+         senderId: string,
+         senderName: string,
+         text: string
+       ): Promise<void>
+
+     After the conversation updateDoc call, add:
+       try {
+         const convSnap = await getDoc(doc(db, "conversations", convId));
+         if (convSnap.exists()) {
+           const convData = convSnap.data();
+           const otherUid = (convData.participants as string[])
+             .find(p => p !== senderId);
+           if (otherUid) {
+             await sendNewMessageNotification(
+               otherUid,
+               senderName,
+               convData.listingTitle ?? "a listing"
+             );
+           }
+         }
+       } catch {}
+
+  3. In MessagesPage.tsx, update every call to sendMessage() to
+     pass the user's display name as the third argument:
+       await sendMessage(
+         activeConv.id,
+         user.uid,
+         userProfile?.displayName ?? user.email?.split("@")[0] ?? "Someone",
+         text
+       )
+     Import userProfile from useAuth() if not already done.
+
+═══════════════════════════════════════════════
+BUG 2 — "SEEN" INDICATOR SHOWS INCORRECTLY
+═══════════════════════════════════════════════
+PROBLEM: The "Seen ✓✓" indicator in MessagesPage shows for messages
+even when the recipient has not opened the conversation. The
+markMessagesAsSeen function updates seenBy on ALL unread messages
+the moment the conversation is opened, but the UI renders "Seen" for
+messages that were sent BEFORE the conversation was opened this
+session.
+
+FIX: In MessagesPage.tsx, when rendering message bubbles for
+messages sent by the current user:
+
+  Only show "✓✓ Seen" if:
+    seenBy includes the OTHER participant's UID
+    AND the message was created BEFORE the conversation was opened
+
+  The other participant's UID is:
+    const otherUid = activeConv.participants.find(p => p !== user.uid);
+
+  Update the seen indicator render:
+    {msg.senderId === user.uid && (
+      <p className="text-[10px] text-slate-400 dark:text-slate-500
+      mt-0.5 text-right">
+        {msg.seenBy?.includes(otherUid ?? "") ? "✓✓ Seen" : "✓ Sent"}
+      </p>
+    )}
+
+  Where otherUid is computed once at the top of the chat render:
+    const otherUid = activeConv?.participants.find(p => p !== user?.uid)
+      ?? "";
+
+═══════════════════════════════════════════════
+BUG 3 — TYPING INDICATOR MEMORY LEAK
+═══════════════════════════════════════════════
+PROBLEM: subscribeToTyping is called when activeConv changes, but
+the previous subscription is not cleaned up if the user switches
+conversations rapidly. This leaks onSnapshot listeners.
+
+FIX: In MessagesPage.tsx, find the useEffect that calls
+subscribeToTyping. Ensure it returns the unsubscribe function and
+re-runs when activeConv changes:
+
+  useEffect(() => {
+    if (!activeConv || !user) return;
+    const otherUid = activeConv.participants.find(p => p !== user.uid);
+    if (!otherUid) return;
+    const unsub = subscribeToTyping(
+      activeConv.id,
+      user.uid,
+      otherUid,
+      setOtherIsTyping
+    );
+    return unsub; // THIS IS THE FIX — ensure cleanup runs
+  }, [activeConv?.id, user?.uid]);
+
+  Also: in the cleanup of the sendMessage useEffect or the blur
+  handler, call setTypingStatus(activeConv.id, user.uid, false) to
+  clear your own typing status when navigating away.
+
+═══════════════════════════════════════════════
+CONSTRAINTS
+═══════════════════════════════════════════════
+- Do NOT add any new npm packages.
+- After changes, run pnpm build in xmum-market and confirm zero errors.
+- List every file modified.

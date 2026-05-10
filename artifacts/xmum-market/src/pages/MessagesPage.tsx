@@ -75,7 +75,7 @@ function TypingDots() {
 }
 
 export default function MessagesPage() {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const { t } = useLang();
   const [, navigate] = useLocation();
   const [showAuth, setShowAuth] = useState(false);
@@ -235,11 +235,12 @@ export default function MessagesPage() {
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     setTypingStatus(activeConv.id, user.uid, false);
     const otherUid = activeConv.participants.find((p) => p !== user.uid) ?? "";
+    const senderName = userProfile?.fullName ?? userProfile?.displayName ?? user.email?.split("@")[0] ?? "Someone";
     const text = inputText;
     setInputText("");
     setSending(true);
     try {
-      await sendMessage(activeConv.id, user.uid, text, otherUid);
+      await sendMessage(activeConv.id, user.uid, senderName, text, otherUid);
       inputRef.current?.focus();
     } catch {
       setInputText(text);
@@ -429,6 +430,7 @@ export default function MessagesPage() {
   // ── Active chat view ──────────────────────────────────────────────────────────
   const otherName = otherProfile?.fullName || otherProfile?.displayName || "User";
   const otherEmail = otherProfile?.email ?? "";
+  const otherUid = activeConv?.participants.find((p) => p !== user?.uid) ?? "";
 
   const groups: { date: string; msgs: Message[] }[] = [];
   messages.forEach((msg) => {
@@ -484,9 +486,7 @@ export default function MessagesPage() {
             <div className="space-y-1.5">
               {group.msgs.map((msg) => {
                 const isMine = msg.senderId === user.uid;
-                const otherUid = activeConv.participants.find((p) => p !== user.uid) ?? "";
-                const seenBy = msg.seenBy ?? [];
-                const isSeen = isMine && seenBy.includes(otherUid);
+                const isSeen = isMine && (msg.seenBy ?? []).includes(otherUid);
                 return (
                   <div key={msg.id} className={`flex flex-col ${isMine ? "items-end" : "items-start"}`}>
                     <div className={`relative max-w-[78%] px-3.5 py-2.5 text-sm shadow-sm ${
