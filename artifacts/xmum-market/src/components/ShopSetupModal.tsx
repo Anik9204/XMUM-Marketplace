@@ -168,63 +168,97 @@ export default function ShopSetupModal({ initialStep = 1, onClose, onSuccess }: 
 
     const now = Date.now();
 
-    // Write T&C audit log first (must succeed even if update fails)
-    try {
-      await addDoc(collection(db, "sellerTcAuditLogs"), {
-        userId: user.uid,
-        userEmail: user.email ?? "",
-        shopName: shopName.trim(),
-        tcVersion: SELLER_TC_VERSION,
-        acceptedAt: now,
-        userAgent: navigator.userAgent,
-      });
-    } catch (err) {
-      console.warn("[ShopSetup] T&C audit log failed:", err);
+    /** Race a promise against a ms timeout — resolves to null on timeout */
+    function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
+      return Promise.race([
+        p.then((v) => v).catch(() => null),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
+      ]);
     }
 
+    // T&C audit log — fire-and-forget, never blocks submission
+    addDoc(collection(db, "sellerTcAuditLogs"), {
+      userId: user.uid,
+      userEmail: user.email ?? "",
+      shopName: shopName.trim(),
+      tcVersion: SELLER_TC_VERSION,
+      acceptedAt: now,
+      userAgent: navigator.userAgent,
+    }).catch((err) => console.warn("[ShopSetup] T&C audit log failed:", err));
+
     try {
-      // Upload student IDs if provided (step 1)
+      // Student ID uploads — non-blocking with 15s timeout each.
+      // If storage isn't configured or rules block the path, we still proceed.
+      const uploadPromises: Promise<unknown>[] = [];
       if (frontIdFile) {
-        const frontRef = ref(storage, `studentIds/${user.uid}/front.jpg`);
-        await uploadBytes(frontRef, frontIdFile);
+        uploadPromises.push(
+          withTimeout(
+            uploadBytes(ref(storage, `studentIds/${user.uid}/front.jpg`), frontIdFile),
+            15_000,
+          ),
+        );
       }
       if (backIdFile) {
-        const backRef = ref(storage, `studentIds/${user.uid}/back.jpg`);
-        await uploadBytes(backRef, backIdFile);
+        uploadPromises.push(
+          withTimeout(
+            uploadBytes(ref(storage, `studentIds/${user.uid}/back.jpg`), backIdFile),
+            15_000,
+          ),
+        );
       }
+      // Run ID uploads in parallel without awaiting (truly non-blocking)
+      Promise.all(uploadPromises).catch((err) =>
+        console.warn("[ShopSetup] Student ID upload failed (non-fatal):", err),
+      );
 
-      // Upload banner if provided
+      // Banner upload — attempt with 15s timeout; failure is non-fatal
       let bannerUrl = userProfile?.shopBannerUrl;
       if (bannerFile) {
-        const bannerRef = ref(storage, `shopBanners/${user.uid}/banner.jpg`);
-        await uploadBytes(bannerRef, bannerFile);
-        bannerUrl = await getDownloadURL(bannerRef);
+        try {
+          const bannerRef = ref(storage, `shopBanners/${user.uid}/banner.jpg`);
+          const result = await withTimeout(uploadBytes(bannerRef, bannerFile), 15_000);
+          if (result) {
+            const url = await withTimeout(getDownloadURL(bannerRef), 8_000);
+            if (url) bannerUrl = url;
+          }
+        } catch (err) {
+          console.warn("[ShopSetup] Banner upload failed (non-fatal):", err);
+        }
       }
 
       const finalSlug = slugify(shopSlug) || slugify(shopName);
 
-      await updateDoc(doc(db, "users", user.uid), {
-        shopName: shopName.trim(),
-        shopSlug: finalSlug,
-        shopBio: shopBio.trim(),
-        shopCategories,
-        ...(bannerUrl ? { shopBannerUrl: bannerUrl } : {}),
-        verificationStatus: "pending",
-        verificationSubmittedAt: now,
-        sellerTcAcceptedAt: now,
-        sellerTcVersion: SELLER_TC_VERSION,
-      });
+      // This is the critical write — mark user as pending in Firestore
+      await Promise.race([
+        updateDoc(doc(db, "users", user.uid), {
+          shopName: shopName.trim(),
+          shopSlug: finalSlug,
+          shopBio: shopBio.trim(),
+          shopCategories,
+          ...(bannerUrl ? { shopBannerUrl: bannerUrl } : {}),
+          verificationStatus: "pending",
+          verificationSubmittedAt: now,
+          sellerTcAcceptedAt: now,
+          sellerTcVersion: SELLER_TC_VERSION,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("timeout")), 12_000),
+        ),
+      ]);
 
-      await refetchProfile().catch(() => {});
+      refetchProfile().catch(() => {});
       setStep(4);
     } catch (err: any) {
       const code: string = err?.code ?? "";
-      if (code === "permission-denied") {
+      const msg: string = err?.message ?? "";
+      if (msg === "timeout") {
+        setSubmitError("Request timed out. Please check your internet connection and try again.");
+      } else if (code === "permission-denied" || code === "PERMISSION_DENIED") {
         setSubmitError("Permission denied. Make sure your XMUM email is verified.");
       } else if (code.includes("storage/unauthorized")) {
-        setSubmitError("Storage upload blocked. Your email must be verified.");
+        setSubmitError("Storage permission denied. Your email must be verified.");
       } else {
-        setSubmitError(err?.message ?? "Submission failed. Please try again.");
+        setSubmitError(msg || "Submission failed. Please try again.");
       }
     } finally {
       setSubmitting(false);
