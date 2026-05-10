@@ -43,16 +43,25 @@ export default function SearchPage() {
   const [searched, setSearched] = useState(false);
   const [priceRange, setPriceRange] = useState<PriceRange>("all");
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const skipNextDebounceRef = useRef(false);
 
   const showPriceFilter = type === "buy-sell" || type === "jobs" || type === "assistance" || type === "rental";
   const showConditionFilter = type === "buy-sell";
 
-  // Pre-populate from ?q= URL param once on mount
+  // Bug 1 fix: auto-run search immediately when arriving from home page with ?q=
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const q = params.get("q");
-    if (q) setKeyword(q);
-  }, []);
+    if (q && q.trim()) {
+      skipNextDebounceRef.current = true;
+      setLoading(true);
+      setSearched(true);
+      searchListings(type, q, undefined, undefined, "all")
+        .then(setResults)
+        .catch(() => setResults([]))
+        .finally(() => setLoading(false));
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const applyPriceRange = (range: PriceRange) => {
     setPriceRange(range);
@@ -63,6 +72,7 @@ export default function SearchPage() {
   };
 
   const doSearch = async () => {
+    if (!keyword.trim() && !searched) return;
     setLoading(true);
     setSearched(true);
     try {
@@ -74,23 +84,31 @@ export default function SearchPage() {
         condition
       );
       setResults(res);
+    } catch {
+      setResults([]);
     } finally {
       setLoading(false);
     }
   };
 
+  // Bug 2 fix: debounce auto-search watching priceRange (not raw min/max) + proper guard
   useEffect(() => {
-    clearTimeout(debounceRef.current);
-    if (!keyword && !minPrice && !maxPrice && condition === "all") {
-      setResults([]);
-      setSearched(false);
+    // Skip the first debounce trigger if the mount auto-search already handled it
+    if (skipNextDebounceRef.current) {
+      skipNextDebounceRef.current = false;
       return;
     }
-    debounceRef.current = setTimeout(doSearch, 400);
-    return () => clearTimeout(debounceRef.current);
-  }, [keyword, type, minPrice, maxPrice, condition]);
+    if (!keyword.trim() && !searched) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      doSearch();
+    }, 500);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [keyword, type, priceRange, condition]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Reset price range pill if manual min/max inputs change it out of sync
+  // Keep priceRange pill in sync when manual min/max inputs change
   useEffect(() => {
     const matched = PRICE_RANGE_PILLS.find(
       (p) =>
@@ -105,6 +123,17 @@ export default function SearchPage() {
     setMaxPrice("");
     setCondition("all");
     setPriceRange("all");
+  };
+
+  // Bug 3 fix: reset all filters when switching listing types
+  const handleTypeChange = (newType: ListingType) => {
+    setType(newType);
+    setPriceRange("all");
+    setMinPrice("");
+    setMaxPrice("");
+    setCondition("all");
+    setResults([]);
+    setSearched(false);
   };
 
   const hasFilters = minPrice || maxPrice || condition !== "all";
@@ -190,12 +219,12 @@ export default function SearchPage() {
           </div>
         )}
 
-        {/* Type tabs */}
+        {/* Type tabs — Bug 3 fix: use handleTypeChange to reset filters */}
         <div className="flex gap-1 mt-2.5 overflow-x-auto scrollbar-hide">
           {ALL_TABS.map(({ value, label }) => (
             <button
               key={value}
-              onClick={() => { setType(value); setResults([]); setSearched(false); }}
+              onClick={() => handleTypeChange(value)}
               className={`flex-shrink-0 px-3 py-1.5 min-h-[36px] rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${type === value ? "bg-[#003366] dark:bg-blue-600 text-white" : "bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400"}`}
             >
               {label(t)}
@@ -248,11 +277,30 @@ export default function SearchPage() {
               </div>
             )}
 
-            {hasFilters && (
-              <button onClick={clearFilters} className="w-full text-xs text-red-500 border border-red-200 dark:border-red-800 rounded-lg py-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
-                {t.clearFilters}
+            {/* Bug 4 fix: Apply + Reset buttons replacing the single clear link */}
+            <div className="flex gap-3 mt-4 pt-4 border-t border-gray-100 dark:border-slate-700">
+              <button
+                onClick={() => {
+                  setPriceRange("all");
+                  setMinPrice("");
+                  setMaxPrice("");
+                  setCondition("all");
+                }}
+                className="flex-1 min-h-[44px] text-sm text-gray-600 dark:text-slate-300
+                           border border-gray-300 dark:border-slate-600 rounded-xl
+                           hover:bg-gray-50 dark:hover:bg-slate-700 transition"
+              >
+                Reset
               </button>
-            )}
+              <button
+                onClick={() => { setShowFilters(false); doSearch(); }}
+                className="flex-1 min-h-[44px] text-sm bg-[#003366] dark:bg-blue-600
+                           text-white rounded-xl font-semibold hover:bg-[#002244]
+                           dark:hover:bg-blue-700 transition"
+              >
+                {t.applyFilters}
+              </button>
+            </div>
           </div>
         )}
       </div>

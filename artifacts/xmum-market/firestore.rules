@@ -65,7 +65,9 @@ service cloud.firestore {
 
     match /users/{userId}/notifications/{notifId} {
       allow read: if isOwner(userId);
-      allow write: if isOwner(userId) || isEditor();
+      allow write: if isOwner(userId)
+                   || isEditor()
+                   || isXmuEmail(); // allows peer notifications e.g. new_message
     }
 
     // ── Rental Audit Logs ──────────────────────────────────────────────────────

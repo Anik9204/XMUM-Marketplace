@@ -1,0 +1,246 @@
+You are a senior UI/UX developer on the XMUM Marketplace. Read ALL
+of these files before writing any code:
+  cat artifacts/xmum-market/src/pages/SearchPage.tsx
+  cat artifacts/xmum-market/src/lib/listings.ts | grep -A 30 "searchListings"
+  cat artifacts/xmum-market/src/lib/i18n.ts | grep -E "search|noResults|filter"
+
+═══════════════════════════════════════════════
+BUG 1 — SEARCH DOESN'T AUTO-RUN WHEN ARRIVING FROM HOME PAGE
+═══════════════════════════════════════════════
+PROBLEM: When the user types in the home page search bar and presses
+Enter, they navigate to /search?q=laptop. SearchPage reads the ?q=
+param on mount and sets keyword state. BUT doSearch() is never called
+automatically — the user has to press the search button again. This
+is a broken UX flow.
+
+FIX: In SearchPage.tsx, add a useEffect that auto-runs the search
+when a ?q= param is present on mount:
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get("q");
+    if (q && q.trim()) {
+      setKeyword(q);
+      // Run search immediately — don't wait for user to press button
+      setLoading(true);
+      setSearched(true);
+      searchListings(type, q, undefined, undefined, "all")
+        .then(setResults)
+        .catch(() => setResults([]))
+        .finally(() => setLoading(false));
+    }
+  }, []); // empty deps — only on mount
+
+  Remove the duplicate useEffect that also reads ?q= (merge them).
+
+═══════════════════════════════════════════════
+BUG 2 — SEARCH INPUT DOES NOT DEBOUNCE — FIRES ON EVERY KEYSTROKE
+═══════════════════════════════════════════════
+PROBLEM: SearchPage fires doSearch on every onChange of the keyword
+input (if debounce is not properly implemented). Looking at the code,
+the debounceRef resets on every keystroke but doSearch is also wired
+to a button. However the search never auto-fires when typing, which
+means the search input is confusing — type something, nothing happens,
+user doesn't know to press button.
+
+FIX: Implement proper auto-search-as-you-type with debounce:
+
+  In SearchPage.tsx, add a useEffect that watches keyword + type
+  + priceRange + condition:
+
+  useEffect(() => {
+    if (!keyword.trim() && !searched) return; // don't search on empty first load
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      doSearch();
+    }, 500);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [keyword, type, priceRange, condition]);
+
+  Update doSearch to NOT set loading if keyword is empty:
+    const doSearch = async () => {
+      if (!keyword.trim() && !searched) return;
+      setLoading(true);
+      setSearched(true);
+      ...
+    };
+
+  Remove the explicit "Search" button or change it to just an icon
+  trigger (keep it for accessibility but auto-search handles the rest).
+
+═══════════════════════════════════════════════
+BUG 3 — PRICE RANGE PILLS DO NOT RESET WHEN SWITCHING LISTING TYPES
+═══════════════════════════════════════════════
+PROBLEM: If user selects "RM50–200" price range on Buy & Sell, then
+switches to "Lost & Found" (which has no price), the price filter
+pills disappear from the UI but the priceRange state is still
+"50-200". This means the search still sends min=50&max=200 filters
+even for lost-found listings where price doesn't apply.
+
+FIX: In the tab onChange handler, reset price range when switching:
+
+  const handleTypeChange = (newType: ListingType) => {
+    setType(newType);
+    setPriceRange("all");   // ← ADD THIS
+    setMinPrice("");         // ← ADD THIS
+    setMaxPrice("");         // ← ADD THIS
+    setCondition("all");     // ← ADD THIS
+  };
+
+  Make sure the tab selector pills call handleTypeChange instead of
+  setType directly.
+
+═══════════════════════════════════════════════
+BUG 4 — FILTER SHEET HAS NO APPLY BUTTON ON MOBILE
+═══════════════════════════════════════════════
+PROBLEM: The filter sheet/panel opens but changes to min/max price
+and condition apply immediately on close. There is no "Apply Filters"
+or "Reset" button visible, making the UX confusing on mobile.
+
+FIX: In the filter panel/sheet in SearchPage.tsx, add at the bottom:
+  <div className="flex gap-3 mt-4 pt-4 border-t border-gray-100
+  dark:border-slate-700">
+    <button
+      onClick={() => {
+        setPriceRange("all");
+        setMinPrice("");
+        setMaxPrice("");
+        setCondition("all");
+      }}
+      className="flex-1 min-h-[44px] text-sm text-gray-600
+      dark:text-slate-300 border border-gray-300 dark:border-slate-600
+      rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700 transition"
+    >
+      Reset
+    </button>
+    <button
+      onClick={() => { setShowFilters(false); doSearch(); }}
+      className="flex-2 min-h-[44px] text-sm bg-[#003366]
+      dark:bg-blue-600 text-white rounded-xl font-semibold
+      flex-1 hover:bg-[#002244] transition"
+    >
+      Apply Filters
+    </button>
+  </div>
+
+═══════════════════════════════════════════════
+CONSTRAINTS
+═══════════════════════════════════════════════
+- Do NOT add new npm packages.
+- Run pnpm build in xmum-market and confirm zero errors.
+- List every file modified.
+
+
+
+
+
+
+
+You are a senior DevSecOps developer working on the XMUM Marketplace.
+Read ALL of these files before writing any code:
+  cat artifacts/xmum-market/firestore.rules
+  cat artifacts/xmum-market/src/lib/notifications.ts
+  cat artifacts/xmum-market/src/lib/messaging.ts | grep "getUserConversations"
+
+═══════════════════════════════════════════════
+BUG 1 — NOTIFICATIONS WRITE RULE BLOCKS sendNewMessageNotification
+═══════════════════════════════════════════════
+PROBLEM: The current Firestore rule for notifications is:
+  match /users/{userId}/notifications/{notifId} {
+    allow read: if isOwner(userId);
+    allow write: if isOwner(userId) || isEditor();
+  }
+
+sendNewMessageNotification writes to users/{recipientUid}/notifications
+but is called by the SENDER (not the recipient and not an admin).
+The sender's uid !== recipientUid, so isOwner(userId) fails.
+The sender is not an editor, so isEditor() also fails.
+Result: every new message notification silently fails with
+"permission-denied" — the try/catch hides it.
+
+FIX: In firestore.rules, update the notifications rule to also
+allow ANY authenticated XMUM email user to write notifications
+to other users (for system-generated notifications like new_message):
+
+  match /users/{userId}/notifications/{notifId} {
+    allow read: if isOwner(userId);
+    allow write: if isOwner(userId)
+                 || isEditor()
+                 || isXmuEmail(); // ← allows peer notifications
+  }
+
+This is safe because: (a) only @xmu.edu.my accounts can write,
+(b) users can only read their OWN notifications (isOwner on read),
+(c) the worst case is someone spamming another user's notifications —
+add a Firestore rate limit via security rules if this becomes an
+issue later.
+
+═══════════════════════════════════════════════
+BUG 2 — daily_digest TYPE NOT ACCEPTED BY addNotification
+═══════════════════════════════════════════════
+PROBLEM: sendDailyDigestIfDue calls addNotification with type:
+"daily_digest". But addNotification's data parameter uses type
+Omit<AppNotification, "id"|"createdAt"|"read"> which references
+the old AppNotification.type union that DID include "daily_digest".
+After the AppNotification union is expanded (from Part 1 fix), this
+remains correct — BUT "new_message" and other new types written by
+sendNewMessageNotification were not in the old union, causing
+TypeScript to complain.
+
+This should be resolved after Part 1 (AppNotification type fix),
+but verify: after Part 1's fix, run pnpm build and confirm no
+TypeScript errors in notifications.ts or messaging.ts around
+addNotification calls.
+
+If errors still exist, the fix is: cast the type parameter:
+  await addNotification(uid, {
+    type: "new_message" as AppNotification["type"],
+    ...
+  });
+But this should NOT be needed after Part 1. Only apply if build fails.
+
+═══════════════════════════════════════════════
+BUG 3 — getUserConversations USES getDocs (BREAKS DAILY DIGEST COUNT)
+═══════════════════════════════════════════════
+PROBLEM: sendDailyDigestIfDue calls getUserConversations(uid) to get
+unread message count. But getUserConversations uses getDocs and is
+in messaging.ts — it may not exist at all (check the file). If
+it doesn't exist as an exported function, the import fails silently
+and the digest always shows "0 unread messages."
+
+FIX: In artifacts/xmum-market/src/lib/messaging.ts, add this
+exported function if it is missing:
+
+  export async function getUserConversations(uid: string):
+    Promise<Conversation[]> {
+    try {
+      const q = query(
+        collection(db, "conversations"),
+        where("participants", "array-contains", uid),
+        orderBy("lastMessageAt", "desc")
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map(d => {
+        const data = d.data();
+        return {
+          id: d.id,
+          ...data,
+          lastMessageAt: toMillis(data.lastMessageAt),
+        } as Conversation;
+      });
+    } catch {
+      return [];
+    }
+  }
+
+Also add getDocs to the firebase/firestore imports if not present.
+
+═══════════════════════════════════════════════
+FINAL OUTPUT
+═══════════════════════════════════════════════
+After all fixes, output:
+1. The COMPLETE updated firestore.rules file.
+2. Run pnpm build in xmum-market — paste the output.
+3. List every file modified.
