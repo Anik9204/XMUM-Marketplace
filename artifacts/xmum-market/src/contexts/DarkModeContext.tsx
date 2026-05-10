@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 
 interface DarkModeCtx {
   dark: boolean;
@@ -8,14 +8,14 @@ interface DarkModeCtx {
 const Ctx = createContext<DarkModeCtx>({ dark: false, toggle: () => {} });
 
 export function DarkModeProvider({ children }: { children: ReactNode }) {
-  const userHasToggled = useRef(false);
-
   const [dark, setDark] = useState<boolean>(() => {
     try {
       const stored = localStorage.getItem("xmum-theme");
       if (stored === "dark") return true;
       if (stored === "light") return false;
-      return window.matchMedia("(prefers-color-scheme: dark)").matches;
+      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      localStorage.setItem("xmum-theme", prefersDark ? "dark" : "light");
+      return prefersDark;
     } catch {
       return false;
     }
@@ -28,15 +28,12 @@ export function DarkModeProvider({ children }: { children: ReactNode }) {
     } else {
       root.classList.remove("dark");
     }
-    if (userHasToggled.current) {
+    try {
       localStorage.setItem("xmum-theme", dark ? "dark" : "light");
-    }
+    } catch {}
   }, [dark]);
 
-  const toggle = () => {
-    userHasToggled.current = true;
-    setDark((d) => !d);
-  };
+  const toggle = () => setDark((d) => !d);
 
   return <Ctx.Provider value={{ dark, toggle }}>{children}</Ctx.Provider>;
 }
