@@ -1,0 +1,86 @@
+You are a senior developer on the XMUM Marketplace project. A cleanup task is needed on artifacts/xmum-market/src/pages/PostPage.tsx. The old "Verified Seller" tier system has been removed, but PostPage still has leftover gates that lock Jobs, Assistance, and Rental tabs behind verification, and shows an "Upgrade to Verified" banner. Remove all of this so every logged-in XMUM student can use all post types freely.
+Make exactly these changes to src/pages/PostPage.tsx:
+1. Remove these two constants near the top:
+tsconst FREE_LIMIT = 5;
+const VERIFIED_LIMIT = 30;
+2. Replace these three lines:
+tsconst isVerified = userProfile?.verificationStatus === "approved";
+const activeListingCount = userProfile?.activeListingCount ?? 0;
+const listingLimit = isVerified ? VERIFIED_LIMIT : FREE_LIMIT;
+With just:
+tsconst activeListingCount = userProfile?.activeListingCount ?? 0;
+3. Remove this constant:
+tsconst VERIFIED_ONLY_TABS: ListingType[] = ["jobs", "assistance", "rental"];
+4. In the handleTypeChange function, remove this early-return guard:
+tsif (VERIFIED_ONLY_TABS.includes(newType) && !isVerified) return;
+5. Remove the entire "Listing limit notice" JSX block (the amber warning shown when isAtLimit):
+tsx{isAtLimit && (
+  <div className="mb-4 bg-amber-50 ...">
+    ...
+  </div>
+)}
+6. Remove the entire "Tier notice for non-verified" JSX block:
+tsx{!isVerified && !isAtLimit && (
+  <div className="mb-4 bg-blue-50 ...">
+    Free account: <strong>{activeListingCount} / {FREE_LIMIT}</strong> listings used.{" "}
+    <a href="/settings#shop-verification" ...>Upgrade to Verified</a> for 30 listings + all post types.
+  </div>
+)}
+7. In the tab button render loop, remove the locked variable and all related logic:
+Replace:
+tsx{ALL_TABS.map((tab) => {
+  const locked = VERIFIED_ONLY_TABS.includes(tab) && !isVerified;
+  return (
+    <button
+      key={tab}
+      type="button"
+      onClick={() => handleTypeChange(tab)}
+      disabled={locked}
+      title={locked ? "Verified Sellers only — upgrade in Settings" : undefined}
+      className={`... ${
+        type === tab
+          ? "bg-white dark:bg-slate-700 shadow text-[#003366] dark:text-slate-100"
+          : locked
+          ? "text-gray-300 dark:text-slate-600 cursor-not-allowed"
+          : "text-gray-500 dark:text-slate-400"
+      }`}
+    >
+      {locked && <Lock size={9} className="inline mb-0.5 mr-0.5 text-gray-400" />}
+      {tabLabel(tab)}
+    </button>
+  );
+})}
+With:
+tsx{ALL_TABS.map((tab) => (
+  <button
+    key={tab}
+    type="button"
+    onClick={() => handleTypeChange(tab)}
+    className={`flex-1 min-w-[72px] py-2 min-h-[44px] rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
+      type === tab
+        ? "bg-white dark:bg-slate-700 shadow text-[#003366] dark:text-slate-100"
+        : "text-gray-500 dark:text-slate-400"
+    }`}
+  >
+    {tabLabel(tab)}
+  </button>
+))}
+8. Remove the isAtLimit variable:
+tsconst isAtLimit = activeListingCount >= listingLimit;
+9. In handleSubmit, remove the listing limit check block:
+tsif (activeListingCount >= listingLimit) {
+  setError(
+    isVerified
+      ? `You have reached the maximum of ${VERIFIED_LIMIT} active listings for Verified Sellers.`
+      : `Free accounts can have up to ${FREE_LIMIT} active listings. Become a Verified Seller to post more.`
+  );
+  setLoading(false);
+  return;
+}
+10. In the submit button, remove isAtLimit from the disabled condition:
+Change: disabled={loading || isAtLimit}
+To: disabled={loading}
+11. Remove unused imports — ShieldCheck, ShieldOff, Lock from the lucide-react import if they are no longer used anywhere else in the file.
+After all changes, run:
+bashcd artifacts/xmum-market && pnpm run typecheck
+Fix any TypeScript errors. When done, sync to GitHub. Tell me: ✅ Verification gates removed — all users can now post all listing types freely.

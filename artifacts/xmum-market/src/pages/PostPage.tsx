@@ -15,7 +15,7 @@ import ListingCard from "@/components/ListingCard";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import {
   ImagePlus, X, AlertCircle, CheckCircle2, Edit2, Wifi, WifiOff,
-  ShieldCheck, ShieldOff, Lock, Eye, EyeOff, Loader2,
+  Eye, EyeOff, Loader2,
 } from "lucide-react";
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
@@ -43,9 +43,6 @@ const selectCls =
   "w-full bg-white text-gray-900 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600 dark:[color-scheme:dark] focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 transition min-h-[44px]";
 
 const labelCls = "block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-1";
-
-const FREE_LIMIT = 5;
-const VERIFIED_LIMIT = 30;
 
 function relativeTime(ms: number): string {
   const diff = Date.now() - ms;
@@ -182,16 +179,13 @@ function CentsInput({
 }
 
 const ALL_TABS: ListingType[] = ["buy-sell", "lost-found", "jobs", "assistance", "rental"];
-const VERIFIED_ONLY_TABS: ListingType[] = ["jobs", "assistance", "rental"];
 
 export default function PostPage() {
   const { t } = useLang();
   const { user, userProfile } = useAuth();
   const [, navigate] = useLocation();
 
-  const isVerified = userProfile?.isVerified === true;
   const activeListingCount = userProfile?.activeListingCount ?? 0;
-  const listingLimit = isVerified ? VERIFIED_LIMIT : FREE_LIMIT;
 
   const [type, setType] = useState<ListingType>("buy-sell");
   const [title, setTitle] = useState("");
@@ -457,7 +451,6 @@ export default function PostPage() {
   };
 
   const handleTypeChange = (newType: ListingType) => {
-    if (VERIFIED_ONLY_TABS.includes(newType) && !isVerified) return;
     if (newType === "rental" && !tcAccepted) {
       setPrevType(type);
       setShowTcModal(true);
@@ -484,16 +477,6 @@ export default function PostPage() {
     setError("");
     setFieldError(null);
     setLoading(true);
-
-    if (activeListingCount >= listingLimit) {
-      setError(
-        isVerified
-          ? `You have reached the maximum of ${VERIFIED_LIMIT} active listings for Verified Sellers.`
-          : `Free accounts can have up to ${FREE_LIMIT} active listings. Become a Verified Seller to post more.`
-      );
-      setLoading(false);
-      return;
-    }
 
     if (!checkRateLimit(`post_${user.uid}`, 3, 60 * 60 * 1000)) {
       setError("You've posted too many listings in the last hour. Please wait before posting again.");
@@ -674,7 +657,6 @@ export default function PostPage() {
   };
 
   const currentYear = new Date().getFullYear();
-  const isAtLimit = activeListingCount >= listingLimit;
 
   return (
     <div className="relative max-w-lg mx-auto px-4 py-5 pb-28 sm:pb-8 animate-in fade-in duration-200">
@@ -709,54 +691,22 @@ export default function PostPage() {
         </button>
       </div>
 
-      {/* Listing limit notice */}
-      {isAtLimit && (
-        <div className="mb-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl px-4 py-3 flex items-start gap-3">
-          <AlertCircle size={16} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-          <p className="text-xs text-amber-800 dark:text-amber-300">
-            {isVerified
-              ? `You've reached the ${VERIFIED_LIMIT}-listing limit for Verified Sellers.`
-              : `Free accounts are limited to ${FREE_LIMIT} active listings. `}
-            {!isVerified && (
-              <a href="/settings#shop-verification" className="underline font-semibold">Become a Verified Seller</a>
-            )}
-            {!isVerified && " for up to 30."}
-          </p>
-        </div>
-      )}
-
-      {/* Tier notice for non-verified */}
-      {!isVerified && !isAtLimit && (
-        <div className="mb-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl px-3 py-2 text-xs text-blue-700 dark:text-blue-400">
-          Free account: <strong>{activeListingCount} / {FREE_LIMIT}</strong> listings used.{" "}
-          <a href="/settings#shop-verification" className="underline font-semibold">Upgrade to Verified</a> for 30 listings + all post types.
-        </div>
-      )}
-
       {/* Type selector */}
       <div className="flex bg-gray-100 dark:bg-slate-800 rounded-xl p-1 mb-5 gap-1 overflow-x-auto scrollbar-hide">
-        {ALL_TABS.map((tab) => {
-          const locked = VERIFIED_ONLY_TABS.includes(tab) && !isVerified;
-          return (
-            <button
-              key={tab}
-              type="button"
-              onClick={() => handleTypeChange(tab)}
-              disabled={locked}
-              title={locked ? "Verified Sellers only — upgrade in Settings" : undefined}
-              className={`flex-1 min-w-[72px] py-2 min-h-[44px] rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap relative ${
-                type === tab
-                  ? "bg-white dark:bg-slate-700 shadow text-[#003366] dark:text-slate-100"
-                  : locked
-                  ? "text-gray-300 dark:text-slate-600 cursor-not-allowed"
-                  : "text-gray-500 dark:text-slate-400"
-              }`}
-            >
-              {locked && <Lock size={9} className="inline mb-0.5 mr-0.5 text-gray-400" />}
-              {tabLabel(tab)}
-            </button>
-          );
-        })}
+        {ALL_TABS.map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            onClick={() => handleTypeChange(tab)}
+            className={`flex-1 min-w-[72px] py-2 min-h-[44px] rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
+              type === tab
+                ? "bg-white dark:bg-slate-700 shadow text-[#003366] dark:text-slate-100"
+                : "text-gray-500 dark:text-slate-400"
+            }`}
+          >
+            {tabLabel(tab)}
+          </button>
+        ))}
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -1204,7 +1154,7 @@ export default function PostPage() {
           <div className="pointer-events-none absolute -top-6 left-0 right-0 h-6 bg-gradient-to-t from-white dark:from-slate-900 to-transparent md:hidden" />
           <button
             type="submit"
-            disabled={loading || isAtLimit}
+            disabled={loading}
             className="w-full min-h-[56px] bg-[#003366] dark:bg-blue-600 text-white font-semibold text-base rounded-xl hover:bg-[#002244] dark:hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.97] transition-all duration-150 flex items-center justify-center gap-2 shadow"
           >
             {loading ? (
