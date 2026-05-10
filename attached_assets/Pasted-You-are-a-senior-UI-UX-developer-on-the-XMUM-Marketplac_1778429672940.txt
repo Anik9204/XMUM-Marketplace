@@ -1,0 +1,334 @@
+You are a senior UI/UX developer on the XMUM Marketplace. Read ALL
+of these files before writing any code:
+  cat artifacts/xmum-market/src/pages/HomePage.tsx
+  cat artifacts/xmum-market/src/lib/listings.ts | grep -A 40 "getTabCounts"
+  cat artifacts/xmum-market/src/lib/i18n.ts | grep -E "jobs|assistance|rental|lostFound"
+
+═══════════════════════════════════════════════
+BUG 1 — TAB COUNT BADGES CRASH ON FIREBASE INDEXES NOT DEPLOYED
+═══════════════════════════════════════════════
+PROBLEM: getTabCounts() uses getCountFromServer with queries that
+require composite Firestore indexes. When the indexes haven't been
+deployed to Firebase Console, getCountFromServer throws an error
+with code "failed-precondition" and a URL to create the index.
+The try/catch in getTabCounts returns 0 for ALL tabs silently,
+meaning the tab count badges never show anything — they appear as
+small empty circles that look broken.
+
+FIX: In HomePage.tsx, change the tab count badge display:
+  - If tabCounts[tab] is undefined OR 0: show NOTHING (no badge).
+  - Only show the badge if tabCounts[tab] > 0.
+
+  Change from:
+    {tabCounts[tab] !== undefined && (
+      <span className="...">{tabCounts[tab]}</span>
+    )}
+  To:
+    {(tabCounts[tab] ?? 0) > 0 && (
+      <span className="...">{tabCounts[tab]}</span>
+    )}
+
+  Also in getTabCounts in listings.ts, improve the error logging:
+    } catch (err: any) {
+      // Log the index creation URL if present (helps dev know what to deploy)
+      const msg = err?.message ?? "";
+      if (msg.includes("index")) {
+        console.warn("[getTabCounts] Missing Firestore index. Create it at:", msg);
+      }
+      return {};
+    }
+
+═══════════════════════════════════════════════
+BUG 2 — CATEGORY CHIP SCROLL SHADOWS DON'T WORK ON FIRST RENDER
+═══════════════════════════════════════════════
+PROBLEM: The left/right scroll shadow gradients on the category chip
+row (chipRowRef) initialize with showRightShadow=true and
+showLeftShadow=false, which is correct. But when switching tabs,
+the shadow state is NOT reset — if the user had scrolled halfway
+through chips on the "Buy & Sell" tab, then switches to "Jobs"
+(which has fewer chips), the left shadow may still show even though
+scroll position is back at 0.
+
+FIX: In HomePage.tsx, add a reset of scroll shadows when the tab
+changes:
+
+  In the setActiveTab click handler (or wherever the tab changes):
+    setActiveTab(tab);
+    setCategoryFilter("all");
+    setShowLeftShadow(false);
+    setShowRightShadow(true);
+    // Reset the chip row scroll position
+    if (chipRowRef.current) {
+      chipRowRef.current.scrollLeft = 0;
+    }
+
+  Also: the scroll shadow onScroll handler should run ONCE on mount
+  to correctly initialize both shadows. Add:
+    useEffect(() => {
+      const el = chipRowRef.current;
+      if (!el) return;
+      setShowLeftShadow(el.scrollLeft > 0);
+      setShowRightShadow(el.scrollLeft < el.scrollWidth - el.clientWidth - 1);
+    }, [activeTab, categoryFilter]);
+
+═══════════════════════════════════════════════
+BUG 3 — "NEAR YOU" BANNER SHOWS ON ALL PAGES VIA LAYOUT
+═══════════════════════════════════════════════
+PROBLEM: The "📍 XMUM Campus, Sepang" location banner is inside
+HomePage.tsx JSX. This is correct. However it was also accidentally
+added to some version of Layout.tsx (check whether it appears in
+Layout.tsx — if it does, it will show on EVERY page).
+
+FIX: Search Layout.tsx for "XMUM Campus" or "Sepang":
+  grep -n "Sepang\|XMUM Campus\|near you\|location banner" \
+    artifacts/xmum-market/src/components/Layout.tsx
+
+If found in Layout.tsx: REMOVE it from Layout.tsx. It must only
+appear in HomePage.tsx, below the category chip row, visible on
+mobile only.
+
+═══════════════════════════════════════════════
+BUG 4 — HOME PAGE LOADS ALL LISTINGS TWICE ON FIRST MOUNT
+═══════════════════════════════════════════════
+PROBLEM: In HomePage.tsx, there are two useEffects that trigger
+a data load: one watches [activeTab] and one watches [categoryFilter].
+When the component first mounts, BOTH fire — activeTab = "buy-sell"
+(initial) and categoryFilter = "all" (initial). This causes two
+simultaneous Firestore reads for the same data.
+
+FIX: Merge the two loading effects into one. Use a single useEffect
+that watches both [activeTab, categoryFilter]:
+
+  useEffect(() => {
+    loadFirst(activeTab);
+  }, [activeTab, categoryFilter]);
+
+  And update loadFirst to also pass categoryFilter as a parameter:
+    const loadFirst = useCallback(async (tab: ListingType) => {
+      ...
+      const result = await getListingsPage(tab, null, categoryFilter === "all" ? undefined : categoryFilter);
+      ...
+    }, [categoryFilter]);
+
+  Check what getListingsPage accepts as a 3rd parameter and ensure
+  it supports the category filter. If it doesn't, add an optional
+  category parameter to getListingsPage in listings.ts:
+
+    export async function getListingsPage(
+      type: ListingType,
+      cursor: QueryDocumentSnapshot | null,
+      category?: string
+    )
+
+  And inside the function, if category is provided and !== "all",
+  add: where("category", "==", category) to the query.
+
+═══════════════════════════════════════════════
+CONSTRAINTS
+═══════════════════════════════════════════════
+- Do NOT add new npm packages.
+- Run pnpm build in xmum-market and confirm zero errors.
+- List every file modified.
+
+
+
+
+You are a senior full-stack developer on the XMUM Marketplace. Read
+ALL of these files completely before writing any code:
+  cat artifacts/xmum-market/src/pages/PostPage.tsx
+  cat artifacts/xmum-market/src/pages/EditListingPage.tsx
+  cat artifacts/xmum-market/src/lib/listings.ts | grep -A 30 "bumpListing"
+  cat artifacts/xmum-market/src/index.css | grep "dark\|@layer\|keyframe"
+  cat artifacts/xmum-market/src/pages/ProfilePage.tsx | grep -A 20 "handleBump"
+
+═══════════════════════════════════════════════
+BUG 1 — BUMP LISTING COOLDOWN NOT ENFORCED SERVER-SIDE
+═══════════════════════════════════════════════
+PROBLEM: bumpListing in listings.ts reads lastBumpedAt from Firestore
+BEFORE updating. This is correct. However, there is a race condition:
+if two devices bump the same listing simultaneously, both read
+lastBumpedAt before either writes, both pass the cooldown check, and
+both write — resulting in two bumps within seconds. Also, the 24h
+cooldown check uses LISTING_EXPIRY_MS constant instead of a dedicated
+BUMP_COOLDOWN_MS.
+
+FIX: In artifacts/xmum-market/src/lib/listings.ts:
+
+  1. Add at the top (near LISTING_EXPIRY_MS):
+       export const BUMP_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+  2. In bumpListing function, verify it uses BUMP_COOLDOWN_MS not any
+     other constant. If it uses any other value, replace with
+     BUMP_COOLDOWN_MS.
+
+  3. The function should return { success: boolean; nextBumpAt: number }
+     Check that it does. If it only returns void, update it:
+
+     export async function bumpListing(id: string):
+       Promise<{ success: boolean; nextBumpAt: number }> {
+       try {
+         const ref = doc(db, "listings", id);
+         const snap = await getDoc(ref);
+         if (!snap.exists()) return { success: false, nextBumpAt: 0 };
+         const data = snap.data();
+         const lastBumpedAt: number = data.lastBumpedAt ?? 0;
+         const now = Date.now();
+         if (now - lastBumpedAt < BUMP_COOLDOWN_MS) {
+           return { success: false, nextBumpAt: lastBumpedAt + BUMP_COOLDOWN_MS };
+         }
+         await updateDoc(ref, { lastBumpedAt: now, sortKey: now });
+         return { success: true, nextBumpAt: now + BUMP_COOLDOWN_MS };
+       } catch (err) {
+         console.error("[bumpListing] failed:", err);
+         return { success: false, nextBumpAt: 0 };
+       }
+     }
+
+  4. In ProfilePage.tsx, import BUMP_COOLDOWN_MS from "@/lib/listings"
+     and use it for the cooldown display:
+       const onCooldown = !!l.lastBumpedAt &&
+         Date.now() - l.lastBumpedAt < BUMP_COOLDOWN_MS;
+
+═══════════════════════════════════════════════
+BUG 2 — EditListingPage MISSING RENTAL-SPECIFIC FIELDS
+═══════════════════════════════════════════════
+PROBLEM: EditListingPage was updated to support jobs and assistance
+listing types, but rental listings are NOT editable. If a user tries
+to edit a rental listing, they see only the generic fields (title,
+description, photos, contact) without vehicle type, brand, model,
+year, plate number, pricing, availability dates, or deposit. Saving
+overwrites the rental data with incomplete data.
+
+FIX: In artifacts/xmum-market/src/pages/EditListingPage.tsx:
+
+  1. Add rental state variables (matching PostPage.tsx):
+       const [vehicleType, setVehicleType] = useState<string>("");
+       const [vehicleBrand, setVehicleBrand] = useState("");
+       const [vehicleModel, setVehicleModel] = useState("");
+       const [vehicleYear, setVehicleYear] = useState("");
+       const [rentalPricePerDay, setRentalPricePerDay] = useState("");
+       const [rentalPricePerHour, setRentalPricePerHour] = useState("");
+       const [depositAmount, setDepositAmount] = useState("");
+       const [availableFrom, setAvailableFrom] = useState("");
+       const [availableTo, setAvailableTo] = useState("");
+       const [requiresLicense, setRequiresLicense] = useState(true);
+       const [requiresInsurance, setRequiresInsurance] = useState(true);
+       const [rentalTerms, setRentalTerms] = useState("");
+
+  2. In the getListing useEffect where form fields are populated from
+     the existing listing, also populate the rental fields:
+       if (data.type === "rental") {
+         setVehicleType(data.vehicleType ?? "");
+         setVehicleBrand(data.vehicleBrand ?? "");
+         setVehicleModel(data.vehicleModel ?? "");
+         setVehicleYear(data.vehicleYear ? String(data.vehicleYear) : "");
+         setRentalPricePerDay(data.rentalPricePerDay ?
+           String(data.rentalPricePerDay) : "");
+         setRentalPricePerHour(data.rentalPricePerHour ?
+           String(data.rentalPricePerHour) : "");
+         setDepositAmount(data.depositAmount ?
+           String(data.depositAmount) : "");
+         setAvailableFrom(data.availableFrom ?
+           new Date(data.availableFrom).toISOString().split("T")[0] : "");
+         setAvailableTo(data.availableTo ?
+           new Date(data.availableTo).toISOString().split("T")[0] : "");
+         setRequiresLicense(data.requiresLicense ?? true);
+         setRequiresInsurance(data.requiresInsuranceProof ?? true);
+         setRentalTerms(data.rentalTerms ?? "");
+       }
+
+  3. In the submit/save handler, when type === "rental", include
+     the rental fields in the updateListing call:
+       if (type === "rental") {
+         Object.assign(updates, {
+           vehicleType, vehicleBrand, vehicleModel,
+           vehicleYear: parseInt(vehicleYear) || undefined,
+           rentalPricePerDay: parseFloat(rentalPricePerDay) || undefined,
+           rentalPricePerHour: rentalPricePerHour ?
+             parseFloat(rentalPricePerHour) : undefined,
+           depositAmount: parseFloat(depositAmount) || undefined,
+           availableFrom: availableFrom ?
+             new Date(availableFrom).getTime() : undefined,
+           availableTo: availableTo ?
+             new Date(availableTo).getTime() : undefined,
+           requiresLicense,
+           requiresInsuranceProof: requiresInsurance,
+           rentalTerms,
+         });
+       }
+
+  4. In the JSX, add a conditional rental fields section:
+     After the existing Jobs/Assistance conditional fields, add:
+       {type === "rental" && (
+         <div className="space-y-3">
+           <p className="text-xs font-semibold text-amber-600 uppercase
+           tracking-wide">Vehicle Details</p>
+           // vehicle type selector (same pills as PostPage)
+           // brand, model, year text inputs
+           // price/day, price/hr, deposit number inputs
+           // from/to date pickers
+           // license/insurance toggles
+           // rental terms textarea
+         </div>
+       )}
+     Mirror the exact same JSX from PostPage.tsx for the rental tab.
+
+═══════════════════════════════════════════════
+BUG 3 — DARK MODE: MULTIPLE COMPONENTS HAVE HARDCODED LIGHT COLOURS
+═══════════════════════════════════════════════
+PROBLEM: Several components use hardcoded bg-white, text-gray-900
+etc. without dark: variants, causing them to show white backgrounds
+in dark mode.
+
+FIX: Audit and fix these specific cases:
+
+  In src/components/ReportModal.tsx:
+    Any div with className="bg-white" → add "dark:bg-slate-800"
+    Any "text-gray-900" → add "dark:text-slate-100"
+    Any "border-gray-200" → add "dark:border-slate-700"
+    The category pill buttons selected state: verify selected pills
+    use navy bg which works in both modes (✓), unselected pills:
+    "bg-gray-100 text-gray-700" → add "dark:bg-slate-700
+    dark:text-slate-300"
+
+  In src/components/SponsoredAdCard.tsx:
+    If the card background is bg-white, add dark:bg-slate-800.
+
+  In src/pages/ResetPasswordPage.tsx:
+    Audit the full page — ensure all inputs and cards have dark:
+    variants matching the established pattern of the app.
+
+  In src/pages/not-found.tsx:
+    Ensure the 404 page background is bg-gray-50 dark:bg-slate-900.
+
+═══════════════════════════════════════════════
+BUG 4 — POST PAGE DRAFT RESTORE MARKS FORM AS DIRTY
+═══════════════════════════════════════════════
+PROBLEM: In PostPage.tsx, restoreDraft() sets all form fields which
+triggers the onChange handlers, setting isDirty = true. This means
+restoring a draft immediately triggers the "You have unsaved changes"
+browser warning, which is wrong — a restored draft IS the saved state.
+
+FIX: In PostPage.tsx, add a ref to track whether restoration is in
+progress:
+
+  const isRestoringDraft = useRef(false);
+
+  In restoreDraft():
+    isRestoringDraft.current = true;
+    // ... set all field states ...
+    // Use setTimeout to reset the flag AFTER all state setters run:
+    setTimeout(() => {
+      isRestoringDraft.current = false;
+      setIsDirty(false); // explicitly reset dirty after restore
+    }, 100);
+
+  In every onChange handler that sets isDirty:
+    if (!isRestoringDraft.current) setIsDirty(true);
+
+═══════════════════════════════════════════════
+CONSTRAINTS
+═══════════════════════════════════════════════
+- Do NOT add new npm packages.
+- Run pnpm build in xmum-market and confirm zero errors.
+- After fixes, list every file modified.

@@ -10,7 +10,8 @@ import {
   markConversationRead, markMessagesAsSeen, setTypingStatus,
   subscribeToTyping, clearConversation, Conversation, Message,
 } from "@/lib/messaging";
-import { MessageCircle, ArrowLeft, Send, Loader2, Search, X, Trash2 } from "lucide-react";
+import { MessageCircle, ArrowLeft, Send, Loader2, Search, X, Trash2, Flag } from "lucide-react";
+import { reportUser, USER_REPORT_REASONS, UserReportReason } from "@/lib/reports";
 import AuthModal from "@/components/AuthModal";
 
 const MAX_CHARS = 1000;
@@ -92,6 +93,10 @@ export default function MessagesPage() {
   const [participantProfiles, setParticipantProfiles] = useState<Record<string, UserProfile | null>>({});
   const [otherIsTyping, setOtherIsTyping] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportReason, setReportReason] = useState<UserReportReason>("spam");
+  const [submittingReport, setSubmittingReport] = useState(false);
+  const [reportDone, setReportDone] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -269,6 +274,25 @@ export default function MessagesPage() {
       setClearing(false);
     }
   }, [activeConv?.id, user?.uid]);
+
+  const handleReport = useCallback(async () => {
+    if (!user || !activeConv) return;
+    const otherUid = activeConv.participants.find((p) => p !== user.uid) ?? "";
+    const otherEmail = otherProfile?.email ?? "";
+    setSubmittingReport(true);
+    try {
+      await reportUser(user.uid, otherUid, otherEmail, reportReason);
+      setReportDone(true);
+      setTimeout(() => {
+        setShowReportModal(false);
+        setReportDone(false);
+      }, 2000);
+    } catch {
+      // silent
+    } finally {
+      setSubmittingReport(false);
+    }
+  }, [user?.uid, activeConv?.id, otherProfile?.email, reportReason]);
 
   const openConv = (conv: Conversation) => {
     setActiveConv(conv);
@@ -484,6 +508,13 @@ export default function MessagesPage() {
         )}
 
         <button
+          onClick={() => { setReportDone(false); setReportReason("spam"); setShowReportModal(true); }}
+          title="Report user"
+          className="shrink-0 flex items-center justify-center w-9 h-9 rounded-xl text-slate-400 dark:text-slate-500 hover:text-amber-500 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
+        >
+          <Flag size={16} />
+        </button>
+        <button
           onClick={handleClear}
           disabled={clearing}
           title="Clear conversation"
@@ -492,6 +523,62 @@ export default function MessagesPage() {
           {clearing ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
         </button>
       </div>
+
+      {/* Report user modal */}
+      {showReportModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowReportModal(false)}>
+          <div
+            className="bg-white dark:bg-slate-900 w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl px-5 pt-5 pb-8 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {reportDone ? (
+              <div className="flex flex-col items-center py-6 gap-3">
+                <span className="text-4xl">✅</span>
+                <p className="text-sm font-semibold text-gray-800 dark:text-slate-100">Report submitted</p>
+                <p className="text-xs text-gray-500 dark:text-slate-400 text-center">Thank you. Our team will review this report.</p>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-base font-bold text-gray-900 dark:text-slate-100 flex items-center gap-2">
+                    <Flag size={16} className="text-amber-500" /> Report User
+                  </h3>
+                  <button onClick={() => setShowReportModal(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 min-h-[44px] min-w-[44px] flex items-center justify-center">
+                    <X size={18} />
+                  </button>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+                  Reporting <span className="font-semibold text-slate-700 dark:text-slate-200">{otherName}</span>. Please select a reason:
+                </p>
+                <div className="space-y-2 mb-5">
+                  {USER_REPORT_REASONS.map((r) => (
+                    <button
+                      key={r.value}
+                      type="button"
+                      onClick={() => setReportReason(r.value)}
+                      className={`w-full text-left px-4 py-3 rounded-xl text-sm border transition-colors min-h-[44px] ${
+                        reportReason === r.value
+                          ? "bg-amber-50 dark:bg-amber-900/20 border-amber-400 dark:border-amber-500 text-amber-800 dark:text-amber-300 font-semibold"
+                          : "bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300"
+                      }`}
+                    >
+                      {r.label}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={handleReport}
+                  disabled={submittingReport}
+                  className="w-full min-h-[48px] bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-semibold rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
+                >
+                  {submittingReport ? <Loader2 size={16} className="animate-spin" /> : null}
+                  {submittingReport ? "Submitting…" : "Submit Report"}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1 bg-gray-50 dark:bg-slate-950">

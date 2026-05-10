@@ -170,7 +170,7 @@ export async function updateListing(
   }
 }
 
-const BUMP_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+export const BUMP_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 export async function bumpListing(
   id: string

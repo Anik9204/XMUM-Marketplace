@@ -26,14 +26,18 @@ const ASSISTANCE_CATEGORIES = [
   "event_setup", "tech_help", "other_assistance",
 ];
 
+const RENTAL_VEHICLE_TYPES = ["car", "bike", "motorcycle", "bicycle", "scooter"] as const;
+type VehicleType = typeof RENTAL_VEHICLE_TYPES[number];
+
 function getCategoriesForType(type: ListingType): string[] {
   if (type === "buy-sell") return BUY_SELL_CATEGORIES;
   if (type === "lost-found") return LOST_FOUND_CATEGORIES;
   if (type === "jobs") return JOBS_CATEGORIES;
+  if (type === "rental") return [...RENTAL_VEHICLE_TYPES];
   return ASSISTANCE_CATEGORIES;
 }
 
-const ALL_TABS: ListingType[] = ["buy-sell", "lost-found", "jobs", "assistance"];
+const ALL_TABS: ListingType[] = ["buy-sell", "lost-found", "jobs", "assistance", "rental"];
 
 const inputCls =
   "w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 transition min-h-[44px]";
@@ -139,6 +143,21 @@ export default function EditListingPage() {
   const [pricingModel, setPricingModel] = useState<"per_hour" | "per_day" | "per_month" | "fixed">("per_hour");
   const [availability, setAvailability] = useState("");
 
+  // Rental-specific
+  const [vehicleType, setVehicleType] = useState<VehicleType>("car");
+  const [vehicleBrand, setVehicleBrand] = useState("");
+  const [vehicleModel, setVehicleModel] = useState("");
+  const [vehicleYear, setVehicleYear] = useState("");
+  const [plateNumber, setPlateNumber] = useState("");
+  const [rentalPricePerDay, setRentalPricePerDay] = useState(0);
+  const [rentalPricePerHour, setRentalPricePerHour] = useState(0);
+  const [depositAmount, setDepositAmount] = useState(0);
+  const [availableFrom, setAvailableFrom] = useState("");
+  const [availableTo, setAvailableTo] = useState("");
+  const [requiresLicense, setRequiresLicense] = useState(true);
+  const [requiresInsuranceProof, setRequiresInsuranceProof] = useState(false);
+  const [rentalTerms, setRentalTerms] = useState("");
+
   // FIX 1: Unified photo list
   const [allPhotos, setAllPhotos] = useState<PhotoItem[]>([]);
   const [dragOverZone, setDragOverZone] = useState(false);
@@ -195,6 +214,22 @@ export default function EditListingPage() {
         if (listing.isRemote != null) setIsRemote(listing.isRemote);
         if (listing.pricingModel) setPricingModel(listing.pricingModel);
         if (listing.availability) setAvailability(listing.availability);
+        // Rental fields
+        if (listing.vehicleType && RENTAL_VEHICLE_TYPES.includes(listing.vehicleType as VehicleType)) {
+          setVehicleType(listing.vehicleType as VehicleType);
+        }
+        if (listing.vehicleBrand) setVehicleBrand(listing.vehicleBrand);
+        if (listing.vehicleModel) setVehicleModel(listing.vehicleModel);
+        if (listing.vehicleYear) setVehicleYear(String(listing.vehicleYear));
+        if (listing.plateNumber) setPlateNumber(listing.plateNumber);
+        if (listing.rentalPricePerDay) setRentalPricePerDay(listing.rentalPricePerDay);
+        if (listing.rentalPricePerHour) setRentalPricePerHour(listing.rentalPricePerHour);
+        if (listing.depositAmount) setDepositAmount(listing.depositAmount);
+        if (listing.availableFrom) setAvailableFrom(new Date(listing.availableFrom).toISOString().split("T")[0]);
+        if (listing.availableTo) setAvailableTo(new Date(listing.availableTo).toISOString().split("T")[0]);
+        if (listing.requiresLicense != null) setRequiresLicense(listing.requiresLicense);
+        if (listing.requiresInsuranceProof != null) setRequiresInsuranceProof(listing.requiresInsuranceProof);
+        if (listing.rentalTerms) setRentalTerms(listing.rentalTerms);
         // Do NOT set isDirty — restoring from server is not a user edit
       })
       .catch(() => setFetchError("Failed to load listing. Please try again."))
@@ -363,6 +398,21 @@ export default function EditListingPage() {
         baseData.pricingModel = pricingModel;
         baseData.meetupSpot = meetupSpot;
         baseData.availability = availability.trim();
+      } else if (type === "rental") {
+        baseData.vehicleType = vehicleType;
+        if (vehicleBrand.trim()) baseData.vehicleBrand = vehicleBrand.trim();
+        if (vehicleModel.trim()) baseData.vehicleModel = vehicleModel.trim();
+        const yr = parseInt(vehicleYear);
+        if (!isNaN(yr) && yr > 1900) baseData.vehicleYear = yr;
+        if (plateNumber.trim()) baseData.plateNumber = plateNumber.trim();
+        baseData.rentalPricePerDay = rentalPricePerDay;
+        if (rentalPricePerHour > 0) baseData.rentalPricePerHour = rentalPricePerHour;
+        if (depositAmount > 0) baseData.depositAmount = depositAmount;
+        if (availableFrom) baseData.availableFrom = new Date(availableFrom).getTime();
+        if (availableTo) baseData.availableTo = new Date(availableTo).getTime();
+        baseData.requiresLicense = requiresLicense;
+        baseData.requiresInsuranceProof = requiresInsuranceProof;
+        if (rentalTerms.trim()) baseData.rentalTerms = rentalTerms.trim();
       }
 
       await withTimeout(updateListing(id, user!.uid, baseData as Parameters<typeof updateListing>[2]), 12_000, "update-listing");
@@ -388,6 +438,7 @@ export default function EditListingPage() {
     if (tab === "buy-sell") return t.buySell;
     if (tab === "lost-found") return t.lostFound;
     if (tab === "jobs") return t.jobs;
+    if (tab === "rental") return t.rental ?? "Rental";
     return t.assistance;
   };
 
@@ -723,6 +774,117 @@ export default function EditListingPage() {
               value={availability}
               onChange={(e) => { setAvailability(e.target.value.slice(0, 80)); setIsDirty(true); }}
               placeholder={t.availabilityPlaceholder}
+              maxLength={80}
+              className={inputCls}
+            />
+          </div>
+        )}
+
+        {/* Rental: Vehicle details */}
+        {type === "rental" && (
+          <>
+            <div>
+              <label className={labelCls}>Vehicle Type *</label>
+              <div className="grid grid-cols-5 gap-1.5">
+                {RENTAL_VEHICLE_TYPES.map((vt) => (
+                  <button
+                    key={vt}
+                    type="button"
+                    onClick={() => { setVehicleType(vt); setIsDirty(true); }}
+                    className={`py-2 rounded-xl text-xs font-semibold border min-h-[44px] flex flex-col items-center justify-center gap-0.5 transition-colors ${
+                      vehicleType === vt
+                        ? "bg-[#003366] dark:bg-blue-600 text-white border-transparent"
+                        : "bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600"
+                    }`}
+                  >
+                    <span className="text-lg">{vt === "car" ? "🚗" : vt === "bicycle" ? "🚲" : vt === "scooter" ? "🛵" : "🏍️"}</span>
+                    <span className="text-[9px] capitalize">{vt}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>Brand *</label>
+                <input type="text" value={vehicleBrand} onChange={(e) => { setVehicleBrand(e.target.value); setIsDirty(true); }} placeholder="e.g. Honda" className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Model *</label>
+                <input type="text" value={vehicleModel} onChange={(e) => { setVehicleModel(e.target.value); setIsDirty(true); }} placeholder="e.g. City" className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Year</label>
+                <input type="number" value={vehicleYear} onChange={(e) => { setVehicleYear(e.target.value); setIsDirty(true); }} placeholder="e.g. 2020" min={1960} max={new Date().getFullYear() + 1} className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Plate Number</label>
+                <input type="text" value={plateNumber} onChange={(e) => { setPlateNumber(e.target.value.toUpperCase()); setIsDirty(true); }} placeholder="e.g. WXY 1234" className={inputCls} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>Price / Day (RM) *</label>
+                <input type="number" value={rentalPricePerDay || ""} onChange={(e) => { setRentalPricePerDay(parseFloat(e.target.value) || 0); setIsDirty(true); }} placeholder="0.00" min={0} step={0.01} className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Price / Hour (RM) <span className="text-gray-400 font-normal text-xs">(opt)</span></label>
+                <input type="number" value={rentalPricePerHour || ""} onChange={(e) => { setRentalPricePerHour(parseFloat(e.target.value) || 0); setIsDirty(true); }} placeholder="0.00" min={0} step={0.01} className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Security Deposit (RM)</label>
+                <input type="number" value={depositAmount || ""} onChange={(e) => { setDepositAmount(parseFloat(e.target.value) || 0); setIsDirty(true); }} placeholder="0.00" min={0} step={0.01} className={inputCls} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>Available From</label>
+                <input type="date" value={availableFrom} onChange={(e) => { setAvailableFrom(e.target.value); setIsDirty(true); }} className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Available To</label>
+                <input type="date" value={availableTo} onChange={(e) => { setAvailableTo(e.target.value); setIsDirty(true); }} className={inputCls} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl px-4 py-3">
+                <span className="text-sm font-medium text-gray-700 dark:text-slate-300">Requires valid driver's license</span>
+                <button type="button" onClick={() => { setRequiresLicense((p) => !p); setIsDirty(true); }} className={`relative w-11 h-6 rounded-full transition-colors ${requiresLicense ? "bg-[#003366] dark:bg-blue-600" : "bg-gray-300 dark:bg-slate-600"}`}>
+                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${requiresLicense ? "translate-x-5" : "translate-x-0"}`} />
+                </button>
+              </div>
+              <div className="flex items-center justify-between bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl px-4 py-3">
+                <span className="text-sm font-medium text-gray-700 dark:text-slate-300">Requires insurance proof</span>
+                <button type="button" onClick={() => { setRequiresInsuranceProof((p) => !p); setIsDirty(true); }} className={`relative w-11 h-6 rounded-full transition-colors ${requiresInsuranceProof ? "bg-[#003366] dark:bg-blue-600" : "bg-gray-300 dark:bg-slate-600"}`}>
+                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${requiresInsuranceProof ? "translate-x-5" : "translate-x-0"}`} />
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className={labelCls}>Rental Terms <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
+              <textarea
+                value={rentalTerms}
+                onChange={(e) => { setRentalTerms(e.target.value.slice(0, 500)); setIsDirty(true); }}
+                placeholder="Any specific terms or conditions for renting..."
+                maxLength={500}
+                rows={3}
+                className={`${inputCls} resize-none`}
+              />
+              <p className={`text-right text-[10px] mt-0.5 ${rentalTerms.length >= 450 ? "text-amber-500" : "text-gray-400 dark:text-slate-500"}`}>
+                {rentalTerms.length}/500
+              </p>
+            </div>
+          </>
+        )}
+
+        {/* Rental: Price fields */}
+        {type === "rental" && (
+          <div>
+            <label className={labelCls}>Meetup / Pickup Location</label>
+            <input
+              type="text"
+              value={meetupSpot}
+              onChange={(e) => { setMeetupSpot(e.target.value.slice(0, 80)); setIsDirty(true); }}
+              placeholder={t.meetupSpotPlaceholder}
               maxLength={80}
               className={inputCls}
             />

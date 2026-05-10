@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { getUserListings, deleteListing, markAsSold, bumpListing, getListing, LISTING_EXPIRY_MS, LISTING_REMINDER_MS } from "@/lib/listings";
+import { getUserListings, deleteListing, markAsSold, bumpListing, getListing, LISTING_EXPIRY_MS, LISTING_REMINDER_MS, BUMP_COOLDOWN_MS } from "@/lib/listings";
 import { getUserConversations } from "@/lib/messaging";
 import { sendDailyDigestIfDue } from "@/lib/notifications";
 import { Listing } from "@/lib/types";
@@ -157,8 +157,6 @@ export default function ProfilePage() {
       setDeleting(false);
     }
   };
-
-  const BUMP_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
   const handleBump = async (listing: Listing) => {
     if (listing.status === "sold") return;

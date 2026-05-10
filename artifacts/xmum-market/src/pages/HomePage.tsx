@@ -157,9 +157,20 @@ export default function HomePage() {
     setShowRightShadow(el.scrollLeft < el.scrollWidth - el.clientWidth - 8);
   };
 
+  const handleTabChange = (tab: ListingType) => {
+    setActiveTab(tab);
+    const el = chipRowRef.current;
+    if (el) {
+      el.scrollLeft = 0;
+      setShowLeftShadow(false);
+      setShowRightShadow(el.scrollWidth > el.clientWidth);
+    }
+  };
+
   useEffect(() => {
     const el = chipRowRef.current;
     if (!el) return;
+    el.scrollLeft = 0;
     handleChipScroll();
     el.addEventListener("scroll", handleChipScroll, { passive: true });
     return () => el.removeEventListener("scroll", handleChipScroll);
@@ -255,7 +266,7 @@ export default function HomePage() {
               return (
                 <button
                   key={tab}
-                  onClick={() => setActiveTab(tab)}
+                  onClick={() => handleTabChange(tab)}
                   className={`
                     flex-shrink-0 md:flex-1 flex items-center gap-1.5 py-3 px-3 md:px-4
                     text-xs sm:text-sm font-semibold border-b-2 whitespace-nowrap
