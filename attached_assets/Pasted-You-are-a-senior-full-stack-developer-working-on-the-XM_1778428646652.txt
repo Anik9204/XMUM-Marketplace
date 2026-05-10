@@ -1,0 +1,151 @@
+You are a senior full-stack developer working on the XMUM Marketplace
+admin app. Read ALL of these files completely before writing any code:
+  cat artifacts/xmum-admin/src/pages/DashboardPage.tsx
+  cat artifacts/xmum-admin/src/pages/UsersPage.tsx
+  cat artifacts/xmum-admin/src/components/Layout.tsx
+
+═══════════════════════════════════════════════
+BUG 1 — DASHBOARD USES getDocs FOR USERS AND LISTINGS (NOT REAL-TIME)
+═══════════════════════════════════════════════
+PROBLEM: DashboardPage.tsx uses getDocs for users, listings, and ads.
+Only the pending reports count uses onSnapshot. So users and listings
+counts are stale from the moment the page loads — they don't update
+when new users register or new listings are posted.
+
+FIX: In DashboardPage.tsx, replace the getDocs calls with onSnapshot
+listeners for all three collections:
+
+  Remove the loadStatic function entirely. Replace with a single
+  useEffect that sets up three onSnapshot listeners:
+
+  useEffect(() => {
+    const unsubs: (() => void)[] = [];
+
+    // Users count — real-time
+    unsubs.push(onSnapshot(
+      collection(db, "users"),
+      snap => setStats(p => ({ ...(p ?? defaultStats), totalUsers: snap.size })),
+      err => console.error("[Dashboard] users snapshot:", err)
+    ));
+
+    // Active listings count — real-time
+    unsubs.push(onSnapshot(
+      query(collection(db, "listings"), where("isArchived", "==", false)),
+      snap => setStats(p => ({ ...(p ?? defaultStats), totalListings: snap.size })),
+      err => console.error("[Dashboard] listings snapshot:", err)
+    ));
+
+    // Active ads — real-time
+    unsubs.push(onSnapshot(
+      query(collection(db, "ads"), where("isActive", "==", true)),
+      snap => setStats(p => ({ ...(p ?? defaultStats), activeAds: snap.size })),
+      err => console.error("[Dashboard] ads snapshot:", err)
+    ));
+
+    // Pending reports — real-time (already implemented, keep it)
+    unsubs.push(onSnapshot(
+      query(collection(db, "reports"), where("status", "==", "pending")),
+      snap => {
+        const count = snap.size;
+        setPendingReports(count);
+        setStats(p => ({ ...(p ?? defaultStats), pendingReports: count }));
+        setLoading(false);
+      },
+      err => console.error("[Dashboard] reports snapshot:", err)
+    ));
+
+    // Recent signups — compute from users snapshot (handled above)
+    return () => unsubs.forEach(u => u());
+  }, []);
+
+  Add a defaultStats constant:
+    const defaultStats: Stats = {
+      totalUsers: 0, totalListings: 0, pendingReports: 0,
+      activeAds: 0, recentSignups: 0
+    };
+
+  Remove the Refresh button — it's no longer needed since everything
+  is real-time. Remove refreshing state. Remove setRefreshing.
+
+  Add the "🟢 Live" indicator next to the heading:
+    <span className="inline-flex items-center gap-1 text-[10px]
+    font-semibold text-green-600 dark:text-green-400 bg-green-50
+    dark:bg-green-900/30 px-2 py-0.5 rounded-full ml-2">
+      <span className="w-1.5 h-1.5 bg-green-500 rounded-full
+      animate-pulse inline-block" />
+      Live
+    </span>
+
+═══════════════════════════════════════════════
+BUG 2 — UsersPage USES getDocs (NO REAL-TIME UPDATES)
+═══════════════════════════════════════════════
+PROBLEM: UsersPage fetches users once with getDocs. If a new user
+registers while the admin is on the page, they won't see it without
+refreshing. If a user is banned by another admin session, it won't
+reflect.
+
+FIX: In UsersPage.tsx, replace the getDocs load with onSnapshot:
+
+  useEffect(() => {
+    let q;
+    try {
+      q = query(collection(db, "users"), orderBy("createdAt", "desc"));
+    } catch {
+      q = collection(db, "users");
+    }
+    const unsub = onSnapshot(q, snap => {
+      setUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() } as AdminUser)));
+      setLoading(false);
+    }, err => {
+      console.error("[UsersPage] snapshot error:", err);
+      setLoading(false);
+    });
+    return unsub;
+  }, []);
+
+  Add onSnapshot to the firebase/firestore imports.
+  Remove the existing async load() function.
+  Keep the updateUser function exactly as-is.
+
+═══════════════════════════════════════════════
+BUG 3 — LAYOUT SIDEBAR PENDING BADGE MISSING FOR VERIFICATIONS
+═══════════════════════════════════════════════
+PROBLEM: The Layout sidebar in the admin app shows a pending badge
+for Reports but NOT for Verifications, even though the code was
+planned. The Verifications nav item has no live count badge.
+
+FIX: In artifacts/xmum-admin/src/components/Layout.tsx:
+
+  Add imports: collection, query, where, onSnapshot from
+  "firebase/firestore", and db from "../lib/firebase".
+
+  Add state inside Layout:
+    const [pendingVerifs, setPendingVerifs] = useState(0);
+
+  Add useEffect:
+    useEffect(() => {
+      const q = query(
+        collection(db, "users"),
+        where("verificationStatus", "==", "pending")
+      );
+      const unsub = onSnapshot(q, snap => setPendingVerifs(snap.size),
+        () => {});
+      return unsub;
+    }, []);
+
+  In the NAV array render, for the Verifications item (href="/verifications"),
+  after the label text, add:
+    {pendingVerifs > 0 && (
+      <span className="ml-auto bg-amber-500 text-white text-[9px]
+      font-bold rounded-full min-w-[18px] h-[18px] flex items-center
+      justify-center px-1 leading-none">
+        {pendingVerifs > 99 ? "99+" : pendingVerifs}
+      </span>
+    )}
+
+═══════════════════════════════════════════════
+CONSTRAINTS
+═══════════════════════════════════════════════
+- Do NOT add new npm packages.
+- Run pnpm build in xmum-admin and confirm zero TypeScript errors.
+- List every file modified.

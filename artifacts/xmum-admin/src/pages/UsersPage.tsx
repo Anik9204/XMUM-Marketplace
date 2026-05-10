@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { collection, getDocs, updateDoc, doc, orderBy, query } from "firebase/firestore";
+import { collection, updateDoc, doc, orderBy, query, onSnapshot } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { AdminUser, UserRole } from "../lib/types";
@@ -30,20 +30,24 @@ export default function UsersPage() {
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   useEffect(() => {
-    async function load() {
-      try {
-        const snap = await getDocs(
-          query(collection(db, "users"), orderBy("createdAt", "desc"))
-        );
+    let q;
+    try {
+      q = query(collection(db, "users"), orderBy("createdAt", "desc"));
+    } catch {
+      q = collection(db, "users");
+    }
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
         setUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() } as AdminUser)));
-      } catch {
-        const snap = await getDocs(collection(db, "users"));
-        setUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() } as AdminUser)));
-      } finally {
+        setLoading(false);
+      },
+      (err) => {
+        console.error("[UsersPage] snapshot error:", err);
         setLoading(false);
       }
-    }
-    load();
+    );
+    return unsub;
   }, []);
 
   async function updateUser(uid: string, data: Partial<AdminUser>) {

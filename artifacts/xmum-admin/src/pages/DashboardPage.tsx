@@ -1,7 +1,7 @@
-import { useEffect, useState, useCallback } from "react";
-import { collection, getDocs, query, where, onSnapshot } from "firebase/firestore";
+import { useEffect, useState } from "react";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { Users, Flag, Megaphone, ShoppingBag, TrendingUp, RefreshCw } from "lucide-react";
+import { Users, Flag, Megaphone, ShoppingBag, TrendingUp } from "lucide-react";
 
 interface Stats {
   totalUsers: number;
@@ -10,6 +10,14 @@ interface Stats {
   activeAds: number;
   recentSignups: number;
 }
+
+const defaultStats: Stats = {
+  totalUsers: 0,
+  totalListings: 0,
+  pendingReports: 0,
+  activeAds: 0,
+  recentSignups: 0,
+};
 
 function StatCard({ icon: Icon, label, value, color }:
   { icon: any; label: string; value: number | string; color: string }) {
@@ -29,69 +37,71 @@ function StatCard({ icon: Icon, label, value, color }:
 export default function DashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [pendingReports, setPendingReports] = useState(0);
 
-  const loadStatic = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
-    else setRefreshing(true);
-    try {
-      const [usersSnap, listingsSnap, adsSnap] = await Promise.all([
-        getDocs(collection(db, "users")),
-        getDocs(query(collection(db, "listings"), where("isArchived", "==", false))),
-        getDocs(query(collection(db, "ads"), where("isActive", "==", true))),
-      ]);
-      const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-      const recentSignups = usersSnap.docs.filter(
-        d => (d.data().createdAt ?? 0) > sevenDaysAgo
-      ).length;
-      setStats(prev => ({
-        totalUsers:     usersSnap.size,
-        totalListings:  listingsSnap.size,
-        pendingReports: prev?.pendingReports ?? 0,
-        activeAds:      adsSnap.size,
-        recentSignups,
-      }));
-    } catch (e) {
-      console.error("[DashboardPage] load failed:", e);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
   useEffect(() => {
-    loadStatic();
+    const unsubs: (() => void)[] = [];
 
-    const q = query(collection(db, "reports"), where("status", "==", "pending"));
-    const unsub = onSnapshot(q, (snap) => {
-      const count = snap.size;
-      setPendingReports(count);
-      setStats(prev => prev ? { ...prev, pendingReports: count } : null);
-    }, (err) => {
-      console.error("[DashboardPage] reports onSnapshot error:", err);
-    });
+    unsubs.push(onSnapshot(
+      collection(db, "users"),
+      (snap) => {
+        const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        const recentSignups = snap.docs.filter(
+          d => (d.data().createdAt ?? 0) > sevenDaysAgo
+        ).length;
+        setStats(p => ({
+          ...(p ?? defaultStats),
+          totalUsers: snap.size,
+          recentSignups,
+        }));
+      },
+      err => console.error("[Dashboard] users snapshot:", err)
+    ));
 
-    return () => unsub();
-  }, [loadStatic]);
+    unsubs.push(onSnapshot(
+      query(collection(db, "listings"), where("isArchived", "==", false)),
+      (snap) => setStats(p => ({ ...(p ?? defaultStats), totalListings: snap.size })),
+      err => console.error("[Dashboard] listings snapshot:", err)
+    ));
+
+    unsubs.push(onSnapshot(
+      query(collection(db, "ads"), where("isActive", "==", true)),
+      (snap) => setStats(p => ({ ...(p ?? defaultStats), activeAds: snap.size })),
+      err => console.error("[Dashboard] ads snapshot:", err)
+    ));
+
+    unsubs.push(onSnapshot(
+      query(collection(db, "reports"), where("status", "==", "pending")),
+      (snap) => {
+        const count = snap.size;
+        setPendingReports(count);
+        setStats(p => ({ ...(p ?? defaultStats), pendingReports: count }));
+        setLoading(false);
+      },
+      err => {
+        console.error("[Dashboard] reports snapshot:", err);
+        setLoading(false);
+      }
+    ));
+
+    return () => unsubs.forEach(u => u());
+  }, []);
 
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-slate-800 dark:text-slate-200">Dashboard</h1>
+          <h1 className="text-xl font-bold text-slate-800 dark:text-slate-200 flex items-center">
+            Dashboard
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold
+                             text-green-600 dark:text-green-400 bg-green-50
+                             dark:bg-green-900/30 px-2 py-0.5 rounded-full ml-2">
+              <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse inline-block" />
+              Live
+            </span>
+          </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Platform overview</p>
         </div>
-        <button
-          onClick={() => loadStatic(true)}
-          disabled={refreshing}
-          className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400
-                     hover:text-slate-700 dark:hover:text-slate-200 border border-gray-200
-                     dark:border-slate-700 rounded-xl px-3 py-2 min-h-[40px]
-                     disabled:opacity-50 transition-colors bg-white dark:bg-slate-800">
-          <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
-          Refresh
-        </button>
       </div>
 
       {loading ? (

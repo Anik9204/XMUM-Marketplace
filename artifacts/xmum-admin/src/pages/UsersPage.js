@@ -1,6 +1,6 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useEffect, useState } from "react";
-import { collection, getDocs, updateDoc, doc, orderBy, query } from "firebase/firestore";
+import { collection, updateDoc, doc, orderBy, query, onSnapshot } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { Ban, CheckCircle, CheckCircle2 } from "lucide-react";
@@ -22,20 +22,21 @@ export default function UsersPage() {
     const [loading, setLoading] = useState(true);
     const [toast, setToast] = useState(null);
     useEffect(() => {
-        async function load() {
-            try {
-                const snap = await getDocs(query(collection(db, "users"), orderBy("createdAt", "desc")));
-                setUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() })));
-            }
-            catch {
-                const snap = await getDocs(collection(db, "users"));
-                setUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() })));
-            }
-            finally {
-                setLoading(false);
-            }
+        let q;
+        try {
+            q = query(collection(db, "users"), orderBy("createdAt", "desc"));
         }
-        load();
+        catch {
+            q = collection(db, "users");
+        }
+        const unsub = onSnapshot(q, (snap) => {
+            setUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() })));
+            setLoading(false);
+        }, (err) => {
+            console.error("[UsersPage] snapshot error:", err);
+            setLoading(false);
+        });
+        return unsub;
     }, []);
     async function updateUser(uid, data) {
         if (!isAdmin && "role" in data)
