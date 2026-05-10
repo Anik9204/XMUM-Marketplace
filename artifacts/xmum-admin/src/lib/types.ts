@@ -1,7 +1,7 @@
 export type UserRole = "user" | "editor" | "admin";
 export type ReportStatus = "pending" | "reviewed" | "dismissed" | "actioned";
 export type ReportCategory = "spam" | "scam" | "offensive" | "prohibited_item" | "wrong_category" | "other";
-export type ListingType = "buy-sell" | "lost-found";
+export type ListingType = "buy-sell" | "lost-found" | "jobs" | "assistance" | "rental";
 export type VerificationStatus = "none" | "pending" | "approved" | "rejected";
 
 export interface AdminUser {
@@ -26,6 +26,8 @@ export interface AdminUser {
   shopCategories?: string[];
   shopBannerUrl?: string;
   activeListingCount?: number;
+  rating?: number;
+  totalReviews?: number;
 }
 
 export interface ListingReport {
@@ -62,4 +64,34 @@ export interface SponsoredAd {
   createdBy: string;
   createdByEmail: string;
   updatedAt: number;
+}
+
+export interface AdminListing {
+  id: string;
+  type: ListingType;
+  title: string;
+  category: string;
+  price?: number;
+  photos: string[];
+  userId: string;
+  userEmail: string;
+  userName: string;
+  status?: "active" | "sold";
+  isArchived: boolean;
+  createdAt: number;
+  viewCount?: number;
+  isFeatured?: boolean;
+}
+
+export interface AdminReview {
+  id: string;
+  reviewerId: string;
+  reviewerName: string;
+  sellerId: string;
+  sellerName?: string;
+  listingId: string;
+  listingTitle: string;
+  rating: number;
+  comment: string;
+  createdAt: number;
 }

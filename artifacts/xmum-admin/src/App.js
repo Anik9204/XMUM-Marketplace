@@ -6,6 +6,11 @@ import DashboardPage from "./pages/DashboardPage";
 import ReportsPage from "./pages/ReportsPage";
 import UsersPage from "./pages/UsersPage";
 import AdsPage from "./pages/AdsPage";
+import RentalAuditPage from "./pages/RentalAuditPage";
+import VerificationPage from "./pages/VerificationPage";
+import ReviewsPage from "./pages/ReviewsPage";
+import ListingsPage from "./pages/ListingsPage";
+import AnalyticsPage from "./pages/AnalyticsPage";
 import Layout from "./components/Layout";
 export default function App() {
     const { user, isEditor, loading } = useAuth();
@@ -15,5 +20,5 @@ export default function App() {
     if (!user || !isEditor) {
         return _jsx(LoginPage, {});
     }
-    return (_jsx(Layout, { children: _jsxs(Switch, { children: [_jsx(Route, { path: "/", component: DashboardPage }), _jsx(Route, { path: "/reports", component: ReportsPage }), _jsx(Route, { path: "/users", component: UsersPage }), _jsx(Route, { path: "/ads", component: AdsPage }), _jsx(Route, { children: _jsx(Redirect, { to: "/" }) })] }) }));
+    return (_jsx(Layout, { children: _jsxs(Switch, { children: [_jsx(Route, { path: "/", component: DashboardPage }), _jsx(Route, { path: "/listings", component: ListingsPage }), _jsx(Route, { path: "/users", component: UsersPage }), _jsx(Route, { path: "/reports", component: ReportsPage }), _jsx(Route, { path: "/reviews", component: ReviewsPage }), _jsx(Route, { path: "/verifications", component: VerificationPage }), _jsx(Route, { path: "/rental-audit", component: RentalAuditPage }), _jsx(Route, { path: "/ads", component: AdsPage }), _jsx(Route, { path: "/analytics", component: AnalyticsPage }), _jsx(Route, { children: _jsx(Redirect, { to: "/" }) })] }) }));
 }

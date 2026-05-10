@@ -1,0 +1,279 @@
+You are a senior full-stack developer working on the XMUM Marketplace
+admin app at artifacts/xmum-admin/. Read ALL of these files completely
+before writing a single line of code:
+
+- src/App.tsx
+- src/components/Layout.tsx
+- src/pages/DashboardPage.tsx
+- src/pages/ReportsPage.tsx
+- src/pages/UsersPage.tsx
+- src/pages/AdsPage.tsx
+- src/pages/RentalAuditPage.tsx
+- src/lib/types.ts
+- src/lib/firebase.ts
+- src/contexts/AuthContext.tsx
+
+⚠️ CRITICAL — READ BEFORE WRITING ANY CODE:
+
+1. UPDATE ADMIN TYPES FIRST (do this before any other change):
+   In src/lib/types.ts, make these changes:
+
+   a) Change ListingType from the outdated:
+        "buy-sell" | "lost-found"
+      To match the user app exactly:
+        "buy-sell" | "lost-found" | "jobs" | "assistance" | "rental"
+
+   b) Extend AdminUser with these new fields:
+        shopName?: string;
+        shopSlug?: string;
+        shopBio?: string;
+        shopCategories?: string[];
+        verificationStatus?: "none" | "pending" | "approved" | "rejected";
+        verificationSubmittedAt?: number;
+        verificationReviewedAt?: number;
+        verificationRejectionReason?: string;
+        isVerified?: boolean;
+        rating?: number;
+        totalReviews?: number;
+
+   c) Add these new interfaces:
+        export interface AdminListing {
+          id: string;
+          type: ListingType;
+          title: string;
+          category: string;
+          price?: number;
+          photos: string[];
+          userId: string;
+          userEmail: string;
+          userName: string;
+          status?: "active" | "sold";
+          isArchived: boolean;
+          createdAt: number;
+          viewCount?: number;
+          isFeatured?: boolean;
+        }
+
+        export interface AdminReview {
+          id: string;
+          reviewerId: string;
+          reviewerName: string;
+          sellerId: string;
+          sellerName?: string;
+          listingId: string;
+          listingTitle: string;
+          rating: number;
+          comment: string;
+          createdAt: number;
+        }
+
+2. VerificationPage.tsx was already created by a previous task.
+   Do NOT recreate it. Only register its route and sidebar link
+   if they are not already present in App.tsx and Layout.tsx.
+   Check App.tsx — if <Route path="/verifications"> is missing,
+   add it. Check Layout.tsx NAV array — if the Verifications entry
+   is missing, add it.
+
+═══════════════════════════════════════════════════════
+FEATURE 1 — REVIEWS MODERATION PAGE
+═══════════════════════════════════════════════════════
+Create src/pages/ReviewsPage.tsx.
+
+FETCH: onSnapshot on Firestore "reviews" collection,
+orderBy("createdAt", "desc"). Unsubscribe on unmount.
+
+UI: Same card/table style as existing admin pages.
+Heading: "Reviews" with total count badge.
+
+Each review row shows:
+  - Reviewer name + uid (small grey).
+  - Seller name + uid (small grey).
+  - Listing title in italic grey.
+  - Star rating: render filled ★ based on rating (1–5).
+  - Comment text (max 2 lines, truncated with "...").
+  - CreatedAt formatted: toLocaleDateString.
+  - "🗑️ Delete" button (red, outlined).
+
+DELETE REVIEW action:
+  On confirm (window.confirm("Delete this review? This cannot be
+  undone.")):
+    1. deleteDoc the review from "reviews" collection.
+    2. Recompute the seller's rating: getDocs remaining reviews
+       for the same sellerId, compute new average, updateDoc
+       users/{sellerId} with { rating: newAvg, totalReviews: increment(-1) }.
+    3. If no reviews remain: updateDoc users/{sellerId} with
+       { rating: 0, totalReviews: 0 }.
+    4. Remove the review from local state optimistically.
+
+EMPTY STATE: star illustration (use text emoji ⭐) + "No reviews yet."
+SKELETON: 4 pulsing rows while loading.
+
+═══════════════════════════════════════════════════════
+FEATURE 2 — LISTINGS OVERVIEW PAGE
+═══════════════════════════════════════════════════════
+Create src/pages/ListingsPage.tsx.
+
+FETCH: Use Firestore pagination. Initial load: getDocs on "listings"
+collection, orderBy("createdAt", "desc"), limit(20).
+"Load More" button: startAfter last document cursor.
+
+UI: Heading "All Listings" with total count.
+  Filter row:
+    - Type dropdown: All | Buy & Sell | Lost & Found | Jobs |
+      Assistance | Rental.
+    - Status dropdown: All | Active | Sold | Archived.
+    - Search input: client-side filter on loaded data by title.
+
+Table/card per listing:
+  - Photo thumbnail (48×48px, rounded-lg, object-cover).
+    If no photo, show a grey placeholder.
+  - Title (bold, max 1 line truncated).
+  - Type badge (colored pill matching the platform badge colors).
+  - Category label.
+  - Price (RM X or "Free").
+  - Poster email (small grey).
+  - Status badge: Active (green), Sold (blue), Archived (grey).
+  - createdAt formatted.
+  - viewCount if present.
+  - Three action buttons:
+      * "🗑️ Delete" (red): window.confirm, then deleteDoc listing.
+        Also delete Storage images: for each url in listing.photos,
+        extract the storage path using this helper:
+          function pathFromUrl(url: string): string | null {
+            const m = url.match(/\/o\/(.+?)(\?|$)/);
+            return m ? decodeURIComponent(m[1]) : null;
+          }
+        Call deleteObject(ref(storage, path)) for each, wrapped in
+        try/catch (non-fatal if image already deleted).
+      * "📦 Archive" (amber): updateDoc { isArchived: true }.
+        Only shown if not already archived.
+      * "⭐ Feature" (navy): updateDoc { isFeatured: true }.
+        Only shown if not already featured.
+
+EMPTY STATE and SKELETON as per the pattern in other admin pages.
+
+═══════════════════════════════════════════════════════
+FEATURE 3 — ANALYTICS PAGE
+═══════════════════════════════════════════════════════
+Create src/pages/AnalyticsPage.tsx.
+
+Import Recharts (already available as a dependency — do NOT install
+it again): import { BarChart, Bar, PieChart, Pie, LineChart, Line,
+XAxis, YAxis, CartesianGrid, Tooltip, Legend, Cell,
+ResponsiveContainer } from "recharts";
+
+FETCH (all at once on mount, not real-time — use getDocs):
+  const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  Query "listings" where createdAt >= thirtyDaysAgo.
+  Query "users" (all — for total count).
+  Query "reports" where status == "pending" (for pending count).
+  Query "reviews" (all — for total count).
+  Run all 4 in parallel with Promise.all.
+
+Compute client-side:
+  - listingsPerDay: group fetched listings by
+    new Date(l.createdAt).toLocaleDateString("en-MY", {day:"numeric",month:"short"})
+    Count per day, for the last 30 days.
+  - typeDistribution: count by l.type across all fetched listings.
+  - viewsPerDay: group by same date key, sum l.viewCount ?? 0.
+
+LAYOUT:
+
+  STAT CARDS ROW (4 cards, same style as DashboardPage):
+    - Total Users
+    - Total Listings (last 30 days)
+    - Pending Reports
+    - Total Reviews
+
+  CHARTS (stacked vertically, each wrapped in a white rounded-2xl card):
+
+  Chart 1 — Listings Posted Per Day (BarChart):
+    data: listingsPerDay array [{date, count}]
+    Bar fill: #003366
+    XAxis dataKey: "date"
+    YAxis allowDecimals: false
+    Heading: "Listings Posted (Last 30 Days)"
+
+  Chart 2 — Listing Type Distribution (PieChart):
+    data: typeDistribution array [{name, value}]
+    COLORS: { "buy-sell":"#003366", "lost-found":"#0D9488",
+              "jobs":"#7C3AED", "assistance":"#EA580C",
+              "rental":"#D97706" }
+    Legend below the chart.
+    Heading: "Listings by Type"
+
+  Chart 3 — Views Per Day (LineChart):
+    data: viewsPerDay array [{date, views}]
+    Line stroke: #0055CC
+    Heading: "Total Views (Last 30 Days)"
+
+All charts: ResponsiveContainer width="100%" height={220}.
+Show a loading spinner (Loader2 animate-spin) while fetching.
+
+═══════════════════════════════════════════════════════
+SIDEBAR & ROUTING UPDATE
+═══════════════════════════════════════════════════════
+In src/components/Layout.tsx, update the NAV array to:
+
+  import { LayoutDashboard, Flag, Users, Megaphone, FileText,
+           Star, GraduationCap, List, BarChart2, LogOut } from "lucide-react";
+
+  const NAV = [
+    { href: "/",              label: "Dashboard",    icon: LayoutDashboard },
+    { href: "/listings",      label: "Listings",     icon: List },
+    { href: "/users",         label: "Users",        icon: Users },
+    { href: "/reports",       label: "Reports",      icon: Flag },
+    { href: "/reviews",       label: "Reviews",      icon: Star },
+    { href: "/verifications", label: "Verifications",icon: GraduationCap },
+    { href: "/rental-audit",  label: "Rental Audit", icon: FileText },
+    { href: "/ads",           label: "Ads",          icon: Megaphone },
+    { href: "/analytics",     label: "Analytics",    icon: BarChart2 },
+  ];
+
+Add LIVE PENDING BADGES to two nav items:
+  For "Reports": fetch pending count using onSnapshot on "reports"
+  where status == "pending". Store in state pendingReports.
+  For "Verifications": fetch pending count using onSnapshot on
+  "users" where verificationStatus == "pending". Store in state
+  pendingVerifications.
+  Both onSnapshot listeners must unsubscribe on unmount via a
+  useEffect cleanup.
+
+  Render badge next to the label:
+    {label === "Reports" && pendingReports > 0 && (
+      <span className="ml-auto bg-red-500 text-white text-[9px]
+      font-bold rounded-full min-w-[18px] h-[18px] flex items-center
+      justify-center px-1">
+        {pendingReports > 99 ? "99+" : pendingReports}
+      </span>
+    )}
+    (same pattern for Verifications with pendingVerifications)
+
+In src/App.tsx, add the new routes:
+  import ReviewsPage      from "./pages/ReviewsPage";
+  import ListingsPage     from "./pages/ListingsPage";
+  import AnalyticsPage    from "./pages/AnalyticsPage";
+  import VerificationPage from "./pages/VerificationPage"; // already exists
+
+  <Route path="/reviews"       component={ReviewsPage} />
+  <Route path="/listings"      component={ListingsPage} />
+  <Route path="/analytics"     component={AnalyticsPage} />
+  <Route path="/verifications" component={VerificationPage} />
+
+If any of these routes already exist (especially /verifications),
+do NOT add a duplicate — check first.
+
+═══════════════════════════════════════════════════════
+CONSTRAINTS
+═══════════════════════════════════════════════════════
+- Do NOT add any new npm packages (Recharts is already installed).
+- Every onSnapshot listener in Layout.tsx must be cleaned up in
+  useEffect return.
+- All destructive actions (delete review, delete listing) must use
+  window.confirm before executing.
+- Each new page must have: skeleton loading state, empty state with
+  emoji illustration, and error handling for failed Firestore calls.
+- After ALL changes:
+  (a) List every file created and modified.
+  (b) Run pnpm build in artifacts/xmum-admin and paste the output.
+  (c) Confirm the admin app loads on preview with zero console errors.

@@ -1,30 +1,42 @@
 import { ReactNode, useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, Flag, Users, Megaphone, FileText, LogOut, GraduationCap } from "lucide-react";
+import {
+  LayoutDashboard, Flag, Users, Megaphone, FileText,
+  Star, GraduationCap, List, BarChart2, LogOut,
+} from "lucide-react";
 import { signOut } from "firebase/auth";
-import { auth } from "../lib/firebase";
+import { auth, db } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
-import { db } from "../lib/firebase";
 
 export default function Layout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const { adminUser } = useAuth();
-  const [pendingCount, setPendingCount] = useState(0);
+  const [pendingReports, setPendingReports]           = useState(0);
+  const [pendingVerifications, setPendingVerifications] = useState(0);
+
+  useEffect(() => {
+    const q = query(collection(db, "reports"), where("status", "==", "pending"));
+    const unsub = onSnapshot(q, (snap) => setPendingReports(snap.size), () => {});
+    return unsub;
+  }, []);
 
   useEffect(() => {
     const q = query(collection(db, "users"), where("verificationStatus", "==", "pending"));
-    const unsub = onSnapshot(q, (snap) => setPendingCount(snap.size), () => {});
+    const unsub = onSnapshot(q, (snap) => setPendingVerifications(snap.size), () => {});
     return unsub;
   }, []);
 
   const NAV = [
-    { href: "/",             label: "Dashboard",    icon: LayoutDashboard, badge: 0 },
-    { href: "/reports",      label: "Reports",      icon: Flag,            badge: 0 },
-    { href: "/users",        label: "Users",        icon: Users,           badge: 0 },
-    { href: "/ads",          label: "Ads",          icon: Megaphone,       badge: 0 },
-    { href: "/rental-audit", label: "Rental Audit", icon: FileText,        badge: 0 },
-    { href: "/verifications",label: "Verifications",icon: GraduationCap,   badge: pendingCount },
+    { href: "/",              label: "Dashboard",     icon: LayoutDashboard },
+    { href: "/listings",      label: "Listings",      icon: List },
+    { href: "/users",         label: "Users",         icon: Users },
+    { href: "/reports",       label: "Reports",       icon: Flag },
+    { href: "/reviews",       label: "Reviews",       icon: Star },
+    { href: "/verifications", label: "Verifications", icon: GraduationCap },
+    { href: "/rental-audit",  label: "Rental Audit",  icon: FileText },
+    { href: "/ads",           label: "Ads",           icon: Megaphone },
+    { href: "/analytics",     label: "Analytics",     icon: BarChart2 },
   ];
 
   return (
@@ -40,8 +52,8 @@ export default function Layout({ children }: { children: ReactNode }) {
           </div>
         </div>
 
-        <nav className="flex-1 px-3 py-4 space-y-1">
-          {NAV.map(({ href, label, icon: Icon, badge }) => {
+        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+          {NAV.map(({ href, label, icon: Icon }) => {
             const active = location === href;
             return (
               <Link key={href} href={href}>
@@ -52,9 +64,19 @@ export default function Layout({ children }: { children: ReactNode }) {
                 }`}>
                   <Icon className="w-4 h-4 shrink-0" />
                   <span className="flex-1">{label}</span>
-                  {badge > 0 && (
-                    <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-amber-500 text-white text-[10px] font-bold">
-                      {badge}
+
+                  {label === "Reports" && pendingReports > 0 && (
+                    <span className="ml-auto bg-red-500 text-white text-[9px] font-bold
+                                     rounded-full min-w-[18px] h-[18px] flex items-center
+                                     justify-center px-1">
+                      {pendingReports > 99 ? "99+" : pendingReports}
+                    </span>
+                  )}
+                  {label === "Verifications" && pendingVerifications > 0 && (
+                    <span className="ml-auto bg-red-500 text-white text-[9px] font-bold
+                                     rounded-full min-w-[18px] h-[18px] flex items-center
+                                     justify-center px-1">
+                      {pendingVerifications > 99 ? "99+" : pendingVerifications}
                     </span>
                   )}
                 </a>

@@ -1,13 +1,16 @@
 import { Switch, Route, Redirect } from "wouter";
 import { useAuth } from "./contexts/AuthContext";
-import LoginPage from "./pages/LoginPage";
-import DashboardPage from "./pages/DashboardPage";
-import ReportsPage from "./pages/ReportsPage";
-import UsersPage from "./pages/UsersPage";
-import AdsPage from "./pages/AdsPage";
-import RentalAuditPage from "./pages/RentalAuditPage";
+import LoginPage        from "./pages/LoginPage";
+import DashboardPage    from "./pages/DashboardPage";
+import ReportsPage      from "./pages/ReportsPage";
+import UsersPage        from "./pages/UsersPage";
+import AdsPage          from "./pages/AdsPage";
+import RentalAuditPage  from "./pages/RentalAuditPage";
 import VerificationPage from "./pages/VerificationPage";
-import Layout from "./components/Layout";
+import ReviewsPage      from "./pages/ReviewsPage";
+import ListingsPage     from "./pages/ListingsPage";
+import AnalyticsPage    from "./pages/AnalyticsPage";
+import Layout           from "./components/Layout";
 
 export default function App() {
   const { user, isEditor, loading } = useAuth();
@@ -28,11 +31,14 @@ export default function App() {
     <Layout>
       <Switch>
         <Route path="/"               component={DashboardPage} />
-        <Route path="/reports"        component={ReportsPage} />
+        <Route path="/listings"       component={ListingsPage} />
         <Route path="/users"          component={UsersPage} />
-        <Route path="/ads"            component={AdsPage} />
-        <Route path="/rental-audit"   component={RentalAuditPage} />
+        <Route path="/reports"        component={ReportsPage} />
+        <Route path="/reviews"        component={ReviewsPage} />
         <Route path="/verifications"  component={VerificationPage} />
+        <Route path="/rental-audit"   component={RentalAuditPage} />
+        <Route path="/ads"            component={AdsPage} />
+        <Route path="/analytics"      component={AnalyticsPage} />
         <Route>
           <Redirect to="/" />
         </Route>
