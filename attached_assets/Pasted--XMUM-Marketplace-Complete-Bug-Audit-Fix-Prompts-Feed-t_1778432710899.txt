@@ -1,0 +1,927 @@
+# XMUM Marketplace — Complete Bug Audit & Fix Prompts
+# Feed these to Replit one at a time, in order.
+
+---
+
+## MASTER BUG LIST (summary before prompts)
+
+| # | Bug | File(s) | Severity |
+|---|-----|---------|----------|
+| 1 | Dark mode auto-enables on Settings page visit | `use-dark-mode.ts`, `index.html` | 🔴 Critical |
+| 2 | Pages shake/jitter on desktop scroll (sticky sub-headers) | `HomePage.tsx`, `SearchPage.tsx`, `ListingDetailPage.tsx` | 🔴 Critical |
+| 3 | Typing in messages locks scroll — can't read history | `MessagesPage.tsx` | 🔴 Critical |
+| 4 | Messages page height wrong on desktop (calc uses wrong offset) | `MessagesPage.tsx` | 🔴 Critical |
+| 5 | Dark mode class not applied on first load (FOUC — flash of wrong theme) | `index.html` | 🔴 Critical |
+| 6 | `useDarkMode` creates isolated state per component — toggle in Settings doesn't sync with rest of app | `use-dark-mode.ts`, `App.tsx` | 🔴 Critical |
+| 7 | ListingCard save button shows for own listings (pointless, confusing) | `ListingCard.tsx` | 🟡 Medium |
+| 8 | Desktop nav: Profile dropdown closes but page doesn't scroll to top | `Layout.tsx` | 🟡 Medium |
+| 9 | Notification dropdown can overflow off-screen on small desktop widths | `NotificationBell.tsx` | 🟡 Medium |
+| 10 | SearchPage: `autoFocus` on search input steals focus and scrolls page on mobile | `SearchPage.tsx` | 🟡 Medium |
+| 11 | No `overscroll-behavior: contain` on chat panel — page scrolls behind chat | `MessagesPage.tsx` | 🟡 Medium |
+| 12 | Textarea in messages auto-grows but never shrinks when text is deleted | `MessagesPage.tsx` | 🟡 Medium |
+| 13 | `ListingDetailPage` sticky sub-header `top` value may mismatch header height on resize | `ListingDetailPage.tsx` | 🟡 Medium |
+| 14 | Footer PDPA text only shows on `/` but footer itself is always visible on desktop — wasteful whitespace on inner pages | `Layout.tsx` | 🟠 Low |
+| 15 | `max-scale=1` in viewport meta blocks pinch-zoom — accessibility violation | `index.html` | 🟠 Low |
+| 16 | CSP blocks `connect-src wss:` (too broad) and may block some Firebase paths in production | `index.html` | 🟠 Low |
+| 17 | Online/offline banner pushes content down and causes layout shift — not using `fixed` properly with top offset | `Layout.tsx` | 🟡 Medium |
+| 18 | ProfilePage listing tabs don't update count badges when listings load | `ProfilePage.tsx` | 🟡 Medium |
+
+---
+
+## BUG FIX PROMPT 1 OF 10
+## Dark Mode Flash on Load (FOUC) + Auto-Enables on Settings Visit
+
+**Root Cause:**
+Two separate bugs combine here.
+
+Bug A: `index.html` has no inline script to apply the `dark` class to `<html>` before React hydrates. So users with dark mode saved see a white flash every page load.
+
+Bug B: `useDarkMode` is a plain hook — every component that calls it creates its own isolated `useState`. When `SettingsPage` mounts, it calls `useDarkMode()` and initialises its own `dark` state from localStorage. But since `userHasToggled.current` starts as `false` in this new instance, the `useEffect` that sets the `dark` class runs immediately on mount. If the OS is in dark mode but the user previously set `light`, the Settings instance re-reads and re-applies correctly — but because this is a second instance of the hook, React's state reconciliation triggers a re-render which briefly applies the wrong class. The real fix is to move dark mode into a single shared context.
+
+---
+
+**Paste this entire prompt to Replit:**
+
+```
+You are fixing two related dark mode bugs in the XMUM Marketplace app.
+
+## BUG A — Flash of white on load (FOUC)
+
+Open `artifacts/xmum-market/index.html`.
+
+Add this inline script as the VERY FIRST child of <head>, before any other tags:
+
+```html
+<script>
+  (function () {
+    try {
+      var theme = localStorage.getItem('xmum-theme');
+      if (theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.classList.add('dark');
+      }
+    } catch (e) {}
+  })();
+</script>
+```
+
+This must be the first tag in <head> so it runs synchronously before any CSS or React loads,
+preventing the white flash.
+
+## BUG B — Dark mode state not shared across components
+
+The current `useDarkMode` hook is a plain React hook. Every component that calls it
+gets its own isolated useState. This causes SettingsPage to create a new instance on
+mount, which can re-apply dark mode incorrectly.
+
+The fix: convert dark mode into a React Context so there is only ONE source of truth.
+
+### Step 1 — Rewrite `artifacts/xmum-market/src/hooks/use-dark-mode.ts`
+
+Replace the entire file with:
+
+```typescript
+// This file is now just a re-export for backwards compatibility.
+// The real implementation is in DarkModeContext.
+export { useDarkMode } from "@/contexts/DarkModeContext";
+```
+
+### Step 2 — Create `artifacts/xmum-market/src/contexts/DarkModeContext.tsx`
+
+Create this new file with the following content:
+
+```typescript
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
+
+interface DarkModeCtx {
+  dark: boolean;
+  toggle: () => void;
+}
+
+const Ctx = createContext<DarkModeCtx>({ dark: false, toggle: () => {} });
+
+export function DarkModeProvider({ children }: { children: ReactNode }) {
+  const userHasToggled = useRef(false);
+
+  const [dark, setDark] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem("xmum-theme");
+      if (stored === "dark") return true;
+      if (stored === "light") return false;
+      return window.matchMedia("(prefers-color-scheme: dark)").matches;
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (dark) {
+      root.classList.add("dark");
+    } else {
+      root.classList.remove("dark");
+    }
+    // Only persist to localStorage when the user explicitly clicked the toggle
+    if (userHasToggled.current) {
+      localStorage.setItem("xmum-theme", dark ? "dark" : "light");
+    }
+  }, [dark]);
+
+  const toggle = () => {
+    userHasToggled.current = true;
+    setDark((d) => !d);
+  };
+
+  return <Ctx.Provider value={{ dark, toggle }}>{children}</Ctx.Provider>;
+}
+
+export function useDarkMode() {
+  return useContext(Ctx);
+}
+```
+
+### Step 3 — Wrap the app with DarkModeProvider in `artifacts/xmum-market/src/App.tsx`
+
+Find the existing return statement of the `App` function. It currently looks like:
+
+```typescript
+return (
+  <QueryClientProvider client={queryClient}>
+    <AuthProvider>
+      <LanguageProvider>
+        ...
+      </LanguageProvider>
+    </AuthProvider>
+  </QueryClientProvider>
+);
+```
+
+Add `<DarkModeProvider>` as the OUTERMOST wrapper:
+
+```typescript
+import { DarkModeProvider } from "@/contexts/DarkModeContext";
+
+return (
+  <DarkModeProvider>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <LanguageProvider>
+          ...
+        </LanguageProvider>
+      </AuthProvider>
+    </QueryClientProvider>
+  </DarkModeProvider>
+);
+```
+
+Do not change anything else in App.tsx.
+
+### Verification
+After making these changes:
+1. Run `pnpm dev`
+2. Enable dark mode via Settings
+3. Navigate away and back to Settings — the toggle should reflect the correct state
+4. Refresh the page — no white flash should occur
+5. SettingsPage visit alone should NOT change dark mode state
+```
+
+---
+
+## BUG FIX PROMPT 2 OF 10
+## Page Shake / Jitter on Desktop Scroll (Multiple Sticky Headers)
+
+**Root Cause:**
+There are TWO sticky elements stacked:
+1. The `<header>` in `Layout.tsx` is `sticky top-0 h-14 sm:h-16`
+2. Sub-headers in `HomePage.tsx`, `SearchPage.tsx`, and `ListingDetailPage.tsx` use `sticky top-14 sm:top-16`
+
+On desktop, when the browser scrollbar appears/disappears (because content changes between loading and loaded), it shifts the page width by ~15px. This, combined with stacked sticky elements that depend on exact pixel offsets, causes visible jitter/shake. The sub-headers also create a "fighting sticky" effect — two stacking contexts competing.
+
+The additional issue: `transform` and `will-change` are not set on sticky elements, so the browser can't GPU-composite them, causing repaints on every scroll frame.
+
+---
+
+**Paste this entire prompt to Replit:**
+
+```
+You are fixing the page shake/jitter bug on desktop scroll in the XMUM Marketplace.
+
+## ROOT CAUSE
+Two stacked sticky elements (header + sub-header) and no scrollbar gutter reservation
+cause layout shift. Fix this in three files.
+
+## FIX 1 — `artifacts/xmum-market/src/index.css`
+
+Add these lines inside the `@layer base` block, after the `body` rule:
+
+```css
+/* Prevent scrollbar from causing layout shift */
+html {
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+}
+
+/* GPU-composite sticky elements to prevent jitter */
+header[data-sticky],
+[data-sticky-subheader] {
+  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+```
+
+## FIX 2 — `artifacts/xmum-market/src/components/Layout.tsx`
+
+Find the `<header>` tag. Change it from:
+```
+<header className="sticky top-0 z-50 bg-[#003366] ...">
+```
+to:
+```
+<header data-sticky className="sticky top-0 z-50 bg-[#003366] ...">
+```
+
+(Just add `data-sticky` attribute — do not change any classNames)
+
+## FIX 3 — `artifacts/xmum-market/src/pages/HomePage.tsx`
+
+Find the sticky sub-header div. It currently starts with:
+```
+<div className="sticky top-14 sm:top-16 z-30 bg-white ...">
+```
+
+Change it to:
+```
+<div data-sticky-subheader className="sticky top-14 sm:top-16 z-30 bg-white ...">
+```
+
+Also find the outer page wrapper (the topmost div returned by HomePage).
+Add `overflow-x: hidden` by adding `overflow-x-hidden` to its className.
+
+## FIX 4 — `artifacts/xmum-market/src/pages/SearchPage.tsx`
+
+Find the sticky search header div. It currently starts with:
+```
+<div className="bg-white dark:bg-slate-900 ... sticky top-14 sm:top-16 z-30">
+```
+
+Change it to:
+```
+<div data-sticky-subheader className="bg-white dark:bg-slate-900 ... sticky top-14 sm:top-16 z-30">
+```
+
+## FIX 5 — `artifacts/xmum-market/src/pages/ListingDetailPage.tsx`
+
+Find the sticky back-button bar. It currently starts with:
+```
+<div className="sticky top-14 sm:top-16 z-20 bg-white/80 ...">
+```
+
+Change it to:
+```
+<div data-sticky-subheader className="sticky top-14 sm:top-16 z-20 bg-white/80 ...">
+```
+
+## VERIFICATION
+After changes:
+1. Open the app on a desktop browser (Chrome or Edge, not mobile emulator)
+2. Scroll up and down quickly on the homepage
+3. Switch tabs (Buy & Sell → Lost & Found) while scrolling
+4. Pages should be completely stable — no jitter
+5. Confirm sticky sub-headers stay in place correctly below the main header
+```
+
+---
+
+## BUG FIX PROMPT 3 OF 10
+## Messages Page — Typing Locks Scroll + Textarea Doesn't Shrink
+
+**Root Cause — Scroll Lock:**
+The message list area is `flex-1 overflow-y-auto`. The textarea at the bottom uses `rows={1}` with `max-h-32 overflow-y-auto`. When the textarea grows (multi-line typing), it doesn't have `overscroll-behavior: contain`, so scroll events on the textarea bubble up to the message list, preventing the user from scrolling up to read history. Additionally, the message list div has no `overscroll-behavior` set, so iOS/desktop momentum scroll bleeds through to the page behind.
+
+**Root Cause — Textarea Not Shrinking:**
+The textarea uses CSS `resize: none` with a `rows={1}` attribute and `max-h-32`, but there's no JavaScript to auto-resize it. In some browsers, `rows={1}` sets initial height but the textarea never shrinks after growing because the browser doesn't reduce height automatically when text is deleted.
+
+---
+
+**Paste this entire prompt to Replit:**
+
+```
+You are fixing two bugs in MessagesPage: scroll locking when typing, and
+the textarea not shrinking when text is deleted.
+
+File to edit: `artifacts/xmum-market/src/pages/MessagesPage.tsx`
+
+## FIX 1 — Add overscroll containment to the messages list
+
+Find the messages scroll container. It currently looks like:
+```
+<div className="flex-1 overflow-y-auto px-3 py-3 space-y-1 bg-gray-50 dark:bg-slate-950">
+```
+
+Change it to:
+```
+<div className="flex-1 overflow-y-auto px-3 py-3 space-y-1 bg-gray-50 dark:bg-slate-950 overscroll-contain">
+```
+
+## FIX 2 — Add overscroll containment to the textarea
+
+Find the textarea element. It currently has:
+```
+style={{ resize: "none" }}
+className="w-full bg-gray-50 ... max-h-32 overflow-y-auto ..."
+```
+
+Change the style to:
+```
+style={{ resize: "none", overscrollBehavior: "contain" }}
+```
+
+And add `overscroll-contain` to its className as well.
+
+## FIX 3 — Auto-resize textarea (grow AND shrink)
+
+In the component, find the `inputRef` declaration:
+```typescript
+const inputRef = useRef<HTMLTextAreaElement>(null);
+```
+
+Add a new auto-resize function. Place this AFTER all the existing useRef declarations
+and BEFORE the useEffect blocks:
+
+```typescript
+// Auto-resize textarea — grows and shrinks with content
+const autoResizeTextarea = useCallback(() => {
+  const el = inputRef.current;
+  if (!el) return;
+  el.style.height = "auto";
+  el.style.height = Math.min(el.scrollHeight, 128) + "px"; // 128px = max-h-32
+}, []);
+```
+
+Then in the `handleInputChange` function, add a call to `autoResizeTextarea()` at the end:
+```typescript
+const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+  const val = e.target.value.slice(0, MAX_CHARS);
+  setInputText(val);
+  autoResizeTextarea(); // ADD THIS LINE
+  if (!activeConv || !user) return;
+  // ... rest of existing code unchanged
+}, [activeConv?.id, user?.uid, autoResizeTextarea]);
+```
+
+Also call it after sending (to reset height). In `handleSend`, after `setInputText("")`:
+```typescript
+setInputText("");
+autoResizeTextarea(); // ADD THIS LINE — resets textarea to 1 row after send
+```
+
+Also remove `max-h-32` and `overflow-y-auto` from the textarea className since
+height is now controlled by JS. Replace them with just `overflow-hidden`.
+
+The final textarea className should contain:
+- Keep: `w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-2xl px-4 py-2.5 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 min-h-[44px] transition pr-14 leading-relaxed overscroll-contain`
+- Remove: `max-h-32 overflow-y-auto`
+- Add: `overflow-hidden`
+
+## VERIFICATION
+1. Open a conversation in Messages
+2. Type multiple lines — textarea should grow
+3. Delete all text — textarea should shrink back to 1 row
+4. While typing, scroll up to read old messages — page should scroll freely
+5. On mobile, scrolling the message list should not scroll the page behind it
+```
+
+---
+
+## BUG FIX PROMPT 4 OF 10
+## Messages Page Height Wrong on Desktop
+
+**Root Cause:**
+The messages page outer container uses `h-[calc(100dvh-56px)] sm:h-[calc(100dvh-64px)]`. These values (56px and 64px) are the header heights. However, `100dvh` on desktop equals the full viewport height, and the subtracted values must account for the header. The header is `h-14` (56px) on mobile and `h-16` (64px) on sm+. This is correct in theory, but:
+
+1. On desktop, if a VerificationBanner is showing (unverified user), it adds ~44px to the top. The calc doesn't account for this, so the panel overflows.
+2. The `overflow-hidden` on the outer div clips the bottom on some desktop browsers.
+3. On desktop with the bottom mobile nav hidden (`md:pb-0` in Layout), the `<main>` has `pb-20 md:pb-0`. But MessagesPage uses 100dvh calc which already tries to fill the screen — the `pb-20` padding on `<main>` causes a 20px gap at the bottom on mobile.
+
+---
+
+**Paste this entire prompt to Replit:**
+
+```
+You are fixing the Messages page height/layout bug on desktop and mobile.
+
+File to edit: `artifacts/xmum-market/src/pages/MessagesPage.tsx`
+
+## FIX — Replace the outer container height logic
+
+Find the two-panel layout return. It contains:
+```
+<div className="flex h-[calc(100dvh-56px)] sm:h-[calc(100dvh-64px)] overflow-hidden">
+```
+
+Replace it with:
+```
+<div className="flex h-[calc(100dvh-56px)] sm:h-[calc(100dvh-64px)] md:h-[calc(100dvh-64px)] overflow-hidden overscroll-none">
+```
+
+This is the same fix but also adds `overscroll-none` to prevent the entire panel
+from bouncing on desktop trackpads.
+
+## ADDITIONAL FIX — Account for VerificationBanner
+
+The VerificationBanner renders between the header and main content when the user's
+email is unverified. It is approximately 48px tall. We need to handle this gracefully.
+
+In MessagesPage, add this near the top of the component (after the existing state declarations):
+
+```typescript
+// Detect if verification banner is visible
+const showVerificationBanner = !!user && !user.emailVerified;
+```
+
+Then update the outer container height:
+```
+<div className={`flex overflow-hidden overscroll-none ${
+  showVerificationBanner
+    ? "h-[calc(100dvh-56px-48px)] sm:h-[calc(100dvh-64px-48px)]"
+    : "h-[calc(100dvh-56px)] sm:h-[calc(100dvh-64px)]"
+}`}>
+```
+
+## VERIFICATION
+1. Open Messages page on a 1280px wide desktop window
+2. The panel should fill the screen with no gap at top or bottom
+3. The left conversation list and right chat panel should both be full height
+4. Log in with an unverified account — the page should still fit without overflow
+5. On mobile, the messages panel should not leave a gap above the bottom nav
+```
+
+---
+
+## BUG FIX PROMPT 5 OF 10
+## SearchPage autoFocus Steals Focus on Mobile
+
+**Root Cause:**
+`SearchPage.tsx` has `autoFocus` on the search input. On desktop this is fine. On mobile, `autoFocus` triggers the virtual keyboard to pop up immediately every time the user navigates to the Search page — even if they just tapped a category chip. This is highly disruptive: the keyboard pushes the entire content up, and then the sticky header calculation breaks, sometimes scrolling the user to a random position.
+
+---
+
+**Paste this entire prompt to Replit:**
+
+```
+You are fixing the autoFocus bug on the SearchPage search input.
+
+File to edit: `artifacts/xmum-market/src/pages/SearchPage.tsx`
+
+## THE BUG
+The search input has `autoFocus` which pops up the mobile keyboard immediately
+on page load. This is bad UX on mobile — the keyboard appears before the user
+has even decided to type.
+
+## THE FIX
+
+### Step 1 — Remove autoFocus from the input
+
+Find the search input element. It has `autoFocus` as an attribute:
+```
+<input
+  type="text"
+  ...
+  autoFocus
+/>
+```
+
+Remove the `autoFocus` attribute entirely.
+
+### Step 2 — Only focus on desktop
+
+Instead, add a useRef and a useEffect that focuses ONLY on desktop (not mobile).
+
+Add near the top of the component (with other state/ref declarations):
+```typescript
+const searchInputRef = useRef<HTMLInputElement>(null);
+```
+
+Add this useEffect (after existing useEffects):
+```typescript
+// Only auto-focus on desktop — not on mobile (avoids keyboard pop-up)
+useEffect(() => {
+  const isMobile = window.matchMedia("(max-width: 768px)").matches;
+  if (!isMobile && searchInputRef.current) {
+    // Small delay to avoid conflicting with page transition
+    setTimeout(() => searchInputRef.current?.focus(), 100);
+  }
+}, []);
+```
+
+Add `ref={searchInputRef}` to the input element.
+
+## VERIFICATION
+1. On a real mobile device or Chrome DevTools mobile emulator (375px width):
+   - Navigate to Search page — keyboard should NOT pop up automatically
+2. On desktop (1280px+):
+   - Navigate to Search page — the search input SHOULD be focused automatically
+3. No layout shift should occur on mobile when landing on Search
+```
+
+---
+
+## BUG FIX PROMPT 6 OF 10
+## Notification Bell Dropdown Overflows Off-Screen
+
+**Root Cause:**
+The notification bell is in the top-right of the header. Its dropdown uses `absolute right-0 top-10` positioning. On desktop widths between ~768px and ~900px, the dropdown can extend beyond the right viewport edge because `right-0` is relative to the bell button, not the viewport. On very wide screens it's fine; on narrow desktops it clips.
+
+---
+
+**Paste this entire prompt to Replit:**
+
+```
+You are fixing the NotificationBell dropdown overflow bug.
+
+File to edit: `artifacts/xmum-market/src/components/NotificationBell.tsx`
+
+## THE BUG
+The notification dropdown uses `absolute right-0` positioning relative to the
+bell button. On narrow desktop windows it can overflow off the right edge of
+the viewport.
+
+## THE FIX
+
+Find the dropdown container div. It currently uses positioning like:
+```
+className="absolute right-0 top-10 ... min-w-[320px] ..."
+```
+or similar absolute-positioned dropdown.
+
+Change the positioning to use `right-0` with a `max-w` constraint and ensure it
+can't go off-screen by adding these classes:
+
+```
+className="absolute right-0 top-10 z-[70] w-[min(320px,calc(100vw-16px))] ..."
+```
+
+The key addition is `w-[min(320px,calc(100vw-16px))]` which means:
+"be 320px wide, but never wider than the viewport minus 16px padding".
+
+Also add `overflow-hidden` to the dropdown container if it's not already there.
+
+If the dropdown is a mapped list of notifications, ensure the outer container has:
+- `overflow-y-auto`
+- `max-h-[70vh]`
+
+This ensures it doesn't overflow vertically on screens with many notifications.
+
+## VERIFICATION
+1. Open the app in a browser window resized to 800px wide
+2. Click the notification bell
+3. The dropdown should appear fully within the viewport — not clipped on the right
+4. On a 1920px wide screen, the dropdown should still appear correctly
+5. With many notifications, the dropdown should scroll internally (not grow to push content)
+```
+
+---
+
+## BUG FIX PROMPT 7 OF 10
+## ListingCard — Save Button Shows on Own Listings
+
+**Root Cause:**
+In `ListingCard.tsx`, the save/bookmark button is conditionally rendered based on `showSaveButton` prop. However, `showSaveButton` is passed as `true` in places where the current user may be viewing their own listing. The component has `isOwnListing` computed but it's only used to skip the `isListingSaved` useEffect — the button still renders visually for own listings.
+
+---
+
+**Paste this entire prompt to Replit:**
+
+```
+You are fixing the ListingCard save button appearing on the user's own listings.
+
+File to edit: `artifacts/xmum-market/src/components/ListingCard.tsx`
+
+## THE BUG
+The save/bookmark button renders even when the user is viewing their own listing.
+Saving your own listing is pointless and confusing.
+
+## THE FIX
+
+Find where the save button is rendered. It's inside the card JSX and is
+conditionally shown based on `showSaveButton`. Look for code like:
+
+```
+{showSaveButton && user && (
+  <button ...>
+    {isSaved ? <BookmarkCheck ... /> : <Bookmark ... />}
+  </button>
+)}
+```
+
+Change the condition to also exclude own listings:
+
+```
+{showSaveButton && user && !isOwnListing && (
+  <button ...>
+    {isSaved ? <BookmarkCheck ... /> : <Bookmark ... />}
+  </button>
+)}
+```
+
+That's the only change needed. `isOwnListing` is already computed at the top of
+the component as:
+```typescript
+const isOwnListing = !!user && user.uid === listing.userId;
+```
+
+## VERIFICATION
+1. Log in and view your own listings on the homepage or profile
+2. No bookmark/save button should appear on your own listings
+3. Log in and view someone else's listings — the bookmark button should still appear
+4. Saving and unsaving should still work correctly on other people's listings
+```
+
+---
+
+## BUG FIX PROMPT 8 OF 10
+## Online/Offline Banner Causes Layout Shift
+
+**Root Cause:**
+The online/offline banner in `Layout.tsx` uses `fixed top-0` which places it over the header, not above it. But it also uses `z-[100]` (higher than the header's `z-50`), so it covers the header. When the banner appears, the header appears to shift down visually even though it hasn't moved — the banner just covers it. When the banner disappears, users are confused because the header "reappears". This is not a true layout shift but is visually very jarring.
+
+The better UX: the banner should push content down (not float over it), OR it should be styled as a compact top-bar that the sticky header sits below.
+
+---
+
+**Paste this entire prompt to Replit:**
+
+```
+You are fixing the online/offline status banner in Layout.tsx.
+
+File to edit: `artifacts/xmum-market/src/components/Layout.tsx`
+
+## THE BUG
+The offline banner uses `fixed top-0 z-[100]` which covers the header rather than
+appearing above it. This looks broken — the header seems to disappear when the
+banner shows.
+
+## THE FIX
+
+### Step 1 — Change banners from fixed to sticky, inside the layout flow
+
+Find the offline banner (there are two: offline + back-online). They currently use:
+```
+className="fixed top-0 left-0 right-0 z-[100] ..."
+```
+
+Change BOTH banners to:
+```
+className="sticky top-0 z-[60] ..."
+```
+
+By removing `fixed` and making them `sticky top-0`, they will appear ABOVE the
+header in the DOM flow, pushing it down naturally. Since they are `sticky`,
+they stay at the top when scrolling.
+
+### Step 2 — Ensure banners are ABOVE the header in the JSX
+
+Currently the banners render just before the `<header>` tag. This is already correct.
+The sticky banners will sit above the sticky header, both staying at the top.
+
+### Step 3 — Animate the back-online banner out gracefully
+
+The back-online banner disappears after 3 seconds. Ensure it has a smooth exit.
+Find the showBackOnline banner and confirm it has this class structure:
+```
+className="... animate-in slide-in-from-top duration-300"
+```
+
+If it doesn't have an animate-out class, wrap the render in a div and use opacity:
+```typescript
+{showBackOnline && (
+  <div className="sticky top-0 z-[60] bg-emerald-500 text-white text-xs
+                  font-semibold text-center py-2 px-4 flex items-center
+                  justify-center gap-2 animate-in slide-in-from-top duration-300">
+    ✅ You're back online!
+  </div>
+)}
+```
+
+## VERIFICATION
+1. In Chrome DevTools, go to Network tab → Throttling → Offline
+2. The amber offline banner should appear ABOVE the header, pushing it down
+3. Switch back to online — green banner appears, then fades after 3 seconds
+4. Header should remain fully visible and not be covered by either banner
+5. No layout shift or content jump should occur
+```
+
+---
+
+## BUG FIX PROMPT 9 OF 10
+## Remove `maximum-scale=1` Accessibility Violation + Fix CSP
+
+**Root Cause 1:**
+`<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />` blocks pinch-to-zoom. This is an accessibility violation (WCAG 1.4.4) that affects users who need to zoom in to read content. It also fails automated accessibility audits (Lighthouse, axe). Modern iOS ignores this for users who need accessibility zoom, but Android browsers respect it and block zoom entirely.
+
+**Root Cause 2:**
+The Content Security Policy has `connect-src ... wss:` (bare wildcard WebSocket) which is overly broad. It should specify only `wss://*.firebaseio.com`. This doesn't break anything but is a security hygiene issue.
+
+---
+
+**Paste this entire prompt to Replit:**
+
+```
+You are fixing two issues in index.html: an accessibility violation and a CSP issue.
+
+File to edit: `artifacts/xmum-market/index.html`
+
+## FIX 1 — Remove maximum-scale=1 (accessibility fix)
+
+Find this meta tag:
+```html
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+```
+
+Replace it with:
+```html
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+```
+
+Removing `maximum-scale=1` allows users to pinch-zoom the page. This is required
+for WCAG 1.4.4 compliance and does NOT break the app's responsive design.
+
+## FIX 2 — Tighten the Content Security Policy
+
+Find the Content-Security-Policy meta tag. In the `connect-src` directive, find:
+```
+wss:;
+```
+
+Replace it with:
+```
+wss://*.firebaseio.com;
+```
+
+The full connect-src line should look like:
+```
+connect-src 'self' https://*.googleapis.com
+  https://*.firebaseio.com
+  https://firestore.googleapis.com
+  wss://*.firebaseio.com;
+```
+
+This is more restrictive and only allows WebSocket connections to Firebase,
+not to any random WebSocket endpoint.
+
+## VERIFICATION
+1. Deploy the change
+2. Open Chrome DevTools → Lighthouse → Accessibility audit
+3. The "User can zoom and scale the text" check should now pass
+4. Test that Firebase real-time listeners (messages, notifications) still work
+5. In Chrome DevTools → Network → WS tab, verify Firebase WebSocket connections succeed
+```
+
+---
+
+## BUG FIX PROMPT 10 OF 10
+## ProfilePage Listing Tab Counts Not Dynamic + Desktop Footer Cleanup
+
+**Root Cause:**
+`ProfilePage.tsx` has tabs for Active / Sold / Archived listings. The tab labels show the tab name but no count. When listings are loading, the tab renders without any count, and after loading finishes, the count is never shown at all. Users have no way to know how many listings are in each tab without switching to it.
+
+Additionally, on desktop, the footer in `Layout.tsx` shows the PDPA notice only on the homepage, but the footer itself renders on all pages — showing just the copyright line. This is wasted space on inner pages. A minimal footer is fine but should be more compact on non-home pages.
+
+---
+
+**Paste this entire prompt to Replit:**
+
+```
+You are fixing two smaller but important issues:
+1. ProfilePage listing tabs should show live counts
+2. Desktop footer should be more compact on non-home pages
+
+## FIX 1 — ProfilePage listing tab counts
+
+File: `artifacts/xmum-market/src/pages/ProfilePage.tsx`
+
+Find where the tabs are rendered. They look like:
+```typescript
+const [tab, setTab] = useState<'active' | 'sold' | 'archived'>('active')
+```
+
+And the tab UI renders buttons for each tab.
+
+### Step 1 — Compute counts from the listings array
+
+Find where `listings` (the user's listing array) is defined and loaded.
+After the listings are loaded, compute tab counts. Add this derived data:
+
+```typescript
+const activeCount   = listings.filter(l => !l.isArchived && l.status !== "sold").length;
+const soldCount     = listings.filter(l => l.status === "sold").length;
+const archivedCount = listings.filter(l => l.isArchived && l.status !== "sold").length;
+```
+
+### Step 2 — Show counts on tab buttons
+
+Find the tab button render. It currently shows just the tab name like "Active", "Sold", "Archived".
+
+Update each button label to include the count:
+```typescript
+// For Active tab button:
+Active ({activeCount})
+
+// For Sold tab button:
+Sold ({soldCount})
+
+// For Archived tab button:
+Archived ({archivedCount})
+```
+
+The full tab button text should be like:
+```
+Active (12)
+Sold (3)
+Archived (1)
+```
+
+While listings are loading (before data arrives), show a skeleton count:
+```typescript
+{loading ? "..." : activeCount}
+```
+
+## FIX 2 — Compact footer on non-home pages
+
+File: `artifacts/xmum-market/src/components/Layout.tsx`
+
+Find the desktop footer. It currently looks like:
+```typescript
+<footer className="hidden md:block bg-[#003366] ... py-6 px-4">
+  <div className="max-w-5xl mx-auto">
+    {location === "/" && (
+      <>
+        <p className="font-semibold ...">PDPA title</p>
+        <p className="mb-3">PDPA text</p>
+      </>
+    )}
+    <p className="text-white/50">{t.allRights}</p>
+  </div>
+</footer>
+```
+
+Change the footer padding to be smaller on non-home pages:
+```typescript
+<footer className={`hidden md:block bg-[#003366] dark:bg-slate-900 dark:border-t
+                    dark:border-slate-700 text-white/70 text-xs px-4
+                    ${location === "/" ? "py-6" : "py-3"}`}>
+  <div className="max-w-5xl mx-auto">
+    {location === "/" && (
+      <>
+        <p className="font-semibold text-white/90 mb-1">{t.pdpaTitle}</p>
+        <p className="mb-3">{t.pdpaText}</p>
+      </>
+    )}
+    <p className="text-white/50">{t.allRights}</p>
+  </div>
+</footer>
+```
+
+This makes the footer compact (12px padding) on all pages except home,
+and full-size (24px padding) with PDPA text on the home page.
+
+## VERIFICATION FOR FIX 1
+1. Go to Profile page — tabs should show "(Loading...)" or "Active (...)" while loading
+2. After listings load, each tab should show the correct count
+3. Mark a listing as sold — the Sold count should increase when you refresh
+4. The counts should update if listings change
+
+## VERIFICATION FOR FIX 2
+1. On desktop, visit the home page — full footer with PDPA text visible
+2. Visit Search, Messages, Settings — compact footer with only copyright line
+3. Footer should not take up excessive space on inner pages
+```
+
+---
+
+## IMPORTANT NOTES FOR REPLIT
+
+- Feed these prompts **one at a time**, in order (1 → 10)
+- After each prompt, run `pnpm dev` and verify the fix before moving to the next
+- Do **NOT** modify `src/lib/` files, Firestore rules, or Storage rules
+- Do **NOT** change any Firebase logic during these fixes
+- All changes are UI/layout/UX only except Prompt 1 (context) and Prompt 9 (index.html)
+- After all 10 prompts are done, run `pnpm build` to check for TypeScript errors
+- Then push to GitHub → Vercel auto-deploys
+
+## POST-FIX VERIFICATION CHECKLIST
+
+After all 10 fixes are applied and deployed:
+
+- [ ] Open on Chrome desktop (1280px) — scroll homepage, no shaking
+- [ ] Open on Chrome desktop — visit Settings, toggle dark mode once → stays applied, no auto-toggle on visit
+- [ ] Refresh page in dark mode — no white flash before dark theme loads
+- [ ] Open Messages on desktop — panel fills screen correctly
+- [ ] Type a long message in Messages — textarea grows, delete text — textarea shrinks
+- [ ] Scroll message history while typing — page scrolls freely
+- [ ] Open app on Chrome mobile emulator (375px) — navigate to Search — keyboard does NOT pop up
+- [ ] Click notification bell on a narrow desktop (800px wide) — dropdown stays within viewport
+- [ ] View your own listing — no bookmark/save button visible
+- [ ] Go offline in DevTools — banner appears above header, header visible
+- [ ] ProfilePage — tabs show counts like "Active (5)"
+- [ ] Run Lighthouse accessibility audit — zoom/scale check passes

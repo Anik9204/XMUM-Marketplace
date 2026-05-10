@@ -1,8 +1,26 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('xmum-theme');
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var dark = stored === 'dark' || (!stored && prefersDark);
+          if (!stored) {
+            localStorage.setItem('xmum-theme', dark ? 'dark' : 'light');
+          }
+          if (dark) document.documentElement.classList.add('dark');
+        } catch (e) {}
+      })();
+    </script>
+    <style>
+      /* Critical: paint correct background BEFORE Tailwind CSS loads (prevents FOUC) */
+      html { background-color: #F8FAFC; }
+      html.dark { background-color: #0F172A; }
+    </style>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>XMUM Market</title>
     <meta http-equiv="Content-Security-Policy" content="
       default-src 'self';
@@ -18,8 +36,7 @@
       connect-src 'self' https://*.googleapis.com
         https://*.firebaseio.com
         https://firestore.googleapis.com
-        wss://*.firebaseio.com
-        wss:;
+        wss://*.firebaseio.com;
       frame-src https://*.firebaseapp.com;
     " />
 

@@ -57,17 +57,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-[#F8FAFC] dark:bg-[#0F172A] flex flex-col">
       {!isOnline && (
-        <div className="fixed top-0 left-0 right-0 z-[100] bg-amber-500 text-white text-xs font-semibold text-center py-2 px-4 flex items-center justify-center gap-2">
+        <div className="sticky top-0 z-[60] bg-amber-500 text-white text-xs font-semibold text-center py-2 px-4 flex items-center justify-center gap-2">
           📡 You're offline. Some features may not work.
         </div>
       )}
       {showBackOnline && (
-        <div className="fixed top-0 left-0 right-0 z-[100] bg-emerald-500 text-white text-xs font-semibold text-center py-2 px-4 flex items-center justify-center gap-2 animate-in slide-in-from-top duration-300">
+        <div className="sticky top-0 z-[60] bg-emerald-500 text-white text-xs font-semibold text-center py-2 px-4 flex items-center justify-center gap-2 animate-in slide-in-from-top duration-300">
           ✅ You're back online!
         </div>
       )}
       {/* ── Header ────────────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-50 bg-[#003366] dark:bg-slate-900 shadow-md border-b border-slate-200 dark:border-slate-700/80">
+      <header data-sticky className="sticky top-0 z-50 bg-[#003366] dark:bg-slate-900 shadow-md border-b border-slate-200 dark:border-slate-700/80">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 shrink-0">
@@ -154,7 +154,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </main>
 
       {/* Footer — desktop only */}
-      <footer className="hidden md:block bg-[#003366] dark:bg-slate-900 dark:border-t dark:border-slate-700 text-white/70 text-xs py-6 px-4">
+      <footer className={`hidden md:block bg-[#003366] dark:bg-slate-900 dark:border-t dark:border-slate-700 text-white/70 text-xs px-4 ${location === "/" ? "py-6" : "py-3"}`}>
         <div className="max-w-5xl mx-auto">
           {location === "/" && (
             <>

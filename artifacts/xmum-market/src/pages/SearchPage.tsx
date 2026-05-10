@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useLang } from "@/contexts/LanguageContext";
 import { searchListings } from "@/lib/listings";
 import { Listing, ListingType } from "@/lib/types";
@@ -44,6 +44,15 @@ export default function SearchPage() {
   const [priceRange, setPriceRange] = useState<PriceRange>("all");
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const skipNextDebounceRef = useRef(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Only auto-focus on desktop — not on mobile (avoids keyboard pop-up)
+  useEffect(() => {
+    const isMobile = window.matchMedia("(max-width: 768px)").matches;
+    if (!isMobile && searchInputRef.current) {
+      setTimeout(() => searchInputRef.current?.focus(), 100);
+    }
+  }, []);
 
   const showPriceFilter = type === "buy-sell" || type === "jobs" || type === "assistance" || type === "rental";
   const showConditionFilter = type === "buy-sell";
@@ -154,18 +163,18 @@ export default function SearchPage() {
   return (
     <div className="max-w-6xl mx-auto animate-in fade-in duration-200">
       {/* Search header */}
-      <div className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 px-4 py-3 sticky top-14 sm:top-16 z-30">
+      <div data-sticky-subheader className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 px-4 py-3 sticky top-14 sm:top-16 z-30">
         {/* Search input row */}
         <div className="flex gap-2 items-center">
           <div className="relative flex-1">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-400" />
             <input
+              ref={searchInputRef}
               type="text"
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
               placeholder={t.searchPlaceholder}
               className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl pl-9 pr-9 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 transition"
-              autoFocus
             />
             {keyword && (
               <button onClick={() => setKeyword("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-400">

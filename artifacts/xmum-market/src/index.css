@@ -1,5 +1,17 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
+
+html {
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+}
+
+header[data-sticky],
+[data-sticky-subheader] {
+  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
 
