@@ -21,6 +21,16 @@ service cloud.firestore {
     function isEditor() {
       return isSignedIn() && (getUserRole() == 'editor' || getUserRole() == 'admin');
     }
+    function isShopOwner(shopId) {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/shops/$(shopId)).data.ownerId == request.auth.uid;
+    }
+    function isShopMember(shopId) {
+      return isSignedIn() && (
+        get(/databases/$(database)/documents/shops/$(shopId)).data.ownerId == request.auth.uid ||
+        request.auth.uid in get(/databases/$(database)/documents/shops/$(shopId)).data.editorIds
+      );
+    }
 
     match /users/{userId} {
       allow read: if true;
@@ -30,10 +40,6 @@ service cloud.firestore {
     match /listings/{listingId} {
       allow read: if true;
       allow create: if isXmuEmail()
-                    && (
-                      request.resource.data.type in ["buy-sell", "lost-found"]
-                      || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.verificationStatus == "approved"
-                    )
                     && request.resource.data.title is string
                     && request.resource.data.title.size() <= 100
                     && request.resource.data.description is string
@@ -41,6 +47,58 @@ service cloud.firestore {
                     && request.resource.data.type in
                        ["buy-sell","lost-found","jobs","assistance","rental"];
       allow update, delete: if isOwner(resource.data.userId) || isEditor();
+    }
+
+    // ── Campus Market Shops ───────────────────────────────────────────────────
+    match /shops/{shopId} {
+      allow read: if true;
+      allow create: if isXmuEmail()
+                    && request.resource.data.ownerId == request.auth.uid
+                    && request.resource.data.name is string
+                    && request.resource.data.name.size() <= 60
+                    && request.resource.data.editorIds.size() <= 3;
+      allow update: if isShopOwner(shopId) || isAdmin();
+      allow delete: if isShopOwner(shopId) || isAdmin();
+    }
+
+    // ── Shop Listings ─────────────────────────────────────────────────────────
+    match /shopListings/{listingId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isShopMember(request.resource.data.shopId);
+      allow update: if isSignedIn() && isShopMember(resource.data.shopId);
+      allow delete: if isSignedIn() && isShopMember(resource.data.shopId);
+    }
+
+    // ── Shop Inquiries ────────────────────────────────────────────────────────
+    match /shopInquiries/{inquiryId} {
+      allow read: if isSignedIn() && (
+        resource.data.buyerId == request.auth.uid ||
+        isShopMember(resource.data.shopId)
+      );
+      allow create: if isXmuEmail()
+                    && request.resource.data.buyerId == request.auth.uid
+                    && request.resource.data.note is string
+                    && request.resource.data.note.size() <= 500;
+      allow update: if isSignedIn() && (
+        isShopMember(resource.data.shopId) ||
+        resource.data.buyerId == request.auth.uid
+      );
+    }
+
+    // ── Shop Reviews ──────────────────────────────────────────────────────────
+    match /shopReviews/{reviewId} {
+      allow read: if true;
+      allow create: if isXmuEmail()
+                    && request.resource.data.reviewerId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // ── Shop Ads ──────────────────────────────────────────────────────────────
+    match /shopAds/{adId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isShopOwner(request.resource.data.shopId);
+      allow update: if isAdmin() || isShopOwner(resource.data.shopId);
+      allow delete: if isAdmin();
     }
 
     match /reports/{reportId} {
@@ -65,61 +123,33 @@ service cloud.firestore {
 
     match /users/{userId}/notifications/{notifId} {
       allow read: if isOwner(userId);
-      allow write: if isOwner(userId)
-                   || isEditor()
-                   || isXmuEmail(); // allows peer notifications e.g. new_message
+      allow write: if isOwner(userId) || isEditor() || isXmuEmail();
     }
 
-    // ── Rental Audit Logs ──────────────────────────────────────────────────────
     match /rentalAuditLogs/{logId} {
       allow create: if isXmuEmail()
                     && request.resource.data.userId == request.auth.uid;
       allow read, update, delete: if isAdmin();
     }
 
-    // ── Seller T&C Audit Logs — permanent, admin-read-only ────────────────────
     match /sellerTcAuditLogs/{logId} {
       allow create: if isXmuEmail()
                     && request.resource.data.userId == request.auth.uid;
-      allow read, update, delete: if isAdmin();
+      allow read: if isAdmin();
     }
 
-    // ── Reviews ───────────────────────────────────────────────────────────────
-    match /reviews/{reviewId} {
-      allow read: if true;
-      allow create: if isXmuEmail()
-                    && request.resource.data.reviewerId == request.auth.uid
-                    && request.resource.data.rating >= 1
-                    && request.resource.data.rating <= 5
-                    && request.resource.data.comment.size() <= 300;
-      allow delete: if isAdmin();
-    }
-
-    // Saved listings — private per-user wishlist
-    match /users/{userId}/savedListings/{listingId} {
-      allow read, write: if isOwner(userId);
-    }
-
-    // Conversations: only participants can read or write
     match /conversations/{convId} {
-      allow read: if isSignedIn()
-                  && request.auth.uid in resource.data.participants;
-      allow create: if isXmuEmail()
-                    && request.auth.uid in request.resource.data.participants;
-      allow update: if isSignedIn()
-                    && request.auth.uid in resource.data.participants;
+      allow read, write: if isSignedIn() &&
+        request.auth.uid in resource.data.participants;
+      allow create: if isSignedIn() &&
+        request.auth.uid in request.resource.data.participants;
+    }
 
-      match /messages/{messageId} {
-        allow read: if isSignedIn()
-                    && request.auth.uid in get(/databases/$(database)/documents/conversations/$(convId)).data.participants;
-        allow create: if isSignedIn()
-                      && request.auth.uid in get(/databases/$(database)/documents/conversations/$(convId)).data.participants
-                      && request.auth.uid == request.resource.data.senderId
-                      && request.resource.data.text is string
-                      && request.resource.data.text.size() <= 1000;
-        allow update: if isSignedIn()
-                      && request.auth.uid in get(/databases/$(database)/documents/conversations/$(convId)).data.participants;
-      }
+    match /conversations/{convId}/messages/{msgId} {
+      allow read: if isSignedIn() &&
+        request.auth.uid in get(/databases/$(database)/documents/conversations/$(convId)).data.participants;
+      allow create: if isSignedIn() &&
+        request.auth.uid in get(/databases/$(database)/documents/conversations/$(convId)).data.participants;
     }
   }
 }

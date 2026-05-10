@@ -1,0 +1,545 @@
+# PROMPT 2 OF 6 — Firestore Rules + New Shop Library
+ 
+You are a senior full-stack developer on the XMUM Marketplace project. Prompt 1 is complete. Now implement the backend data layer for the new Campus Market shop system.
+ 
+---
+ 
+### STEP 1 — Update `firestore.rules`
+ 
+Replace the entire file with:
+ 
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+ 
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+    function isXmuEmail() {
+      return isSignedIn() &&
+        request.auth.token.email.matches('.*@xmu\\.edu\\.my');
+    }
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    function isAdmin() {
+      return isSignedIn() && getUserRole() == 'admin';
+    }
+    function isEditor() {
+      return isSignedIn() && (getUserRole() == 'editor' || getUserRole() == 'admin');
+    }
+    function isShopOwner(shopId) {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/shops/$(shopId)).data.ownerId == request.auth.uid;
+    }
+    function isShopMember(shopId) {
+      return isSignedIn() && (
+        get(/databases/$(database)/documents/shops/$(shopId)).data.ownerId == request.auth.uid ||
+        request.auth.uid in get(/databases/$(database)/documents/shops/$(shopId)).data.editorIds
+      );
+    }
+ 
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if isOwner(userId) || isAdmin();
+    }
+ 
+    match /listings/{listingId} {
+      allow read: if true;
+      allow create: if isXmuEmail()
+                    && request.resource.data.title is string
+                    && request.resource.data.title.size() <= 100
+                    && request.resource.data.description is string
+                    && request.resource.data.description.size() <= 1000
+                    && request.resource.data.type in
+                       ["buy-sell","lost-found","jobs","assistance","rental"];
+      allow update, delete: if isOwner(resource.data.userId) || isEditor();
+    }
+ 
+    // ── Campus Market Shops ───────────────────────────────────────────────────
+    match /shops/{shopId} {
+      allow read: if true;
+      allow create: if isXmuEmail()
+                    && request.resource.data.ownerId == request.auth.uid
+                    && request.resource.data.name is string
+                    && request.resource.data.name.size() <= 60
+                    && request.resource.data.editorIds.size() <= 3;
+      allow update: if isShopOwner(shopId) || isAdmin();
+      allow delete: if isShopOwner(shopId) || isAdmin();
+    }
+ 
+    // ── Shop Listings ─────────────────────────────────────────────────────────
+    match /shopListings/{listingId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isShopMember(request.resource.data.shopId);
+      allow update: if isSignedIn() && isShopMember(resource.data.shopId);
+      allow delete: if isSignedIn() && isShopMember(resource.data.shopId);
+    }
+ 
+    // ── Shop Inquiries ────────────────────────────────────────────────────────
+    match /shopInquiries/{inquiryId} {
+      allow read: if isSignedIn() && (
+        resource.data.buyerId == request.auth.uid ||
+        isShopMember(resource.data.shopId)
+      );
+      allow create: if isXmuEmail()
+                    && request.resource.data.buyerId == request.auth.uid
+                    && request.resource.data.note is string
+                    && request.resource.data.note.size() <= 500;
+      allow update: if isSignedIn() && (
+        isShopMember(resource.data.shopId) ||
+        resource.data.buyerId == request.auth.uid
+      );
+    }
+ 
+    // ── Shop Reviews ──────────────────────────────────────────────────────────
+    match /shopReviews/{reviewId} {
+      allow read: if true;
+      allow create: if isXmuEmail()
+                    && request.resource.data.reviewerId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+ 
+    // ── Shop Ads ──────────────────────────────────────────────────────────────
+    match /shopAds/{adId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isShopOwner(request.resource.data.shopId);
+      allow update: if isAdmin() || isShopOwner(resource.data.shopId);
+      allow delete: if isAdmin();
+    }
+ 
+    match /reports/{reportId} {
+      allow create: if isXmuEmail()
+                    && request.resource.data.reportedBy == request.auth.uid
+                    && request.resource.data.reason is string
+                    && request.resource.data.reason.size() <= 500;
+      allow read, update: if isEditor();
+      allow delete: if isAdmin();
+    }
+ 
+    match /ads/{adId} {
+      allow read: if true;
+      allow create, update: if isEditor();
+      allow delete: if isAdmin();
+    }
+ 
+    match /analytics/{docId} {
+      allow read: if isEditor();
+      allow write: if isAdmin();
+    }
+ 
+    match /users/{userId}/notifications/{notifId} {
+      allow read: if isOwner(userId);
+      allow write: if isOwner(userId) || isEditor() || isXmuEmail();
+    }
+ 
+    match /rentalAuditLogs/{logId} {
+      allow create: if isXmuEmail()
+                    && request.resource.data.userId == request.auth.uid;
+      allow read, update, delete: if isAdmin();
+    }
+ 
+    match /sellerTcAuditLogs/{logId} {
+      allow create: if isXmuEmail()
+                    && request.resource.data.userId == request.auth.uid;
+      allow read: if isAdmin();
+    }
+ 
+    match /conversations/{convId} {
+      allow read, write: if isSignedIn() &&
+        request.auth.uid in resource.data.participants;
+      allow create: if isSignedIn() &&
+        request.auth.uid in request.resource.data.participants;
+    }
+ 
+    match /conversations/{convId}/messages/{msgId} {
+      allow read: if isSignedIn() &&
+        request.auth.uid in get(/databases/$(database)/documents/conversations/$(convId)).data.participants;
+      allow create: if isSignedIn() &&
+        request.auth.uid in get(/databases/$(database)/documents/conversations/$(convId)).data.participants;
+    }
+  }
+}
+```
+ 
+---
+ 
+### STEP 2 — Create `src/lib/shops.ts`
+ 
+Create a new file with this full content:
+ 
+```typescript
+import {
+  collection, doc, addDoc, getDoc, getDocs, updateDoc, deleteDoc,
+  query, where, orderBy, limit, serverTimestamp, increment,
+  onSnapshot, Timestamp,
+} from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import { db, storage } from "@/lib/firebase";
+import { Shop, ShopListing, ShopInquiry, ShopReview, ShopAd, InquiryStatus } from "@/lib/types";
+ 
+// ── Slug helpers ──────────────────────────────────────────────────────────────
+export function slugify(str: string): string {
+  return str.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
+}
+ 
+export async function isSlugAvailable(slug: string): Promise<boolean> {
+  const q = query(collection(db, "shops"), where("slug", "==", slug), limit(1));
+  const snap = await getDocs(q);
+  return snap.empty;
+}
+ 
+// ── Shop CRUD ─────────────────────────────────────────────────────────────────
+export async function createShop(
+  ownerId: string,
+  ownerEmail: string,
+  data: { name: string; slug: string; bio: string; category: string; whatsapp?: string; wechat?: string }
+): Promise<string> {
+  const docRef = await addDoc(collection(db, "shops"), {
+    ownerId,
+    ownerEmail,
+    name: data.name.trim(),
+    slug: data.slug,
+    bio: data.bio.trim(),
+    category: data.category,
+    whatsapp: data.whatsapp ?? "",
+    wechat: data.wechat ?? "",
+    createdAt: Date.now(),
+    isActive: true,
+    editorIds: [],
+    totalListings: 0,
+    totalInquiries: 0,
+    rating: 0,
+    reviewCount: 0,
+  });
+  return docRef.id;
+}
+ 
+export async function getShopBySlug(slug: string): Promise<Shop | null> {
+  const q = query(collection(db, "shops"), where("slug", "==", slug), limit(1));
+  const snap = await getDocs(q);
+  if (snap.empty) return null;
+  return { id: snap.docs[0].id, ...snap.docs[0].data() } as Shop;
+}
+ 
+export async function getShopById(shopId: string): Promise<Shop | null> {
+  const snap = await getDoc(doc(db, "shops", shopId));
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...snap.data() } as Shop;
+}
+ 
+export async function getShopsByOwner(ownerId: string): Promise<Shop[]> {
+  const q = query(collection(db, "shops"), where("ownerId", "==", ownerId));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Shop));
+}
+ 
+export async function getShopsWhereEditor(uid: string): Promise<Shop[]> {
+  const q = query(collection(db, "shops"), where("editorIds", "array-contains", uid));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Shop));
+}
+ 
+export async function updateShop(shopId: string, data: Partial<Shop>): Promise<void> {
+  const { id, ...rest } = data as any;
+  await updateDoc(doc(db, "shops", shopId), rest);
+}
+ 
+export async function uploadShopBanner(shopId: string, file: File): Promise<string> {
+  const storageRef = ref(storage, `shopBanners/${shopId}/banner.jpg`);
+  await uploadBytes(storageRef, file);
+  return getDownloadURL(storageRef);
+}
+ 
+export async function uploadShopLogo(shopId: string, file: File): Promise<string> {
+  const storageRef = ref(storage, `shopLogos/${shopId}/logo.jpg`);
+  await uploadBytes(storageRef, file);
+  return getDownloadURL(storageRef);
+}
+ 
+// ── Shop Editors ──────────────────────────────────────────────────────────────
+export async function addShopEditor(shopId: string, editorUid: string, currentEditors: string[]): Promise<void> {
+  if (currentEditors.length >= 3) throw new Error("Maximum 3 editors allowed.");
+  if (currentEditors.includes(editorUid)) throw new Error("User is already an editor.");
+  await updateDoc(doc(db, "shops", shopId), {
+    editorIds: [...currentEditors, editorUid],
+  });
+}
+ 
+export async function removeShopEditor(shopId: string, editorUid: string, currentEditors: string[]): Promise<void> {
+  await updateDoc(doc(db, "shops", shopId), {
+    editorIds: currentEditors.filter((id) => id !== editorUid),
+  });
+}
+ 
+// ── Shop Listings ─────────────────────────────────────────────────────────────
+export async function createShopListing(data: Omit<ShopListing, "id" | "viewCount" | "inquiryCount" | "createdAt">): Promise<string> {
+  const docRef = await addDoc(collection(db, "shopListings"), {
+    ...data,
+    createdAt: Date.now(),
+    viewCount: 0,
+    inquiryCount: 0,
+    isActive: true,
+  });
+  await updateDoc(doc(db, "shops", data.shopId), { totalListings: increment(1) });
+  return docRef.id;
+}
+ 
+export async function getShopListings(shopId: string): Promise<ShopListing[]> {
+  const q = query(
+    collection(db, "shopListings"),
+    where("shopId", "==", shopId),
+    where("isActive", "==", true),
+    orderBy("createdAt", "desc")
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ShopListing));
+}
+ 
+export async function getAllShopListings(limitCount = 40): Promise<ShopListing[]> {
+  const q = query(
+    collection(db, "shopListings"),
+    where("isActive", "==", true),
+    orderBy("createdAt", "desc"),
+    limit(limitCount)
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ShopListing));
+}
+ 
+export async function getShopListingsByCategory(category: string, limitCount = 40): Promise<ShopListing[]> {
+  const q = query(
+    collection(db, "shopListings"),
+    where("isActive", "==", true),
+    where("category", "==", category),
+    orderBy("createdAt", "desc"),
+    limit(limitCount)
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ShopListing));
+}
+ 
+export async function updateShopListing(listingId: string, data: Partial<ShopListing>): Promise<void> {
+  const { id, ...rest } = data as any;
+  await updateDoc(doc(db, "shopListings", listingId), rest);
+}
+ 
+export async function deleteShopListing(listingId: string, shopId: string): Promise<void> {
+  await updateDoc(doc(db, "shopListings", listingId), { isActive: false });
+  await updateDoc(doc(db, "shops", shopId), { totalListings: increment(-1) });
+}
+ 
+export async function incrementShopListingView(listingId: string): Promise<void> {
+  await updateDoc(doc(db, "shopListings", listingId), { viewCount: increment(1) });
+}
+ 
+export async function uploadShopListingPhoto(shopId: string, file: File, index: number): Promise<string> {
+  const storageRef = ref(storage, `shopListingPhotos/${shopId}/${Date.now()}_${index}.jpg`);
+  await uploadBytes(storageRef, file);
+  return getDownloadURL(storageRef);
+}
+ 
+// ── Inquiries ─────────────────────────────────────────────────────────────────
+export async function createInquiry(data: {
+  shopId: string;
+  shopName: string;
+  shopListingId: string;
+  listingTitle: string;
+  buyerId: string;
+  buyerName: string;
+  buyerEmail: string;
+  quantity?: number;
+  note: string;
+}): Promise<string> {
+  const docRef = await addDoc(collection(db, "shopInquiries"), {
+    ...data,
+    status: "pending" as InquiryStatus,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    reviewLeft: false,
+  });
+  await updateDoc(doc(db, "shopListings", data.shopListingId), { inquiryCount: increment(1) });
+  await updateDoc(doc(db, "shops", data.shopId), { totalInquiries: increment(1) });
+  return docRef.id;
+}
+ 
+export async function getInquiriesForShop(shopId: string): Promise<ShopInquiry[]> {
+  const q = query(
+    collection(db, "shopInquiries"),
+    where("shopId", "==", shopId),
+    orderBy("createdAt", "desc")
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ShopInquiry));
+}
+ 
+export async function getInquiriesForBuyer(buyerId: string): Promise<ShopInquiry[]> {
+  const q = query(
+    collection(db, "shopInquiries"),
+    where("buyerId", "==", buyerId),
+    orderBy("createdAt", "desc")
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ShopInquiry));
+}
+ 
+export async function updateInquiryStatus(inquiryId: string, status: InquiryStatus): Promise<void> {
+  await updateDoc(doc(db, "shopInquiries", inquiryId), { status, updatedAt: Date.now() });
+}
+ 
+// ── Reviews ───────────────────────────────────────────────────────────────────
+export async function leaveShopReview(data: {
+  shopId: string;
+  inquiryId: string;
+  reviewerId: string;
+  reviewerName: string;
+  reviewerAvatar?: string;
+  listingTitle: string;
+  rating: number;
+  comment: string;
+}): Promise<void> {
+  await addDoc(collection(db, "shopReviews"), { ...data, createdAt: Date.now() });
+  await updateDoc(doc(db, "shopInquiries", data.inquiryId), { reviewLeft: true });
+  // Update shop rating average
+  const reviewsSnap = await getDocs(query(collection(db, "shopReviews"), where("shopId", "==", data.shopId)));
+  const reviews = reviewsSnap.docs.map((d) => d.data() as ShopReview);
+  const avg = reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length;
+  await updateDoc(doc(db, "shops", data.shopId), {
+    rating: Math.round(avg * 10) / 10,
+    reviewCount: reviews.length,
+  });
+}
+ 
+export async function getShopReviews(shopId: string): Promise<ShopReview[]> {
+  const q = query(
+    collection(db, "shopReviews"),
+    where("shopId", "==", shopId),
+    orderBy("createdAt", "desc")
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ShopReview));
+}
+ 
+// ── Shop Ads ──────────────────────────────────────────────────────────────────
+export async function submitShopAd(data: Omit<ShopAd, "id" | "impressions" | "clicks" | "submittedAt" | "status">): Promise<string> {
+  const docRef = await addDoc(collection(db, "shopAds"), {
+    ...data,
+    status: "pending" as const,
+    impressions: 0,
+    clicks: 0,
+    submittedAt: Date.now(),
+  });
+  return docRef.id;
+}
+ 
+export async function getApprovedShopAds(): Promise<ShopAd[]> {
+  const now = Date.now();
+  const q = query(
+    collection(db, "shopAds"),
+    where("status", "==", "approved"),
+    where("startDate", "<=", now),
+    where("endDate", ">=", now)
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ShopAd));
+}
+ 
+export async function getAllShops(limitCount = 50): Promise<Shop[]> {
+  const q = query(
+    collection(db, "shops"),
+    where("isActive", "==", true),
+    orderBy("createdAt", "desc"),
+    limit(limitCount)
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Shop));
+}
+```
+ 
+---
+ 
+### STEP 3 — Update `firestore.indexes.json`
+ 
+Replace the entire file with:
+ 
+```json
+{
+  "indexes": [
+    {
+      "collectionGroup": "shopListings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isActive", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "shopListings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "shopId", "order": "ASCENDING" },
+        { "fieldPath": "isActive", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "shopListings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isActive", "order": "ASCENDING" },
+        { "fieldPath": "category", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "shopInquiries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "shopId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "shopInquiries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "buyerId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "shopReviews",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "shopId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "shops",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isActive", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
+```
+ 
+---
+ 
+### STEP 4 — Run typecheck
+ 
+```bash
+cd artifacts/xmum-market && pnpm run typecheck
+```
+ 
+Fix any errors. When done, tell me: ✅ Prompt 2 complete — Firestore rules and shop library ready.
+ 
+---
