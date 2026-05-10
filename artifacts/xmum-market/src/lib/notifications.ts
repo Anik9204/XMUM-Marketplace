@@ -89,6 +89,79 @@ export function subscribeToNotifications(
   );
 }
 
+// ── Campus Market notification helpers ──────────────────────────────────────
+
+export async function notifyShopInquiryReceived(
+  shopOwnerId: string,
+  shopName: string,
+  buyerName: string,
+  inquiryId: string,
+  shopId: string,
+): Promise<void> {
+  await addNotification(shopOwnerId, {
+    type: "shop_inquiry_received",
+    title: "New inquiry received",
+    body: `${buyerName} sent an inquiry to your shop "${shopName}".`,
+    shopId,
+    inquiryId,
+  });
+}
+
+export async function notifyInquiryStatusChanged(
+  buyerId: string,
+  shopName: string,
+  newStatus: string,
+  inquiryId: string,
+  shopId: string,
+): Promise<void> {
+  const statusLabel =
+    newStatus === "confirmed" ? "confirmed" :
+    newStatus === "completed" ? "completed" :
+    newStatus === "cancelled" ? "cancelled" : newStatus;
+
+  const type =
+    newStatus === "confirmed" ? "shop_inquiry_confirmed" :
+    newStatus === "completed" ? "shop_inquiry_completed" :
+    "shop_inquiry_received" as AppNotification["type"];
+
+  await addNotification(buyerId, {
+    type,
+    title: `Inquiry ${statusLabel}`,
+    body: `Your inquiry to "${shopName}" has been ${statusLabel}.`,
+    shopId,
+    inquiryId,
+  });
+}
+
+export async function notifyShopAdApproved(
+  shopOwnerId: string,
+  shopName: string,
+  shopId: string,
+): Promise<void> {
+  await addNotification(shopOwnerId, {
+    type: "shop_ad_approved",
+    title: "Shop ad approved",
+    body: `Your ad for "${shopName}" has been approved and will be displayed in Campus Market.`,
+    shopId,
+  });
+}
+
+export async function notifyShopAdRejected(
+  shopOwnerId: string,
+  shopName: string,
+  adminNote: string,
+  shopId: string,
+): Promise<void> {
+  await addNotification(shopOwnerId, {
+    type: "shop_ad_rejected",
+    title: "Shop ad rejected",
+    body: adminNote
+      ? `Your ad for "${shopName}" was rejected: ${adminNote}`
+      : `Your ad for "${shopName}" was not approved. Please review and resubmit.`,
+    shopId,
+  });
+}
+
 const DIGEST_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 export async function sendDailyDigestIfDue(uid: string, listings: Listing[]): Promise<void> {

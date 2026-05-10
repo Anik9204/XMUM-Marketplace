@@ -1,0 +1,119 @@
+# PROMPT 6 OF 6 — Final Polish, Notifications & Deployment Check
+ 
+You are a senior full-stack developer on the XMUM Marketplace project. Prompts 1–5 are complete. Now do the final integration, polish, and deployment preparation.
+ 
+---
+ 
+### STEP 1 — Notifications for Shop Events
+ 
+In `src/lib/notifications.ts` (or wherever notifications are sent), add helper functions:
+ 
+```typescript
+export async function notifyShopInquiryReceived(shopOwnerId: string, shopName: string, buyerName: string, inquiryId: string, shopId: string)
+export async function notifyInquiryStatusChanged(buyerId: string, shopName: string, newStatus: string, inquiryId: string, shopId: string)
+export async function notifyShopAdApproved(shopOwnerId: string, shopName: string, shopId: string)
+export async function notifyShopAdRejected(shopOwnerId: string, shopName: string, adminNote: string, shopId: string)
+```
+ 
+Each writes to `/users/{uid}/notifications/{auto-id}` with the correct `AppNotification` type from types.ts.
+ 
+Call `notifyShopInquiryReceived` inside `createInquiry()` in `src/lib/shops.ts` after the inquiry is created.
+Call `notifyInquiryStatusChanged` inside `updateInquiryStatus()` in `src/lib/shops.ts`.
+ 
+---
+ 
+### STEP 2 — i18n updates
+ 
+In `src/lib/i18n.ts`, add these keys to both the English and Chinese translation objects:
+ 
+English additions:
+```
+campusMarket: "Campus Market",
+myShops: "My Shops",
+myInquiries: "My Inquiries",
+createShop: "Create a Shop",
+openYourShop: "Open Your Shop",
+shopDashboard: "Shop Dashboard",
+sendInquiry: "Send Inquiry",
+inquiryNote: "Note to seller",
+inquiryQuantity: "Quantity",
+leaveReview: "Leave a Review",
+shopListings: "Shop Listings",
+noShopsYet: "No shops yet — be the first!",
+```
+ 
+Chinese (translate appropriately or use reasonable approximations):
+```
+campusMarket: "校园市场",
+myShops: "我的店铺",
+myInquiries: "我的询价",
+createShop: "创建店铺",
+openYourShop: "开设店铺",
+shopDashboard: "店铺管理",
+sendInquiry: "发送询价",
+inquiryNote: "备注给卖家",
+inquiryQuantity: "数量",
+leaveReview: "撰写评价",
+shopListings: "店铺商品",
+noShopsYet: "暂无店铺 — 成为第一个！",
+```
+ 
+---
+ 
+### STEP 3 — Deployment check: update `pnpm-lock.yaml`
+ 
+Run in the Replit shell:
+```bash
+cd /home/user/workspace && pnpm install
+```
+ 
+Then:
+```bash
+cd artifacts/xmum-market && pnpm run typecheck
+```
+ 
+Then:
+```bash
+cd artifacts/xmum-admin && pnpm run typecheck
+```
+ 
+Fix any remaining TypeScript errors.
+ 
+---
+ 
+### STEP 4 — Final verification checklist
+ 
+Go through this list and confirm each item works:
+ 
+1. ✅ User can navigate to `/campus-market` from the bottom nav (mobile) and top nav (desktop)
+2. ✅ User can create a shop at `/create-shop` (requires XMUM email login)
+3. ✅ Shop owner can manage shop at `/shop-dashboard/[shopId]`
+4. ✅ Public can view any shop at `/shop/[slug]`
+5. ✅ Logged-in user can send an inquiry on a shop listing
+6. ✅ Shop owner sees inquiry in dashboard and can confirm/complete/cancel
+7. ✅ Buyer can leave a review after inquiry is "completed"
+8. ✅ Old shop verification system is completely removed (no references to `verificationStatus` for shop, no `ShopSetupModal`, no old `/shop/:slug` that used user profile)
+9. ✅ Admin panel shows Shops and Shop Ads pages
+10. ✅ No TypeScript errors in either app
+---
+ 
+### STEP 5 — Git commit
+ 
+After everything passes, run:
+```bash
+cd /home/user/workspace
+git add -A
+git commit -m "feat: Campus Market - new shop system with listings, inquiries, reviews and ads"
+git push origin main
+```
+ 
+When done, tell me: ✅ Prompt 6 complete — Campus Market fully implemented and deployed.
+ 
+---
+ 
+## IMPORTANT NOTES FOR ALL PROMPTS:
+- The app uses **Firebase/Firestore** as the database — no SQL, no Express backend for this feature
+- The app is deployed on **Vercel** — after each prompt, if Replit asks to preview, just run `pnpm run typecheck` instead
+- After Prompt 6, push to GitHub and Vercel will auto-deploy
+- If Replit breaks something or asks to restart, always run `pnpm install` first from the workspace root, then retry
+- Dark mode must work on every new page/component — always add `dark:` variants to Tailwind classes

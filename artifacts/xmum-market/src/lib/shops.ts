@@ -6,6 +6,10 @@ import {
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
 import { Shop, ShopListing, ShopInquiry, ShopReview, ShopAd, InquiryStatus } from "@/lib/types";
+import {
+  notifyShopInquiryReceived,
+  notifyInquiryStatusChanged,
+} from "@/lib/notifications";
 
 // ── Slug helpers ──────────────────────────────────────────────────────────────
 export function slugify(str: string): string {
@@ -189,6 +193,19 @@ export async function createInquiry(data: {
   });
   await updateDoc(doc(db, "shopListings", data.shopListingId), { inquiryCount: increment(1) });
   await updateDoc(doc(db, "shops", data.shopId), { totalInquiries: increment(1) });
+
+  // Notify the shop owner — non-critical, fire and forget
+  const shop = await getShopById(data.shopId);
+  if (shop) {
+    notifyShopInquiryReceived(
+      shop.ownerId,
+      data.shopName,
+      data.buyerName,
+      docRef.id,
+      data.shopId,
+    ).catch(() => {});
+  }
+
   return docRef.id;
 }
 
@@ -214,6 +231,23 @@ export async function getInquiriesForBuyer(buyerId: string): Promise<ShopInquiry
 
 export async function updateInquiryStatus(inquiryId: string, status: InquiryStatus): Promise<void> {
   await updateDoc(doc(db, "shopInquiries", inquiryId), { status, updatedAt: Date.now() });
+
+  // Notify the buyer — non-critical, fire and forget
+  try {
+    const snap = await getDoc(doc(db, "shopInquiries", inquiryId));
+    if (snap.exists()) {
+      const inquiry = snap.data() as ShopInquiry;
+      notifyInquiryStatusChanged(
+        inquiry.buyerId,
+        inquiry.shopName,
+        status,
+        inquiryId,
+        inquiry.shopId,
+      ).catch(() => {});
+    }
+  } catch {
+    // Silently ignore — notification is non-critical
+  }
 }
 
 // ── Reviews ───────────────────────────────────────────────────────────────────
