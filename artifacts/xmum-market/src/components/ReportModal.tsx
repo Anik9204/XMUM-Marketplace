@@ -5,6 +5,7 @@ import { db } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { Listing, ReportCategory } from "../lib/types";
 import { useToast } from "../hooks/use-toast";
+import { checkRateLimit } from "../lib/rateLimit";
 
 interface Props {
   listing: Listing;
@@ -38,6 +39,10 @@ export default function ReportModal({ listing, onClose }: Props) {
     if (!user || !userProfile) return;
     if (reason.trim().length < 10) {
       toast({ title: "Please provide more detail (at least 10 characters)", variant: "destructive" });
+      return;
+    }
+    if (!checkRateLimit(`report_${user.uid}`, 5, 10 * 60 * 1000)) {
+      toast({ title: "You've submitted too many reports. Please wait 10 minutes.", variant: "destructive" });
       return;
     }
     setLoading(true);

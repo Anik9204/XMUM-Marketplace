@@ -1,0 +1,454 @@
+You are a senior DevSecOps engineer working on the XMUM Marketplace at
+artifacts/xmum-market/. Read ALL of these files completely before writing
+a single line of code:
+
+- src/lib/firebase.ts
+- src/lib/listings.ts
+- src/lib/contentFilter.ts
+- src/lib/userProfile.ts
+- src/lib/messaging.ts
+- src/lib/validation.ts
+- src/main.tsx
+- src/App.tsx
+- firestore.rules
+- storage.rules
+- vite.config.ts
+- index.html
+- public/manifest.json (if it exists)
+
+⚠️ CRITICAL — FIRESTORE RULES PRESERVATION:
+firestore.rules was already updated by previous tasks and contains
+ALL of the following blocks that must be kept exactly as-is:
+  - match /rentalAuditLogs/{logId}
+  - match /users/{userId}/savedListings/{listingId}
+  - match /conversations/{convId} with messages subcollection
+  - match /reviews/{reviewId}              ← added by Part 5
+  - match /sellerTcAuditLogs/{logId}       ← added by Part 5
+  - The listings create rule which gates jobs/assistance/rental
+    behind verificationStatus == "approved"  ← added by Part 5
+
+When you output the updated firestore.rules, read the CURRENT file
+first, then ONLY ADD the new field validation constraints described
+below. Do not remove, reorder, or replace any existing rule block.
+Output the COMPLETE file.
+
+⚠️ CRITICAL — STORAGE RULES PRESERVATION:
+storage.rules was already updated by a previous task and contains:
+  - match /studentIds/{userId}/{allPaths=**}   ← added by Part 5
+  - match /shopBanners/{userId}/{allPaths=**}  ← added by Part 5
+  - match /avatars/{userId}/{allPaths=**}      ← may exist
+
+When you output the updated storage.rules, read the CURRENT file
+first, then ONLY ADD or tighten the rules described below. Never
+remove the studentIds or shopBanners rules.
+
+═══════════════════════════════════════════════════════
+SECTION A — SECURITY
+═══════════════════════════════════════════════════════
+
+── A1: Client-Side Rate Limiting ───────────────────────
+Create src/lib/rateLimit.ts:
+
+  interface RateLimitRecord {
+    timestamps: number[];
+  }
+
+  export function checkRateLimit(
+    key: string,
+    maxCalls: number,
+    windowMs: number
+  ): boolean {
+    const now = Date.now();
+    let record: RateLimitRecord = { timestamps: [] };
+    try {
+      const raw = localStorage.getItem(`rl_${key}`);
+      if (raw) record = JSON.parse(raw);
+    } catch {}
+    // Remove expired timestamps
+    record.timestamps = record.timestamps.filter(
+      (t) => now - t < windowMs
+    );
+    if (record.timestamps.length >= maxCalls) return false; // blocked
+    record.timestamps.push(now);
+    try { localStorage.setItem(`rl_${key}`, JSON.stringify(record)); }
+    catch {}
+    return true; // allowed
+  }
+
+Apply checkRateLimit in these places:
+
+  src/pages/PostPage.tsx — in the submit handler, BEFORE the
+  createListing call (but AFTER the tier enforcement checks):
+    import { checkRateLimit } from "@/lib/rateLimit";
+    if (!checkRateLimit(`post_${user.uid}`, 3, 60 * 60 * 1000)) {
+      setError("You've posted too many listings in the last hour. Please wait before posting again.");
+      setLoading(false);
+      return;
+    }
+
+  src/components/ReportModal.tsx — in the submit handler:
+    if (!checkRateLimit(`report_${user.uid}`, 5, 10 * 60 * 1000)) {
+      setError("You've submitted too many reports. Please wait 10 minutes.");
+      return;
+    }
+
+  src/pages/MessagesPage.tsx — in the send handler:
+    if (!checkRateLimit(`msg_${user.uid}`, 30, 60 * 1000)) {
+      // Silently fail with a brief inline error, don't block UX
+      setInputError("You're sending messages too quickly. Please slow down.");
+      return;
+    }
+
+  src/components/AuthModal.tsx — in the sign-in submit handler:
+    if (!checkRateLimit(`login_${email}`, 5, 5 * 60 * 1000)) {
+      setError("Too many login attempts. Please wait 5 minutes and try again.");
+      return;
+    }
+
+── A2: Input Sanitization ──────────────────────────────
+Create src/lib/sanitize.ts:
+
+  export function sanitizeText(
+    input: string,
+    maxLength: number
+  ): string {
+    return input
+      .trim()
+      .replace(/<[^>]*>/g, "")        // strip HTML tags
+      .replace(/\s{2,}/g, " ")        // collapse multiple spaces
+      .slice(0, maxLength);
+  }
+
+  export function sanitizeListingData(
+    data: Record<string, unknown>
+  ): Record<string, unknown> {
+    const out = { ...data };
+    if (typeof out.title === "string")
+      out.title = sanitizeText(out.title, 100);
+    if (typeof out.description === "string")
+      out.description = sanitizeText(out.description, 1000);
+    if (typeof out.meetupSpot === "string")
+      out.meetupSpot = sanitizeText(out.meetupSpot, 200);
+    if (typeof out.wechat === "string")
+      out.wechat = sanitizeText(out.wechat, 50);
+    if (typeof out.whatsapp === "string")
+      out.whatsapp = out.whatsapp.replace(/[^\d+]/g, "").slice(0, 20);
+    if (typeof out.price === "number")
+      out.price = Math.max(0, Math.min(50000, out.price));
+    return out;
+  }
+
+In src/lib/listings.ts:
+  - Import sanitizeListingData from "./sanitize".
+  - In createListing, wrap the data object before passing to addDoc:
+      const safeData = sanitizeListingData(data as Record<string, unknown>);
+      await addDoc(collection(db, "listings"), { ...safeData, ... });
+  - In updateListing, do the same for the updates parameter:
+      const safeUpdates = sanitizeListingData(updates as Record<string, unknown>);
+
+── A3: Firestore Rules Hardening ───────────────────────
+Read the CURRENT firestore.rules file completely.
+Add field validation to these EXISTING rules (modify the rules
+in-place, do not duplicate them):
+
+  listings create rule — add field validations:
+    && request.resource.data.title is string
+    && request.resource.data.title.size() <= 100
+    && request.resource.data.description is string
+    && request.resource.data.description.size() <= 1000
+    && request.resource.data.type in
+       ["buy-sell","lost-found","jobs","assistance","rental"]
+
+  reports create rule — add:
+    && request.resource.data.reason is string
+
+  messages create rule — add:
+    && request.resource.data.text is string
+    && request.resource.data.text.size() <= 1000
+
+IMPORTANT: The listings create rule already has the verificationStatus
+gate from Part 5. Keep it. The updated rule must have BOTH the
+verificationStatus gate AND the new field validations.
+
+Output the COMPLETE updated firestore.rules file.
+
+── A4: Storage Rules Hardening ─────────────────────────
+Read the CURRENT storage.rules file completely.
+Tighten the existing listings photos rule:
+  Change: request.resource.size < 10 * 1024 * 1024
+  To:     request.resource.size < 5 * 1024 * 1024
+
+If an avatars rule exists, add size and type constraints:
+  request.resource.size < 2 * 1024 * 1024
+  && request.resource.contentType.matches("image/.*")
+
+If an avatars rule does NOT exist, add it:
+  match /avatars/{userId}/{allPaths=**} {
+    allow read: if true;
+    allow write: if request.auth != null
+                 && request.auth.uid == userId
+                 && request.resource.size < 2 * 1024 * 1024
+                 && request.resource.contentType.matches("image/.*");
+  }
+
+KEEP studentIds and shopBanners rules exactly as they are.
+Output the COMPLETE updated storage.rules file.
+
+── A5: Content Security Policy ─────────────────────────
+In index.html, add inside <head> (after the existing meta tags):
+
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self' https://apis.google.com
+      https://*.firebaseapp.com https://*.googleapis.com 'unsafe-inline';
+    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+    font-src 'self' https://fonts.gstatic.com;
+    img-src 'self' data: blob: https://*.googleapis.com
+      https://*.googleusercontent.com
+      https://firebasestorage.googleapis.com;
+    connect-src 'self' https://*.googleapis.com
+      https://*.firebaseio.com
+      https://firestore.googleapis.com
+      wss://*.firebaseio.com;
+    frame-src https://*.firebaseapp.com;
+  ">
+
+Keep it as a single meta tag. The whitespace inside content is fine.
+
+── A6: Firebase Missing Env Vars Warning ────────────────
+In src/lib/firebase.ts, add this block BEFORE the initializeApp call:
+
+  const requiredEnvVars = [
+    "VITE_FIREBASE_API_KEY",
+    "VITE_FIREBASE_AUTH_DOMAIN",
+    "VITE_FIREBASE_PROJECT_ID",
+    "VITE_FIREBASE_APP_ID",
+  ] as const;
+  const missingVars = requiredEnvVars.filter(
+    (key) => !import.meta.env[key]
+  );
+  if (missingVars.length > 0) {
+    console.error(
+      "[firebase] Missing environment variables:",
+      missingVars.join(", "),
+      "\nSet these in Vercel: Settings → Environment Variables."
+    );
+  }
+
+═══════════════════════════════════════════════════════
+SECTION B — PERFORMANCE
+═══════════════════════════════════════════════════════
+
+── B1: Code Splitting ──────────────────────────────────
+In src/App.tsx:
+  - Add at the top:
+      import { lazy, Suspense } from "react";
+  - Convert ALL page imports to lazy:
+      const HomePage       = lazy(() => import("@/pages/HomePage"));
+      const SearchPage     = lazy(() => import("@/pages/SearchPage"));
+      const PostPage       = lazy(() => import("@/pages/PostPage"));
+      const ProfilePage    = lazy(() => import("@/pages/ProfilePage"));
+      const SettingsPage   = lazy(() => import("@/pages/SettingsPage"));
+      const ListingDetailPage = lazy(() => import("@/pages/ListingDetailPage"));
+      const EditListingPage   = lazy(() => import("@/pages/EditListingPage"));
+      const ResetPasswordPage = lazy(() => import("@/pages/ResetPasswordPage"));
+      const MessagesPage      = lazy(() => import("@/pages/MessagesPage"));
+      const SellerProfilePage = lazy(() => import("@/pages/SellerProfilePage"));
+      const ShopPage          = lazy(() => import("@/pages/ShopPage"));
+      const NotFound          = lazy(() => import("@/pages/not-found"));
+
+  - Create a PageSkeleton component in the same file:
+      function PageSkeleton() {
+        return (
+          <div className="min-h-screen bg-gray-50 dark:bg-slate-900
+          animate-pulse" />
+        );
+      }
+
+  - Wrap <Switch> with:
+      <Suspense fallback={<PageSkeleton />}>
+        <Switch>...</Switch>
+      </Suspense>
+
+── B2: Image Optimisation ──────────────────────────────
+In src/components/ListingCard.tsx, on all <img> elements:
+  - Ensure loading="lazy" is present.
+  - Add decoding="async".
+  - Add fetchPriority="low" (note: React uses fetchPriority not
+    fetchpriority).
+  - Add width and height attributes matching the aspect ratio to
+    prevent layout shift. Use numeric values (e.g. width={400}
+    height={300} for a 4:3 card image).
+
+In src/pages/ListingDetailPage.tsx, on the hero/first image:
+  - Add fetchPriority="high" and loading="eager".
+  - On all other gallery images: loading="lazy" fetchPriority="low".
+
+── B3: Firestore Index Comments ────────────────────────
+In src/lib/listings.ts, add this comment block at the very top of
+the file (after imports):
+
+  // ── REQUIRED FIRESTORE COMPOSITE INDEXES ─────────────────────────
+  // Deploy these via Firebase Console → Firestore → Indexes:
+  //
+  // 1. listings: type ASC, sortKey DESC
+  //    (used by getListingsPage)
+  //
+  // 2. listings: type ASC, category ASC, sortKey DESC
+  //    (used by getListingsPage with category filter)
+  //
+  // 3. listings: userId ASC, createdAt DESC
+  //    (used by getUserListings)
+  //
+  // 4. listings: type ASC, isArchived ASC, status ASC
+  //    (used by getTabCounts)
+  //
+  // 5. reviews: sellerId ASC, createdAt DESC
+  //    (used by getReviews in reviews.ts)
+  //
+  // 6. sellerTcAuditLogs: userId ASC, acceptedAt DESC
+  //    (admin query)
+  // ──────────────────────────────────────────────────────────────────
+
+── B4: Session-Level Listing Cache ─────────────────────
+In src/lib/listings.ts, add a simple stale-while-revalidate cache
+for getListingsPage:
+
+  const CACHE_TTL_MS = 60_000; // 60 seconds
+
+  function getCacheKey(type: string, cursor: string | null): string {
+    return `listings_cache_${type}_${cursor ?? "first"}`;
+  }
+
+  function readCache<T>(key: string): T | null {
+    try {
+      const raw = sessionStorage.getItem(key);
+      if (!raw) return null;
+      const { data, ts } = JSON.parse(raw);
+      if (Date.now() - ts > CACHE_TTL_MS) {
+        sessionStorage.removeItem(key);
+        return null;
+      }
+      return data as T;
+    } catch { return null; }
+  }
+
+  function writeCache<T>(key: string, data: T): void {
+    try {
+      sessionStorage.setItem(key, JSON.stringify({ data, ts: Date.now() }));
+    } catch {}
+  }
+
+In getListingsPage:
+  - At the top of the function, before the Firestore query:
+      const cacheKey = getCacheKey(type, cursor?.id ?? null);
+      const cached = readCache<{ listings: Listing[]; cursor: ...; hasMore: boolean }>(cacheKey);
+      // Stale-while-revalidate: return cache immediately, fetch in background
+      // For simplicity, just return cache if fresh (skip background refetch):
+      if (cached) return cached;
+  - After a successful Firestore fetch, before returning:
+      writeCache(cacheKey, result);
+      return result;
+
+═══════════════════════════════════════════════════════
+SECTION C — PWA
+═══════════════════════════════════════════════════════
+
+── C1: Install vite-plugin-pwa ─────────────────────────
+Run: pnpm add -D vite-plugin-pwa
+(This is the ONLY new package permitted in this entire task.)
+
+In vite.config.ts:
+  - Import: import { VitePWA } from "vite-plugin-pwa";
+  - Add to the plugins array (LAST item, after readmeTimestampPlugin):
+      VitePWA({
+        registerType: "autoUpdate",
+        includeAssets: ["favicon.svg"],
+        manifest: {
+          name: "XMUM Market",
+          short_name: "XMUM Market",
+          description: "The community marketplace for XMUM students",
+          theme_color: "#003366",
+          background_color: "#003366",
+          display: "standalone",
+          start_url: "/",
+          icons: [
+            { src: "/favicon.svg", sizes: "any", type: "image/svg+xml",
+              purpose: "any maskable" },
+          ],
+        },
+        workbox: {
+          globPatterns: ["**/*.{js,css,html,svg,png,jpg,webp}"],
+          runtimeCaching: [
+            {
+              urlPattern:
+                /^https:\/\/firebasestorage\.googleapis\.com\/.*/i,
+              handler: "CacheFirst",
+              options: {
+                cacheName: "firebase-images",
+                expiration: {
+                  maxEntries: 100,
+                  maxAgeSeconds: 60 * 60 * 24 * 7, // 7 days
+                },
+              },
+            },
+          ],
+        },
+      }),
+
+── C2: Offline Banner ──────────────────────────────────
+In src/components/Layout.tsx, add online/offline detection:
+
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [showBackOnline, setShowBackOnline] = useState(false);
+
+  useEffect(() => {
+    const onOnline = () => {
+      setIsOnline(true);
+      setShowBackOnline(true);
+      setTimeout(() => setShowBackOnline(false), 3000);
+    };
+    const onOffline = () => {
+      setIsOnline(false);
+      setShowBackOnline(false);
+    };
+    window.addEventListener("online",  onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => {
+      window.removeEventListener("online",  onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
+  }, []);
+
+Render at the very top of the Layout return, before any other
+content:
+  {!isOnline && (
+    <div className="fixed top-0 left-0 right-0 z-[100] bg-amber-500
+    text-white text-xs font-semibold text-center py-2 px-4
+    flex items-center justify-center gap-2">
+      📡 You're offline. Some features may not work.
+    </div>
+  )}
+  {showBackOnline && (
+    <div className="fixed top-0 left-0 right-0 z-[100] bg-emerald-500
+    text-white text-xs font-semibold text-center py-2 px-4
+    flex items-center justify-center gap-2
+    animate-in slide-in-from-top duration-300">
+      ✅ You're back online!
+    </div>
+  )}
+
+═══════════════════════════════════════════════════════
+CONSTRAINTS
+═══════════════════════════════════════════════════════
+- vite-plugin-pwa is the ONLY new package permitted.
+- Rate limiting is client-side UX throttling only. Security is
+  enforced by Firestore rules.
+- Do NOT modify any Firestore query logic other than adding the
+  sanitize call in createListing and updateListing.
+- After ALL changes:
+  (a) Show every file modified or created.
+  (b) Output the COMPLETE updated firestore.rules.
+  (c) Output the COMPLETE updated storage.rules.
+  (d) Run pnpm build and paste the terminal output.
+  (e) Confirm pnpm preview loads without console errors.

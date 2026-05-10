@@ -155,6 +155,9 @@ export default function ListingCard({
                 className={`w-full aspect-[4/3] object-cover ${isSold ? "opacity-50" : ""}`}
                 loading="lazy"
                 decoding="async"
+                fetchPriority="low"
+                width={400}
+                height={300}
               />
             ) : (
               <div className={`w-full aspect-[4/3] bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-600 flex flex-col items-center justify-center gap-2 ${isSold ? "opacity-50" : ""}`}>

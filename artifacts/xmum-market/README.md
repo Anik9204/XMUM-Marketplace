@@ -1,6 +1,6 @@
 # XMUM Market — Marketplace App
 
-Last updated: Sun, 10 May 2026 02:46:35 GMT
+Last updated: Sun, 10 May 2026 03:26:07 GMT
 
 ---
 
@@ -40,7 +40,7 @@ XMUM Market is a mobile-first community marketplace for students of Xiamen Unive
 
 ## 2. Current Project State
 
-Last updated: Sun, 10 May 2026 02:46:35 GMT
+Last updated: Sun, 10 May 2026 03:26:07 GMT
 
 **Working features:**
 - Sign up / sign in with `@xmu.edu.my` email only — enforced at Firebase Auth and Firestore rules level

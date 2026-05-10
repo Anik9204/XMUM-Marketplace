@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { uploadPhoto, createListing, writeRentalTcAuditLog } from "@/lib/listings";
+import { checkRateLimit } from "@/lib/rateLimit";
 import { checkContent } from "@/lib/contentFilter";
 import { auth, db } from "@/lib/firebase";
 import { doc, updateDoc, increment } from "firebase/firestore";
@@ -490,6 +491,12 @@ export default function PostPage() {
           ? `You have reached the maximum of ${VERIFIED_LIMIT} active listings for Verified Sellers.`
           : `Free accounts can have up to ${FREE_LIMIT} active listings. Become a Verified Seller to post more.`
       );
+      setLoading(false);
+      return;
+    }
+
+    if (!checkRateLimit(`post_${user.uid}`, 3, 60 * 60 * 1000)) {
+      setError("You've posted too many listings in the last hour. Please wait before posting again.");
       setLoading(false);
       return;
     }

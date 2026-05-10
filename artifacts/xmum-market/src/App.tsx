@@ -1,24 +1,31 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import Layout from "@/components/Layout";
-import HomePage from "@/pages/HomePage";
-import SearchPage from "@/pages/SearchPage";
-import PostPage from "@/pages/PostPage";
-import ProfilePage from "@/pages/ProfilePage";
-import SettingsPage from "@/pages/SettingsPage";
-import ListingDetailPage from "@/pages/ListingDetailPage";
-import EditListingPage from "@/pages/EditListingPage";
-import ResetPasswordPage from "@/pages/ResetPasswordPage";
-import MessagesPage from "@/pages/MessagesPage";
-import SellerProfilePage from "@/pages/SellerProfilePage";
-import ShopPage from "@/pages/ShopPage";
-import NotFound from "@/pages/not-found";
+
+const HomePage          = lazy(() => import("@/pages/HomePage"));
+const SearchPage        = lazy(() => import("@/pages/SearchPage"));
+const PostPage          = lazy(() => import("@/pages/PostPage"));
+const ProfilePage       = lazy(() => import("@/pages/ProfilePage"));
+const SettingsPage      = lazy(() => import("@/pages/SettingsPage"));
+const ListingDetailPage = lazy(() => import("@/pages/ListingDetailPage"));
+const EditListingPage   = lazy(() => import("@/pages/EditListingPage"));
+const ResetPasswordPage = lazy(() => import("@/pages/ResetPasswordPage"));
+const MessagesPage      = lazy(() => import("@/pages/MessagesPage"));
+const SellerProfilePage = lazy(() => import("@/pages/SellerProfilePage"));
+const ShopPage          = lazy(() => import("@/pages/ShopPage"));
+const NotFound          = lazy(() => import("@/pages/not-found"));
 
 const queryClient = new QueryClient();
+
+function PageSkeleton() {
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-900 animate-pulse" />
+  );
+}
 
 function FirebaseActionHandler() {
   const [, navigate] = useLocation();
@@ -42,20 +49,22 @@ function Router() {
   return (
     <Layout>
       <FirebaseActionHandler />
-      <Switch>
-        <Route path="/" component={HomePage} />
-        <Route path="/reset-password" component={ResetPasswordPage} />
-        <Route path="/search" component={SearchPage} />
-        <Route path="/post" component={PostPage} />
-        <Route path="/profile" component={ProfilePage} />
-        <Route path="/settings" component={SettingsPage} />
-        <Route path="/listing/:id" component={ListingDetailPage} />
-        <Route path="/edit/:id" component={EditListingPage} />
-        <Route path="/messages" component={MessagesPage} />
-        <Route path="/seller/:uid" component={SellerProfilePage} />
-        <Route path="/shop/:slug" component={ShopPage} />
-        <Route component={NotFound} />
-      </Switch>
+      <Suspense fallback={<PageSkeleton />}>
+        <Switch>
+          <Route path="/" component={HomePage} />
+          <Route path="/reset-password" component={ResetPasswordPage} />
+          <Route path="/search" component={SearchPage} />
+          <Route path="/post" component={PostPage} />
+          <Route path="/profile" component={ProfilePage} />
+          <Route path="/settings" component={SettingsPage} />
+          <Route path="/listing/:id" component={ListingDetailPage} />
+          <Route path="/edit/:id" component={EditListingPage} />
+          <Route path="/messages" component={MessagesPage} />
+          <Route path="/seller/:uid" component={SellerProfilePage} />
+          <Route path="/shop/:slug" component={ShopPage} />
+          <Route component={NotFound} />
+        </Switch>
+      </Suspense>
     </Layout>
   );
 }

@@ -33,13 +33,20 @@ service cloud.firestore {
                     && (
                       request.resource.data.type in ["buy-sell", "lost-found"]
                       || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.verificationStatus == "approved"
-                    );
+                    )
+                    && request.resource.data.title is string
+                    && request.resource.data.title.size() <= 100
+                    && request.resource.data.description is string
+                    && request.resource.data.description.size() <= 1000
+                    && request.resource.data.type in
+                       ["buy-sell","lost-found","jobs","assistance","rental"];
       allow update, delete: if isOwner(resource.data.userId) || isEditor();
     }
 
     match /reports/{reportId} {
       allow create: if isXmuEmail()
                     && request.resource.data.reportedBy == request.auth.uid
+                    && request.resource.data.reason is string
                     && request.resource.data.reason.size() <= 500;
       allow read, update: if isEditor();
       allow delete: if isAdmin();
@@ -105,7 +112,9 @@ service cloud.firestore {
                     && request.auth.uid in get(/databases/$(database)/documents/conversations/$(convId)).data.participants;
         allow create: if isSignedIn()
                       && request.auth.uid in get(/databases/$(database)/documents/conversations/$(convId)).data.participants
-                      && request.auth.uid == request.resource.data.senderId;
+                      && request.auth.uid == request.resource.data.senderId
+                      && request.resource.data.text is string
+                      && request.resource.data.text.size() <= 1000;
         allow update: if isSignedIn()
                       && request.auth.uid in get(/databases/$(database)/documents/conversations/$(convId)).data.participants;
       }

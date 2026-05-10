@@ -468,6 +468,8 @@ export default function ListingDetailPage() {
                 alt={listing.title}
                 className={`w-full h-64 sm:h-80 md:h-96 object-contain cursor-zoom-in transition-opacity duration-150 ${isSold ? "opacity-50" : ""}`}
                 onClick={() => openLightbox(activePhoto)}
+                fetchPriority="high"
+                loading="eager"
               />
               {isSold && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -511,7 +513,7 @@ export default function ListingDetailPage() {
                 onClick={() => setActivePhoto(i)}
                 className={`w-14 h-14 flex-shrink-0 rounded-xl overflow-hidden border-2 transition-all ${i === activePhoto ? "border-[#003366] dark:border-blue-400 ring-2 ring-[#003366]/30" : "border-transparent"}`}
               >
-                <img src={src} alt={`${listing.title} photo ${i + 1}`} className="w-full h-full object-cover" />
+                <img src={src} alt={`${listing.title} photo ${i + 1}`} className="w-full h-full object-cover" loading="lazy" decoding="async" />
               </button>
             ))}
           </div>

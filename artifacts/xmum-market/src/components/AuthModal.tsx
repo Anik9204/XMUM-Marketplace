@@ -3,6 +3,7 @@ import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { signIn, signUp, resetPasswordWithCheck, isXmuEmail, resendVerification } from "@/lib/auth";
 import { X, Eye, EyeOff, MailCheck, Loader2 } from "lucide-react";
+import { checkRateLimit } from "@/lib/rateLimit";
 
 type Mode = "signin" | "signup" | "forgot";
 
@@ -128,6 +129,10 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
         setVerificationPending(true);
         startCooldown();
       } else {
+        if (!checkRateLimit(`login_${email}`, 5, 5 * 60 * 1000)) {
+          setError("Too many login attempts. Please wait 5 minutes and try again.");
+          return;
+        }
         await signIn(email, password);
         onClose();
       }

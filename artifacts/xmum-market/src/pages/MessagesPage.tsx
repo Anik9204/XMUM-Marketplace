@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useLang } from "@/contexts/LanguageContext";
 import { getProfile } from "@/lib/userProfile";
 import { UserProfile } from "@/lib/types";
+import { checkRateLimit } from "@/lib/rateLimit";
 import {
   subscribeToConversations, subscribeToMessages, sendMessage,
   markConversationRead, markMessagesAsSeen, setTypingStatus,
@@ -78,6 +79,7 @@ export default function MessagesPage() {
   const { t } = useLang();
   const [, navigate] = useLocation();
   const [showAuth, setShowAuth] = useState(false);
+  const [inputError, setInputError] = useState("");
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loadingConvs, setLoadingConvs] = useState(true);
@@ -225,6 +227,11 @@ export default function MessagesPage() {
 
   const handleSend = useCallback(async () => {
     if (!inputText.trim() || !activeConv || !user || sending) return;
+    if (!checkRateLimit(`msg_${user.uid}`, 30, 60 * 1000)) {
+      setInputError("You're sending messages too quickly. Please slow down.");
+      return;
+    }
+    setInputError("");
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     setTypingStatus(activeConv.id, user.uid, false);
     const otherUid = activeConv.participants.find((p) => p !== user.uid) ?? "";
@@ -520,6 +527,9 @@ export default function MessagesPage() {
 
       {/* Input bar */}
       <div className="shrink-0 px-3 py-3 bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-700">
+        {inputError && (
+          <p className="text-xs text-red-500 dark:text-red-400 mb-1 px-1">{inputError}</p>
+        )}
         <div className="flex items-end gap-2">
           <div className="relative flex-1">
             <textarea

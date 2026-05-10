@@ -4,6 +4,24 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
     <title>XMUM Market</title>
+    <meta http-equiv="Content-Security-Policy" content="
+      default-src 'self';
+      script-src 'self' https://apis.google.com
+        https://*.firebaseapp.com https://*.googleapis.com 'unsafe-inline';
+      style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+      font-src 'self' https://fonts.gstatic.com;
+      img-src 'self' data: blob:
+        https://*.googleapis.com
+        https://*.googleusercontent.com
+        https://firebasestorage.googleapis.com
+        https://ui-avatars.com;
+      connect-src 'self' https://*.googleapis.com
+        https://*.firebaseio.com
+        https://firestore.googleapis.com
+        wss://*.firebaseio.com
+        wss:;
+      frame-src https://*.firebaseapp.com;
+    " />
 
     <!-- PWA -->
     <link rel="manifest" href="/manifest.json" />

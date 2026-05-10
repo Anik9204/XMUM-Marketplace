@@ -24,8 +24,56 @@ import {
 } from "firebase/storage";
 import { db, storage } from "./firebase";
 import { Listing, ListingType } from "./types";
+import { sanitizeListingData } from "./sanitize";
+
+// ── REQUIRED FIRESTORE COMPOSITE INDEXES ─────────────────────────
+// Deploy these via Firebase Console → Firestore → Indexes:
+//
+// 1. listings: type ASC, sortKey DESC
+//    (used by getListingsPage)
+//
+// 2. listings: type ASC, category ASC, sortKey DESC
+//    (used by getListingsPage with category filter)
+//
+// 3. listings: userId ASC, createdAt DESC
+//    (used by getUserListings)
+//
+// 4. listings: type ASC, isArchived ASC, status ASC
+//    (used by getTabCounts)
+//
+// 5. reviews: sellerId ASC, createdAt DESC
+//    (used by getReviews in reviews.ts)
+//
+// 6. sellerTcAuditLogs: userId ASC, acceptedAt DESC
+//    (admin query)
+// ──────────────────────────────────────────────────────────────────
 
 const PAGE_SIZE = 12;
+
+const CACHE_TTL_MS = 60_000;
+
+function getCacheKey(type: string, cursor: string | null): string {
+  return `listings_cache_${type}_${cursor ?? "first"}`;
+}
+
+function readCache<T>(key: string): T | null {
+  try {
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return null;
+    const { data, ts } = JSON.parse(raw);
+    if (Date.now() - ts > CACHE_TTL_MS) {
+      sessionStorage.removeItem(key);
+      return null;
+    }
+    return data as T;
+  } catch { return null; }
+}
+
+function writeCache<T>(key: string, data: T): void {
+  try {
+    sessionStorage.setItem(key, JSON.stringify({ data, ts: Date.now() }));
+  } catch {}
+}
 
 export const LISTING_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000;
 export const LISTING_REMINDER_MS = 23 * 24 * 60 * 60 * 1000;
@@ -88,8 +136,9 @@ export async function createListing(
   data: Omit<Listing, "id" | "createdAt" | "isArchived" | "status">
 ): Promise<string> {
   const now = Date.now();
+  const safeData = sanitizeListingData(data as Record<string, unknown>);
   const docRef = await addDoc(collection(db, "listings"), {
-    ...data,
+    ...safeData,
     createdAt: serverTimestamp(),
     sortKey: now,
     isArchived: false,
@@ -106,8 +155,9 @@ export async function updateListing(
   const shouldDecrement =
     data.status === "sold" || data.isArchived === true;
 
+  const safeUpdates = sanitizeListingData(data as Record<string, unknown>);
   await Promise.race([
-    updateDoc(doc(db, "listings", id), data),
+    updateDoc(doc(db, "listings", id), safeUpdates),
     new Promise<void>((_, reject) =>
       setTimeout(() => reject(new Error("timeout:update-listing")), 6_000)
     ),
@@ -173,6 +223,9 @@ export async function getListingsPage(
   type: ListingType,
   cursor?: QueryDocumentSnapshot | null
 ): Promise<{ listings: Listing[]; cursor: QueryDocumentSnapshot | null; hasMore: boolean }> {
+  const cacheKey = getCacheKey(type, cursor?.id ?? null);
+  const cached = readCache<{ listings: Listing[]; cursor: QueryDocumentSnapshot | null; hasMore: boolean }>(cacheKey);
+  if (cached) return cached;
   try {
     const constraints = [
       where("type", "==", type),
@@ -187,7 +240,9 @@ export async function getListingsPage(
     const pageDocs = snap.docs.slice(0, PAGE_SIZE);
     const listings = pageDocs.map(mapDoc);
     const nextCursor = pageDocs.length > 0 ? pageDocs[pageDocs.length - 1] : null;
-    return { listings, cursor: nextCursor, hasMore };
+    const result = { listings, cursor: nextCursor, hasMore };
+    writeCache(cacheKey, result);
+    return result;
   } catch (err: any) {
     if (err?.code === "failed-precondition" || err?.message?.includes("index")) {
       console.warn("[listings] Composite index not ready — using client-side fallback");

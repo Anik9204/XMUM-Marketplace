@@ -9,6 +9,7 @@ import { useState, useEffect } from "react";
 import NotificationBell from "@/components/NotificationBell";
 import { subscribeToUnreadCount } from "@/lib/messaging";
 
+
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { t, toggleLang, lang } = useLang();
   const { user } = useAuth();
@@ -16,6 +17,26 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [showBackOnline, setShowBackOnline] = useState(false);
+
+  useEffect(() => {
+    const onOnline = () => {
+      setIsOnline(true);
+      setShowBackOnline(true);
+      setTimeout(() => setShowBackOnline(false), 3000);
+    };
+    const onOffline = () => {
+      setIsOnline(false);
+      setShowBackOnline(false);
+    };
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
+  }, []);
 
   const isHomePage = location === "/";
 
@@ -35,6 +56,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] dark:bg-[#0F172A] flex flex-col">
+      {!isOnline && (
+        <div className="fixed top-0 left-0 right-0 z-[100] bg-amber-500 text-white text-xs font-semibold text-center py-2 px-4 flex items-center justify-center gap-2">
+          📡 You're offline. Some features may not work.
+        </div>
+      )}
+      {showBackOnline && (
+        <div className="fixed top-0 left-0 right-0 z-[100] bg-emerald-500 text-white text-xs font-semibold text-center py-2 px-4 flex items-center justify-center gap-2 animate-in slide-in-from-top duration-300">
+          ✅ You're back online!
+        </div>
+      )}
       {/* ── Header ────────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-50 bg-[#003366] dark:bg-slate-900 shadow-md border-b border-slate-200 dark:border-slate-700/80">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between">
