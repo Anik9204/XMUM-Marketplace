@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { logOut } from "@/lib/auth";
 import AuthModal from "@/components/AuthModal";
 import VerificationBanner from "@/components/VerificationBanner";
-import { Home, Search, PlusSquare, User, Globe, MessageCircle, Plus } from "lucide-react";
+import { Home, Search, PlusSquare, User, Globe, MessageCircle, Plus, Store } from "lucide-react";
 import { useState, useEffect } from "react";
 import NotificationBell from "@/components/NotificationBell";
 import { subscribeToUnreadCount } from "@/lib/messaging";
@@ -49,6 +49,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const navItems = [
     { href: "/", icon: Home, label: t.home },
     { href: "/search", icon: Search, label: t.search },
+    { href: "/campus-market", icon: Store, label: "Market" },
     { href: "/messages", icon: MessageCircle, label: t.messages },
     { href: "/post", icon: PlusSquare, label: t.post },
     { href: "/profile", icon: User, label: t.profile, activeFor: ["/profile", "/settings"] },
@@ -102,6 +103,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   </span>
                 )}
               </Link>
+              <Link href="/campus-market" className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${location === "/campus-market" ? "text-white bg-white/20" : "text-white/70 hover:text-white hover:bg-white/10"}`}>Market</Link>
               <Link href="/post" className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${location === "/post" ? "text-white bg-white/20" : "text-white/70 hover:text-white hover:bg-white/10"}`}>{t.post}</Link>
               {user ? (
                 <div className="relative">

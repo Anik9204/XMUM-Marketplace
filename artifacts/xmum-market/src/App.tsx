@@ -17,6 +17,7 @@ const EditListingPage   = lazy(() => import("@/pages/EditListingPage"));
 const ResetPasswordPage = lazy(() => import("@/pages/ResetPasswordPage"));
 const MessagesPage      = lazy(() => import("@/pages/MessagesPage"));
 const SellerProfilePage = lazy(() => import("@/pages/SellerProfilePage"));
+const CampusMarketPage  = lazy(() => import("@/pages/CampusMarketPage"));
 const CreateShopPage    = lazy(() => import("@/pages/CreateShopPage"));
 const ShopDashboardPage = lazy(() => import("@/pages/ShopDashboardPage"));
 const ShopPublicPage    = lazy(() => import("@/pages/ShopPublicPage"));
@@ -64,6 +65,7 @@ function Router() {
           <Route path="/edit/:id" component={EditListingPage} />
           <Route path="/messages" component={MessagesPage} />
           <Route path="/seller/:uid" component={SellerProfilePage} />
+          <Route path="/campus-market" component={CampusMarketPage} />
           <Route path="/create-shop" component={CreateShopPage} />
           <Route path="/shop-dashboard/:shopId" component={ShopDashboardPage} />
           <Route path="/shop/:slug" component={ShopPublicPage} />
