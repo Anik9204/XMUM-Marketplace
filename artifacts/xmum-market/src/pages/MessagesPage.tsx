@@ -8,9 +8,9 @@ import { checkRateLimit } from "@/lib/rateLimit";
 import {
   subscribeToConversations, subscribeToMessages, sendMessage,
   markConversationRead, markMessagesAsSeen, setTypingStatus,
-  subscribeToTyping, Conversation, Message,
+  subscribeToTyping, clearConversation, Conversation, Message,
 } from "@/lib/messaging";
-import { MessageCircle, ArrowLeft, Send, Loader2, Search, X } from "lucide-react";
+import { MessageCircle, ArrowLeft, Send, Loader2, Search, X, Trash2 } from "lucide-react";
 import AuthModal from "@/components/AuthModal";
 
 const MAX_CHARS = 1000;
@@ -91,6 +91,7 @@ export default function MessagesPage() {
   const [otherProfile, setOtherProfile] = useState<UserProfile | null>(null);
   const [participantProfiles, setParticipantProfiles] = useState<Record<string, UserProfile | null>>({});
   const [otherIsTyping, setOtherIsTyping] = useState(false);
+  const [clearing, setClearing] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -255,6 +256,19 @@ export default function MessagesPage() {
       handleSend();
     }
   }, [handleSend]);
+
+  const handleClear = useCallback(async () => {
+    if (!activeConv || !user) return;
+    if (!window.confirm("Clear this conversation? Only you will see it as cleared — the other person's view won't change.")) return;
+    setClearing(true);
+    try {
+      await clearConversation(activeConv.id, user.uid);
+    } catch {
+      // silent — UI still reflects cleared state optimistically via Firestore listener
+    } finally {
+      setClearing(false);
+    }
+  }, [activeConv?.id, user?.uid]);
 
   const openConv = (conv: Conversation) => {
     setActiveConv(conv);
@@ -432,8 +446,12 @@ export default function MessagesPage() {
   const otherEmail = otherProfile?.email ?? "";
   const otherUid = activeConv?.participants.find((p) => p !== user?.uid) ?? "";
 
+  // Filter out messages cleared by the current user
+  const clearedSince = activeConv?.clearedAt?.[user?.uid ?? ""] ?? 0;
+  const visibleMessages = messages.filter((m) => m.createdAt >= clearedSince);
+
   const groups: { date: string; msgs: Message[] }[] = [];
-  messages.forEach((msg) => {
+  visibleMessages.forEach((msg) => {
     const label = formatDate(msg.createdAt);
     const last = groups[groups.length - 1];
     if (last?.date === label) last.msgs.push(msg);
@@ -464,15 +482,30 @@ export default function MessagesPage() {
             <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">{activeConv.listingTitle}</p>
           </div>
         )}
+
+        <button
+          onClick={handleClear}
+          disabled={clearing}
+          title="Clear conversation"
+          className="shrink-0 flex items-center justify-center w-9 h-9 rounded-xl text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-40"
+        >
+          {clearing ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+        </button>
       </div>
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1 bg-gray-50 dark:bg-slate-950">
-        {messages.length === 0 && (
+        {visibleMessages.length === 0 && (
           <div className="flex justify-center mt-6">
-            <span className="bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 text-gray-500 dark:text-slate-400 text-xs px-4 py-2 rounded-full shadow-sm">
-              Say hi about &ldquo;{activeConv.listingTitle}&rdquo;
-            </span>
+            {clearedSince > 0 && messages.length > 0 ? (
+              <span className="bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 text-gray-500 dark:text-slate-400 text-xs px-4 py-2 rounded-full shadow-sm">
+                Conversation cleared — new messages will appear here
+              </span>
+            ) : (
+              <span className="bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 text-gray-500 dark:text-slate-400 text-xs px-4 py-2 rounded-full shadow-sm">
+                Say hi about &ldquo;{activeConv.listingTitle}&rdquo;
+              </span>
+            )}
           </div>
         )}
 

@@ -15,6 +15,7 @@ export interface Conversation {
   lastMessageAt: number;
   unreadCount: Record<string, number>;
   typing?: Record<string, boolean>;
+  clearedAt?: Record<string, number>;
 }
 
 export interface Message {
@@ -203,6 +204,12 @@ export async function getUserConversations(uid: string): Promise<Conversation[]>
     console.error("[messaging] getUserConversations failed:", err);
     return [];
   }
+}
+
+export async function clearConversation(convId: string, uid: string): Promise<void> {
+  await updateDoc(doc(db, "conversations", convId), {
+    [`clearedAt.${uid}`]: Date.now(),
+  });
 }
 
 export async function markConversationRead(convId: string, uid: string): Promise<void> {
