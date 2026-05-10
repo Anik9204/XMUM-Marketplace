@@ -6,13 +6,19 @@ import { uploadPhoto, createListing, writeRentalTcAuditLog } from "@/lib/listing
 import { checkContent } from "@/lib/contentFilter";
 import { auth, db } from "@/lib/firebase";
 import { doc, updateDoc, increment } from "firebase/firestore";
-import { ListingType, Condition } from "@/lib/types";
+import { ListingType, Condition, Listing } from "@/lib/types";
 import { validateWhatsApp, suggestMalaysianFormat } from "@/lib/validation";
 import AuthModal from "@/components/AuthModal";
 import RentalTcModal from "@/components/RentalTcModal";
-import { ImagePlus, X, AlertCircle, CheckCircle2, Edit2, Wifi, WifiOff, ShieldCheck, ShieldOff, Lock } from "lucide-react";
+import ListingCard from "@/components/ListingCard";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
+import {
+  ImagePlus, X, AlertCircle, CheckCircle2, Edit2, Wifi, WifiOff,
+  ShieldCheck, ShieldOff, Lock, Eye, EyeOff, Loader2,
+} from "lucide-react";
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
+const DRAFT_KEY = "xmum_post_draft_v2";
 
 const BUY_SELL_CATEGORIES = [
   "electronics", "books", "clothing", "furniture", "food", "services", "others",
@@ -39,6 +45,17 @@ const labelCls = "block text-sm font-semibold text-gray-700 dark:text-slate-300 
 
 const FREE_LIMIT = 5;
 const VERIFIED_LIMIT = 30;
+
+function relativeTime(ms: number): string {
+  const diff = Date.now() - ms;
+  const mins = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+  if (mins < 2) return "just now";
+  if (hours < 1) return `${mins}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  return `${days}d ago`;
+}
 
 function SuccessToast({ message, onDone }: { message: string; onDone: () => void }) {
   const [visible, setVisible] = useState(true);
@@ -129,11 +146,13 @@ function CentsInput({
   onChange,
   placeholder = "0.00",
   className,
+  onBlur,
 }: {
   value: number;
   onChange: (v: number) => void;
   placeholder?: string;
   className?: string;
+  onBlur?: () => void;
 }) {
   return (
     <div className={`relative ${className ?? ""}`}>
@@ -153,6 +172,7 @@ function CentsInput({
           }
         }}
         onFocus={(e) => e.target.select()}
+        onBlur={onBlur}
         readOnly={false}
         className={`${inputCls} pl-10 text-right font-mono tracking-wide`}
       />
@@ -215,10 +235,95 @@ export default function PostPage() {
   const [requiresInsuranceProof, setRequiresInsuranceProof] = useState(true);
   const [rentalTerms, setRentalTerms] = useState("");
 
+  // FIX 3: Unsaved changes
+  const [isDirty, setIsDirty] = useState(false);
+
+  // FIX 2: Live preview
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewListing, setPreviewListing] = useState<Listing>({
+    id: "preview", type: "buy-sell", title: "", description: "", category: "electronics",
+    condition: "used", photos: [], userId: "", userEmail: "", userName: "You",
+    createdAt: Date.now(), isArchived: false, status: "active",
+  });
+  const previewDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  // FIX 4: Content filter UX
+  const [fieldError, setFieldError] = useState<"content" | null>(null);
+  const titleRef = useRef<HTMLInputElement>(null);
+
+  // FIX 5: Draft
+  const [draftBanner, setDraftBanner] = useState<{ savedAt: number; draft: any } | null>(null);
+
+  // FIX 1: Drag-and-drop
+  const [dragOverZone, setDragOverZone] = useState(false);
+  const [photoError, setPhotoError] = useState("");
+  const dragIndexRef = useRef<number>(-1);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const maxPhotos = type === "rental" ? 5 : 3;
 
+  // FIX 3: beforeunload
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (!isDirty) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [isDirty]);
+
+  useUnsavedChangesGuard(isDirty);
+
+  // FIX 2: Preview debounce
+  useEffect(() => {
+    clearTimeout(previewDebounceRef.current);
+    previewDebounceRef.current = setTimeout(() => {
+      setPreviewListing({
+        id: "preview",
+        type,
+        title: title || "Your listing title",
+        description,
+        price: priceCents / 100,
+        category,
+        condition,
+        photos: previews.length > 0 ? [previews[0]] : [],
+        userId: "",
+        userEmail: "",
+        userName: "You",
+        createdAt: Date.now(),
+        isArchived: false,
+        status: "active",
+      });
+    }, 500);
+    return () => clearTimeout(previewDebounceRef.current);
+  }, [title, priceCents, previews, category, type, condition, description]);
+
+  // FIX 5: Draft restore on mount
+  useEffect(() => {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (raw) {
+      try {
+        const draft = JSON.parse(raw);
+        const ageMs = Date.now() - (draft.savedAt ?? 0);
+        if (ageMs < 7 * 24 * 60 * 60 * 1000) {
+          setDraftBanner({ savedAt: draft.savedAt, draft });
+        } else {
+          localStorage.removeItem(DRAFT_KEY);
+        }
+      } catch {
+        localStorage.removeItem(DRAFT_KEY);
+      }
+    }
+  }, []);
+
+  // FIX 5: Auto-save interval
+  useEffect(() => {
+    const id = setInterval(saveDraft, 30_000);
+    return () => clearInterval(id);
+  }, [type, title, description, priceCents, category, condition, whatsapp, wechat, meetupSpot]);
+
+  // Prefill contact info from profile
   useEffect(() => {
     if (!userProfile) return;
     if (userProfile.whatsapp) setWhatsapp(userProfile.whatsapp);
@@ -228,6 +333,37 @@ export default function PostPage() {
   useEffect(() => {
     if (user?.email) setTeams(user.email);
   }, [user, type]);
+
+  // Auto-dismiss photo error
+  useEffect(() => {
+    if (!photoError) return;
+    const id = setTimeout(() => setPhotoError(""), 4000);
+    return () => clearTimeout(id);
+  }, [photoError]);
+
+  function saveDraft() {
+    const draft = {
+      type, title, description, price: priceCents, category,
+      condition, whatsapp, wechat, meetupSpot,
+      savedAt: Date.now(),
+    };
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch {}
+  }
+
+  function restoreDraft() {
+    if (!draftBanner) return;
+    const d = draftBanner.draft;
+    if (d.type) setType(d.type);
+    if (d.title) setTitle(d.title);
+    if (d.description) setDescription(d.description);
+    if (d.price != null) setPriceCents(Number(d.price));
+    if (d.category) setCategory(d.category);
+    if (d.condition) setCondition(d.condition);
+    if (d.whatsapp) setWhatsapp(d.whatsapp);
+    if (d.wechat) setWechat(d.wechat);
+    if (d.meetupSpot) setMeetupSpot(d.meetupSpot);
+    setDraftBanner(null);
+  }
 
   if (!user) {
     return (
@@ -264,29 +400,63 @@ export default function PostPage() {
     ]);
   }
 
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []);
-    if (photos.length + files.length > maxPhotos) {
-      setError(type === "rental" ? "You can upload up to 5 photos for rental listings." : t.uploadLimit);
+  // FIX 1: Add files from input or drop
+  function addFiles(files: File[]) {
+    const imageFiles = files.filter((f) => f.type.startsWith("image/"));
+    if (photos.length + imageFiles.length > maxPhotos) {
+      setPhotoError(type === "rental" ? "You can upload up to 5 photos for rental listings." : t.uploadLimit);
       return;
     }
-    const oversized = files.find((f) => f.size > MAX_FILE_BYTES);
-    if (oversized) { setError(t.imageTooLarge); return; }
-    setError("");
-    setPhotos([...photos, ...files]);
-    setPreviews([...previews, ...files.map((f) => URL.createObjectURL(f))]);
+    const oversized = imageFiles.find((f) => f.size > MAX_FILE_BYTES);
+    if (oversized) {
+      setPhotoError(`⚠️ ${oversized.name} is too large. Max 5MB per photo.`);
+      return;
+    }
+    setPhotoError("");
+    setIsDirty(true);
+    setPhotos((prev) => [...prev, ...imageFiles]);
+    setPreviews((prev) => [...prev, ...imageFiles.map((f) => URL.createObjectURL(f))]);
+  }
+
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    addFiles(files);
     e.target.value = "";
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOverZone(false);
+    const files = Array.from(e.dataTransfer.files);
+    addFiles(files);
   };
 
   const removePhoto = (i: number) => {
     setPhotos(photos.filter((_, idx) => idx !== i));
     setPreviews(previews.filter((_, idx) => idx !== i));
+    setIsDirty(true);
+  };
+
+  // FIX 1: Thumbnail drag-to-reorder
+  const handleThumbDragStart = (i: number) => {
+    dragIndexRef.current = i;
+  };
+
+  const handleThumbDrop = (dropIndex: number) => {
+    const fromIndex = dragIndexRef.current;
+    if (fromIndex === -1 || fromIndex === dropIndex) return;
+    const newPhotos = [...photos];
+    const newPreviews = [...previews];
+    [newPhotos[fromIndex], newPhotos[dropIndex]] = [newPhotos[dropIndex], newPhotos[fromIndex]];
+    [newPreviews[fromIndex], newPreviews[dropIndex]] = [newPreviews[dropIndex], newPreviews[fromIndex]];
+    setPhotos(newPhotos);
+    setPreviews(newPreviews);
+    dragIndexRef.current = -1;
+    setIsDirty(true);
   };
 
   const handleTypeChange = (newType: ListingType) => {
-    // Block verified-only tabs for non-verified users
     if (VERIFIED_ONLY_TABS.includes(newType) && !isVerified) return;
-
     if (newType === "rental" && !tcAccepted) {
       setPrevType(type);
       setShowTcModal(true);
@@ -294,6 +464,7 @@ export default function PostPage() {
     }
     setType(newType);
     setCategory(defaultCategoryForType(newType));
+    setIsDirty(true);
   };
 
   const handleTcAccepted = () => {
@@ -310,9 +481,9 @@ export default function PostPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setFieldError(null);
     setLoading(true);
 
-    // Check listing limit
     if (activeListingCount >= listingLimit) {
       setError(
         isVerified
@@ -365,12 +536,20 @@ export default function PostPage() {
       }
     }
 
+    // FIX 4: Content filter with flaggedTerms
     const filterResult = checkContent(title, description);
     if (!filterResult.passed) {
-      setError(filterResult.reason ?? t.contentNotAllowed);
+      let errMsg = filterResult.reason ?? t.contentNotAllowed;
+      if (filterResult.flaggedTerms?.length) {
+        errMsg += ` (flagged: ${filterResult.flaggedTerms.join(", ")})`;
+      }
+      setError(errMsg);
+      setFieldError("content");
+      titleRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       setLoading(false);
       return;
     }
+
     const hasContact = whatsapp.trim() || wechat.trim() || teams.trim();
     if (!hasContact) {
       setError(t.contactRequired);
@@ -453,6 +632,8 @@ export default function PostPage() {
         }
       }
 
+      setIsDirty(false);
+      localStorage.removeItem(DRAFT_KEY);
       setToast("Your post has been successfully published.");
     } catch (err: any) {
       const code: string = err?.code ?? "";
@@ -486,18 +667,40 @@ export default function PostPage() {
   };
 
   const currentYear = new Date().getFullYear();
-
   const isAtLimit = activeListingCount >= listingLimit;
 
   return (
-    <div className="max-w-lg mx-auto px-4 py-5 pb-28 sm:pb-8 animate-in fade-in duration-200">
+    <div className="relative max-w-lg mx-auto px-4 py-5 pb-28 sm:pb-8 animate-in fade-in duration-200">
       {toast && <SuccessToast message={toast} onDone={() => navigate("/profile")} />}
 
       {showTcModal && (
         <RentalTcModal onAccept={handleTcAccepted} onCancel={handleTcCancelled} />
       )}
 
-      <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-4">{t.postItem}</h1>
+      {/* FIX 2: Live preview floating panel */}
+      {showPreview && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-40 w-[180px] pointer-events-none">
+          <ListingCard listing={previewListing} />
+        </div>
+      )}
+
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100">{t.postItem}</h1>
+        {/* FIX 2: Preview toggle */}
+        <button
+          type="button"
+          onClick={() => setShowPreview((p) => !p)}
+          className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors min-h-[36px] ${
+            showPreview
+              ? "bg-[#003366] dark:bg-blue-600 text-white border-[#003366] dark:border-blue-600"
+              : "bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600"
+          }`}
+        >
+          {showPreview ? <EyeOff size={14} /> : <Eye size={14} />}
+          Preview
+        </button>
+      </div>
 
       {/* Listing limit notice */}
       {isAtLimit && (
@@ -550,48 +753,109 @@ export default function PostPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Photos */}
+
+        {/* FIX 5: Draft banner — below type selector, above first field */}
+        {draftBanner && (
+          <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3 flex items-center justify-between gap-3 mb-4">
+            <p className="text-xs text-amber-700 dark:text-amber-300">
+              📝 Draft saved {relativeTime(draftBanner.savedAt)}
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={restoreDraft}
+                className="text-xs font-semibold text-amber-700 dark:text-amber-300 underline min-h-[44px]"
+              >
+                Restore
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.removeItem(DRAFT_KEY);
+                  setDraftBanner(null);
+                }}
+                className="text-xs text-amber-500 min-h-[44px]"
+              >
+                Discard
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* FIX 1: Drag-and-drop photo uploader */}
         <div>
           <label className={labelCls}>
-            {type === "rental"
-              ? `Photos (min 2, max 5) *`
-              : t.photos}
+            {type === "rental" ? `Photos (min 2, max 5) *` : t.photos}
           </label>
           {type === "rental" && (
             <p className="text-xs text-amber-600 dark:text-amber-400 mb-2">{t.rentalPhotosNote}</p>
           )}
-          <div className="grid grid-cols-3 gap-2">
-            {previews.map((src, i) => (
-              <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-gray-200 dark:border-slate-600">
-                <img src={src} alt="" className="w-full h-full object-cover" />
+
+          {/* Drop zone */}
+          <div
+            className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors ${
+              dragOverZone
+                ? "border-blue-400 bg-blue-50 dark:bg-slate-800"
+                : "border-gray-300 dark:border-slate-600 hover:border-[#003366] dark:hover:border-blue-500"
+            }`}
+            onClick={() => fileRef.current?.click()}
+            onDragEnter={(e) => { e.preventDefault(); setDragOverZone(true); }}
+            onDragOver={(e) => { e.preventDefault(); setDragOverZone(true); }}
+            onDragLeave={() => setDragOverZone(false)}
+            onDrop={handleDrop}
+          >
+            <ImagePlus size={24} className="mx-auto text-gray-400 dark:text-slate-500 mb-1" />
+            <p className="text-xs text-gray-500 dark:text-slate-400">Drag photos here or tap to upload</p>
+            <p className="text-[10px] text-gray-300 dark:text-slate-600 mt-0.5">
+              {type === "rental" ? "Min 2 · Max 5 · 5 MB each" : "Up to 3 · Max 5 MB each"}
+            </p>
+          </div>
+
+          {/* Photo error */}
+          {photoError && (
+            <p className="text-xs text-red-500 dark:text-red-400 mt-1.5">{photoError}</p>
+          )}
+
+          {/* Thumbnail row */}
+          {previews.length > 0 && (
+            <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
+              {previews.map((src, i) => (
+                <div
+                  key={i}
+                  draggable
+                  onDragStart={() => handleThumbDragStart(i)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={() => handleThumbDrop(i)}
+                  className="relative shrink-0 w-[72px] h-[72px] rounded-lg overflow-hidden border border-gray-200 dark:border-slate-600 cursor-grab active:cursor-grabbing"
+                >
+                  <img src={src} alt="" className="w-full h-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); removePhoto(i); }}
+                    className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center"
+                  >
+                    <X size={10} />
+                  </button>
+                </div>
+              ))}
+              {photos.length < maxPhotos && (
                 <button
                   type="button"
-                  onClick={() => removePhoto(i)}
-                  className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-0.5"
+                  onClick={() => fileRef.current?.click()}
+                  className="shrink-0 w-[72px] h-[72px] rounded-lg border-2 border-dashed border-gray-300 dark:border-slate-600 flex items-center justify-center text-gray-400 dark:text-slate-500 hover:border-[#003366] dark:hover:border-blue-500 transition-colors text-xl"
                 >
-                  <X size={12} />
+                  ➕
                 </button>
-              </div>
-            ))}
-            {photos.length < maxPhotos && (
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                className={`rounded-xl border-2 border-dashed border-gray-300 dark:border-slate-600 flex flex-col items-center justify-center text-gray-400 dark:text-slate-500 hover:border-[#003366] dark:hover:border-blue-500 hover:text-[#003366] dark:hover:text-blue-400 transition-colors ${photos.length === 0 ? "col-span-3 py-10 gap-2" : "aspect-square"}`}
-              >
-                <ImagePlus size={photos.length === 0 ? 28 : 22} />
-                <span className={photos.length === 0 ? "text-xs mt-1" : "text-[10px] mt-1"}>{t.uploadPhotos}</span>
-                {photos.length === 0 && (
-                  <span className="text-[10px] text-gray-300 dark:text-slate-600">
-                    {type === "rental" ? "Min 2 · Max 5 photos · Max 5 MB each" : "Up to 3 photos · Max 5 MB each"}
-                  </span>
-                )}
-              </button>
-            )}
-          </div>
-          <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-1.5">
-            Max 5 MB per photo · {type === "rental" ? `Min 2, up to ${maxPhotos} photos` : `Up to ${maxPhotos} photos`}
-          </p>
+              )}
+            </div>
+          )}
+
+          {previews.length > 0 && (
+            <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-1">
+              Photo {Math.min(previews.length, maxPhotos)} of {maxPhotos}
+            </p>
+          )}
+
           <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoChange} />
         </div>
 
@@ -601,9 +865,11 @@ export default function PostPage() {
             {(type === "jobs" || type === "assistance") ? t.serviceTitle : type === "rental" ? "Listing Title *" : t.title} *
           </label>
           <input
+            ref={titleRef}
             type="text"
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            onChange={(e) => { setTitle(e.target.value); setIsDirty(true); setFieldError(null); }}
+            onBlur={saveDraft}
             required
             maxLength={80}
             placeholder={
@@ -612,7 +878,7 @@ export default function PostPage() {
               type === "rental" ? "e.g. 2020 Honda City Available for Rent" :
               ""
             }
-            className={inputCls}
+            className={`${inputCls} ${fieldError === "content" ? "ring-2 ring-red-400" : ""}`}
           />
           <div className={`text-right text-xs mt-1 font-medium ${title.length > 70 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
             {title.length} / 80
@@ -628,14 +894,14 @@ export default function PostPage() {
                 <button
                   key={sub}
                   type="button"
-                  onClick={() => setJobSubtype(sub)}
+                  onClick={() => { setJobSubtype(sub); setIsDirty(true); }}
                   className={`flex-1 min-h-[44px] py-2.5 rounded-xl text-sm font-semibold border transition-colors ${
                     jobSubtype === sub
                       ? "bg-[#003366] dark:bg-blue-600 text-white border-[#003366] dark:border-blue-600"
                       : "bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600 hover:border-[#003366] dark:hover:border-blue-500"
                   }`}
                 >
-                  {sub === "offering" ? `▶ ${t.offeringLabel}` : `◀ ${t.seekingLabel}`}
+                  {sub === "offering" ? `▶ ${t.jobSubtypeOffering}` : `◀ ${t.jobSubtypeSeeking}`}
                 </button>
               ))}
             </div>
@@ -646,12 +912,11 @@ export default function PostPage() {
         {type === "jobs" && (
           <div className="flex items-center justify-between bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-3 min-h-[56px]">
             <div>
-              <p className="text-sm font-semibold text-gray-700 dark:text-slate-200">{t.remoteToggle}</p>
-              <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">{t.remoteToggleDesc}</p>
+              <p className="text-sm font-semibold text-gray-700 dark:text-slate-200">{t.availableRemotely}</p>
             </div>
             <button
               type="button"
-              onClick={() => setIsRemote(!isRemote)}
+              onClick={() => { setIsRemote(!isRemote); setIsDirty(true); }}
               className={`relative w-11 h-6 rounded-full transition-colors ${isRemote ? "bg-[#003366] dark:bg-blue-600" : "bg-gray-200 dark:bg-slate-500"}`}
             >
               <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${isRemote ? "left-6" : "left-1"}`} />
@@ -662,14 +927,14 @@ export default function PostPage() {
         {/* Description */}
         <div>
           <label className={labelCls}>
-            {(type === "jobs" || type === "assistance") ? t.serviceDesc : t.descriptionLabel} *
+            {t.descriptionLabel} *
           </label>
           <button
             type="button"
             onClick={() => setShowDescEditor(true)}
-            className={`w-full text-left border border-gray-300 dark:border-slate-600 rounded-xl px-3 py-2.5 text-sm min-h-[80px] bg-white dark:bg-slate-700 ${
+            className={`w-full text-left border rounded-xl px-3 py-2.5 text-sm min-h-[80px] bg-white dark:bg-slate-700 ${
               description ? "text-gray-900 dark:text-slate-100" : "text-gray-400 dark:text-slate-500"
-            }`}
+            } ${fieldError === "content" ? "border-red-400 ring-2 ring-red-400" : "border-gray-300 dark:border-slate-600"}`}
           >
             {description ? (
               <div className="flex items-start justify-between gap-2">
@@ -689,7 +954,7 @@ export default function PostPage() {
         {showDescEditor && (
           <DescriptionEditorModal
             value={description}
-            onChange={setDescription}
+            onChange={(val) => { setDescription(val); setIsDirty(true); setFieldError(null); }}
             onClose={() => setShowDescEditor(false)}
           />
         )}
@@ -697,7 +962,7 @@ export default function PostPage() {
         {/* Category */}
         <div>
           <label className={labelCls}>{t.category}</label>
-          <select value={category} onChange={(e) => setCategory(e.target.value)} className={selectCls}>
+          <select value={category} onChange={(e) => { setCategory(e.target.value); setIsDirty(true); }} className={selectCls}>
             {categories.map((cat) => (
               <option key={cat} value={cat}>
                 {(t.categories as any)[cat] ?? cat}
@@ -716,7 +981,7 @@ export default function PostPage() {
                   <button
                     key={vt}
                     type="button"
-                    onClick={() => setVehicleType(vt)}
+                    onClick={() => { setVehicleType(vt); setIsDirty(true); }}
                     className={`py-2 rounded-xl text-xs font-semibold border min-h-[44px] flex flex-col items-center justify-center gap-0.5 transition-colors ${
                       vehicleType === vt
                         ? "bg-[#003366] dark:bg-blue-600 text-white border-transparent"
@@ -732,66 +997,62 @@ export default function PostPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={labelCls}>{t.rentalBrandLabel} *</label>
-                <input type="text" value={vehicleBrand} onChange={(e) => setVehicleBrand(e.target.value)} placeholder="e.g. Honda" className={inputCls} />
+                <input type="text" value={vehicleBrand} onChange={(e) => { setVehicleBrand(e.target.value); setIsDirty(true); }} placeholder="e.g. Honda" className={inputCls} />
               </div>
               <div>
                 <label className={labelCls}>{t.rentalModelLabel} *</label>
-                <input type="text" value={vehicleModel} onChange={(e) => setVehicleModel(e.target.value)} placeholder="e.g. City" className={inputCls} />
+                <input type="text" value={vehicleModel} onChange={(e) => { setVehicleModel(e.target.value); setIsDirty(true); }} placeholder="e.g. City" className={inputCls} />
               </div>
               <div>
                 <label className={labelCls}>{t.rentalYearLabel}</label>
-                <input type="number" value={vehicleYear} onChange={(e) => setVehicleYear(Number(e.target.value))} min={1990} max={currentYear + 1} className={inputCls} />
+                <input type="number" value={vehicleYear} onChange={(e) => { setVehicleYear(Number(e.target.value)); setIsDirty(true); }} min={1990} max={currentYear + 1} className={inputCls} />
               </div>
               <div>
                 <label className={labelCls}>{t.rentalPlateNumber} *</label>
-                <input type="text" value={plateNumber} onChange={(e) => setPlateNumber(e.target.value.toUpperCase())} placeholder="e.g. PBJ 1234" className={`${inputCls} uppercase font-mono tracking-widest`} />
+                <input type="text" value={plateNumber} onChange={(e) => { setPlateNumber(e.target.value.toUpperCase()); setIsDirty(true); }} placeholder="e.g. PBJ 1234" className={`${inputCls} uppercase font-mono tracking-widest`} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={labelCls}>Per Day (RM) *</label>
-                <CentsInput value={rentalPricePerDayCents} onChange={setRentalPricePerDayCents} />
+                <CentsInput value={rentalPricePerDayCents} onChange={(v) => { setRentalPricePerDayCents(v); setIsDirty(true); }} />
               </div>
               <div>
                 <label className={labelCls}>Per Hour (RM) <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
-                <CentsInput value={rentalPricePerHourCents} onChange={setRentalPricePerHourCents} />
+                <CentsInput value={rentalPricePerHourCents} onChange={(v) => { setRentalPricePerHourCents(v); setIsDirty(true); }} />
               </div>
               <div>
                 <label className={labelCls}>{t.rentalDeposit} (RM) *</label>
-                <CentsInput value={depositCents} onChange={setDepositCents} />
+                <CentsInput value={depositCents} onChange={(v) => { setDepositCents(v); setIsDirty(true); }} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className={labelCls}>{t.rentalAvailFrom}</label>
-                <input type="date" value={availableFrom} onChange={(e) => setAvailableFrom(e.target.value)} className={inputCls} min={new Date().toISOString().split("T")[0]} />
+                <label className={labelCls}>{t.rentalAvailableFromLabel}</label>
+                <input type="date" value={availableFrom} onChange={(e) => { setAvailableFrom(e.target.value); setIsDirty(true); }} className={inputCls} min={new Date().toISOString().split("T")[0]} />
               </div>
               <div>
-                <label className={labelCls}>{t.rentalAvailTo}</label>
-                <input type="date" value={availableTo} onChange={(e) => setAvailableTo(e.target.value)} className={inputCls} min={availableFrom || new Date().toISOString().split("T")[0]} />
+                <label className={labelCls}>{t.rentalAvailableToLabel}</label>
+                <input type="date" value={availableTo} onChange={(e) => { setAvailableTo(e.target.value); setIsDirty(true); }} className={inputCls} min={availableFrom || new Date().toISOString().split("T")[0]} />
               </div>
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-3 min-h-[52px]">
-                <div>
-                  <p className="text-sm font-semibold text-gray-700 dark:text-slate-200">{t.rentalLicenceRequired}</p>
-                </div>
-                <button type="button" onClick={() => setRequiresLicense(!requiresLicense)} className={`relative w-11 h-6 rounded-full transition-colors ${requiresLicense ? "bg-[#003366] dark:bg-blue-600" : "bg-gray-200 dark:bg-slate-500"}`}>
+                <p className="text-sm font-semibold text-gray-700 dark:text-slate-200">{t.rentalLicenceRequired}</p>
+                <button type="button" onClick={() => { setRequiresLicense(!requiresLicense); setIsDirty(true); }} className={`relative w-11 h-6 rounded-full transition-colors ${requiresLicense ? "bg-[#003366] dark:bg-blue-600" : "bg-gray-200 dark:bg-slate-500"}`}>
                   <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${requiresLicense ? "left-6" : "left-1"}`} />
                 </button>
               </div>
               <div className="flex items-center justify-between bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-3 min-h-[52px]">
-                <div>
-                  <p className="text-sm font-semibold text-gray-700 dark:text-slate-200">{t.rentalInsuranceRequired}</p>
-                </div>
-                <button type="button" onClick={() => setRequiresInsuranceProof(!requiresInsuranceProof)} className={`relative w-11 h-6 rounded-full transition-colors ${requiresInsuranceProof ? "bg-[#003366] dark:bg-blue-600" : "bg-gray-200 dark:bg-slate-500"}`}>
+                <p className="text-sm font-semibold text-gray-700 dark:text-slate-200">{t.rentalInsuranceRequired}</p>
+                <button type="button" onClick={() => { setRequiresInsuranceProof(!requiresInsuranceProof); setIsDirty(true); }} className={`relative w-11 h-6 rounded-full transition-colors ${requiresInsuranceProof ? "bg-[#003366] dark:bg-blue-600" : "bg-gray-200 dark:bg-slate-500"}`}>
                   <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${requiresInsuranceProof ? "left-6" : "left-1"}`} />
                 </button>
               </div>
             </div>
             <div>
               <label className={labelCls}>{t.rentalSellerTerms} <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
-              <textarea value={rentalTerms} onChange={(e) => setRentalTerms(e.target.value.slice(0, 500))} rows={3} className={`${inputCls} resize-none`} placeholder={t.rentalTermsPlaceholder} />
+              <textarea value={rentalTerms} onChange={(e) => { setRentalTerms(e.target.value.slice(0, 500)); setIsDirty(true); }} rows={3} className={`${inputCls} resize-none`} placeholder={t.rentalCustomTermsPlaceholder} />
             </div>
           </>
         )}
@@ -805,7 +1066,7 @@ export default function PostPage() {
                 <button
                   key={c}
                   type="button"
-                  onClick={() => setCondition(c)}
+                  onClick={() => { setCondition(c); setIsDirty(true); }}
                   className={`flex-1 min-h-[44px] py-2.5 rounded-xl text-sm font-semibold border transition-colors ${
                     condition === c
                       ? "bg-[#003366] dark:bg-blue-600 text-white border-[#003366] dark:border-blue-600"
@@ -823,7 +1084,7 @@ export default function PostPage() {
         {(type === "buy-sell" || type === "assistance") && (
           <div>
             <label className={labelCls}>
-              {type === "buy-sell" ? t.price : t.serviceRate}
+              {type === "buy-sell" ? t.price : "Service Rate (RM)"}
               {type === "buy-sell" && <span className="ml-1 text-xs text-gray-400 font-normal">(enter 0 for free)</span>}
             </label>
             {type === "assistance" && (
@@ -832,7 +1093,7 @@ export default function PostPage() {
                   <button
                     key={model}
                     type="button"
-                    onClick={() => setPricingModel(model)}
+                    onClick={() => { setPricingModel(model); setIsDirty(true); }}
                     className={`flex-1 min-h-[40px] py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
                       pricingModel === model
                         ? "bg-orange-500 text-white border-orange-500"
@@ -844,15 +1105,15 @@ export default function PostPage() {
                 ))}
               </div>
             )}
-            <CentsInput value={priceCents} onChange={setPriceCents} />
+            <CentsInput value={priceCents} onChange={(v) => { setPriceCents(v); setIsDirty(true); }} onBlur={saveDraft} />
           </div>
         )}
 
         {/* Jobs: rate (optional) */}
         {type === "jobs" && (
           <div>
-            <label className={labelCls}>{t.hourlyRate} <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
-            <CentsInput value={priceCents} onChange={setPriceCents} />
+            <label className={labelCls}>{t.pricePerHour} <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
+            <CentsInput value={priceCents} onChange={(v) => { setPriceCents(v); setIsDirty(true); }} onBlur={saveDraft} />
           </div>
         )}
 
@@ -860,7 +1121,7 @@ export default function PostPage() {
         {type === "assistance" && (
           <div>
             <label className={labelCls}>{t.availability} <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
-            <input type="text" value={availability} onChange={(e) => setAvailability(e.target.value)} placeholder={t.availabilityPlaceholder} className={inputCls} />
+            <input type="text" value={availability} onChange={(e) => { setAvailability(e.target.value); setIsDirty(true); }} placeholder={t.availabilityPlaceholder} className={inputCls} />
           </div>
         )}
 
@@ -873,7 +1134,8 @@ export default function PostPage() {
             <input
               type="text"
               value={meetupSpot}
-              onChange={(e) => setMeetupSpot(e.target.value)}
+              onChange={(e) => { setMeetupSpot(e.target.value); setIsDirty(true); }}
+              onBlur={saveDraft}
               placeholder={type === "jobs" || type === "assistance" ? "e.g. Library, Block A, etc." : t.meetupSpotPlaceholder}
               className={inputCls}
             />
@@ -890,8 +1152,9 @@ export default function PostPage() {
             <input
               type="text"
               value={whatsapp}
-              onChange={(e) => { setWhatsapp(e.target.value); setWhatsappError(""); }}
+              onChange={(e) => { setWhatsapp(e.target.value); setWhatsappError(""); setIsDirty(true); }}
               onBlur={() => {
+                saveDraft();
                 if (!whatsapp.trim()) return;
                 const result = validateWhatsApp(whatsapp);
                 if (!result.valid) {
@@ -911,13 +1174,13 @@ export default function PostPage() {
           {type !== "rental" && (
             <div>
               <label className={labelCls}>WeChat ID <span className="text-gray-400 font-normal">(optional)</span></label>
-              <input type="text" value={wechat} onChange={(e) => setWechat(e.target.value)} placeholder="WeChat ID" className={inputCls} />
+              <input type="text" value={wechat} onChange={(e) => { setWechat(e.target.value); setIsDirty(true); }} onBlur={saveDraft} placeholder="WeChat ID" className={inputCls} />
             </div>
           )}
           {type !== "rental" && (
             <div>
               <label className={labelCls}>Microsoft Teams <span className="text-gray-400 font-normal">(optional)</span></label>
-              <input type="text" value={teams} onChange={(e) => setTeams(e.target.value)} placeholder="your@xmu.edu.my" className={inputCls} />
+              <input type="text" value={teams} onChange={(e) => { setTeams(e.target.value); setIsDirty(true); }} placeholder="your@xmu.edu.my" className={inputCls} />
             </div>
           )}
         </div>
@@ -929,23 +1192,21 @@ export default function PostPage() {
           </div>
         )}
 
-        <button
-          type="submit"
-          disabled={loading || isAtLimit}
-          className="w-full min-h-[52px] bg-[#003366] dark:bg-blue-600 text-white rounded-xl text-sm font-bold py-3 hover:bg-[#002244] dark:hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2 shadow"
-        >
-          {loading ? (
-            <>
-              <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-              {t.posting}
-            </>
-          ) : (
-            t.postItem
-          )}
-        </button>
+        {/* FIX 6: Sticky submit button */}
+        <div className="sticky bottom-0 z-20 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-700 px-4 pt-3 pb-4 md:static md:bg-transparent md:border-0 md:p-0 md:mt-6 -mx-4">
+          <div className="pointer-events-none absolute -top-6 left-0 right-0 h-6 bg-gradient-to-t from-white dark:from-slate-900 to-transparent md:hidden" />
+          <button
+            type="submit"
+            disabled={loading || isAtLimit}
+            className="w-full min-h-[56px] bg-[#003366] dark:bg-blue-600 text-white font-semibold text-base rounded-xl hover:bg-[#002244] dark:hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.97] transition-all duration-150 flex items-center justify-center gap-2 shadow"
+          >
+            {loading ? (
+              <><Loader2 size={20} className="animate-spin" /> {t.submitting}</>
+            ) : (
+              t.postItem
+            )}
+          </button>
+        </div>
       </form>
     </div>
   );

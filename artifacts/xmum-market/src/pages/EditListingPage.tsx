@@ -7,9 +7,11 @@ import { checkContent } from "@/lib/contentFilter";
 import { auth } from "@/lib/firebase";
 import { ListingType, Condition } from "@/lib/types";
 import { validateWhatsApp, suggestMalaysianFormat } from "@/lib/validation";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { ImagePlus, X, AlertCircle, CheckCircle2, Lock, Edit2, Loader2, Wifi, WifiOff } from "lucide-react";
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
+const MAX_PHOTOS = 3;
 
 const BUY_SELL_CATEGORIES = [
   "electronics", "books", "clothing", "furniture", "food", "services", "others",
@@ -40,6 +42,11 @@ const selectCls =
   "w-full bg-white text-gray-900 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600 dark:[color-scheme:dark] focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 transition min-h-[44px]";
 
 const labelCls = "block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-1";
+
+// Unified photo item: either an existing URL or a new File+preview
+type PhotoItem =
+  | { kind: "existing"; src: string }
+  | { kind: "new"; src: string; file: File };
 
 function SuccessToast({ message, onDone }: { message: string; onDone: () => void }) {
   const [visible, setVisible] = useState(true);
@@ -119,9 +126,6 @@ export default function EditListingPage() {
   const [wechat, setWechat] = useState("");
   const [teams, setTeams] = useState("");
   const [meetupSpot, setMeetupSpot] = useState("");
-  const [existingPhotos, setExistingPhotos] = useState<string[]>([]);
-  const [photos, setPhotos] = useState<File[]>([]);
-  const [previews, setPreviews] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
@@ -135,7 +139,39 @@ export default function EditListingPage() {
   const [pricingModel, setPricingModel] = useState<"per_hour" | "per_day" | "per_month" | "fixed">("per_hour");
   const [availability, setAvailability] = useState("");
 
+  // FIX 1: Unified photo list
+  const [allPhotos, setAllPhotos] = useState<PhotoItem[]>([]);
+  const [dragOverZone, setDragOverZone] = useState(false);
+  const [photoError, setPhotoError] = useState("");
+  const dragIndexRef = useRef<number>(-1);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // FIX 3: Unsaved changes
+  const [isDirty, setIsDirty] = useState(false);
+
+  // FIX 4: Content filter UX
+  const [fieldError, setFieldError] = useState<"content" | null>(null);
+  const titleRef = useRef<HTMLInputElement>(null);
+
+  // FIX 3: beforeunload
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (!isDirty) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [isDirty]);
+
+  useUnsavedChangesGuard(isDirty);
+
+  // Auto-dismiss photo error
+  useEffect(() => {
+    if (!photoError) return;
+    const id = setTimeout(() => setPhotoError(""), 4000);
+    return () => clearTimeout(id);
+  }, [photoError]);
 
   useEffect(() => {
     if (!id) { setFetchError("Invalid listing ID."); setFetchLoading(false); return; }
@@ -153,11 +189,13 @@ export default function EditListingPage() {
         setWechat(listing.wechat ?? "");
         setTeams(listing.teams ?? "");
         setMeetupSpot(listing.meetupSpot ?? "");
-        setExistingPhotos(listing.photos);
+        // Convert existing photo URLs into unified PhotoItem[]
+        setAllPhotos(listing.photos.map((src) => ({ kind: "existing", src })));
         if (listing.jobSubtype) setJobSubtype(listing.jobSubtype);
         if (listing.isRemote != null) setIsRemote(listing.isRemote);
         if (listing.pricingModel) setPricingModel(listing.pricingModel);
         if (listing.availability) setAvailability(listing.availability);
+        // Do NOT set isDirty — restoring from server is not a user edit
       })
       .catch(() => setFetchError("Failed to load listing. Please try again."))
       .finally(() => setFetchLoading(false));
@@ -183,7 +221,6 @@ export default function EditListingPage() {
     );
   }
 
-  const totalPhotos = existingPhotos.length + photos.length;
   const categories = getCategoriesForType(type);
 
   function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
@@ -193,30 +230,69 @@ export default function EditListingPage() {
     ]);
   }
 
+  // FIX 1: Add files from input or drop
+  function addFiles(files: File[]) {
+    const imageFiles = files.filter((f) => f.type.startsWith("image/"));
+    if (allPhotos.length + imageFiles.length > MAX_PHOTOS) {
+      setPhotoError(t.uploadLimit);
+      return;
+    }
+    const oversized = imageFiles.find((f) => f.size > MAX_FILE_BYTES);
+    if (oversized) {
+      setPhotoError(`⚠️ ${oversized.name} is too large. Max 5MB per photo.`);
+      return;
+    }
+    setPhotoError("");
+    setIsDirty(true);
+    const newItems: PhotoItem[] = imageFiles.map((file) => ({
+      kind: "new",
+      src: URL.createObjectURL(file),
+      file,
+    }));
+    setAllPhotos((prev) => [...prev, ...newItems]);
+  }
+
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
-    if (totalPhotos + files.length > 3) { setError(t.uploadLimit); return; }
-    const oversized = files.find((f) => f.size > MAX_FILE_BYTES);
-    if (oversized) { setError(t.imageTooLarge); return; }
-    setError("");
-    setPhotos([...photos, ...files]);
-    setPreviews([...previews, ...files.map((f) => URL.createObjectURL(f))]);
+    addFiles(files);
     e.target.value = "";
   };
 
-  const removeExistingPhoto = (i: number) => {
-    setExistingPhotos(existingPhotos.filter((_, idx) => idx !== i));
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOverZone(false);
+    const files = Array.from(e.dataTransfer.files);
+    addFiles(files);
   };
 
-  const removeNewPhoto = (i: number) => {
-    setPhotos(photos.filter((_, idx) => idx !== i));
-    setPreviews(previews.filter((_, idx) => idx !== i));
+  const removePhoto = (i: number) => {
+    setAllPhotos((prev) => prev.filter((_, idx) => idx !== i));
+    setIsDirty(true);
+  };
+
+  // FIX 1: Thumbnail drag-to-reorder
+  const handleThumbDragStart = (i: number) => {
+    dragIndexRef.current = i;
+  };
+
+  const handleThumbDrop = (dropIndex: number) => {
+    const fromIndex = dragIndexRef.current;
+    if (fromIndex === -1 || fromIndex === dropIndex) return;
+    setAllPhotos((prev) => {
+      const next = [...prev];
+      [next[fromIndex], next[dropIndex]] = [next[dropIndex], next[fromIndex]];
+      return next;
+    });
+    dragIndexRef.current = -1;
+    setIsDirty(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setFieldError(null);
     setLoading(true);
+
     if (whatsapp.trim()) {
       const result = validateWhatsApp(whatsapp);
       if (!result.valid) {
@@ -226,35 +302,49 @@ export default function EditListingPage() {
       }
     }
 
+    // FIX 4: Content filter with flaggedTerms
     const filterResult = checkContent(title, description);
     if (!filterResult.passed) {
-      setError(filterResult.reason ?? t.contentNotAllowed);
+      let errMsg = filterResult.reason ?? t.contentNotAllowed;
+      if (filterResult.flaggedTerms?.length) {
+        errMsg += ` (flagged: ${filterResult.flaggedTerms.join(", ")})`;
+      }
+      setError(errMsg);
+      setFieldError("content");
+      titleRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       setLoading(false);
       return;
     }
+
     const hasContact = whatsapp.trim() || wechat.trim() || teams.trim();
     if (!hasContact) {
       setError(t.contactRequired);
       setLoading(false);
       return;
     }
+
     try {
       await withTimeout(auth.currentUser?.getIdToken(true) ?? Promise.resolve(""), 10_000, "token-refresh");
 
-      const newUrls: string[] = [];
-      for (const f of photos) {
-        try {
-          const url = await withTimeout(uploadPhoto(f, user!.uid), 30_000, "photo-upload");
-          newUrls.push(url);
-        } catch (photoErr: any) {
-          console.warn("[EditListingPage] Photo skipped:", photoErr?.message);
+      // Upload new photos, keep existing URLs
+      const finalUrls: string[] = [];
+      for (const item of allPhotos) {
+        if (item.kind === "existing") {
+          finalUrls.push(item.src);
+        } else {
+          try {
+            const url = await withTimeout(uploadPhoto(item.file, user!.uid), 30_000, "photo-upload");
+            finalUrls.push(url);
+          } catch (photoErr: any) {
+            console.warn("[EditListingPage] Photo skipped:", photoErr?.message);
+          }
         }
       }
 
       const baseData: Record<string, unknown> = {
         title, description,
         category, condition,
-        photos: [...existingPhotos, ...newUrls],
+        photos: finalUrls,
         whatsapp, wechat, teams,
       };
 
@@ -275,7 +365,9 @@ export default function EditListingPage() {
         baseData.availability = availability.trim();
       }
 
-      await withTimeout(updateListing(id, baseData as Parameters<typeof updateListing>[1]), 12_000, "update-listing");
+      await withTimeout(updateListing(id, user!.uid, baseData as Parameters<typeof updateListing>[2]), 12_000, "update-listing");
+
+      setIsDirty(false);
       setToast("Listing updated successfully!");
     } catch (err: any) {
       const code: string = err?.code ?? "";
@@ -300,12 +392,12 @@ export default function EditListingPage() {
   };
 
   return (
-    <div className="max-w-lg mx-auto px-4 py-5 pb-28 sm:pb-8 animate-in fade-in duration-200">
+    <div className="relative max-w-lg mx-auto px-4 py-5 pb-28 sm:pb-8 animate-in fade-in duration-200">
       {toast && <SuccessToast message={toast} onDone={() => navigate(`/listing/${id}`)} />}
 
       <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-4">{t.editListingTitle}</h1>
 
-      {/* Type selector — read-only, 2×2 grid */}
+      {/* Type selector — read-only */}
       <div className="mb-5">
         <div className="grid grid-cols-2 bg-gray-100 dark:bg-slate-800 rounded-xl p-1 pointer-events-none opacity-60 gap-1">
           {ALL_TABS.map((tab) => (
@@ -324,38 +416,78 @@ export default function EditListingPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Photos */}
+
+        {/* FIX 1: Drag-and-drop photo uploader */}
         <div>
           <label className={labelCls}>{t.photos}</label>
-          <div className="grid grid-cols-3 gap-2">
-            {existingPhotos.map((src, i) => (
-              <div key={`existing-${i}`} className="relative aspect-square rounded-xl overflow-hidden border border-gray-200 dark:border-slate-600">
-                <img src={src} alt="" className="w-full h-full object-cover" />
-                <button type="button" onClick={() => removeExistingPhoto(i)} className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-0.5">
-                  <X size={12} />
-                </button>
-              </div>
-            ))}
-            {previews.map((src, i) => (
-              <div key={`new-${i}`} className="relative aspect-square rounded-xl overflow-hidden border border-blue-200 dark:border-blue-600">
-                <img src={src} alt="" className="w-full h-full object-cover" />
-                <button type="button" onClick={() => removeNewPhoto(i)} className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-0.5">
-                  <X size={12} />
-                </button>
-              </div>
-            ))}
-            {totalPhotos < 3 && (
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                className="aspect-square rounded-xl border-2 border-dashed border-gray-300 dark:border-slate-600 flex flex-col items-center justify-center text-gray-400 dark:text-slate-500 hover:border-[#003366] dark:hover:border-blue-500 hover:text-[#003366] dark:hover:text-blue-400 transition-colors"
-              >
-                <ImagePlus size={22} />
-                <span className="text-[10px] mt-1">{t.uploadPhotos}</span>
-              </button>
-            )}
+
+          {/* Drop zone */}
+          <div
+            className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors ${
+              dragOverZone
+                ? "border-blue-400 bg-blue-50 dark:bg-slate-800"
+                : "border-gray-300 dark:border-slate-600 hover:border-[#003366] dark:hover:border-blue-500"
+            }`}
+            onClick={() => fileRef.current?.click()}
+            onDragEnter={(e) => { e.preventDefault(); setDragOverZone(true); }}
+            onDragOver={(e) => { e.preventDefault(); setDragOverZone(true); }}
+            onDragLeave={() => setDragOverZone(false)}
+            onDrop={handleDrop}
+          >
+            <ImagePlus size={24} className="mx-auto text-gray-400 dark:text-slate-500 mb-1" />
+            <p className="text-xs text-gray-500 dark:text-slate-400">Drag photos here or tap to upload</p>
+            <p className="text-[10px] text-gray-300 dark:text-slate-600 mt-0.5">Up to 3 · Max 5 MB each</p>
           </div>
-          <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-1.5">Max 5 MB per photo · Up to 3 photos</p>
+
+          {/* Photo error */}
+          {photoError && (
+            <p className="text-xs text-red-500 dark:text-red-400 mt-1.5">{photoError}</p>
+          )}
+
+          {/* Thumbnail row */}
+          {allPhotos.length > 0 && (
+            <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
+              {allPhotos.map((item, i) => (
+                <div
+                  key={i}
+                  draggable
+                  onDragStart={() => handleThumbDragStart(i)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={() => handleThumbDrop(i)}
+                  className={`relative shrink-0 w-[72px] h-[72px] rounded-lg overflow-hidden border cursor-grab active:cursor-grabbing ${
+                    item.kind === "existing"
+                      ? "border-gray-200 dark:border-slate-600"
+                      : "border-blue-200 dark:border-blue-600"
+                  }`}
+                >
+                  <img src={item.src} alt="" className="w-full h-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); removePhoto(i); }}
+                    className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center"
+                  >
+                    <X size={10} />
+                  </button>
+                </div>
+              ))}
+              {allPhotos.length < MAX_PHOTOS && (
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  className="shrink-0 w-[72px] h-[72px] rounded-lg border-2 border-dashed border-gray-300 dark:border-slate-600 flex items-center justify-center text-gray-400 dark:text-slate-500 hover:border-[#003366] dark:hover:border-blue-500 transition-colors text-xl"
+                >
+                  ➕
+                </button>
+              )}
+            </div>
+          )}
+
+          {allPhotos.length > 0 && (
+            <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-1">
+              Photo {allPhotos.length} of {MAX_PHOTOS}
+            </p>
+          )}
+
           <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoChange} />
         </div>
 
@@ -365,12 +497,13 @@ export default function EditListingPage() {
             {(type === "jobs" || type === "assistance") ? t.serviceTitle : t.title} *
           </label>
           <input
+            ref={titleRef}
             type="text"
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            onChange={(e) => { setTitle(e.target.value); setIsDirty(true); setFieldError(null); }}
             required
             maxLength={80}
-            className={inputCls}
+            className={`${inputCls} ${fieldError === "content" ? "ring-2 ring-red-400" : ""}`}
           />
           <div className={`text-right text-xs mt-1 font-medium ${title.length > 70 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
             {title.length} / 80
@@ -386,7 +519,7 @@ export default function EditListingPage() {
                 <button
                   key={sub}
                   type="button"
-                  onClick={() => setJobSubtype(sub)}
+                  onClick={() => { setJobSubtype(sub); setIsDirty(true); }}
                   className={`flex-1 min-h-[44px] py-2 rounded-xl text-sm font-medium border transition-colors ${jobSubtype === sub ? "bg-[#003366] dark:bg-blue-600 text-white border-[#003366] dark:border-blue-600" : "bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600"}`}
                 >
                   {sub === "offering" ? t.jobSubtypeOffering : t.jobSubtypeSeeking}
@@ -405,7 +538,11 @@ export default function EditListingPage() {
           <button
             type="button"
             onClick={() => setShowDescEditor(true)}
-            className="w-full min-h-[80px] text-left bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition flex items-start justify-between gap-2"
+            className={`w-full min-h-[80px] text-left bg-white dark:bg-slate-700 border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition flex items-start justify-between gap-2 ${
+              fieldError === "content"
+                ? "border-red-400 ring-2 ring-red-400"
+                : "border-gray-300 dark:border-slate-600"
+            }`}
           >
             <span className={description ? "text-gray-900 dark:text-slate-100 line-clamp-3 flex-1" : "text-gray-400 dark:text-slate-500 flex-1"}>
               {description || t.descriptionPlaceholder}
@@ -422,7 +559,7 @@ export default function EditListingPage() {
         {/* Category */}
         <div>
           <label className={labelCls}>{t.category}</label>
-          <select value={category} onChange={(e) => setCategory(e.target.value)} className={selectCls}>
+          <select value={category} onChange={(e) => { setCategory(e.target.value); setIsDirty(true); }} className={selectCls}>
             {categories.map((c) => (
               <option key={c} value={c}>{t.categories[c as keyof typeof t.categories]}</option>
             ))}
@@ -438,7 +575,7 @@ export default function EditListingPage() {
                 <button
                   key={c}
                   type="button"
-                  onClick={() => setCondition(c)}
+                  onClick={() => { setCondition(c); setIsDirty(true); }}
                   className={`flex-1 min-h-[44px] py-2 rounded-xl text-sm font-medium border transition-colors ${condition === c ? "bg-[#003366] dark:bg-blue-600 text-white border-[#003366] dark:border-blue-600" : "bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600"}`}
                 >
                   {c === "new" ? t.conditionNew : t.conditionUsed}
@@ -462,9 +599,11 @@ export default function EditListingPage() {
                   if (e.key >= "0" && e.key <= "9") {
                     e.preventDefault();
                     setPriceCents((prev) => { const next = prev * 10 + parseInt(e.key); return next > 9999999 ? prev : next; });
+                    setIsDirty(true);
                   } else if (e.key === "Backspace") {
                     e.preventDefault();
                     setPriceCents((prev) => Math.floor(prev / 10));
+                    setIsDirty(true);
                   }
                 }}
                 onFocus={(e) => e.target.select()}
@@ -491,9 +630,11 @@ export default function EditListingPage() {
                   if (e.key >= "0" && e.key <= "9") {
                     e.preventDefault();
                     setPriceCents((prev) => { const next = prev * 10 + parseInt(e.key); return next > 9999999 ? prev : next; });
+                    setIsDirty(true);
                   } else if (e.key === "Backspace") {
                     e.preventDefault();
                     setPriceCents((prev) => Math.floor(prev / 10));
+                    setIsDirty(true);
                   }
                 }}
                 onFocus={(e) => e.target.select()}
@@ -513,7 +654,7 @@ export default function EditListingPage() {
             </div>
             <button
               type="button"
-              onClick={() => setIsRemote((prev) => !prev)}
+              onClick={() => { setIsRemote((prev) => !prev); setIsDirty(true); }}
               className={`relative w-11 h-6 rounded-full transition-colors ${isRemote ? "bg-sky-500" : "bg-gray-300 dark:bg-slate-600"}`}
             >
               <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${isRemote ? "translate-x-5" : "translate-x-0"}`} />
@@ -532,7 +673,7 @@ export default function EditListingPage() {
                   <button
                     key={model}
                     type="button"
-                    onClick={() => setPricingModel(model)}
+                    onClick={() => { setPricingModel(model); setIsDirty(true); }}
                     className={`min-h-[44px] py-2 rounded-xl text-sm font-medium border transition-colors ${pricingModel === model ? "bg-[#003366] dark:bg-blue-600 text-white border-[#003366] dark:border-blue-600" : "bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600"}`}
                   >
                     {label}
@@ -557,9 +698,11 @@ export default function EditListingPage() {
                   if (e.key >= "0" && e.key <= "9") {
                     e.preventDefault();
                     setPriceCents((prev) => { const next = prev * 10 + parseInt(e.key); return next > 9999999 ? prev : next; });
+                    setIsDirty(true);
                   } else if (e.key === "Backspace") {
                     e.preventDefault();
                     setPriceCents((prev) => Math.floor(prev / 10));
+                    setIsDirty(true);
                   }
                 }}
                 onFocus={(e) => e.target.select()}
@@ -578,7 +721,7 @@ export default function EditListingPage() {
             <input
               type="text"
               value={availability}
-              onChange={(e) => setAvailability(e.target.value.slice(0, 80))}
+              onChange={(e) => { setAvailability(e.target.value.slice(0, 80)); setIsDirty(true); }}
               placeholder={t.availabilityPlaceholder}
               maxLength={80}
               className={inputCls}
@@ -591,13 +734,11 @@ export default function EditListingPage() {
           <p className="text-sm font-semibold text-gray-700 dark:text-slate-300">{t.contactInfo}</p>
           <p className="text-xs text-gray-400 dark:text-slate-500">{t.contactAtLeastOne}</p>
           <div>
-            <label className="block text-xs text-gray-500 dark:text-slate-400 mb-1">
-              {t.whatsapp}
-            </label>
+            <label className="block text-xs text-gray-500 dark:text-slate-400 mb-1">{t.whatsapp}</label>
             <input
               type="text"
               value={whatsapp}
-              onChange={(e) => { setWhatsapp(e.target.value.slice(0, 20)); setWhatsappError(""); }}
+              onChange={(e) => { setWhatsapp(e.target.value.slice(0, 20)); setWhatsappError(""); setIsDirty(true); }}
               onBlur={() => {
                 const result = validateWhatsApp(whatsapp);
                 if (!result.valid) {
@@ -622,7 +763,7 @@ export default function EditListingPage() {
             <input
               type="text"
               value={wechat}
-              onChange={(e) => setWechat(e.target.value.slice(0, 30))}
+              onChange={(e) => { setWechat(e.target.value.slice(0, 30)); setIsDirty(true); }}
               placeholder="WeChat ID"
               maxLength={30}
               className={inputCls}
@@ -633,7 +774,7 @@ export default function EditListingPage() {
           </div>
           <div>
             <label className="block text-xs text-gray-500 dark:text-slate-400 mb-1">{t.teams}</label>
-            <input type="text" value={teams} onChange={(e) => setTeams(e.target.value)} placeholder="student@xmu.edu.my" maxLength={60} className={inputCls} />
+            <input type="text" value={teams} onChange={(e) => { setTeams(e.target.value); setIsDirty(true); }} placeholder="student@xmu.edu.my" maxLength={60} className={inputCls} />
           </div>
           {!(type === "jobs" && isRemote) && (
             <div>
@@ -641,7 +782,7 @@ export default function EditListingPage() {
               <input
                 type="text"
                 value={meetupSpot}
-                onChange={(e) => setMeetupSpot(e.target.value.slice(0, 80))}
+                onChange={(e) => { setMeetupSpot(e.target.value.slice(0, 80)); setIsDirty(true); }}
                 placeholder={t.meetupSpotPlaceholder}
                 maxLength={80}
                 className={inputCls}
@@ -659,27 +800,28 @@ export default function EditListingPage() {
           </div>
         )}
 
-        <button
-          type="submit"
-          disabled={loading || !title}
-          className="w-full mb-6 bg-[#003366] dark:bg-blue-600 text-white rounded-xl py-3 min-h-[48px] text-sm font-semibold hover:bg-[#002244] dark:hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-lg"
-        >
-          {loading ? (
-            <span className="flex items-center justify-center gap-2">
-              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-              </svg>
-              {t.submitting}
-            </span>
-          ) : t.save}
-        </button>
+        {/* FIX 6: Sticky submit button */}
+        <div className="sticky bottom-0 z-20 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-700 px-4 pt-3 pb-4 md:static md:bg-transparent md:border-0 md:p-0 md:mt-6 -mx-4">
+          <div className="pointer-events-none absolute -top-6 left-0 right-0 h-6 bg-gradient-to-t from-white dark:from-slate-900 to-transparent md:hidden" />
+          <button
+            type="submit"
+            disabled={loading || !title}
+            className="w-full min-h-[56px] bg-[#003366] dark:bg-blue-600 text-white font-semibold text-base rounded-xl hover:bg-[#002244] dark:hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.97] transition-all duration-150 flex items-center justify-center gap-2 shadow"
+          >
+            {loading ? (
+              <span className="flex items-center justify-center gap-2">
+                <Loader2 size={20} className="animate-spin" />
+                {t.submitting}
+              </span>
+            ) : t.save}
+          </button>
+        </div>
       </form>
 
       {showDescEditor && (
         <DescriptionEditorModal
           value={description}
-          onChange={(val) => setDescription(val)}
+          onChange={(val) => { setDescription(val); setIsDirty(true); setFieldError(null); }}
           onClose={() => setShowDescEditor(false)}
         />
       )}

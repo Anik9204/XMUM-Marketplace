@@ -1,0 +1,334 @@
+You are a senior UI/UX developer working on the XMUM Marketplace at
+artifacts/xmum-market/. Read ALL of these files completely before writing
+a single line of code:
+
+- src/pages/PostPage.tsx
+- src/pages/EditListingPage.tsx
+- src/lib/listings.ts
+- src/lib/contentFilter.ts
+- src/lib/types.ts
+- src/lib/validation.ts
+- src/lib/i18n.ts
+
+⚠️ CRITICAL — READ THIS BEFORE TOUCHING PostPage.tsx:
+PostPage.tsx was already modified by a previous task and contains the
+following — do NOT remove or overwrite any of this:
+  1. Listing tier enforcement: locked tabs (🔒) for "jobs", "assistance",
+     "rental" when userProfile.verificationStatus !== "approved", with an
+     inline banner and "Open Shop Setup" button.
+  2. activeListingCount limit checks before submit (5 for free, 30 for
+     verified).
+  3. An increment(1) call on users/{uid}.activeListingCount after a
+     successful createListing call.
+Read the current PostPage.tsx fully. Understand every existing function,
+state variable, and JSX block. Then ADD the features below around the
+existing code without disturbing it.
+
+═══════════════════════════════════════════════
+FIX 1 — DRAG-AND-DROP PHOTO UPLOAD
+═══════════════════════════════════════════════
+Replace the current file-input-only photo uploader in BOTH PostPage.tsx
+and EditListingPage.tsx with a drag-and-drop zone. Use ONLY native browser
+events — do NOT add any external drag library.
+
+The new uploader must:
+  - Render a dashed-border box:
+      className="border-2 border-dashed border-gray-300 dark:border-slate-600
+      rounded-xl p-4 text-center cursor-pointer transition-colors"
+    With icon (ImagePlus) + text "Drag photos here or tap to upload".
+  - Change border colour to blue (border-blue-400) and background to
+    blue-50/slate-800 when a file is dragged over (dragenter/dragover).
+  - Revert on dragleave and drop.
+  - Accept onDrop: read e.dataTransfer.files, filter to image/* only,
+    enforce MAX_FILE_BYTES (5MB) per file, append to photos state.
+  - Also accept onClick to open a hidden <input type="file"> (existing).
+  - Below the drop zone, render a horizontal row of thumbnails:
+      * Each thumbnail: 72×72px, rounded-lg, object-cover.
+      * Red × button top-right (20×20px circle, bg-red-500, text-white)
+        to remove that photo. Use e.stopPropagation() on the × click.
+      * Drag-to-reorder using HTML5 Drag API:
+          - draggable={true} on each thumbnail wrapper div.
+          - onDragStart: record dragIndex in a useRef<number>.
+          - onDragOver: e.preventDefault() to allow drop.
+          - onDrop on each thumbnail: swap photos[dragIndex] and
+            photos[dropIndex] in the array, update state.
+      * After all thumbnails, show an "➕" add button (same size) if
+        below the photo limit.
+  - Show "Photo X of Y" label in grey below the row.
+  - If any file exceeds 5MB show an inline error:
+    "⚠️ [filename] is too large. Max 5MB per photo."
+    as red text below the drop zone (auto-dismiss after 4 seconds).
+
+═══════════════════════════════════════════════
+FIX 2 — LIVE LISTING PREVIEW
+═══════════════════════════════════════════════
+Add a "Preview" toggle button in the PostPage header bar (right side,
+Eye icon from lucide-react, text "Preview").
+
+State: const [showPreview, setShowPreview] = useState(false)
+
+When showPreview is true:
+  - Show a floating panel fixed at the bottom of the screen, above the
+    keyboard safe area:
+      className="fixed bottom-20 left-1/2 -translate-x-1/2 z-40
+      w-[180px] pointer-events-none"
+  - Inside it render <ListingCard listing={previewListing} /> where
+    previewListing is a mock Listing object built from current form
+    state (title, price, photos[0], category, type, condition).
+    Use sensible defaults for required fields not in the form
+    (id:"preview", userId:"", userEmail:"", userName:"You",
+    createdAt:Date.now(), isArchived:false).
+  - The card updates debounced (500ms) as the user types. Implement
+    with useRef<ReturnType<typeof setTimeout>> and clear/reset in a
+    useEffect watching [title, price, photos, category, type, condition].
+  - Toggle OFF hides the panel.
+  - The preview card must be read-only (pointer-events-none on the
+    wrapper) — it must not intercept any taps.
+
+Import ListingCard at the top of PostPage.tsx. If it is already
+imported, do not import it again.
+
+═══════════════════════════════════════════════
+FIX 3 — UNSAVED CHANGES WARNING
+═══════════════════════════════════════════════
+In BOTH PostPage.tsx and EditListingPage.tsx:
+
+1. Add state: const [isDirty, setIsDirty] = useState(false)
+   Set isDirty to true inside the onChange handler of EVERY controlled
+   input (title, description, price, whatsapp, wechat, meetup spot,
+   category, condition, type selector, photos). Do NOT set it on mount
+   or when restoring a draft.
+
+2. Browser tab close warning:
+   useEffect(() => {
+     const handler = (e: BeforeUnloadEvent) => {
+       if (!isDirty) return;
+       e.preventDefault();
+       e.returnValue = "";
+     };
+     window.addEventListener("beforeunload", handler);
+     return () => window.removeEventListener("beforeunload", handler);
+   }, [isDirty]);
+
+3. In-app navigation warning:
+   Create a custom hook src/hooks/useUnsavedChangesGuard.ts:
+
+   import { useEffect } from "react";
+   import { useLocation } from "wouter";
+
+   export function useUnsavedChangesGuard(isDirty: boolean) {
+     const [, navigate] = useLocation();
+     useEffect(() => {
+       if (!isDirty) return;
+       const originalPushState = history.pushState.bind(history);
+       history.pushState = function (...args) {
+         const confirmed = window.confirm(
+           "You have unsaved changes. Leave anyway?"
+         );
+         if (confirmed) {
+           history.pushState = originalPushState;
+           originalPushState(...args);
+         }
+       };
+       return () => {
+         history.pushState = originalPushState;
+       };
+     }, [isDirty]);
+   }
+
+   Import and call useUnsavedChangesGuard(isDirty) in both PostPage and
+   EditListingPage. Set isDirty to false immediately before calling
+   navigate() on successful submit so the guard doesn't fire after save.
+
+═══════════════════════════════════════════════
+FIX 4 — CONTENT FILTER UX IMPROVEMENT
+═══════════════════════════════════════════════
+The current checkContent in src/lib/contentFilter.ts already returns
+{ passed: boolean; reason?: string }. Extend it to also return
+flaggedTerms:
+
+Update the FilterResult interface:
+  export interface FilterResult {
+    passed: boolean;
+    reason?: string;
+    flaggedTerms?: string[];
+  }
+
+Update checkContent to return flaggedTerms when content fails:
+  - For prohibited items: flaggedTerms: [redactWord(word)]
+  - For inappropriate language: flaggedTerms: [redactWord(word)]
+
+Add a helper function inside contentFilter.ts:
+  function redactWord(word: string): string {
+    if (word.length <= 2) return "*".repeat(word.length);
+    return word[0] + "*".repeat(word.length - 2) + word[word.length - 1];
+  }
+
+In PostPage.tsx and EditListingPage.tsx, in the submit handler where
+checkContent is called:
+  - If !result.passed:
+    * Set the error to result.reason (already done).
+    * Additionally, if result.flaggedTerms?.length, append to the error:
+      ` (flagged: ${result.flaggedTerms.join(", ")})`
+    * Apply a red ring to BOTH the title and description fields:
+        const [fieldError, setFieldError] = useState<"content"|null>(null)
+      Set fieldError = "content" on filter failure, clear on next input.
+    * Add to the title input className:
+        fieldError === "content" ? "ring-2 ring-red-400" : ""
+    * Do the same for the description field trigger button.
+    * Scroll to the title field: titleRef.current?.scrollIntoView
+      ({ behavior:"smooth", block:"center" })
+      Add const titleRef = useRef<HTMLInputElement>(null) and attach
+      ref={titleRef} to the title input.
+
+═══════════════════════════════════════════════
+FIX 5 — AUTO-SAVE DRAFT (PostPage only)
+═══════════════════════════════════════════════
+In PostPage.tsx ONLY (not EditListingPage):
+
+DRAFT KEY: const DRAFT_KEY = "xmum_post_draft_v2"
+
+SAVE DRAFT (call in two places):
+  function saveDraft() {
+    const draft = { type, title, description, price, category,
+                    condition, whatsapp, wechat, meetupSpot,
+                    savedAt: Date.now() };
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); }
+    catch {}
+  }
+
+  1. On every field blur: attach onBlur={saveDraft} to title, price,
+     whatsapp, wechat, meetupSpot inputs.
+  2. Auto-save interval: in a useEffect, set up
+     setInterval(saveDraft, 30_000) and clear on unmount.
+
+RESTORE ON MOUNT:
+  In the initial useEffect (runs once on mount, after the verification
+  tier check and BEFORE the draft restore):
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (raw) {
+      try {
+        const draft = JSON.parse(raw);
+        const ageMs = Date.now() - (draft.savedAt ?? 0);
+        if (ageMs < 7 * 24 * 60 * 60 * 1000) { // only restore if < 7 days old
+          setDraftBanner({ savedAt: draft.savedAt, draft });
+        } else {
+          localStorage.removeItem(DRAFT_KEY);
+        }
+      } catch {
+        localStorage.removeItem(DRAFT_KEY);
+      }
+    }
+
+  Add state: const [draftBanner, setDraftBanner] = useState
+    { savedAt: number; draft: any } | null>(null)
+
+  Render the banner (when draftBanner is not null) at the very top of
+  the form, BELOW the type selector, ABOVE the first field:
+    <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200
+    dark:border-amber-800 rounded-xl px-4 py-3 flex items-center
+    justify-between gap-3 mb-4">
+      <p className="text-xs text-amber-700 dark:text-amber-300">
+        📝 Draft saved {relativeTime(draftBanner.savedAt)}
+      </p>
+      <div className="flex gap-2">
+        <button onClick={restoreDraft}
+          className="text-xs font-semibold text-amber-700
+          dark:text-amber-300 underline min-h-[44px]">
+          Restore
+        </button>
+        <button onClick={() => {
+            localStorage.removeItem(DRAFT_KEY);
+            setDraftBanner(null);
+          }}
+          className="text-xs text-amber-500 min-h-[44px]">
+          Discard
+        </button>
+      </div>
+    </div>
+
+  restoreDraft function:
+    function restoreDraft() {
+      if (!draftBanner) return;
+      const d = draftBanner.draft;
+      if (d.type) setType(d.type);
+      if (d.title) setTitle(d.title);
+      if (d.description) setDescription(d.description);
+      if (d.price != null) setPrice(String(d.price));
+      if (d.category) setCategory(d.category);
+      if (d.condition) setCondition(d.condition);
+      if (d.whatsapp) setWhatsapp(d.whatsapp);
+      if (d.wechat) setWechat(d.wechat);
+      if (d.meetupSpot) setMeetupSpot(d.meetupSpot);
+      setDraftBanner(null);
+      // Do NOT set isDirty here — restoring a draft is not a user edit
+    }
+
+CLEAR DRAFT on successful post:
+  After navigate("/profile") on successful submit, add:
+    localStorage.removeItem(DRAFT_KEY);
+
+Add a relativeTime helper at the top of PostPage.tsx if one doesn't
+already exist:
+  function relativeTime(ms: number): string {
+    const diff = Date.now() - ms;
+    const mins = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+    if (mins < 2) return "just now";
+    if (hours < 1) return `${mins}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    return `${days}d ago`;
+  }
+
+═══════════════════════════════════════════════
+FIX 6 — STICKY SUBMIT BUTTON
+═══════════════════════════════════════════════
+In BOTH PostPage.tsx and EditListingPage.tsx:
+
+Wrap the submit button in a sticky footer container:
+  <div className="sticky bottom-0 z-20 bg-white dark:bg-slate-900
+  border-t border-gray-100 dark:border-slate-700 px-4 pt-3 pb-4
+  md:static md:bg-transparent md:border-0 md:p-0 md:mt-6">
+    <button
+      type="button"
+      onClick={handleSubmit}
+      disabled={loading}
+      className="w-full min-h-[56px] bg-[#003366] dark:bg-blue-600
+      text-white font-semibold text-base rounded-xl
+      hover:bg-[#002244] dark:hover:bg-blue-700
+      disabled:opacity-50 disabled:cursor-not-allowed
+      active:scale-[0.97] transition-all duration-150
+      flex items-center justify-center gap-2"
+    >
+      {loading ? (
+        <><Loader2 size={20} className="animate-spin" /> Posting...</>
+      ) : (
+        t.postItem  {/* or t.saveChanges for EditListingPage */}
+      )}
+    </button>
+    {/* Gradient fade above the sticky bar — mobile only */}
+    <div className="pointer-events-none absolute -top-6 left-0 right-0
+    h-6 bg-gradient-to-t from-white dark:from-slate-900 to-transparent
+    md:hidden" />
+  </div>
+
+Make the wrapper div position="relative" so the gradient positions
+correctly.
+
+Add Loader2 to the lucide-react imports in both files if not already
+present.
+
+═══════════════════════════════════════════════
+CONSTRAINTS
+═══════════════════════════════════════════════
+- Do NOT add react-dnd, react-beautiful-dnd, or any drag library.
+- Do NOT add any new npm packages.
+- Do NOT remove the tier enforcement code (locked tabs, listing count
+  limits) already present in PostPage.tsx from the previous task.
+- The canvas draft key uses "v2" suffix to avoid conflicts with any
+  previous draft format.
+- After ALL changes, show:
+  (a) Every file modified with a one-line summary of changes.
+  (b) Confirm the app compiles with zero TypeScript errors by running
+      pnpm build and pasting the terminal output.

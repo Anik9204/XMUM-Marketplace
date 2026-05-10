@@ -18,6 +18,12 @@ const INAPPROPRIATE_LANGUAGE = [
 export interface FilterResult {
   passed: boolean;
   reason?: string;
+  flaggedTerms?: string[];
+}
+
+function redactWord(word: string): string {
+  if (word.length <= 2) return "*".repeat(word.length);
+  return word[0] + "*".repeat(word.length - 2) + word[word.length - 1];
 }
 
 export function checkContent(title: string, description: string): FilterResult {
@@ -29,6 +35,7 @@ export function checkContent(title: string, description: string): FilterResult {
       return {
         passed: false,
         reason: `Your listing appears to contain a prohibited item or keyword: "${word}". Please review our community guidelines.`,
+        flaggedTerms: [redactWord(word)],
       };
     }
   }
@@ -39,6 +46,7 @@ export function checkContent(title: string, description: string): FilterResult {
       return {
         passed: false,
         reason: "Your listing contains inappropriate language. Please keep the marketplace respectful.",
+        flaggedTerms: [redactWord(word)],
       };
     }
   }

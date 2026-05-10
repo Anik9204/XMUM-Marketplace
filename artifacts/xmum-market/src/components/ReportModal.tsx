@@ -29,10 +29,9 @@ export default function ReportModal({ listing, onClose }: Props) {
   const [submitted, setSubmitted] = useState(false);
 
   useEffect(() => {
-    if (submitted) {
-      const timer = setTimeout(() => onClose(), 2500);
-      return () => clearTimeout(timer);
-    }
+    if (!submitted) return;
+    const timer = setTimeout(() => onClose(), 2500);
+    return () => clearTimeout(timer);
   }, [submitted, onClose]);
 
   async function handleSubmit() {
