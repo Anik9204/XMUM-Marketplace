@@ -10,6 +10,8 @@ import VerificationPage from "./pages/VerificationPage";
 import ReviewsPage      from "./pages/ReviewsPage";
 import ListingsPage     from "./pages/ListingsPage";
 import AnalyticsPage    from "./pages/AnalyticsPage";
+import ShopsPage        from "./pages/ShopsPage";
+import ShopAdsPage      from "./pages/ShopAdsPage";
 import Layout           from "./components/Layout";
 
 export default function App() {
@@ -39,6 +41,8 @@ export default function App() {
         <Route path="/rental-audit"   component={RentalAuditPage} />
         <Route path="/ads"            component={AdsPage} />
         <Route path="/analytics"      component={AnalyticsPage} />
+        <Route path="/shops"          component={ShopsPage} />
+        <Route path="/shop-ads"       component={ShopAdsPage} />
         <Route>
           <Redirect to="/" />
         </Route>

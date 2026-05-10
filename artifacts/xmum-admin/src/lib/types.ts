@@ -83,6 +83,41 @@ export interface AdminListing {
   isFeatured?: boolean;
 }
 
+export interface AdminShop {
+  id: string;
+  shopName: string;
+  shopSlug: string;
+  ownerEmail: string;
+  ownerUid: string;
+  shopBio?: string;
+  shopCategories?: string[];
+  shopBannerUrl?: string;
+  activeListingCount?: number;
+  rating?: number;
+  totalReviews?: number;
+  inquiryCount?: number;
+  createdAt: number;
+}
+
+export type ShopAdStatus = "pending" | "approved" | "rejected";
+
+export interface ShopAd {
+  id: string;
+  shopId: string;
+  shopName: string;
+  tagline: string;
+  imageUrl: string;
+  startsAt: number;
+  endsAt: number;
+  pricePerDay: number;
+  status: ShopAdStatus;
+  submittedBy: string;
+  submittedAt: number;
+  reviewedBy?: string;
+  reviewedAt?: number;
+  adminNote?: string;
+}
+
 export interface AdminReview {
   id: string;
   reviewerId: string;

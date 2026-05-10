@@ -1,0 +1,64 @@
+# PROMPT 5 OF 6 — Admin Panel: Campus Market Management
+ 
+You are a senior full-stack developer on the XMUM Marketplace project. Prompts 1–4 are complete. Now update the **admin panel** (`artifacts/xmum-admin/`) to manage the Campus Market system.
+ 
+---
+ 
+### STEP 1 — Add Firebase functions in `src/lib/firebase.ts` (admin panel)
+ 
+Add Firestore queries for:
+- `getShops(limitCount)` — all shops ordered by createdAt desc
+- `getPendingShopAds()` — shopAds where status == "pending"
+- `approveShopAd(adId, reviewedBy)` — update status to "approved", set reviewedAt
+- `rejectShopAd(adId, reviewedBy, note)` — update status to "rejected", set adminNote
+- `getShopInquiries(shopId)` — for audit
+- `deleteShop(shopId)` — admin can hard-delete a shop
+---
+ 
+### STEP 2 — Create `src/pages/ShopsPage.tsx` (admin panel)
+ 
+New admin page to manage all Campus Market shops:
+ 
+- Table with columns: Shop Name, Owner Email, Category, Listings, Inquiries, Rating, Created At, Actions
+- Actions: "View" (link to public shop page), "Delete" (with confirmation)
+- Search/filter by shop name or category
+- Shows total shop count at the top
+---
+ 
+### STEP 3 — Create `src/pages/ShopAdsPage.tsx` (admin panel)
+ 
+New admin page to manage shop ad submissions:
+ 
+- Two tabs: **Pending** | **All Ads**
+- Each ad row shows: Shop Name, Tagline, Image preview (thumbnail), Requested dates, Price/day, Status
+- Pending ads have: **Approve** button and **Reject** button (reject opens a small input for admin note/reason)
+- Approved/rejected ads show the reviewer and date
+- Image preview links open the full image in a new tab
+---
+ 
+### STEP 4 — Add new pages to admin `src/App.tsx` or `src/App.js`
+ 
+Add routes:
+```
+/shops → ShopsPage
+/shop-ads → ShopAdsPage
+```
+ 
+---
+ 
+### STEP 5 — Add to admin sidebar nav in `src/components/Layout.tsx` (admin panel)
+ 
+Add two new nav items:
+- 🏪 Shops → `/shops`
+- 📢 Shop Ads → `/shop-ads`
+---
+ 
+### STEP 6 — Run typecheck for admin panel
+ 
+```bash
+cd artifacts/xmum-admin && pnpm run typecheck
+```
+ 
+Fix all errors. When done, tell me: ✅ Prompt 5 complete — admin panel updated for Campus Market.
+ 
+---

@@ -1,6 +1,10 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { initializeFirestore } from "firebase/firestore";
+import {
+  initializeFirestore,
+  collection, query, orderBy, limit, getDocs,
+  where, doc, updateDoc, deleteDoc, getDoc,
+} from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
@@ -21,3 +25,72 @@ export const db      = initializeFirestore(app, {
   experimentalAutoDetectLongPolling: true,
 });
 export const storage = getStorage(app);
+
+// ── Campus Market helpers ────────────────────────────────────────────────────
+
+export async function getShops(limitCount = 100) {
+  const q = query(
+    collection(db, "shops"),
+    orderBy("createdAt", "desc"),
+    limit(limitCount),
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+export async function getPendingShopAds() {
+  const q = query(
+    collection(db, "shopAds"),
+    where("status", "==", "pending"),
+    orderBy("submittedAt", "desc"),
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+export async function getAllShopAds() {
+  const q = query(
+    collection(db, "shopAds"),
+    orderBy("submittedAt", "desc"),
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+export async function approveShopAd(adId: string, reviewedBy: string) {
+  await updateDoc(doc(db, "shopAds", adId), {
+    status: "approved",
+    reviewedBy,
+    reviewedAt: Date.now(),
+  });
+}
+
+export async function rejectShopAd(
+  adId: string,
+  reviewedBy: string,
+  note: string,
+) {
+  await updateDoc(doc(db, "shopAds", adId), {
+    status: "rejected",
+    reviewedBy,
+    reviewedAt: Date.now(),
+    adminNote: note,
+  });
+}
+
+export async function getShopInquiries(shopId: string) {
+  const q = query(
+    collection(db, "shopInquiries"),
+    where("shopId", "==", shopId),
+    orderBy("createdAt", "desc"),
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+export async function deleteShop(shopId: string) {
+  // Fetch shop doc first to get ownerUid for cleanup if needed
+  const shopSnap = await getDoc(doc(db, "shops", shopId));
+  if (!shopSnap.exists()) throw new Error("Shop not found");
+  await deleteDoc(doc(db, "shops", shopId));
+}
