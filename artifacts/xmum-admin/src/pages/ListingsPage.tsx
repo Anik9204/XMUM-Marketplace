@@ -7,7 +7,8 @@ import {
 import { ref, deleteObject } from "firebase/storage";
 import { db, storage } from "../lib/firebase";
 import { AdminListing, ListingType } from "../lib/types";
-import { Trash2, Archive, Star } from "lucide-react";
+import { Trash2, Archive, Star, Download } from "lucide-react";
+import { exportToCsv } from "../lib/exportCsv";
 
 const PAGE_SIZE = 20;
 
@@ -131,15 +132,56 @@ export default function ListingsPage() {
     return true;
   });
 
+  function handleExport() {
+    const timestamp = new Date().toISOString().slice(0, 10);
+    const headers = [
+      "ID", "Title", "Type", "Category", "Price (RM)",
+      "Status", "Poster Email", "Poster Name",
+      "Views", "Featured", "Photos", "Created At",
+    ];
+    const rows = filtered.map((l) => [
+      l.id,
+      l.title,
+      TYPE_LABELS[l.type] ?? l.type,
+      l.category,
+      l.price === 0 ? "Free" : l.price ?? "",
+      l.isArchived ? "Archived" : l.status === "sold" ? "Sold" : "Active",
+      l.userEmail,
+      l.userName,
+      l.viewCount ?? 0,
+      l.isFeatured ? "Yes" : "No",
+      l.photos.length,
+      new Date(l.createdAt).toLocaleDateString("en-MY", {
+        day: "numeric", month: "short", year: "numeric",
+      }),
+    ]);
+    exportToCsv(`listings_${timestamp}.csv`, headers, rows);
+  }
+
   return (
     <div className="p-6">
-      <div className="flex items-center gap-3 mb-6">
+      <div className="flex items-center justify-between gap-3 mb-6">
         <div>
           <h1 className="text-xl font-bold text-slate-800 dark:text-slate-200">All Listings</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
             {listings.length} loaded{hasMore ? "+" : ""}
+            {filtered.length !== listings.length && ` · ${filtered.length} shown`}
           </p>
         </div>
+        {!loading && (
+          <button
+            onClick={handleExport}
+            disabled={filtered.length === 0}
+            className="flex items-center gap-2 text-sm font-medium text-slate-600
+                       dark:text-slate-300 border border-gray-200 dark:border-slate-700
+                       bg-white dark:bg-slate-800 rounded-xl px-4 min-h-[40px]
+                       hover:bg-slate-50 dark:hover:bg-slate-700/50 disabled:opacity-40
+                       disabled:cursor-not-allowed transition-colors flex-shrink-0"
+          >
+            <Download className="w-4 h-4" />
+            Export CSV
+          </button>
+        )}
       </div>
 
       {/* Filter row */}

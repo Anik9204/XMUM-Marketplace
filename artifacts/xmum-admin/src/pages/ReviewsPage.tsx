@@ -5,7 +5,8 @@ import {
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { AdminReview } from "../lib/types";
-import { Trash2 } from "lucide-react";
+import { Trash2, Download } from "lucide-react";
+import { exportToCsv } from "../lib/exportCsv";
 
 function Stars({ rating }: { rating: number }) {
   return (
@@ -70,6 +71,29 @@ export default function ReviewsPage() {
     }
   }
 
+  function handleExport() {
+    const timestamp = new Date().toISOString().slice(0, 10);
+    const headers = [
+      "ID", "Reviewer Name", "Reviewer UID",
+      "Seller Name", "Seller UID",
+      "Listing Title", "Rating", "Comment", "Date",
+    ];
+    const rows = reviews.map((r) => [
+      r.id,
+      r.reviewerName,
+      r.reviewerId,
+      r.sellerName ?? "",
+      r.sellerId,
+      r.listingTitle,
+      r.rating,
+      r.comment,
+      new Date(r.createdAt).toLocaleDateString("en-MY", {
+        day: "numeric", month: "short", year: "numeric",
+      }),
+    ]);
+    exportToCsv(`reviews_${timestamp}.csv`, headers, rows);
+  }
+
   return (
     <div className="p-6">
       <div className="flex items-center gap-3 mb-6">
@@ -80,10 +104,24 @@ export default function ReviewsPage() {
           </p>
         </div>
         {!loading && (
-          <span className="ml-auto bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300
-                           text-xs font-semibold px-3 py-1 rounded-full">
-            {reviews.length} total
-          </span>
+          <>
+            <span className="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300
+                             text-xs font-semibold px-3 py-1 rounded-full">
+              {reviews.length} total
+            </span>
+            <button
+              onClick={handleExport}
+              disabled={reviews.length === 0}
+              className="ml-auto flex items-center gap-2 text-sm font-medium text-slate-600
+                         dark:text-slate-300 border border-gray-200 dark:border-slate-700
+                         bg-white dark:bg-slate-800 rounded-xl px-4 min-h-[40px]
+                         hover:bg-slate-50 dark:hover:bg-slate-700/50 disabled:opacity-40
+                         disabled:cursor-not-allowed transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              Export CSV
+            </button>
+          </>
         )}
       </div>
 

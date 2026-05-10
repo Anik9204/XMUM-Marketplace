@@ -3,7 +3,8 @@ import { useEffect, useState, useRef } from "react";
 import { collection, query, orderBy, limit, getDocs, startAfter, deleteDoc, updateDoc, doc, } from "firebase/firestore";
 import { ref, deleteObject } from "firebase/storage";
 import { db, storage } from "../lib/firebase";
-import { Trash2, Archive, Star } from "lucide-react";
+import { Trash2, Archive, Star, Download } from "lucide-react";
+import { exportToCsv } from "../lib/exportCsv";
 const PAGE_SIZE = 20;
 const TYPE_LABELS = {
     "buy-sell": "Buy & Sell",
@@ -122,7 +123,32 @@ export default function ListingsPage() {
         }
         return true;
     });
-    return (_jsxs("div", { className: "p-6", children: [_jsx("div", { className: "flex items-center gap-3 mb-6", children: _jsxs("div", { children: [_jsx("h1", { className: "text-xl font-bold text-slate-800 dark:text-slate-200", children: "All Listings" }), _jsxs("p", { className: "text-sm text-slate-500 dark:text-slate-400 mt-0.5", children: [listings.length, " loaded", hasMore ? "+" : ""] })] }) }), _jsxs("div", { className: "flex flex-wrap gap-2 mb-5", children: [_jsxs("select", { value: typeFilter, onChange: (e) => setTypeFilter(e.target.value), className: "bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700\n                     rounded-xl px-3 py-2 text-sm text-slate-700 dark:text-slate-300\n                     min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500", children: [_jsx("option", { value: "all", children: "All Types" }), Object.keys(TYPE_LABELS).map((t) => (_jsx("option", { value: t, children: TYPE_LABELS[t] }, t)))] }), _jsxs("select", { value: statusFilter, onChange: (e) => setStatusFilter(e.target.value), className: "bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700\n                     rounded-xl px-3 py-2 text-sm text-slate-700 dark:text-slate-300\n                     min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500", children: [_jsx("option", { value: "all", children: "All Status" }), _jsx("option", { value: "active", children: "Active" }), _jsx("option", { value: "sold", children: "Sold" }), _jsx("option", { value: "archived", children: "Archived" })] }), _jsx("input", { value: search, onChange: (e) => setSearch(e.target.value), placeholder: "Search by title\u2026", className: "bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700\n                     rounded-xl px-3 py-2 text-sm text-slate-700 dark:text-slate-300\n                     min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1 min-w-[200px]" })] }), loading ? (_jsx("div", { className: "space-y-3", children: [...Array(5)].map((_, i) => (_jsx("div", { className: "h-20 bg-white dark:bg-slate-800 rounded-2xl animate-pulse\n                            border border-gray-100 dark:border-slate-700" }, i))) })) : filtered.length === 0 ? (_jsxs("div", { className: "flex flex-col items-center py-24 text-center", children: [_jsx("span", { className: "text-5xl mb-3", children: "\uD83D\uDCED" }), _jsx("p", { className: "font-semibold text-slate-700 dark:text-slate-300", children: "No listings found." }), _jsx("p", { className: "text-sm text-slate-500 dark:text-slate-400 mt-1", children: "Try adjusting the filters above." })] })) : (_jsxs(_Fragment, { children: [_jsx("div", { className: "space-y-2", children: filtered.map((listing) => {
+    function handleExport() {
+        const timestamp = new Date().toISOString().slice(0, 10);
+        const headers = [
+            "ID", "Title", "Type", "Category", "Price (RM)",
+            "Status", "Poster Email", "Poster Name",
+            "Views", "Featured", "Photos", "Created At",
+        ];
+        const rows = filtered.map((l) => [
+            l.id,
+            l.title,
+            TYPE_LABELS[l.type] ?? l.type,
+            l.category,
+            l.price === 0 ? "Free" : l.price ?? "",
+            l.isArchived ? "Archived" : l.status === "sold" ? "Sold" : "Active",
+            l.userEmail,
+            l.userName,
+            l.viewCount ?? 0,
+            l.isFeatured ? "Yes" : "No",
+            l.photos.length,
+            new Date(l.createdAt).toLocaleDateString("en-MY", {
+                day: "numeric", month: "short", year: "numeric",
+            }),
+        ]);
+        exportToCsv(`listings_${timestamp}.csv`, headers, rows);
+    }
+    return (_jsxs("div", { className: "p-6", children: [_jsxs("div", { className: "flex items-center justify-between gap-3 mb-6", children: [_jsxs("div", { children: [_jsx("h1", { className: "text-xl font-bold text-slate-800 dark:text-slate-200", children: "All Listings" }), _jsxs("p", { className: "text-sm text-slate-500 dark:text-slate-400 mt-0.5", children: [listings.length, " loaded", hasMore ? "+" : "", filtered.length !== listings.length && ` · ${filtered.length} shown`] })] }), !loading && (_jsxs("button", { onClick: handleExport, disabled: filtered.length === 0, className: "flex items-center gap-2 text-sm font-medium text-slate-600\n                       dark:text-slate-300 border border-gray-200 dark:border-slate-700\n                       bg-white dark:bg-slate-800 rounded-xl px-4 min-h-[40px]\n                       hover:bg-slate-50 dark:hover:bg-slate-700/50 disabled:opacity-40\n                       disabled:cursor-not-allowed transition-colors flex-shrink-0", children: [_jsx(Download, { className: "w-4 h-4" }), "Export CSV"] }))] }), _jsxs("div", { className: "flex flex-wrap gap-2 mb-5", children: [_jsxs("select", { value: typeFilter, onChange: (e) => setTypeFilter(e.target.value), className: "bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700\n                     rounded-xl px-3 py-2 text-sm text-slate-700 dark:text-slate-300\n                     min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500", children: [_jsx("option", { value: "all", children: "All Types" }), Object.keys(TYPE_LABELS).map((t) => (_jsx("option", { value: t, children: TYPE_LABELS[t] }, t)))] }), _jsxs("select", { value: statusFilter, onChange: (e) => setStatusFilter(e.target.value), className: "bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700\n                     rounded-xl px-3 py-2 text-sm text-slate-700 dark:text-slate-300\n                     min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500", children: [_jsx("option", { value: "all", children: "All Status" }), _jsx("option", { value: "active", children: "Active" }), _jsx("option", { value: "sold", children: "Sold" }), _jsx("option", { value: "archived", children: "Archived" })] }), _jsx("input", { value: search, onChange: (e) => setSearch(e.target.value), placeholder: "Search by title\u2026", className: "bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700\n                     rounded-xl px-3 py-2 text-sm text-slate-700 dark:text-slate-300\n                     min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1 min-w-[200px]" })] }), loading ? (_jsx("div", { className: "space-y-3", children: [...Array(5)].map((_, i) => (_jsx("div", { className: "h-20 bg-white dark:bg-slate-800 rounded-2xl animate-pulse\n                            border border-gray-100 dark:border-slate-700" }, i))) })) : filtered.length === 0 ? (_jsxs("div", { className: "flex flex-col items-center py-24 text-center", children: [_jsx("span", { className: "text-5xl mb-3", children: "\uD83D\uDCED" }), _jsx("p", { className: "font-semibold text-slate-700 dark:text-slate-300", children: "No listings found." }), _jsx("p", { className: "text-sm text-slate-500 dark:text-slate-400 mt-1", children: "Try adjusting the filters above." })] })) : (_jsxs(_Fragment, { children: [_jsx("div", { className: "space-y-2", children: filtered.map((listing) => {
                             const statusLabel = listing.isArchived ? "Archived"
                                 : listing.status === "sold" ? "Sold" : "Active";
                             const statusColor = listing.isArchived
