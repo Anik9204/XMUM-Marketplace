@@ -230,18 +230,19 @@ export default function ProfilePage() {
   const isGridLoading = tab === "saved" ? savedLoading : loading;
   const gridListings = tab === "saved" ? savedListings : filteredListings;
 
-  const subTabs: { key: ListingTab; label: string }[] = [
-    { key: "active", label: "Active" },
-    { key: "sold", label: "Sold" },
-    { key: "archived", label: "Archived" },
-    { key: "saved", label: "Saved" },
-  ];
-
   // Stats
   const activeCount = listings.filter(l => !l.isArchived && l.status !== "sold").length;
   const soldCount = listings.filter(l => l.status === "sold").length;
+  const archivedCount = listings.filter(l => l.isArchived && l.status !== "sold").length;
   const viewCount = listings.reduce((sum, l) => sum + (l.viewCount ?? 0), 0);
   const savedCount = savedListings.length;
+
+  const subTabs: { key: ListingTab; label: string; count: number }[] = [
+    { key: "active",   label: "Active",   count: activeCount },
+    { key: "sold",     label: "Sold",     count: soldCount },
+    { key: "archived", label: "Archived", count: archivedCount },
+    { key: "saved",    label: "Saved",    count: savedCount },
+  ];
 
   const isVerifiedShop = userProfile?.verificationStatus === "approved" && !!userProfile?.shopSlug;
 
@@ -346,7 +347,7 @@ export default function ProfilePage() {
 
         {/* Listing sub-tabs */}
         <div className="flex gap-1 bg-slate-100 dark:bg-slate-700/50 rounded-xl p-1 mb-4 overflow-x-auto scrollbar-hide">
-          {subTabs.map(({ key, label }) => (
+          {subTabs.map(({ key, label, count }) => (
             <button
               key={key}
               onClick={() => setTab(key)}
@@ -357,7 +358,7 @@ export default function ProfilePage() {
               }`}
             >
               {key === "saved" && <Bookmark size={11} />}
-              {label}
+              {loading ? label : `${label} (${count})`}
             </button>
           ))}
         </div>

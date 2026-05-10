@@ -102,6 +102,14 @@ export default function MessagesPage() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Auto-resize textarea — grows and shrinks with content
+  const autoResizeTextarea = useCallback(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 128) + "px";
+  }, []);
+
   // ── Real-time conversation list ─────────────────────────────────────────────
   useEffect(() => {
     if (!user) return;
@@ -213,6 +221,7 @@ export default function MessagesPage() {
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value.slice(0, MAX_CHARS);
     setInputText(val);
+    autoResizeTextarea();
     if (!activeConv || !user) return;
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     if (val.trim()) {
@@ -223,7 +232,7 @@ export default function MessagesPage() {
     } else {
       setTypingStatus(activeConv.id, user.uid, false);
     }
-  }, [activeConv?.id, user?.uid]);
+  }, [activeConv?.id, user?.uid, autoResizeTextarea]);
 
   const handleInputBlur = useCallback(() => {
     if (!activeConv || !user) return;
@@ -244,6 +253,7 @@ export default function MessagesPage() {
     const senderName = userProfile?.fullName ?? userProfile?.displayName ?? user.email?.split("@")[0] ?? "Someone";
     const text = inputText;
     setInputText("");
+    autoResizeTextarea();
     setSending(true);
     try {
       await sendMessage(activeConv.id, user.uid, senderName, text, otherUid);
@@ -581,7 +591,7 @@ export default function MessagesPage() {
       )}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1 bg-gray-50 dark:bg-slate-950">
+      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1 bg-gray-50 dark:bg-slate-950 overscroll-contain">
         {visibleMessages.length === 0 && (
           <div className="flex justify-center mt-6">
             {clearedSince > 0 && messages.length > 0 ? (
@@ -660,8 +670,8 @@ export default function MessagesPage() {
               onBlur={handleInputBlur}
               placeholder={t.typeMessage}
               rows={1}
-              style={{ resize: "none" }}
-              className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-2xl px-4 py-2.5 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 min-h-[44px] max-h-32 overflow-y-auto transition pr-14 leading-relaxed"
+              style={{ resize: "none", overscrollBehavior: "contain" }}
+              className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-2xl px-4 py-2.5 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 min-h-[44px] overflow-hidden transition pr-14 leading-relaxed overscroll-contain"
             />
             {inputText.length > CHAR_WARN && (
               <span className={`absolute right-3 bottom-2.5 text-[10px] font-medium pointer-events-none ${inputText.length >= MAX_CHARS ? "text-red-500" : "text-slate-400"}`}>
@@ -705,7 +715,7 @@ export default function MessagesPage() {
         }
       `}</style>
 
-      <div className="flex h-[calc(100dvh-56px)] sm:h-[calc(100dvh-64px)] overflow-hidden">
+      <div className={`flex overflow-hidden overscroll-none ${!!user && !user.emailVerified ? "h-[calc(100dvh-56px-48px)] sm:h-[calc(100dvh-64px-48px)]" : "h-[calc(100dvh-56px)] sm:h-[calc(100dvh-64px)]"}`}>
 
         {/* Left panel: conversation list */}
         <div className={`flex flex-col border-r border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden w-full md:w-80 md:shrink-0 ${activeConv ? "hidden md:flex" : "flex"}`}>

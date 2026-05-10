@@ -1,8 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
+    <script>
+      (function () {
+        try {
+          var theme = localStorage.getItem('xmum-theme');
+          if (theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+          }
+        } catch (e) {}
+      })();
+    </script>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>XMUM Market</title>
     <meta http-equiv="Content-Security-Policy" content="
       default-src 'self';
@@ -18,8 +28,7 @@
       connect-src 'self' https://*.googleapis.com
         https://*.firebaseio.com
         https://firestore.googleapis.com
-        wss://*.firebaseio.com
-        wss:;
+        wss://*.firebaseio.com;
       frame-src https://*.firebaseapp.com;
     " />
 

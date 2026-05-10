@@ -101,7 +101,7 @@ export default function NotificationBell() {
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-11 w-80 bg-white dark:bg-slate-800 rounded-2xl shadow-modal border border-gray-100 dark:border-slate-700 z-50 overflow-hidden animate-in slide-in-from-top-2 duration-150">
+          <div className="absolute right-0 top-11 w-[min(320px,calc(100vw-16px))] bg-white dark:bg-slate-800 rounded-2xl shadow-modal border border-gray-100 dark:border-slate-700 z-50 overflow-hidden animate-in slide-in-from-top-2 duration-150">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-slate-700">
               <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Notifications</p>
               {hasUnread && (
@@ -113,7 +113,7 @@ export default function NotificationBell() {
                 </button>
               )}
             </div>
-            <div className="max-h-72 overflow-y-auto">
+            <div className="max-h-[70vh] overflow-y-auto">
               {loading ? (
                 <div className="p-4 text-center text-xs text-gray-400">Loading...</div>
               ) : notifications.length === 0 ? (

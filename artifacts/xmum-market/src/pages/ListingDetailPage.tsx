@@ -403,7 +403,7 @@ export default function ListingDetailPage() {
 
       <div className="max-w-2xl mx-auto pb-32 md:pb-8 animate-in fade-in duration-200">
         {/* Back button + overflow menu */}
-        <div className="sticky top-14 sm:top-16 z-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm border-b border-gray-100 dark:border-slate-700">
+        <div data-sticky-subheader className="sticky top-14 sm:top-16 z-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm border-b border-gray-100 dark:border-slate-700">
           <div className="flex items-center justify-between px-4">
             <button
               onClick={() => window.history.back()}
