@@ -100,7 +100,18 @@ export interface Review {
 
 export interface AppNotification {
   id: string;
-  type: "listing_deleted" | "listing_sold" | "welcome" | "daily_digest" | "new_message_digest";
+  type:
+    | "listing_deleted"
+    | "listing_sold"
+    | "welcome"
+    | "daily_digest"
+    | "new_message_digest"
+    | "new_message"
+    | "bump_available"
+    | "review_received"
+    | "listing_expiring"
+    | "shop_approved"
+    | "shop_rejected";
   title: string;
   body: string;
   createdAt: number;

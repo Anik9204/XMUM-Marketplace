@@ -1,0 +1,8 @@
+node_modules
+dist
+.env
+.env.local
+
+src/**/*.js
+src/**/*.js.map
+!src/**/*.test.js

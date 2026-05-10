@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Bell } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { getNotifications, markNotificationsRead } from "@/lib/notifications";
+import { subscribeToNotifications, markNotificationsRead } from "@/lib/notifications";
 import { AppNotification } from "@/lib/types";
 
 const NOTIF_ICONS: Record<string, string> = {
@@ -33,10 +33,23 @@ export default function NotificationBell() {
   useEffect(() => {
     if (!user) return;
     setLoading(true);
-    getNotifications(user.uid)
-      .then(setNotifications)
-      .finally(() => setLoading(false));
-  }, [user]);
+    const unsub = subscribeToNotifications(user.uid, (notifs) => {
+      setNotifications(prev => {
+        const prevIds = new Set(prev.map(n => n.id));
+        const brandNew = notifs.filter(n => !prevIds.has(n.id) && !n.read);
+        brandNew.forEach(n => {
+          if (Notification.permission === "granted") {
+            try {
+              new Notification(n.title, { body: n.body, icon: "/favicon.svg" });
+            } catch {}
+          }
+        });
+        return notifs;
+      });
+      setLoading(false);
+    });
+    return unsub;
+  }, [user?.uid]);
 
   const handleOpen = async () => {
     setOpen(v => !v);

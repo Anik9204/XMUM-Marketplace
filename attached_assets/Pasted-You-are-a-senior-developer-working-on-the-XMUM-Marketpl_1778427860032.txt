@@ -1,0 +1,157 @@
+You are a senior developer working on the XMUM Marketplace. Read the
+following before writing any code:
+  ls artifacts/xmum-admin/src/pages/
+  ls artifacts/xmum-admin/src/components/
+  ls artifacts/xmum-admin/src/lib/
+  ls artifacts/xmum-admin/src/contexts/
+  cat artifacts/xmum-market/src/lib/types.ts | grep -A 15 "AppNotification"
+
+Do not write any code until you have read all the above.
+
+═══════════════════════════════════════════════
+BUG 1 — DUPLICATE COMPILED .js FILES IN ADMIN APP
+═══════════════════════════════════════════════
+PROBLEM: Every file in artifacts/xmum-admin/src/ has a compiled .js
+duplicate sitting next to the .tsx source file. For example:
+  - AdsPage.tsx  AND  AdsPage.js  (compiled output)
+  - Layout.tsx   AND  Layout.js
+  - types.tsx    AND  types.js
+  - App.tsx      AND  App.js
+  ...and so on for every file.
+
+These .js files are stale compiled outputs that TypeScript/Vite is
+potentially picking up instead of the .tsx source. This causes:
+  - Vite potentially resolving the wrong file version.
+  - TypeScript errors because two module resolutions exist.
+  - Deployment confusion on Vercel.
+  - Git diffs that are impossible to read.
+
+FIX: Delete ALL .js files in the admin app src directory that have a
+corresponding .tsx file. Run these terminal commands:
+
+  find artifacts/xmum-admin/src -name "*.js" | while read f; do
+    tsx_equiv="${f%.js}.tsx"
+    if [ -f "$tsx_equiv" ]; then
+      echo "Deleting $f (has .tsx counterpart)"
+      rm "$f"
+    fi
+  done
+
+After running, verify with:
+  find artifacts/xmum-admin/src -name "*.js"
+The output should be empty. If any .js files remain, delete them
+manually.
+
+Then update artifacts/xmum-admin/.gitignore to prevent this from
+recurring. Add these lines if not already present:
+  src/**/*.js
+  src/**/*.js.map
+  !src/**/*.test.js
+
+═══════════════════════════════════════════════
+BUG 2 — AppNotification TYPE UNION IS INCOMPLETE
+═══════════════════════════════════════════════
+PROBLEM: In artifacts/xmum-market/src/lib/types.ts, the
+AppNotification.type union is:
+  "listing_deleted" | "listing_sold" | "welcome" |
+  "daily_digest" | "new_message_digest"
+
+But the codebase now writes notifications of types:
+  "new_message", "bump_available", "review_received",
+  "listing_expiring", "shop_approved", "shop_rejected"
+
+These missing types cause TypeScript errors anywhere that calls
+addNotification() with a new type, and they prevent NOTIF_ICONS in
+NotificationBell.tsx from matching the correct icon.
+
+FIX: In artifacts/xmum-market/src/lib/types.ts, replace the type
+union on AppNotification.type with the complete list:
+
+  type:
+    | "listing_deleted"
+    | "listing_sold"
+    | "welcome"
+    | "daily_digest"
+    | "new_message_digest"
+    | "new_message"
+    | "bump_available"
+    | "review_received"
+    | "listing_expiring"
+    | "shop_approved"
+    | "shop_rejected";
+
+Do NOT change any other field on the AppNotification interface.
+
+═══════════════════════════════════════════════
+BUG 3 — subscribeToNotifications IS MISSING FROM notifications.ts
+═══════════════════════════════════════════════
+PROBLEM: NotificationBell.tsx imports subscribeToNotifications from
+"@/lib/notifications" but this function does not exist in
+notifications.ts. The bell currently falls back to the old
+getNotifications() getDocs call, meaning notifications are NOT
+real-time — the bell only updates on page load.
+
+FIX: In artifacts/xmum-market/src/lib/notifications.ts:
+  1. Add onSnapshot to the firebase/firestore imports.
+  2. Add this exported function at the bottom of the file:
+
+  export function subscribeToNotifications(
+    uid: string,
+    callback: (notifs: AppNotification[]) => void
+  ): () => void {
+    const q = query(
+      collection(db, "users", uid, "notifications"),
+      orderBy("createdAt", "desc"),
+      limit(20)
+    );
+    return onSnapshot(
+      q,
+      (snap) => {
+        const notifs = snap.docs.map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            ...data,
+            createdAt: toMillis(data.createdAt),
+          } as AppNotification;
+        });
+        callback(notifs);
+      },
+      () => {} // silently ignore snapshot errors (offline, permissions)
+    );
+  }
+
+  3. In NotificationBell.tsx, replace the current useEffect that
+  calls getNotifications() with one that uses subscribeToNotifications:
+
+  useEffect(() => {
+    if (!user) return;
+    setLoading(true);
+    const unsub = subscribeToNotifications(user.uid, (notifs) => {
+      setNotifications(prev => {
+        const prevIds = new Set(prev.map(n => n.id));
+        const brandNew = notifs.filter(n => !prevIds.has(n.id) && !n.read);
+        brandNew.forEach(n => {
+          if (Notification.permission === "granted") {
+            try {
+              new Notification(n.title, { body: n.body, icon: "/favicon.svg" });
+            } catch {}
+          }
+        });
+        return notifs;
+      });
+      setLoading(false);
+    });
+    return unsub;
+  }, [user?.uid]);
+
+  Remove the setLoading(true) that was before the old getDocs call.
+
+═══════════════════════════════════════════════
+VERIFICATION
+═══════════════════════════════════════════════
+After all fixes:
+1. Run: cd artifacts/xmum-market && pnpm build
+2. Run: cd artifacts/xmum-admin && pnpm build
+3. Both must compile with zero TypeScript errors.
+4. List every file modified.

@@ -8,6 +8,7 @@ import {
   query,
   orderBy,
   limit,
+  onSnapshot,
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "./firebase";
@@ -60,6 +61,32 @@ export async function markNotificationsRead(uid: string, ids: string[]): Promise
   } catch {
     // Silent
   }
+}
+
+export function subscribeToNotifications(
+  uid: string,
+  callback: (notifs: AppNotification[]) => void
+): () => void {
+  const q = query(
+    collection(db, "users", uid, "notifications"),
+    orderBy("createdAt", "desc"),
+    limit(20)
+  );
+  return onSnapshot(
+    q,
+    (snap) => {
+      const notifs = snap.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          ...data,
+          createdAt: toMillis(data.createdAt),
+        } as AppNotification;
+      });
+      callback(notifs);
+    },
+    () => {} // silently ignore snapshot errors (offline, permissions)
+  );
 }
 
 const DIGEST_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
