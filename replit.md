@@ -88,3 +88,5 @@ lib/api-spec/              # OpenAPI spec + Orval codegen config
 - "Firestore not found" console warnings in dev = Firebase project needs Firestore database created in the Firebase Console — not a code error
 - `PORT` and `BASE_PATH` env vars are required by `vite.config.ts` at startup
 - Workflow runs: `PORT=5173 BASE_PATH=/ pnpm --filter @workspace/xmum-market run dev`
+
+<!-- test push from Antigravity -->
