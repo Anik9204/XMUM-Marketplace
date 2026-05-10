@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { getUserListings, deleteListing, markAsSold, bumpListing, getListing, LISTING_EXPIRY_MS, LISTING_REMINDER_MS } from "@/lib/listings";
+import { getUserConversations } from "@/lib/messaging";
 import { sendDailyDigestIfDue } from "@/lib/notifications";
 import { Listing } from "@/lib/types";
 import { getSavedListings } from "@/lib/savedListings";
@@ -46,6 +47,7 @@ export default function ProfilePage() {
 
   const [savedListings, setSavedListings] = useState<Listing[]>([]);
   const [savedLoading, setSavedLoading] = useState(false);
+  const [totalMessages, setTotalMessages] = useState(0);
 
   const listingsCache = useRef<Listing[]>([]);
 
@@ -83,6 +85,10 @@ export default function ProfilePage() {
         listingsCache.current = active;
         setListings(active);
         sendDailyDigestIfDue(user.uid, active);
+        getUserConversations(user.uid).then(convs => {
+          const msgs = convs.reduce((sum, c) => sum + (c.unreadCount?.[user.uid] ?? 0), 0);
+          setTotalMessages(msgs);
+        }).catch(() => {});
 
         const expiringSoon = active.filter(
           l => l.status === "active" &&
@@ -280,21 +286,25 @@ export default function ProfilePage() {
           </div>
 
           {/* Stats row */}
-          <div className="mt-4 grid grid-cols-4 divide-x divide-gray-100 dark:divide-slate-700 border-t border-gray-100 dark:border-slate-700 pt-4">
-            <div className="text-center px-2">
+          <div className="mt-4 grid grid-cols-5 divide-x divide-gray-100 dark:divide-slate-700 border-t border-gray-100 dark:border-slate-700 pt-4">
+            <div className="text-center px-1">
               <p className="text-lg font-bold text-gray-900 dark:text-slate-100">{activeCount}</p>
               <p className="text-[11px] text-gray-400 dark:text-slate-500">Active</p>
             </div>
-            <div className="text-center px-2">
+            <div className="text-center px-1">
               <p className="text-lg font-bold text-gray-900 dark:text-slate-100">{soldCount}</p>
               <p className="text-[11px] text-gray-400 dark:text-slate-500">Sold</p>
             </div>
-            <div className="text-center px-2">
+            <div className="text-center px-1">
               <p className="text-lg font-bold text-gray-900 dark:text-slate-100">{viewCount}</p>
               <p className="text-[11px] text-gray-400 dark:text-slate-500">Views</p>
             </div>
+            <div className="text-center px-1">
+              <p className="text-lg font-bold text-gray-900 dark:text-slate-100">{totalMessages}</p>
+              <p className="text-[11px] text-gray-400 dark:text-slate-500">Messages</p>
+            </div>
             <button
-              className="text-center px-2 hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-xl transition-colors"
+              className="text-center px-1 hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-xl transition-colors"
               onClick={() => setTab("saved")}
             >
               <p className="text-lg font-bold text-gray-900 dark:text-slate-100">{savedCount}</p>

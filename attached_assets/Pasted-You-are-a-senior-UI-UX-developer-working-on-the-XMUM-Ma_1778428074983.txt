@@ -1,0 +1,108 @@
+You are a senior UI/UX developer working on the XMUM Marketplace.
+Read ALL of these files completely before writing any code:
+  cat artifacts/xmum-market/src/components/ListingCard.tsx
+  cat artifacts/xmum-market/src/pages/ProfilePage.tsx
+  cat artifacts/xmum-market/src/lib/i18n.ts | grep -A 5 "totalViews\|activeCount\|soldCount"
+
+═══════════════════════════════════════════════
+BUG 1 — LISTING CARD HAS OVERLAPPING BADGES
+═══════════════════════════════════════════════
+PROBLEM: ListingCard renders MULTIPLE independent badge layers that
+all position at "top-2 left-2" simultaneously:
+  1. A type-specific badge: "For Sale" / "Lost & Found" / "Offering"
+     / "Assistance" / "Rental" — all at absolute top-2 left-2.
+  2. The TYPE_BADGE pill from TYPE_BADGE map — at bottom-2 left-2.
+  3. The condition badge — at top-2 right-2.
+  4. The save bookmark — at top-2 right-2 (clashes with condition).
+  5. The bumped "Featured" badge — at bottom-7 left-2.
+  6. The remote "Remote OK" badge — at top-2 right-2.
+
+This causes multiple badges to stack on top of each other at the
+same pixel position, making the card look broken.
+
+FIX: Consolidate the card image overlay badges into a clean,
+non-overlapping system. In ListingCard.tsx, replace the entire
+badge section inside the <div className="relative"> image wrapper:
+
+  TOP-LEFT corner: ONE primary status badge only, in this priority:
+    - jobs with jobSubtype: show "Offering" or "Seeking"
+    - buy-sell: show condition (New / Used)
+    - lost-found: show "Lost" or "Found" based on category
+    - assistance: show "Help Wanted"
+    - rental: show vehicle emoji + "Rental"
+  Use: className="absolute top-2 left-2 z-10 text-[10px] font-bold
+    px-2 py-0.5 rounded-full shadow-sm [color based on type]"
+
+  TOP-RIGHT corner: ONE secondary badge only, in this priority:
+    - If remote (jobs): "📶 Remote"
+    - If not remote and buy-sell: condition badge (only if not
+      already shown top-left)
+    - Otherwise: nothing
+  Use: className="absolute top-2 right-2 z-10 ..."
+
+  BOTTOM-LEFT corner: The TYPE_BADGE colored pill (existing):
+    className="absolute bottom-2 left-2 z-10 ..."
+
+  BOTTOM-LEFT above TYPE_BADGE: The "⬆ Featured" bump badge,
+    className="absolute bottom-8 left-2 z-10 ..."
+    (shift up to avoid overlapping the type badge)
+
+  SAVE BUTTON: Move to bottom-right of the image:
+    className="absolute bottom-2 right-2 z-10 ..."
+    This prevents it from clashing with the top-right condition badge.
+
+Remove all duplicate badge renders. Each corner must have at most
+ONE badge at any given time.
+
+═══════════════════════════════════════════════
+BUG 2 — PROFILE PAGE STATS ROW IS MISSING TOTAL VIEWS
+═══════════════════════════════════════════════
+PROBLEM: ProfilePage computes activeCount, soldCount, and savedCount
+but does NOT compute totalViews (sum of viewCount across all
+listings). The stats row shows "X Active | X Sold | X Saved" but
+is missing the Views stat. The stats row also has no visible dividers
+between stats on some screen sizes.
+
+FIX: In artifacts/xmum-market/src/pages/ProfilePage.tsx:
+
+  1. Add totalViews computation below the existing activeCount/
+     soldCount lines (around line 237):
+       const totalViews = listings.reduce(
+         (sum, l) => sum + (l.viewCount ?? 0), 0
+       );
+
+  2. In the stats row JSX, add the Views stat between Sold and Saved.
+     Find the stats row (the section that renders savedCount etc.)
+     and add:
+       <div className="flex-1 flex flex-col items-center py-3 border-r
+         border-gray-100 dark:border-slate-700">
+         <p className="text-lg font-bold text-slate-800 dark:text-slate-100">
+           {totalViews}
+         </p>
+         <p className="text-[11px] text-slate-400 dark:text-slate-500">
+           Views
+         </p>
+       </div>
+
+  3. Make sure each stat cell has border-r except the last one
+     (Saved), which should have no right border.
+
+  4. Add a "Total messages received" stat:
+     This requires a separate fetch. Add:
+       const [totalMessages, setTotalMessages] = useState(0);
+     In the useEffect where getUserListings is called, after setting
+     listings, also call getUserConversations(user.uid) and compute:
+       const msgs = convs.reduce(
+         (sum, c) => sum + (c.unreadCount?.[user.uid] ?? 0), 0
+       );
+       setTotalMessages(msgs);
+     Import getUserConversations from "@/lib/messaging".
+     Add a 5th stat "Messages" showing totalMessages.
+
+═══════════════════════════════════════════════
+CONSTRAINTS
+═══════════════════════════════════════════════
+- Do NOT modify any Firestore queries.
+- Do NOT add new npm packages.
+- After changes, run pnpm build and confirm zero errors.
+- List every file modified.

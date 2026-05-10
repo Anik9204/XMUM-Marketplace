@@ -184,64 +184,74 @@ export default function ListingCard({
               </div>
             )}
 
+            {/* TOP-LEFT: one primary status badge */}
+            {!isSold && (() => {
+              if (isJobs && listing.jobSubtype) {
+                return (
+                  <span className={`absolute top-2 left-2 z-10 text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm ${listing.jobSubtype === "offering" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300" : "bg-purple-100 text-purple-700 dark:bg-purple-900/60 dark:text-purple-300"}`}>
+                    {listing.jobSubtype === "offering" ? t.offeringBadge : t.seekingBadge}
+                  </span>
+                );
+              }
+              if (listing.type === "buy-sell") {
+                return (
+                  <span className={`absolute top-2 left-2 z-10 text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm ${listing.condition === "new" ? "bg-green-100 text-green-700 dark:bg-green-900/60 dark:text-green-300" : "bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300"}`}>
+                    {listing.condition === "new" ? t.conditionNew : t.conditionUsed}
+                  </span>
+                );
+              }
+              if (listing.type === "lost-found") {
+                return (
+                  <span className="absolute top-2 left-2 z-10 text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300">
+                    {listing.category === "found" ? "Found" : "Lost"}
+                  </span>
+                );
+              }
+              if (isAssistance) {
+                return (
+                  <span className="absolute top-2 left-2 z-10 text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm bg-orange-100 text-orange-700 dark:bg-orange-900/60 dark:text-orange-300">
+                    Help Wanted
+                  </span>
+                );
+              }
+              if (isRental) {
+                return (
+                  <span className="absolute top-2 left-2 z-10 text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm bg-yellow-100 text-yellow-800 dark:bg-yellow-900/60 dark:text-yellow-300 flex items-center gap-0.5">
+                    {listing.vehicleType ? VEHICLE_ICONS[listing.vehicleType] : "🚗"} {t.rentalBadge}
+                  </span>
+                );
+              }
+              return null;
+            })()}
+
+            {/* TOP-RIGHT: one secondary badge (remote only) */}
+            {!isSold && isJobs && listing.isRemote && (
+              <span className="absolute top-2 right-2 z-10 text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm bg-sky-100 text-sky-700 dark:bg-sky-900/60 dark:text-sky-300 flex items-center gap-0.5">
+                <Wifi size={9} />
+                {t.remoteBadge}
+              </span>
+            )}
+
+            {/* BOTTOM-LEFT: type pill */}
             {!isSold && typeBadge && (
               <span className={`absolute bottom-2 left-2 z-10 inline-flex items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm ${typeBadge.bg} ${typeBadge.text}`}>
                 {isRental && listing.vehicleType ? `${VEHICLE_ICONS[listing.vehicleType] ?? "🚗"} ${typeBadge.label}` : typeBadge.label}
               </span>
             )}
 
+            {/* BOTTOM-LEFT above type pill: bump badge */}
             {!isSold && listing.lastBumpedAt && Date.now() - listing.lastBumpedAt < 3 * 60 * 60 * 1000 && (
-              <span className="absolute bottom-7 left-2 z-10 inline-flex items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-500 text-white shadow-sm">
+              <span className="absolute bottom-8 left-2 z-10 inline-flex items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-500 text-white shadow-sm">
                 ⬆ Featured
               </span>
             )}
 
-            {!isSold && (
-              <>
-                {listing.type === "buy-sell" && (
-                  <span className="absolute top-2 left-2 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-300">
-                    For Sale
-                  </span>
-                )}
-                {listing.type === "lost-found" && (
-                  <span className="absolute top-2 left-2 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300">
-                    Lost &amp; Found
-                  </span>
-                )}
-                {isJobs && listing.jobSubtype && (
-                  <span className={`absolute top-2 left-2 text-[10px] font-semibold px-2 py-0.5 rounded-full ${listing.jobSubtype === "offering" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300" : "bg-purple-100 text-purple-700 dark:bg-purple-900/60 dark:text-purple-300"}`}>
-                    {listing.jobSubtype === "offering" ? t.offeringBadge : t.seekingBadge}
-                  </span>
-                )}
-                {isJobs && listing.isRemote && (
-                  <span className="absolute top-2 right-2 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 dark:bg-sky-900/60 dark:text-sky-300 flex items-center gap-0.5">
-                    <Wifi size={9} />
-                    {t.remoteBadge}
-                  </span>
-                )}
-                {isAssistance && (
-                  <span className="absolute top-2 left-2 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900/60 dark:text-orange-300">
-                    Assistance
-                  </span>
-                )}
-                {isRental && (
-                  <span className="absolute top-2 left-2 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900/60 dark:text-yellow-300 flex items-center gap-0.5">
-                    {listing.vehicleType ? VEHICLE_ICONS[listing.vehicleType] : "🚗"} {t.rentalBadge}
-                  </span>
-                )}
-                {listing.type === "buy-sell" && (
-                  <span className={`absolute top-2 right-2 text-xs font-semibold px-2 py-0.5 rounded-full ${listing.condition === "new" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
-                    {listing.condition === "new" ? t.conditionNew : t.conditionUsed}
-                  </span>
-                )}
-              </>
-            )}
-
+            {/* BOTTOM-RIGHT: save button */}
             {showSaveButton && !isOwnListing && (
               <button
                 onClick={handleSaveToggle}
                 disabled={savingInProgress}
-                className="absolute top-2 right-2 z-10 w-10 h-10 min-w-[40px] min-h-[40px] rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center hover:bg-black/50 transition-colors disabled:opacity-60"
+                className="absolute bottom-2 right-2 z-10 w-10 h-10 min-w-[40px] min-h-[40px] rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center hover:bg-black/50 transition-colors disabled:opacity-60"
                 aria-label={isSaved ? "Remove from saved" : "Save listing"}
               >
                 {isSaved
