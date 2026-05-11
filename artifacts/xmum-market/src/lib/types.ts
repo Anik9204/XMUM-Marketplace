@@ -34,6 +34,9 @@ export interface Shop {
   totalInquiries: number;
   rating: number;
   reviewCount: number;
+  orderQuestions?: ShopOrderQuestion[];
+  autoReplyEnabled?: boolean;
+  autoReplyMessage?: string;
 }
 
 export interface ShopListing {
@@ -213,7 +216,10 @@ export interface AppNotification {
     | "shop_ad_approved"
     | "shop_ad_rejected"
     | "shop_editor_added"
-    | "shop_editor_removed";
+    | "shop_editor_removed"
+    | "shop_order_received"
+    | "shop_order_confirmed"
+    | "shop_order_cancelled";
   title: string;
   body: string;
   createdAt: number;
@@ -222,6 +228,36 @@ export interface AppNotification {
   shopId?: string;
   inquiryId?: string;
 }
+
+export interface ShopOrderQuestion {
+  id: string;
+  label: string;
+  type: "text" | "number" | "date" | "textarea";
+  required: boolean;
+}
+
+export interface ShopOrder {
+  id: string;
+  shopId: string;
+  shopName: string;
+  shopListingId: string;
+  listingTitle: string;
+  buyerId: string;
+  buyerName: string;
+  buyerEmail: string;
+  buyerWhatsapp?: string;
+  buyerWechat?: string;
+  quantity: number;
+  offeredPrice?: number;
+  answers: Record<string, string>;
+  status: "pending" | "confirmed" | "cancelled";
+  cancellationReason?: string;
+  createdAt: number;
+  updatedAt: number;
+  reviewLeft?: boolean;
+}
+
+export type OrderStatus = ShopOrder["status"];
 
 export interface SponsoredAd {
   id: string;

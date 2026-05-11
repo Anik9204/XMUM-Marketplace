@@ -5,7 +5,7 @@ import {
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { db, storage, auth } from "@/lib/firebase";
-import { Shop, ShopListing, ShopInquiry, ShopReview, ShopAd, InquiryStatus } from "@/lib/types";
+import { Shop, ShopListing, ShopInquiry, ShopReview, ShopAd, InquiryStatus, ShopOrder, ShopOrderQuestion } from "@/lib/types";
 import {
   notifyShopInquiryReceived,
   notifyInquiryStatusChanged,
@@ -392,6 +392,108 @@ export async function getApprovedShopAds(): Promise<ShopAd[]> {
   return snap.docs
     .map((d) => ({ id: d.id, ...d.data() } as ShopAd))
     .filter((ad) => ad.startDate <= now && ad.endDate >= now);
+}
+
+// ── Orders ────────────────────────────────────────────────────────────────────
+export async function createOrder(data: {
+  shopId: string;
+  shopName: string;
+  shopListingId: string;
+  listingTitle: string;
+  buyerId: string;
+  buyerName: string;
+  buyerEmail: string;
+  buyerWhatsapp?: string;
+  buyerWechat?: string;
+  quantity: number;
+  offeredPrice?: number;
+  answers: Record<string, string>;
+}): Promise<string> {
+  const docRef = await addDoc(collection(db, "shopOrders"), {
+    ...data,
+    status: "pending",
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    reviewLeft: false,
+  });
+  return docRef.id;
+}
+
+export async function getOrdersForShop(shopId: string): Promise<ShopOrder[]> {
+  try {
+    const q = query(
+      collection(db, "shopOrders"),
+      where("shopId", "==", shopId),
+      orderBy("createdAt", "desc")
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ShopOrder));
+  } catch (err: any) {
+    if (err?.code === "failed-precondition" || err?.message?.includes("index")) {
+      const q2 = query(collection(db, "shopOrders"), where("shopId", "==", shopId));
+      const snap2 = await getDocs(q2);
+      return snap2.docs
+        .map((d) => ({ id: d.id, ...d.data() } as ShopOrder))
+        .sort((a, b) => b.createdAt - a.createdAt);
+    }
+    throw err;
+  }
+}
+
+export async function getOrdersForBuyer(buyerId: string): Promise<ShopOrder[]> {
+  try {
+    const q = query(
+      collection(db, "shopOrders"),
+      where("buyerId", "==", buyerId),
+      orderBy("createdAt", "desc")
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ShopOrder));
+  } catch (err: any) {
+    const q2 = query(collection(db, "shopOrders"), where("buyerId", "==", buyerId));
+    const snap2 = await getDocs(q2);
+    return snap2.docs
+      .map((d) => ({ id: d.id, ...d.data() } as ShopOrder))
+      .sort((a, b) => b.createdAt - a.createdAt);
+  }
+}
+
+export async function updateOrderStatus(
+  orderId: string,
+  status: "confirmed" | "cancelled",
+  cancellationReason?: string
+): Promise<void> {
+  const updateData: any = { status, updatedAt: Date.now() };
+  if (status === "cancelled" && cancellationReason) {
+    updateData.cancellationReason = cancellationReason.trim();
+  }
+  await updateDoc(doc(db, "shopOrders", orderId), updateData);
+}
+
+// ── Shop Order Questions ───────────────────────────────────────────────────────
+export async function saveOrderQuestions(
+  shopId: string,
+  questions: ShopOrderQuestion[]
+): Promise<void> {
+  await updateDoc(doc(db, "shops", shopId), { orderQuestions: questions });
+}
+
+// ── Automated Inquiry Reply ───────────────────────────────────────────────────
+export async function saveAutoReply(shopId: string, message: string): Promise<void> {
+  await updateDoc(doc(db, "shops", shopId), {
+    autoReplyMessage: message.trim(),
+    autoReplyEnabled: message.trim().length > 0,
+  });
+}
+
+export async function getAutoReply(shopId: string): Promise<{ enabled: boolean; message: string } | null> {
+  const snap = await getDoc(doc(db, "shops", shopId));
+  if (!snap.exists()) return null;
+  const data = snap.data();
+  return {
+    enabled: data.autoReplyEnabled ?? false,
+    message: data.autoReplyMessage ?? "",
+  };
 }
 
 export async function getAllShops(limitCount = 50): Promise<Shop[]> {

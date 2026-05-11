@@ -1,0 +1,212 @@
+I need to add a complete Orders system to the XMUM Marketplace. This prompt sets up the data layer. Do NOT touch any UI files yet — only add to `lib/types.ts`, `lib/shops.ts`, and `lib/notifications.ts`.
+ 
+**Step 1 — Add Order types to `lib/types.ts`**
+ 
+Add these interfaces and types to the bottom of the file:
+ 
+```typescript
+export interface ShopOrderQuestion {
+  id: string;       // e.g. "q1", "q2"
+  label: string;    // e.g. "Preferred delivery date"
+  type: "text" | "number" | "date" | "textarea";
+  required: boolean;
+}
+ 
+export interface ShopOrder {
+  id: string;
+  shopId: string;
+  shopName: string;
+  shopListingId: string;
+  listingTitle: string;
+  buyerId: string;
+  buyerName: string;
+  buyerEmail: string;
+  buyerWhatsapp?: string;   // from user profile at time of order
+  buyerWechat?: string;     // from user profile at time of order
+  quantity: number;
+  offeredPrice?: number;    // only if pricingModel === "negotiable"
+  answers: Record<string, string>; // questionId → answer
+  status: "pending" | "confirmed" | "cancelled";
+  cancellationReason?: string;  // set when status = "cancelled", max 100 words
+  createdAt: number;
+  updatedAt: number;
+  reviewLeft?: boolean;
+}
+ 
+export type OrderStatus = ShopOrder["status"];
+```
+ 
+Also add to `AppNotification["type"]` union: `"shop_order_received"`, `"shop_order_confirmed"`, `"shop_order_cancelled"`, `"shop_editor_added"`, `"shop_editor_removed"` (if not already added from Prompt 1).
+ 
+**Step 2 — Add order functions to `lib/shops.ts`**
+ 
+Add these functions at the bottom of `lib/shops.ts`:
+ 
+```typescript
+// ── Orders ────────────────────────────────────────────────────────────────────
+export async function createOrder(data: {
+  shopId: string;
+  shopName: string;
+  shopListingId: string;
+  listingTitle: string;
+  buyerId: string;
+  buyerName: string;
+  buyerEmail: string;
+  buyerWhatsapp?: string;
+  buyerWechat?: string;
+  quantity: number;
+  offeredPrice?: number;
+  answers: Record<string, string>;
+}): Promise<string> {
+  const docRef = await addDoc(collection(db, "shopOrders"), {
+    ...data,
+    status: "pending",
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    reviewLeft: false,
+  });
+  return docRef.id;
+}
+ 
+export async function getOrdersForShop(shopId: string): Promise<ShopOrder[]> {
+  try {
+    const q = query(
+      collection(db, "shopOrders"),
+      where("shopId", "==", shopId),
+      orderBy("createdAt", "desc")
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ShopOrder));
+  } catch (err: any) {
+    if (err?.code === "failed-precondition" || err?.message?.includes("index")) {
+      const q2 = query(collection(db, "shopOrders"), where("shopId", "==", shopId));
+      const snap2 = await getDocs(q2);
+      return snap2.docs
+        .map((d) => ({ id: d.id, ...d.data() } as ShopOrder))
+        .sort((a, b) => b.createdAt - a.createdAt);
+    }
+    throw err;
+  }
+}
+ 
+export async function getOrdersForBuyer(buyerId: string): Promise<ShopOrder[]> {
+  try {
+    const q = query(
+      collection(db, "shopOrders"),
+      where("buyerId", "==", buyerId),
+      orderBy("createdAt", "desc")
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ShopOrder));
+  } catch (err: any) {
+    const q2 = query(collection(db, "shopOrders"), where("buyerId", "==", buyerId));
+    const snap2 = await getDocs(q2);
+    return snap2.docs
+      .map((d) => ({ id: d.id, ...d.data() } as ShopOrder))
+      .sort((a, b) => b.createdAt - a.createdAt);
+  }
+}
+ 
+export async function updateOrderStatus(
+  orderId: string,
+  status: "confirmed" | "cancelled",
+  cancellationReason?: string
+): Promise<void> {
+  const updateData: any = { status, updatedAt: Date.now() };
+  if (status === "cancelled" && cancellationReason) {
+    updateData.cancellationReason = cancellationReason.trim();
+  }
+  await updateDoc(doc(db, "shopOrders", orderId), updateData);
+}
+ 
+// ── Shop Order Questions (stored on the shop document) ────────────────────────
+export async function saveOrderQuestions(
+  shopId: string,
+  questions: import("@/lib/types").ShopOrderQuestion[]
+): Promise<void> {
+  await updateDoc(doc(db, "shops", shopId), { orderQuestions: questions });
+}
+ 
+// ── Automated Inquiry Reply ───────────────────────────────────────────────────
+export async function saveAutoReply(shopId: string, message: string): Promise<void> {
+  await updateDoc(doc(db, "shops", shopId), {
+    autoReplyMessage: message.trim(),
+    autoReplyEnabled: message.trim().length > 0,
+  });
+}
+ 
+export async function getAutoReply(shopId: string): Promise<{ enabled: boolean; message: string } | null> {
+  const snap = await getDoc(doc(db, "shops", shopId));
+  if (!snap.exists()) return null;
+  const data = snap.data();
+  return {
+    enabled: data.autoReplyEnabled ?? false,
+    message: data.autoReplyMessage ?? "",
+  };
+}
+```
+ 
+**Step 3 — Update `Shop` interface in `lib/types.ts`**
+ 
+Add these optional fields to the `Shop` interface:
+```typescript
+  orderQuestions?: ShopOrderQuestion[];  // custom questions for order form
+  autoReplyEnabled?: boolean;
+  autoReplyMessage?: string;
+```
+ 
+**Step 4 — Add order notification helpers to `lib/notifications.ts`**
+ 
+Add these functions:
+```typescript
+export async function notifyShopOrderReceived(
+  shopOwnerId: string,
+  shopName: string,
+  buyerName: string,
+  orderId: string,
+  shopId: string,
+): Promise<void> {
+  await addNotification(shopOwnerId, {
+    type: "shop_order_received",
+    title: "New order received!",
+    body: `${buyerName} placed an order at "${shopName}". Check your Orders tab.`,
+    shopId,
+    inquiryId: orderId, // reuse field for orderId
+  });
+}
+ 
+export async function notifyOrderConfirmed(
+  buyerId: string,
+  shopName: string,
+  orderId: string,
+  shopId: string,
+): Promise<void> {
+  await addNotification(buyerId, {
+    type: "shop_order_confirmed",
+    title: "Order confirmed! 🎉",
+    body: `Your order at "${shopName}" has been confirmed. The shop will contact you soon.`,
+    shopId,
+    inquiryId: orderId,
+  });
+}
+ 
+export async function notifyOrderCancelled(
+  buyerId: string,
+  shopName: string,
+  reason: string,
+  orderId: string,
+  shopId: string,
+): Promise<void> {
+  await addNotification(buyerId, {
+    type: "shop_order_cancelled",
+    title: "Order cancelled",
+    body: `Your order at "${shopName}" was cancelled. Reason: ${reason || "No reason provided."}`,
+    shopId,
+    inquiryId: orderId,
+  });
+}
+```
+ 
+Also notify shop editors when an order is received — add an `editorIds` param and loop through them.
+ 
+---

@@ -186,6 +186,61 @@ export async function notifyEditorRemoved(
   });
 }
 
+// ── Order notification helpers ─────────────────────────────────────────────────
+
+export async function notifyShopOrderReceived(
+  shopOwnerId: string,
+  shopName: string,
+  buyerName: string,
+  orderId: string,
+  shopId: string,
+  editorIds: string[] = [],
+): Promise<void> {
+  const targets = [shopOwnerId, ...editorIds.filter((id) => id !== shopOwnerId)];
+  await Promise.allSettled(
+    targets.map((uid) =>
+      addNotification(uid, {
+        type: "shop_order_received",
+        title: "New order received!",
+        body: `${buyerName} placed an order at "${shopName}". Check your Orders tab.`,
+        shopId,
+        inquiryId: orderId,
+      })
+    )
+  );
+}
+
+export async function notifyOrderConfirmed(
+  buyerId: string,
+  shopName: string,
+  orderId: string,
+  shopId: string,
+): Promise<void> {
+  await addNotification(buyerId, {
+    type: "shop_order_confirmed",
+    title: "Order confirmed! 🎉",
+    body: `Your order at "${shopName}" has been confirmed. The shop will contact you soon.`,
+    shopId,
+    inquiryId: orderId,
+  });
+}
+
+export async function notifyOrderCancelled(
+  buyerId: string,
+  shopName: string,
+  reason: string,
+  orderId: string,
+  shopId: string,
+): Promise<void> {
+  await addNotification(buyerId, {
+    type: "shop_order_cancelled",
+    title: "Order cancelled",
+    body: `Your order at "${shopName}" was cancelled. Reason: ${reason || "No reason provided."}`,
+    shopId,
+    inquiryId: orderId,
+  });
+}
+
 const DIGEST_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 export async function sendDailyDigestIfDue(uid: string, listings: Listing[]): Promise<void> {
