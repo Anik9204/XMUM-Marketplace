@@ -211,7 +211,9 @@ export interface AppNotification {
     | "shop_inquiry_confirmed"
     | "shop_inquiry_completed"
     | "shop_ad_approved"
-    | "shop_ad_rejected";
+    | "shop_ad_rejected"
+    | "shop_editor_added"
+    | "shop_editor_removed";
   title: string;
   body: string;
   createdAt: number;

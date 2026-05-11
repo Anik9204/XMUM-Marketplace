@@ -162,6 +162,30 @@ export async function notifyShopAdRejected(
   });
 }
 
+export async function notifyEditorAdded(
+  editorUid: string,
+  shopName: string,
+  shopId: string,
+): Promise<void> {
+  await addNotification(editorUid, {
+    type: "shop_editor_added" as AppNotification["type"],
+    title: "You've been added as a shop editor",
+    body: `You are now an editor of "${shopName}". You can manage listings and respond to inquiries.`,
+    shopId,
+  });
+}
+
+export async function notifyEditorRemoved(
+  editorUid: string,
+  shopName: string,
+): Promise<void> {
+  await addNotification(editorUid, {
+    type: "shop_editor_removed" as AppNotification["type"],
+    title: "Editor access removed",
+    body: `Your editor access to the shop "${shopName}" has been removed by the owner.`,
+  });
+}
+
 const DIGEST_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 export async function sendDailyDigestIfDue(uid: string, listings: Listing[]): Promise<void> {

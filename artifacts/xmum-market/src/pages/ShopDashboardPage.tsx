@@ -8,6 +8,7 @@ import {
 } from "@/lib/shops";
 import { collection, query, where, getDocs, limit, getDoc, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { notifyEditorAdded, notifyEditorRemoved } from "@/lib/notifications";
 import { Shop, ShopListing, ShopInquiry, ShopCategory, InquiryStatus } from "@/lib/types";
 import {
   Loader2, Plus, Trash2, Edit2, CheckCircle2, XCircle, Clock, Package,
@@ -245,6 +246,7 @@ export default function ShopDashboardPage() {
               await addShopEditor(shopId, uid, shop.editorIds);
               setShop((prev) => prev ? { ...prev, editorIds: [...prev.editorIds, uid] } : prev);
               setEditorEmail("");
+              notifyEditorAdded(uid, shop.name, shopId).catch(() => {});
             } catch (err: any) {
               setEditorError(err.message ?? "Failed to add editor.");
             } finally {
@@ -254,6 +256,7 @@ export default function ShopDashboardPage() {
           onRemove={async (uid) => {
             await removeShopEditor(shopId, uid, shop.editorIds);
             setShop((prev) => prev ? { ...prev, editorIds: prev.editorIds.filter((e) => e !== uid) } : prev);
+            notifyEditorRemoved(uid, shop.name).catch(() => {});
           }}
         />
       )}

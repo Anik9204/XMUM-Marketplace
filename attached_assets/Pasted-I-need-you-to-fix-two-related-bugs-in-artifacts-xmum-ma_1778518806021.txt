@@ -1,0 +1,81 @@
+I need you to fix two related bugs in `artifacts/xmum-market/src/`.
+ 
+**Bug 1 — Editor gets no notification when removed from shop**
+ 
+In `lib/notifications.ts`, add two new notification helper functions at the bottom of the file (before the last export):
+ 
+```typescript
+export async function notifyEditorAdded(
+  editorUid: string,
+  shopName: string,
+  shopId: string,
+): Promise<void> {
+  await addNotification(editorUid, {
+    type: "shop_editor_added" as AppNotification["type"],
+    title: "You've been added as a shop editor",
+    body: `You are now an editor of "${shopName}". You can manage listings and respond to inquiries.`,
+    shopId,
+  });
+}
+ 
+export async function notifyEditorRemoved(
+  editorUid: string,
+  shopName: string,
+): Promise<void> {
+  await addNotification(editorUid, {
+    type: "shop_editor_removed" as AppNotification["type"],
+    title: "Editor access removed",
+    body: `Your editor access to the shop "${shopName}" has been removed by the owner.`,
+  });
+}
+```
+ 
+In `lib/types.ts`, add `"shop_editor_added"` and `"shop_editor_removed"` to the `AppNotification["type"]` union string.
+ 
+In `pages/ShopDashboardPage.tsx`:
+- Import `notifyEditorAdded` and `notifyEditorRemoved` from `@/lib/notifications`
+- In the `onAdd` handler (where `addShopEditor` is called), after the state update, call `notifyEditorAdded(uid, shop.name, shopId).catch(() => {})`
+- In the `onRemove` handler (where `removeShopEditor` is called), after the state update, call `notifyEditorRemoved(uid, shop.name).catch(() => {})`
+**Bug 2 — After editor is removed, inquiries from that shop still show**
+ 
+In `pages/ShopDashboardPage.tsx`, the `isEditor` check uses `shop.editorIds.includes(user?.uid ?? "")`. This is correct for access control, so the real issue is that after removal, the dashboard still loads. The access denied guard at line ~140 already handles this correctly — make sure it reads:
+ 
+```tsx
+if (!isOwner && !isEditor) {
+  return ( /* Access Denied UI */ );
+}
+```
+ 
+Verify this guard exists and runs AFTER `loadingShop` is false and `shop` is set. If the guard is missing or comes after the tab render, move it so it comes immediately after the `if (!shop)` return. This ensures a removed editor sees "Access Denied" and cannot view inquiries.
+ 
+Also in `lib/shops.ts`, in the `removeShopEditor` function, update the user's `editorShopIds` in their profile document:
+ 
+```typescript
+export async function removeShopEditor(shopId: string, editorUid: string, currentEditors: string[]): Promise<void> {
+  await updateDoc(doc(db, "shops", shopId), {
+    editorIds: currentEditors.filter((id) => id !== editorUid),
+  });
+  // Remove shopId from the editor's editorShopIds array in their user profile
+  try {
+    const { arrayRemove } = await import("firebase/firestore");
+    await updateDoc(doc(db, "users", editorUid), {
+      editorShopIds: arrayRemove(shopId),
+    });
+  } catch {}
+}
+```
+ 
+Similarly, in `addShopEditor`, after updating the shop, add the shopId to the editor's `editorShopIds`:
+ 
+```typescript
+  try {
+    const { arrayUnion } = await import("firebase/firestore");
+    await updateDoc(doc(db, "users", editorUid), {
+      editorShopIds: arrayUnion(shopId),
+    });
+  } catch {}
+```
+ 
+Test that: (1) adding an editor sends them a notification, (2) removing an editor sends them a notification, (3) a removed editor cannot access the dashboard.
+ 
+---

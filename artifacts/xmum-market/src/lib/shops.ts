@@ -99,12 +99,24 @@ export async function addShopEditor(shopId: string, editorUid: string, currentEd
   await updateDoc(doc(db, "shops", shopId), {
     editorIds: [...currentEditors, editorUid],
   });
+  try {
+    const { arrayUnion } = await import("firebase/firestore");
+    await updateDoc(doc(db, "users", editorUid), {
+      editorShopIds: arrayUnion(shopId),
+    });
+  } catch {}
 }
 
 export async function removeShopEditor(shopId: string, editorUid: string, currentEditors: string[]): Promise<void> {
   await updateDoc(doc(db, "shops", shopId), {
     editorIds: currentEditors.filter((id) => id !== editorUid),
   });
+  try {
+    const { arrayRemove } = await import("firebase/firestore");
+    await updateDoc(doc(db, "users", editorUid), {
+      editorShopIds: arrayRemove(shopId),
+    });
+  } catch {}
 }
 
 // ── Shop Listings ─────────────────────────────────────────────────────────────
