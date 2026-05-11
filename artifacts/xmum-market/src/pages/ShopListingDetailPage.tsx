@@ -11,7 +11,6 @@ import {
   Loader2, Store, Send,
 } from "lucide-react";
 import { SiWhatsapp, SiWechat } from "react-icons/si";
-import { toast } from "sonner";
 
 function PriceLabel({ listing }: { listing: ShopListing }) {
   if (listing.pricingModel === "negotiable")
@@ -297,9 +296,19 @@ export default function ShopListingDetailPage() {
 
         {/* Inquiry success */}
         {sent && (
-          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl px-4 py-3 text-sm text-green-700 dark:text-green-400 font-semibold text-center">
-            ✅ Inquiry sent! The shop will contact you soon.
-          </div>
+          <>
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl px-4 py-3 text-sm text-green-700 dark:text-green-400 font-semibold text-center">
+              ✅ Inquiry sent! The shop will contact you soon.
+            </div>
+            {shop?.autoReplyEnabled && shop.autoReplyMessage && (
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-xl px-4 py-3 text-sm text-blue-700 dark:text-blue-300">
+                <p className="font-semibold text-xs mb-1">
+                  Automated reply from {shop.name}:
+                </p>
+                <p>{shop.autoReplyMessage}</p>
+              </div>
+            )}
+          </>
         )}
 
         {/* Inline inquiry form */}
@@ -320,7 +329,7 @@ export default function ShopListingDetailPage() {
                 maxLength={500}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="Ask a question or leave a note for the shop..."
+                placeholder="Ask anything about this listing before ordering…"
                 className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none"
               />
             </div>
@@ -357,9 +366,13 @@ export default function ShopListingDetailPage() {
       {!canManage && !sent && !showInquiry && (
         <div className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-700 px-4 py-3 flex gap-3 shadow-lg">
           <button
-            onClick={() =>
-              toast("Coming soon — orders feature launching next!")
-            }
+            onClick={() => {
+              if (!user) {
+                setShowAuth(true);
+              } else {
+                navigate(`/order/${listing.id}`);
+              }
+            }}
             className="flex-1 min-h-[48px] bg-[#003366] dark:bg-blue-600 text-white font-semibold text-sm rounded-xl hover:bg-[#002244] transition"
           >
             Order This Item

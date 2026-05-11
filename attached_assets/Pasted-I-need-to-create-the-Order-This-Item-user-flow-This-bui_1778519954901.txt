@@ -1,0 +1,63 @@
+I need to create the "Order This Item" user flow. This builds on the data layer from Prompt 4.
+ 
+**Step 1 — Add route in `App.tsx`**
+ 
+Add:
+```tsx
+<Route path="/order/:listingId" component={OrderFormPage} />
+```
+Import `OrderFormPage` from `@/pages/OrderFormPage`.
+ 
+**Step 2 — Create `pages/OrderFormPage.tsx`**
+ 
+Create `artifacts/xmum-market/src/pages/OrderFormPage.tsx`. This page:
+ 
+- Reads `listingId` from route params
+- Fetches the `ShopListing` and its parent `Shop`
+- If user is not logged in, shows `<AuthModal>` and redirects after login
+- If user is shop owner/editor, shows "You manage this shop — you cannot order from your own shop." and a back button
+- Shows a form with these always-present fields:
+  - **Quantity** — number input, min 1, label "Quantity"
+  - **Offered Price** — only shown if `listing.pricingModel === "negotiable"`, number input with `RM` prefix, label "Your offered price (RM)"
+- Then renders the shop's custom questions (`shop.orderQuestions`) dynamically:
+  - If `question.type === "text"` → `<input type="text">`
+  - If `question.type === "number"` → `<input type="number">`
+  - If `question.type === "date"` → `<input type="date">`
+  - If `question.type === "textarea"` → `<textarea rows={3}>`
+  - Mark required fields with a red asterisk
+- Shows a read-only **Contact Info section** from `userProfile` (WhatsApp, WeChat) with a note: "This contact info will be shared with the shop. Update it in Settings."
+- Submit button: "Place Order"
+- On submit:
+  1. Validate required fields
+  2. Call `createOrder(...)` from `lib/shops.ts`
+  3. Call `notifyShopOrderReceived(shop.ownerId, shop.name, buyerName, orderId, shop.id)`
+  4. Also notify each editor in `shop.editorIds`
+  5. Navigate to a success screen (same page, show a green card: "Order placed! The shop will review and confirm your order. You'll get a notification when confirmed.")
+- Show loading spinner during fetch and submit
+- Style consistently with the rest of the app (same `inputCls`, button styles, `#003366` brand color)
+**Step 3 — Wire up "Order This Item" button in `ShopListingDetailPage.tsx`**
+ 
+In the `ShopListingDetailPage` created in Prompt 3, update the "Order This Item" button to navigate to `/order/${listing.id}` using `useLocation` from wouter:
+```tsx
+const [, navigate] = useLocation();
+// ...
+<button onClick={() => navigate(`/order/${listing.id}`)} className="...">Order This Item</button>
+```
+ 
+Remove the placeholder toast from Prompt 3.
+ 
+**Step 4 — Update inquiry form in `ShopListingDetailPage.tsx`**
+ 
+In the inquiry form section of `ShopListingDetailPage.tsx`, **remove the Quantity field entirely** from the inquiry form. The purpose of inquiry is pre-order questions/contact only. Update the form placeholder to: "Ask anything about this listing before ordering…"
+ 
+Also show the auto-reply message (if `shop.autoReplyEnabled && shop.autoReplyMessage`) immediately after inquiry is sent:
+```tsx
+{sent && shop.autoReplyEnabled && shop.autoReplyMessage && (
+  <div className="mt-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-xl px-4 py-3 text-sm text-blue-700 dark:text-blue-300">
+    <p className="font-semibold text-xs mb-1">Automated reply from {shop.name}:</p>
+    <p>{shop.autoReplyMessage}</p>
+  </div>
+)}
+```
+ 
+---
