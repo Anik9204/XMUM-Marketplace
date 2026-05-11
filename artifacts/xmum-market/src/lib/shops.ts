@@ -4,7 +4,7 @@ import {
   onSnapshot, Timestamp,
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
-import { db, storage } from "@/lib/firebase";
+import { db, storage, auth } from "@/lib/firebase";
 import { Shop, ShopListing, ShopInquiry, ShopReview, ShopAd, InquiryStatus } from "@/lib/types";
 import {
   notifyShopInquiryReceived,
@@ -79,13 +79,15 @@ export async function updateShop(shopId: string, data: Partial<Shop>): Promise<v
 }
 
 export async function uploadShopBanner(shopId: string, file: File): Promise<string> {
-  const storageRef = ref(storage, `shopBanners/${shopId}/banner.jpg`);
+  const uid = auth.currentUser?.uid ?? shopId;
+  const storageRef = ref(storage, `shopBanners/${uid}/banner_${shopId}.jpg`);
   await uploadBytes(storageRef, file);
   return getDownloadURL(storageRef);
 }
 
 export async function uploadShopLogo(shopId: string, file: File): Promise<string> {
-  const storageRef = ref(storage, `shopLogos/${shopId}/logo.jpg`);
+  const uid = auth.currentUser?.uid ?? shopId;
+  const storageRef = ref(storage, `shopLogos/${uid}/logo_${shopId}.jpg`);
   await uploadBytes(storageRef, file);
   return getDownloadURL(storageRef);
 }
