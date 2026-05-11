@@ -266,85 +266,119 @@ export default function ShopPublicPage() {
   const canManage = isOwner || isEditor;
 
   return (
-    <div className="max-w-2xl mx-auto pb-24 min-h-screen">
+    <div className="max-w-2xl mx-auto pb-28 min-h-screen bg-gray-50 dark:bg-slate-950">
       {/* Banner */}
       <div
-        className="relative h-40 sm:h-52"
+        className="relative h-44 sm:h-56 w-full"
         style={{
-          background: shop.bannerUrl ? undefined : "linear-gradient(135deg, #003366 0%, #0066cc 100%)",
+          background: shop.bannerUrl ? undefined : "linear-gradient(135deg, #003366 0%, #0055aa 60%, #0077cc 100%)",
         }}
       >
-        {shop.bannerUrl && <img src={shop.bannerUrl} alt="" className="w-full h-full object-cover" />}
-        <button onClick={() => window.history.back()} className="absolute top-3 left-3 bg-black/30 text-white p-2 rounded-full hover:bg-black/50 transition">
+        {shop.bannerUrl && (
+          <img src={shop.bannerUrl} alt="" className="w-full h-full object-cover" />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/20 to-black/40 pointer-events-none" />
+
+        <button
+          onClick={() => window.history.back()}
+          className="absolute top-4 left-4 bg-black/40 backdrop-blur-sm text-white p-2.5 rounded-full hover:bg-black/60 transition shadow-lg"
+        >
           <ArrowLeft size={18} />
         </button>
+
         {canManage && (
-          <Link href={`/shop-dashboard/${shop.id}`} className="absolute top-3 right-3 bg-black/30 text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-black/50 transition flex items-center gap-1">
-            <Settings2 size={12} /> Manage Shop
+          <Link
+            href={`/shop-dashboard/${shop.id}`}
+            className="absolute top-4 right-4 bg-black/40 backdrop-blur-sm text-white text-xs font-semibold px-3 py-2 rounded-xl hover:bg-black/60 transition flex items-center gap-1.5 shadow-lg"
+          >
+            <Settings2 size={13} /> Manage
           </Link>
         )}
       </div>
 
-      {/* Header */}
-      <div className="px-4 -mt-8 mb-5">
-        <div className="flex items-end gap-3">
-          <div className="w-16 h-16 rounded-2xl border-4 border-white dark:border-slate-900 bg-white dark:bg-slate-800 overflow-hidden shadow shrink-0">
-            {shop.logoUrl
-              ? <img src={shop.logoUrl} alt="" className="w-full h-full object-cover" />
-              : <Store size={30} className="text-[#003366] dark:text-blue-400 m-auto mt-2.5" />
-            }
-          </div>
-          <div className="flex-1 min-w-0 pb-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100 truncate">{shop.name}</h1>
-              <span className="text-xs bg-[#003366]/10 dark:bg-blue-900/30 text-[#003366] dark:text-blue-400 font-semibold px-2 py-0.5 rounded-full shrink-0">{shop.category}</span>
+      {/* Shop info card */}
+      <div className="px-4">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg -mt-10 relative z-10 p-5">
+          <div className="flex items-start gap-4">
+            <div className="w-[72px] h-[72px] rounded-2xl border-2 border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 overflow-hidden shadow-sm shrink-0 -mt-10">
+              {shop.logoUrl ? (
+                <img src={shop.logoUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#003366] to-blue-500">
+                  <Store size={30} className="text-white" />
+                </div>
+              )}
             </div>
-            {shop.reviewCount > 0 && (
-              <div className="flex items-center gap-1.5 mt-1">
-                <StarRow rating={shop.rating} size={13} />
-                <span className="text-xs text-gray-500 dark:text-slate-400">{shop.rating.toFixed(1)} ({shop.reviewCount} review{shop.reviewCount !== 1 ? "s" : ""})</span>
+
+            <div className="flex-1 min-w-0 pt-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100 leading-tight">{shop.name}</h1>
+                <span className="text-xs bg-[#003366]/10 dark:bg-blue-900/30 text-[#003366] dark:text-blue-400 font-semibold px-2.5 py-1 rounded-full shrink-0">
+                  {shop.category}
+                </span>
               </div>
+              {shop.reviewCount > 0 && (
+                <div className="flex items-center gap-1.5 mt-1.5">
+                  <StarRow rating={shop.rating} size={13} />
+                  <span className="text-xs text-gray-500 dark:text-slate-400">
+                    {shop.rating.toFixed(1)} ({shop.reviewCount} review{shop.reviewCount !== 1 ? "s" : ""})
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {shop.bio && (
+            <p className="text-sm text-gray-600 dark:text-slate-300 mt-4 leading-relaxed border-t border-gray-100 dark:border-slate-700 pt-4">
+              {shop.bio}
+            </p>
+          )}
+
+          <div className="flex gap-5 mt-4 text-xs text-gray-500 dark:text-slate-400">
+            <span>
+              <strong className="text-gray-800 dark:text-slate-200 text-sm">{shop.totalListings}</strong>
+              {" "}listing{shop.totalListings !== 1 ? "s" : ""}
+            </span>
+            {shop.reviewCount > 0 && (
+              <span>
+                <strong className="text-gray-800 dark:text-slate-200 text-sm">{shop.reviewCount}</strong>
+                {" "}review{shop.reviewCount !== 1 ? "s" : ""}
+              </span>
             )}
           </div>
-        </div>
-        {shop.bio && <p className="text-sm text-gray-600 dark:text-slate-300 mt-3 leading-relaxed">{shop.bio}</p>}
 
-        {/* Stats */}
-        <div className="flex gap-4 mt-3 text-xs text-gray-500 dark:text-slate-400">
-          <span><strong className="text-gray-800 dark:text-slate-200">{shop.totalListings}</strong> listing{shop.totalListings !== 1 ? "s" : ""}</span>
-          {shop.reviewCount > 0 && <span><strong className="text-gray-800 dark:text-slate-200">{shop.reviewCount}</strong> review{shop.reviewCount !== 1 ? "s" : ""}</span>}
-        </div>
-
-        {/* Contact buttons */}
-        <div className="flex flex-wrap gap-2 mt-4">
-          {shop.whatsapp && (
-            <a
-              href={`https://wa.me/${shop.whatsapp.replace(/[^0-9]/g, "")}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 bg-green-500 text-white text-xs font-semibold px-4 py-2 rounded-xl hover:bg-green-600 transition"
-            >
-              <SiWhatsapp size={13} /> WhatsApp
-            </a>
-          )}
-          {shop.wechat && (
-            <div className="flex items-center gap-1.5 bg-[#07C160] text-white text-xs font-semibold px-4 py-2 rounded-xl">
-              <SiWechat size={13} /> {shop.wechat}
+          {(shop.whatsapp || shop.wechat) && (
+            <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-100 dark:border-slate-700">
+              {shop.whatsapp && (
+                <a
+                  href={`https://wa.me/${shop.whatsapp.replace(/[^0-9]/g, "")}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 bg-green-500 text-white text-xs font-semibold px-4 py-2.5 rounded-xl hover:bg-green-600 transition shadow-sm"
+                >
+                  <SiWhatsapp size={13} /> WhatsApp
+                </a>
+              )}
+              {shop.wechat && (
+                <div className="flex items-center gap-1.5 bg-[#07C160] text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-sm">
+                  <SiWechat size={13} /> {shop.wechat}
+                </div>
+              )}
             </div>
           )}
         </div>
       </div>
 
       {/* Listings grid */}
-      <div className="px-4">
+      <div className="px-4 mt-6">
         <h2 className="text-base font-bold text-gray-900 dark:text-slate-100 mb-3">
           Listings
           <span className="ml-2 text-xs font-normal text-gray-400 dark:text-slate-500">({listings.length})</span>
         </h2>
         {listings.length === 0 ? (
-          <div className="text-center py-10 text-gray-400 dark:text-slate-500">
-            <Package size={32} className="mx-auto mb-2 opacity-40" />
-            <p className="text-sm">No listings yet.</p>
+          <div className="text-center py-12 bg-white dark:bg-slate-900 rounded-2xl">
+            <Package size={32} className="mx-auto mb-2 text-gray-300 dark:text-slate-600" />
+            <p className="text-sm text-gray-400 dark:text-slate-500">No listings yet.</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -352,12 +386,12 @@ export default function ShopPublicPage() {
               <button
                 key={l.id}
                 onClick={() => handleSelectListing(l)}
-                className="bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-2xl overflow-hidden text-left hover:shadow-md transition-shadow active:scale-[0.98]"
+                className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700 rounded-2xl overflow-hidden text-left hover:shadow-md transition-shadow active:scale-[0.98] shadow-sm"
               >
                 {l.photos[0] ? (
                   <img src={l.photos[0]} alt="" className="w-full aspect-square object-cover" />
                 ) : (
-                  <div className="w-full aspect-square bg-gray-100 dark:bg-slate-700 flex items-center justify-center">
+                  <div className="w-full aspect-square bg-gradient-to-br from-gray-100 to-gray-200 dark:from-slate-700 dark:to-slate-600 flex items-center justify-center">
                     <Package size={28} className="text-gray-300 dark:text-slate-500" />
                   </div>
                 )}
@@ -373,14 +407,14 @@ export default function ShopPublicPage() {
 
       {/* Reviews */}
       {reviews.length > 0 && (
-        <div className="px-4 mt-8">
+        <div className="px-4 mt-6">
           <h2 className="text-base font-bold text-gray-900 dark:text-slate-100 mb-3">
             Reviews
             <span className="ml-2 text-xs font-normal text-gray-400 dark:text-slate-500">({reviews.length})</span>
           </h2>
           <div className="space-y-3">
             {reviews.map((r) => (
-              <div key={r.id} className="bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-2xl p-4">
+              <div key={r.id} className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700 rounded-2xl p-4 shadow-sm">
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div className="flex items-center gap-2">
                     {r.reviewerAvatar ? (

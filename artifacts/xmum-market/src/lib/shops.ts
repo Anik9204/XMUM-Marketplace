@@ -228,8 +228,11 @@ export async function createInquiry(data: {
     updatedAt: Date.now(),
     reviewLeft: false,
   });
-  await updateDoc(doc(db, "shopListings", data.shopListingId), { inquiryCount: increment(1) });
-  await updateDoc(doc(db, "shops", data.shopId), { totalInquiries: increment(1) });
+  // Fire-and-forget counter updates — never block or fail the inquiry submission
+  Promise.all([
+    updateDoc(doc(db, "shopListings", data.shopListingId), { inquiryCount: increment(1) }),
+    updateDoc(doc(db, "shops", data.shopId), { totalInquiries: increment(1) }),
+  ]).catch(() => {}); // Silently ignore counter update failures
 
   // Notify the shop owner — non-critical, fire and forget
   const shop = await getShopById(data.shopId);

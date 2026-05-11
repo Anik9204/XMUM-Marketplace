@@ -1,0 +1,318 @@
+
+You are a senior full-stack developer fixing 3 specific bugs in the XMUM Marketplace app (`artifacts/xmum-market/`). Fix all of them exactly as described.
+
+---
+
+### BUG FIX 1 — "Missing or insufficient permissions" error when sending an inquiry
+
+**Root cause:** In `src/lib/shops.ts`, the `createInquiry` function does this after saving the inquiry:
+
+```ts
+await updateDoc(doc(db, "shopListings", data.shopListingId), { inquiryCount: increment(1) });
+await updateDoc(doc(db, "shops", data.shopId), { totalInquiries: increment(1) });
+```
+
+The Firestore rule for `shopListings` only allows updates by shop members (owner/editors). A buyer is not a shop member, so `updateDoc` on `shopListings` throws "Missing or insufficient permissions". This error surfaces to the user even though the inquiry itself was saved successfully.
+
+**Fix Part A — Update `firestore.rules`:** Add a rule that allows any authenticated user to increment `inquiryCount` on a shop listing, and `totalInquiries` on a shop. The safest way is to allow buyers to update only those specific counter fields. Replace the `shopListings` rule with:
+
+```
+match /shopListings/{listingId} {
+  allow read: if true;
+  allow create: if isSignedIn() && isShopMember(request.resource.data.shopId);
+  allow update: if isSignedIn() && (
+    isShopMember(resource.data.shopId) ||
+    (
+      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['inquiryCount']) &&
+      isXmuEmail()
+    )
+  );
+  allow delete: if isSignedIn() && isShopMember(resource.data.shopId);
+}
+```
+
+And replace the `shops` update rule to allow buyers to increment `totalInquiries`:
+```
+match /shops/{shopId} {
+  allow read: if true;
+  allow create: if isXmuEmail()
+                && request.resource.data.ownerId == request.auth.uid
+                && request.resource.data.name is string
+                && request.resource.data.name.size() <= 60
+                && request.resource.data.editorIds.size() <= 3;
+  allow update: if isShopOwner(shopId) || isAdmin() || (
+    isXmuEmail() &&
+    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['totalInquiries'])
+  );
+  allow delete: if isShopOwner(shopId) || isAdmin();
+}
+```
+
+**Fix Part B — Make counter updates non-blocking in `src/lib/shops.ts`:** Even with fixed rules, counter updates should never block or fail the user's inquiry submission. Wrap both counter `updateDoc` calls in a fire-and-forget try/catch so that if they fail, the inquiry is still marked as successfully sent:
+
+Replace these two lines in `createInquiry`:
+```ts
+await updateDoc(doc(db, "shopListings", data.shopListingId), { inquiryCount: increment(1) });
+await updateDoc(doc(db, "shops", data.shopId), { totalInquiries: increment(1) });
+```
+
+With:
+```ts
+// Fire-and-forget counter updates — never block or fail the inquiry submission
+Promise.all([
+  updateDoc(doc(db, "shopListings", data.shopListingId), { inquiryCount: increment(1) }),
+  updateDoc(doc(db, "shops", data.shopId), { totalInquiries: increment(1) }),
+]).catch(() => {}); // Silently ignore counter update failures
+```
+
+---
+
+### BUG FIX 2 — Shop banner upload still broken (storage rule still wrong)
+
+**Root cause:** The `storage.rules` file still has:
+```
+match /shopBanners/{userId}/{allPaths=**} {
+  allow write: if request.auth != null
+               && request.auth.uid == userId
+```
+
+But in `src/lib/shops.ts`, the upload path is:
+```ts
+ref(storage, `shopBanners/${shopId}/banner.jpg`)
+```
+
+The path segment captured as `{userId}` is actually `shopId` (e.g. `WVjojsbJ9Sq1g1Jyvo00`), which will never equal `request.auth.uid`. This is why the upload always silently fails.
+
+**The fix — update `storage.rules`:** Replace the entire `shopBanners` block:
+
+```
+match /shopBanners/{shopId}/{allPaths=**} {
+  allow read: if true;
+  allow write: if request.auth != null
+               && request.resource.size < 3 * 1024 * 1024
+               && request.resource.contentType.matches('image/.*');
+}
+```
+
+Note: the `{userId}` variable name is changed to `{shopId}` and the `request.auth.uid == userId` check is removed entirely. Any authenticated user can upload to a shop banner path. This is acceptable because only the shop owner has the `shopId` and can reach the Settings tab.
+
+Also deploy this updated `storage.rules` file — make sure it's committed and pushed so Firebase picks it up. If there's a `firebase.json` file, verify it references `storage.rules` as the storage rules file.
+
+---
+
+### BUG FIX 3 — Shop public page: text gets covered by the banner, poor layout
+
+**Root cause:** Looking at image 3, the problem is that the page has no top padding — the banner slams into the fixed app header at the top. The `-mt-8` negative margin on the header section pulls the shop name/logo up into the banner overlap zone, which works visually only if there's enough room. On the actual deployed page without a custom banner image, the blue gradient banner blends with the blue navbar making everything feel merged and the shop name text is hard to read.
+
+Additionally the shop info card (logo + name + bio + stats + buttons) needs to be redesigned to be a clean white card that sits clearly below the banner.
+
+**The fix — Redesign `ShopPublicPage.tsx` layout:**
+
+Replace the entire return statement of `ShopPublicPage` (everything from `return (` to the closing `);`) with this improved layout:
+
+```tsx
+return (
+  <div className="max-w-2xl mx-auto pb-28 min-h-screen bg-gray-50 dark:bg-slate-950">
+    {/* Banner */}
+    <div
+      className="relative h-44 sm:h-56 w-full"
+      style={{
+        background: shop.bannerUrl ? undefined : "linear-gradient(135deg, #003366 0%, #0055aa 60%, #0077cc 100%)",
+      }}
+    >
+      {shop.bannerUrl && (
+        <img src={shop.bannerUrl} alt="" className="w-full h-full object-cover" />
+      )}
+      {/* Dark overlay for readability */}
+      <div className="absolute inset-0 bg-gradient-to-b from-black/20 to-black/40 pointer-events-none" />
+
+      {/* Back button */}
+      <button
+        onClick={() => window.history.back()}
+        className="absolute top-4 left-4 bg-black/40 backdrop-blur-sm text-white p-2.5 rounded-full hover:bg-black/60 transition shadow-lg"
+      >
+        <ArrowLeft size={18} />
+      </button>
+
+      {/* Manage button */}
+      {canManage && (
+        <Link
+          href={`/shop-dashboard/${shop.id}`}
+          className="absolute top-4 right-4 bg-black/40 backdrop-blur-sm text-white text-xs font-semibold px-3 py-2 rounded-xl hover:bg-black/60 transition flex items-center gap-1.5 shadow-lg"
+        >
+          <Settings2 size={13} /> Manage
+        </Link>
+      )}
+    </div>
+
+    {/* Shop info card — floats over banner bottom */}
+    <div className="px-4">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg -mt-10 relative z-10 p-5">
+        <div className="flex items-start gap-4">
+          {/* Logo */}
+          <div className="w-18 h-18 w-[72px] h-[72px] rounded-2xl border-2 border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 overflow-hidden shadow-sm shrink-0 -mt-10">
+            {shop.logoUrl ? (
+              <img src={shop.logoUrl} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#003366] to-blue-500">
+                <Store size={30} className="text-white" />
+              </div>
+            )}
+          </div>
+
+          {/* Name + category + rating */}
+          <div className="flex-1 min-w-0 pt-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100 leading-tight">{shop.name}</h1>
+              <span className="text-xs bg-[#003366]/10 dark:bg-blue-900/30 text-[#003366] dark:text-blue-400 font-semibold px-2.5 py-1 rounded-full shrink-0">
+                {shop.category}
+              </span>
+            </div>
+            {shop.reviewCount > 0 && (
+              <div className="flex items-center gap-1.5 mt-1.5">
+                <StarRow rating={shop.rating} size={13} />
+                <span className="text-xs text-gray-500 dark:text-slate-400">
+                  {shop.rating.toFixed(1)} ({shop.reviewCount} review{shop.reviewCount !== 1 ? "s" : ""})
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Bio */}
+        {shop.bio && (
+          <p className="text-sm text-gray-600 dark:text-slate-300 mt-4 leading-relaxed border-t border-gray-100 dark:border-slate-700 pt-4">
+            {shop.bio}
+          </p>
+        )}
+
+        {/* Stats row */}
+        <div className="flex gap-5 mt-4 text-xs text-gray-500 dark:text-slate-400">
+          <span>
+            <strong className="text-gray-800 dark:text-slate-200 text-sm">{shop.totalListings}</strong>
+            {" "}listing{shop.totalListings !== 1 ? "s" : ""}
+          </span>
+          {shop.reviewCount > 0 && (
+            <span>
+              <strong className="text-gray-800 dark:text-slate-200 text-sm">{shop.reviewCount}</strong>
+              {" "}review{shop.reviewCount !== 1 ? "s" : ""}
+            </span>
+          )}
+        </div>
+
+        {/* Contact buttons */}
+        {(shop.whatsapp || shop.wechat) && (
+          <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-100 dark:border-slate-700">
+            {shop.whatsapp && (
+              
+                href={`https://wa.me/${shop.whatsapp.replace(/[^0-9]/g, "")}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 bg-green-500 text-white text-xs font-semibold px-4 py-2.5 rounded-xl hover:bg-green-600 transition shadow-sm"
+              >
+                <SiWhatsapp size={13} /> WhatsApp
+              </a>
+            )}
+            {shop.wechat && (
+              <div className="flex items-center gap-1.5 bg-[#07C160] text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-sm">
+                <SiWechat size={13} /> {shop.wechat}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+
+    {/* Listings grid */}
+    <div className="px-4 mt-6">
+      <h2 className="text-base font-bold text-gray-900 dark:text-slate-100 mb-3">
+        Listings
+        <span className="ml-2 text-xs font-normal text-gray-400 dark:text-slate-500">({listings.length})</span>
+      </h2>
+      {listings.length === 0 ? (
+        <div className="text-center py-12 bg-white dark:bg-slate-900 rounded-2xl">
+          <Package size={32} className="mx-auto mb-2 text-gray-300 dark:text-slate-600" />
+          <p className="text-sm text-gray-400 dark:text-slate-500">No listings yet.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {listings.map((l) => (
+            <button
+              key={l.id}
+              onClick={() => handleSelectListing(l)}
+              className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700 rounded-2xl overflow-hidden text-left hover:shadow-md transition-shadow active:scale-[0.98] shadow-sm"
+            >
+              {l.photos[0] ? (
+                <img src={l.photos[0]} alt="" className="w-full aspect-square object-cover" />
+              ) : (
+                <div className="w-full aspect-square bg-gradient-to-br from-gray-100 to-gray-200 dark:from-slate-700 dark:to-slate-600 flex items-center justify-center">
+                  <Package size={28} className="text-gray-300 dark:text-slate-500" />
+                </div>
+              )}
+              <div className="p-3">
+                <p className="text-xs font-semibold text-gray-900 dark:text-slate-100 line-clamp-2 mb-1">{l.title}</p>
+                <PriceLabel listing={l} />
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+
+    {/* Reviews */}
+    {reviews.length > 0 && (
+      <div className="px-4 mt-6">
+        <h2 className="text-base font-bold text-gray-900 dark:text-slate-100 mb-3">
+          Reviews
+          <span className="ml-2 text-xs font-normal text-gray-400 dark:text-slate-500">({reviews.length})</span>
+        </h2>
+        <div className="space-y-3">
+          {reviews.map((r) => (
+            <div key={r.id} className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700 rounded-2xl p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2">
+                  {r.reviewerAvatar ? (
+                    <img src={r.reviewerAvatar} alt="" className="w-8 h-8 rounded-full object-cover" />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-[#003366]/10 dark:bg-blue-900/30 flex items-center justify-center">
+                      <span className="text-xs font-bold text-[#003366] dark:text-blue-400">{r.reviewerName[0]?.toUpperCase()}</span>
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-xs font-semibold text-gray-900 dark:text-slate-100">{r.reviewerName}</p>
+                    <StarRow rating={r.rating} size={11} />
+                  </div>
+                </div>
+                <span className="text-xs text-gray-400 dark:text-slate-500 shrink-0">{relativeTime(r.createdAt)}</span>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-slate-400 mb-1 italic">re: {r.listingTitle}</p>
+              {r.comment && <p className="text-sm text-gray-700 dark:text-slate-300">{r.comment}</p>}
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+
+    {/* Listing detail modal */}
+    {selectedListing && (
+      <ListingModal listing={selectedListing} shop={shop} onClose={() => setSelectedListing(null)} canManage={canManage} />
+    )}
+  </div>
+);
+```
+
+---
+
+### AFTER ALL FIXES:
+
+Run:
+```bash
+cd artifacts/xmum-market && pnpm run typecheck
+```
+
+Fix any TypeScript errors. Then push:
+```bash
+cd /home/user/workspace && git add -A && git commit -m "fix: inquiry permission error, banner storage rule, shop page layout redesign" && git push origin main
+```
+
+Tell me: ✅ All 3 fixes done and pushed.
