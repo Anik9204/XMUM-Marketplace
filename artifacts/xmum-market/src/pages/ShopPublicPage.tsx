@@ -176,6 +176,31 @@ function ListingModal({
   );
 }
 
+// ── Shop Bio with Read More ───────────────────────────────────────────────────
+
+function ShopBio({ bio }: { bio?: string }) {
+  const [bioExpanded, setBioExpanded] = useState(false);
+  if (!bio) return null;
+  const bioWords = bio.trim().split(/\s+/);
+  const shouldTruncate = bioWords.length > 60;
+  const displayBio = shouldTruncate && !bioExpanded
+    ? bioWords.slice(0, 60).join(" ") + "…"
+    : bio;
+  return (
+    <div className="text-sm text-gray-600 dark:text-slate-300 mt-4 leading-relaxed border-t border-gray-100 dark:border-slate-700 pt-4">
+      <p>{displayBio}</p>
+      {shouldTruncate && (
+        <button
+          onClick={() => setBioExpanded((v) => !v)}
+          className="text-xs text-[#003366] dark:text-blue-400 font-semibold mt-1 hover:underline"
+        >
+          {bioExpanded ? "Show less" : "Read more"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function ShopPublicPage() {
@@ -328,11 +353,7 @@ export default function ShopPublicPage() {
             </div>
           </div>
 
-          {shop.bio && (
-            <p className="text-sm text-gray-600 dark:text-slate-300 mt-4 leading-relaxed border-t border-gray-100 dark:border-slate-700 pt-4">
-              {shop.bio}
-            </p>
-          )}
+          <ShopBio bio={shop.bio} />
 
           <div className="flex gap-5 mt-4 text-xs text-gray-500 dark:text-slate-400">
             <span>

@@ -6,6 +6,10 @@ import { ShopCategory } from "@/lib/types";
 import AuthModal from "@/components/AuthModal";
 import { Store, CheckCircle2, XCircle, Loader2, AlertCircle } from "lucide-react";
 
+function countWords(text: string): number {
+  return text.trim() === "" ? 0 : text.trim().split(/\s+/).length;
+}
+
 const SHOP_CATEGORIES: ShopCategory[] = [
   "Food & Beverage",
   "Tutoring & Education",
@@ -190,13 +194,22 @@ export default function CreateShopPage() {
           <label className={labelCls}>Bio / Description</label>
           <textarea
             className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none"
-            rows={3}
-            maxLength={300}
-            placeholder="Tell customers what your shop is about..."
+            rows={6}
+            placeholder="Describe your shop — what you sell, how to order, operating hours, policies..."
             value={bio}
-            onChange={(e) => setBio(e.target.value)}
+            onChange={(e) => {
+              const words = countWords(e.target.value);
+              if (words <= 500) setBio(e.target.value);
+            }}
           />
-          <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">{bio.length}/300</p>
+          <div className="flex justify-between items-center mt-1">
+            <p className="text-xs text-gray-400 dark:text-slate-500">
+              Describe your shop's purpose, ordering process, and any important details.
+            </p>
+            <p className={`text-xs font-semibold tabular-nums ${countWords(bio) >= 480 ? "text-amber-500" : "text-gray-400 dark:text-slate-500"}`}>
+              {countWords(bio)}/500 words
+            </p>
+          </div>
         </div>
 
         <div>

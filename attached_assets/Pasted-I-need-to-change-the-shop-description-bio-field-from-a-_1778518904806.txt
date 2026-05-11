@@ -1,0 +1,86 @@
+I need to change the shop description (bio) field from a 300-character limit to a 500-word limit across the entire app.
+ 
+**Files to change: `pages/ShopDashboardPage.tsx` and `pages/CreateShopPage.tsx`**
+ 
+**Step 1 — Add a word-counting utility**
+ 
+At the top of `pages/ShopDashboardPage.tsx` (after imports), add this helper:
+```typescript
+function countWords(text: string): number {
+  return text.trim() === "" ? 0 : text.trim().split(/\s+/).length;
+}
+```
+ 
+Add the same helper in `pages/CreateShopPage.tsx`.
+ 
+**Step 2 — Update SettingsTab in ShopDashboardPage.tsx**
+ 
+Find the `<textarea>` for the bio in `SettingsTab`. It currently has `maxLength={300}` and a counter showing `{bio.length}/300`. 
+ 
+Replace it with:
+```tsx
+<textarea
+  className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none"
+  rows={6}
+  value={bio}
+  onChange={(e) => {
+    // Allow typing but cap at 500 words
+    const words = countWords(e.target.value);
+    if (words <= 500) setBio(e.target.value);
+  }}
+  placeholder="Describe your shop — what you sell, how to order, operating hours, policies..."
+/>
+<div className="flex justify-between items-center mt-1">
+  <p className="text-xs text-gray-400 dark:text-slate-500">
+    Describe your shop's purpose, ordering process, and any important details.
+  </p>
+  <p className={`text-xs font-semibold tabular-nums ${countWords(bio) >= 480 ? "text-amber-500" : "text-gray-400 dark:text-slate-500"}`}>
+    {countWords(bio)}/500 words
+  </p>
+</div>
+```
+ 
+**Step 3 — Update CreateShopPage.tsx**
+ 
+Find the bio textarea in the shop creation form and apply the same word-limit logic: remove `maxLength`, add the word counter onChange guard, add a `rows={6}` attribute, and show `{countWords(bio)}/500 words` counter below it.
+ 
+**Step 4 — Update the save handler**
+ 
+In the settings save handler in `ShopDashboardPage.tsx`, add validation before saving:
+```typescript
+if (countWords(settingsBio) > 500) {
+  // show an error toast or inline error
+  return;
+}
+```
+ 
+**Step 5 — Update the ShopPublicPage bio display**
+ 
+In `pages/ShopPublicPage.tsx`, find where `shop.bio` is rendered. The bio can now be long, so add a "Read more / Show less" toggle:
+```tsx
+const [bioExpanded, setBioExpanded] = useState(false);
+const bioWords = shop.bio ? shop.bio.trim().split(/\s+/) : [];
+const shouldTruncate = bioWords.length > 60;
+const displayBio = shouldTruncate && !bioExpanded
+  ? bioWords.slice(0, 60).join(" ") + "…"
+  : shop.bio;
+```
+ 
+Then render:
+```tsx
+{shop.bio && (
+  <div className="text-sm text-gray-600 dark:text-slate-300 mt-4 leading-relaxed border-t border-gray-100 dark:border-slate-700 pt-4">
+    <p>{displayBio}</p>
+    {shouldTruncate && (
+      <button
+        onClick={() => setBioExpanded((v) => !v)}
+        className="text-xs text-[#003366] dark:text-blue-400 font-semibold mt-1 hover:underline"
+      >
+        {bioExpanded ? "Show less" : "Read more"}
+      </button>
+    )}
+  </div>
+)}
+```
+ 
+---

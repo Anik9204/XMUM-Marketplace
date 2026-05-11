@@ -16,6 +16,10 @@ import {
   Store, UserMinus, UserPlus, Camera,
 } from "lucide-react";
 
+function countWords(text: string): number {
+  return text.trim() === "" ? 0 : text.trim().split(/\s+/).length;
+}
+
 const SHOP_CATEGORIES: ShopCategory[] = [
   "Food & Beverage", "Tutoring & Education", "Fashion & Apparel", "Electronics",
   "Beauty & Wellness", "Transport & Rental", "Handmade & Custom", "Books & Stationery",
@@ -282,6 +286,7 @@ export default function ShopDashboardPage() {
           bannerInputRef={bannerInputRef}
           logoInputRef={logoInputRef}
           onSave={async () => {
+            if (countWords(settingsBio) > 500) return;
             setSettingsLoading(true);
             try {
               await updateShop(shopId, {
@@ -762,8 +767,24 @@ function SettingsTab({
       </div>
       <div>
         <label className={labelCls}>Bio</label>
-        <textarea className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none" rows={3} maxLength={300} value={bio} onChange={(e) => setBio(e.target.value)} />
-        <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">{bio.length}/300</p>
+        <textarea
+          className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none"
+          rows={6}
+          value={bio}
+          onChange={(e) => {
+            const words = countWords(e.target.value);
+            if (words <= 500) setBio(e.target.value);
+          }}
+          placeholder="Describe your shop — what you sell, how to order, operating hours, policies..."
+        />
+        <div className="flex justify-between items-center mt-1">
+          <p className="text-xs text-gray-400 dark:text-slate-500">
+            Describe your shop's purpose, ordering process, and any important details.
+          </p>
+          <p className={`text-xs font-semibold tabular-nums ${countWords(bio) >= 480 ? "text-amber-500" : "text-gray-400 dark:text-slate-500"}`}>
+            {countWords(bio)}/500 words
+          </p>
+        </div>
       </div>
       <div>
         <label className={labelCls}>WhatsApp</label>
