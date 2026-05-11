@@ -49,8 +49,8 @@ function PriceLabel({ listing }: { listing: ShopListing }) {
 // ── Listing Detail Modal ──────────────────────────────────────────────────────
 
 function ListingModal({
-  listing, shop, onClose,
-}: { listing: ShopListing; shop: Shop; onClose: () => void }) {
+  listing, shop, onClose, canManage,
+}: { listing: ShopListing; shop: Shop; onClose: () => void; canManage?: boolean }) {
   const { user, userProfile } = useAuth();
   const [showAuth, setShowAuth] = useState(false);
   const [photoIdx, setPhotoIdx] = useState(0);
@@ -64,6 +64,7 @@ function ListingModal({
   const handleInquiry = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !userProfile) { setShowAuth(true); return; }
+    if (quantity < 1) { setInquiryError("Quantity must be at least 1."); return; }
     setInquiryError("");
     setSending(true);
     try {
@@ -133,16 +134,20 @@ function ListingModal({
             <p className="text-sm text-gray-700 dark:text-slate-300 leading-relaxed">{listing.description}</p>
           )}
 
-          {sent ? (
+          {canManage ? (
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl px-4 py-3 text-xs text-amber-700 dark:text-amber-400 text-center font-medium">
+              You manage this shop — go to your dashboard to view inquiries.
+            </div>
+          ) : sent ? (
             <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl px-4 py-3 text-sm text-green-700 dark:text-green-400 font-semibold text-center">
-              Inquiry sent! The shop will contact you soon.
+              ✅ Inquiry sent! The shop will contact you soon.
             </div>
           ) : showInquiry ? (
             <form onSubmit={handleInquiry} className="space-y-3 bg-blue-50 dark:bg-slate-800 rounded-xl p-4">
               <h3 className="text-sm font-bold text-gray-900 dark:text-slate-100">Send Inquiry</h3>
               <div>
                 <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1">Quantity</label>
-                <input type="number" min={1} value={quantity} onChange={(e) => setQuantity(parseInt(e.target.value) || 1)} className="w-full bg-white text-gray-900 border border-gray-300 rounded-xl px-3 py-2 text-sm dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" />
+                <input type="number" min={1} value={quantity} onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))} className="w-full bg-white text-gray-900 border border-gray-300 rounded-xl px-3 py-2 text-sm dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1">Message (optional, max 500 chars)</label>
@@ -187,15 +192,46 @@ export default function ShopPublicPage() {
 
   useEffect(() => {
     if (!slug) return;
+    let cancelled = false;
     setLoading(true);
-    getShopBySlug(slug).then(async (s) => {
-      if (!s) { setLoading(false); return; }
-      setShop(s);
-      const [lArr, rArr] = await Promise.all([getShopListings(s.id), getShopReviews(s.id)]);
-      setListings(lArr);
-      setReviews(rArr);
-    }).finally(() => setLoading(false));
+    setShop(null);
+    setListings([]);
+    setReviews([]);
+
+    (async () => {
+      try {
+        const s = await getShopBySlug(slug);
+        if (cancelled) return;
+        if (!s) { setLoading(false); return; }
+        setShop(s);
+
+        const [lArr, rArr] = await Promise.allSettled([
+          getShopListings(s.id),
+          getShopReviews(s.id),
+        ]);
+        if (cancelled) return;
+        if (lArr.status === "fulfilled") setListings(lArr.value);
+        if (rArr.status === "fulfilled") setReviews(rArr.value);
+      } catch (err) {
+        console.error("[ShopPublicPage] load error:", err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
   }, [slug]);
+
+  // Auto-open a specific listing if ?listing=ID is in the URL
+  useEffect(() => {
+    if (!listings.length) return;
+    const params = new URLSearchParams(window.location.search);
+    const targetId = params.get("listing");
+    if (targetId) {
+      const found = listings.find((l) => l.id === targetId);
+      if (found) setSelectedListing(found);
+    }
+  }, [listings]);
 
   const handleSelectListing = async (l: ShopListing) => {
     setSelectedListing(l);
@@ -367,7 +403,7 @@ export default function ShopPublicPage() {
 
       {/* Listing detail modal */}
       {selectedListing && (
-        <ListingModal listing={selectedListing} shop={shop} onClose={() => setSelectedListing(null)} />
+        <ListingModal listing={selectedListing} shop={shop} onClose={() => setSelectedListing(null)} canManage={canManage} />
       )}
     </div>
   );

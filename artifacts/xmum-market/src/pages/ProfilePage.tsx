@@ -6,7 +6,7 @@ import { getUserConversations } from "@/lib/messaging";
 import { sendDailyDigestIfDue } from "@/lib/notifications";
 import { Listing, Shop, ShopInquiry, InquiryStatus } from "@/lib/types";
 import { getSavedListings } from "@/lib/savedListings";
-import { getShopsByOwner, getInquiriesForBuyer, leaveShopReview } from "@/lib/shops";
+import { getShopsByOwner, getShopsWhereEditor, getInquiriesForBuyer, leaveShopReview } from "@/lib/shops";
 import ListingCard from "@/components/ListingCard";
 import AuthModal from "@/components/AuthModal";
 import { User, CheckCircle, AlertCircle, LogOut, CheckCircle2, Settings, Clock, X, ArrowUp, Bookmark, Store, Star, MessageSquare, Plus } from "lucide-react";
@@ -221,7 +221,17 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!user) return;
     setShopsLoading(true);
-    getShopsByOwner(user.uid).then(setMyShops).catch(() => {}).finally(() => setShopsLoading(false));
+    Promise.all([
+      getShopsByOwner(user.uid),
+      getShopsWhereEditor(user.uid),
+    ]).then(([owned, editing]) => {
+      const seen = new Set<string>();
+      const merged: Shop[] = [];
+      for (const s of [...owned, ...editing]) {
+        if (!seen.has(s.id)) { seen.add(s.id); merged.push(s); }
+      }
+      setMyShops(merged);
+    }).catch(() => {}).finally(() => setShopsLoading(false));
     setInquiriesLoading(true);
     getInquiriesForBuyer(user.uid).then(setMyInquiries).catch(() => {}).finally(() => setInquiriesLoading(false));
   }, [user?.uid]);

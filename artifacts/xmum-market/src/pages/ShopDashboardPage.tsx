@@ -6,7 +6,7 @@ import {
   uploadShopListingPhoto, getInquiriesForShop, updateInquiryStatus,
   addShopEditor, removeShopEditor, updateShop, uploadShopBanner, uploadShopLogo,
 } from "@/lib/shops";
-import { collection, query, where, getDocs, limit } from "firebase/firestore";
+import { collection, query, where, getDocs, limit, getDoc, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Shop, ShopListing, ShopInquiry, ShopCategory, InquiryStatus } from "@/lib/types";
 import {
@@ -61,6 +61,7 @@ export default function ShopDashboardPage() {
   const [listings, setListings] = useState<ShopListing[]>([]);
   const [loadingListings, setLoadingListings] = useState(false);
   const [showAddListing, setShowAddListing] = useState(false);
+  const [pendingInquiryCount, setPendingInquiryCount] = useState(0);
 
   // Inquiries state
   const [inquiries, setInquiries] = useState<ShopInquiry[]>([]);
@@ -86,7 +87,7 @@ export default function ShopDashboardPage() {
   useEffect(() => {
     if (!shopId) return;
     setLoadingShop(true);
-    getShopById(shopId).then((s) => {
+    getShopById(shopId).then(async (s) => {
       setShop(s);
       if (s) {
         setSettingsName(s.name);
@@ -94,6 +95,10 @@ export default function ShopDashboardPage() {
         setSettingsCategory(s.category);
         setSettingsWhatsApp(s.whatsapp ?? "");
         setSettingsWeChat(s.wechat ?? "");
+        try {
+          const inqs = await getInquiriesForShop(shopId);
+          setPendingInquiryCount(inqs.filter((i) => i.status === "pending").length);
+        } catch {}
       }
     }).finally(() => setLoadingShop(false));
   }, [shopId]);
@@ -142,9 +147,9 @@ export default function ShopDashboardPage() {
     );
   }
 
-  const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
+  const TABS: { key: Tab; label: string; icon: React.ReactNode; badge?: number }[] = [
     { key: "listings",  label: "Listings",  icon: <Package size={15} /> },
-    { key: "inquiries", label: "Inquiries", icon: <MessageSquare size={15} /> },
+    { key: "inquiries", label: "Inquiries", icon: <MessageSquare size={15} />, badge: pendingInquiryCount },
     ...(isOwner ? [{ key: "editors" as Tab, label: "Editors", icon: <Users size={15} /> }] : []),
     { key: "settings",  label: "Settings",  icon: <Settings size={15} /> },
   ];
@@ -181,6 +186,11 @@ export default function ShopDashboardPage() {
             }`}
           >
             {t.icon}{t.label}
+            {t.badge ? (
+              <span className="ml-1 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none">
+                {t.badge}
+              </span>
+            ) : null}
           </button>
         ))}
       </div>
@@ -311,16 +321,25 @@ function ListingsTab({
   shopId: string; shop: Shop; listings: ShopListing[]; loading: boolean;
   showAdd: boolean; setShowAdd: (v: boolean) => void; onRefresh: () => void;
 }) {
+  const [listingAdded, setListingAdded] = useState(false);
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm font-semibold text-gray-700 dark:text-slate-300">{listings.length} listing{listings.length !== 1 ? "s" : ""}</p>
-        <button
-          onClick={() => setShowAdd(true)}
-          className="flex items-center gap-1.5 bg-[#003366] dark:bg-blue-600 text-white text-xs font-semibold px-3 py-2 rounded-lg hover:bg-[#002244] transition"
-        >
-          <Plus size={14} /> Add Listing
-        </button>
+        <div className="flex items-center gap-2">
+          {listingAdded && (
+            <span className="text-xs text-green-600 dark:text-green-400 font-semibold animate-in fade-in">
+              ✅ Listing added!
+            </span>
+          )}
+          <button
+            onClick={() => setShowAdd(true)}
+            className="flex items-center gap-1.5 bg-[#003366] dark:bg-blue-600 text-white text-xs font-semibold px-3 py-2 rounded-lg hover:bg-[#002244] transition"
+          >
+            <Plus size={14} /> Add Listing
+          </button>
+        </div>
       </div>
 
       {showAdd && (
@@ -328,7 +347,12 @@ function ListingsTab({
           shopId={shopId}
           shop={shop}
           onClose={() => setShowAdd(false)}
-          onCreated={() => { setShowAdd(false); onRefresh(); }}
+          onCreated={() => {
+            setShowAdd(false);
+            setListingAdded(true);
+            setTimeout(() => setListingAdded(false), 3000);
+            onRefresh();
+          }}
         />
       )}
 
@@ -576,6 +600,26 @@ function EditorsTab({ shop, editorEmail, setEditorEmail, editorLoading, editorEr
   editorLoading: boolean; editorError: string;
   onAdd: () => void; onRemove: (uid: string) => void;
 }) {
+  const [editorProfiles, setEditorProfiles] = useState<Record<string, { name: string; email: string }>>({});
+
+  useEffect(() => {
+    if (!shop.editorIds.length) return;
+    Promise.all(
+      shop.editorIds.map(async (uid) => {
+        try {
+          const snap = await getDoc(doc(db, "users", uid));
+          if (snap.exists()) {
+            const data = snap.data();
+            return [uid, { name: data.displayName || data.fullName || "Unknown", email: data.email || "" }] as const;
+          }
+        } catch {}
+        return [uid, { name: "Unknown User", email: uid }] as const;
+      })
+    ).then((results) => {
+      setEditorProfiles(Object.fromEntries(results));
+    });
+  }, [shop.editorIds]);
+
   return (
     <div>
       <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">Editors can add/edit/delete listings and manage inquiries. Max 3 editors.</p>
@@ -586,8 +630,12 @@ function EditorsTab({ shop, editorEmail, setEditorEmail, editorLoading, editorEr
           {shop.editorIds.map((uid) => (
             <div key={uid} className="flex items-center justify-between bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 px-4 py-3">
               <div>
-                <p className="text-xs font-mono text-gray-700 dark:text-slate-300">{uid}</p>
-                <p className="text-xs text-gray-400 dark:text-slate-500">Editor</p>
+                <p className="text-sm font-semibold text-gray-700 dark:text-slate-300">
+                  {editorProfiles[uid]?.name ?? "Loading..."}
+                </p>
+                <p className="text-xs text-gray-400 dark:text-slate-500">
+                  {editorProfiles[uid]?.email ?? uid}
+                </p>
               </div>
               <button onClick={() => onRemove(uid)} className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 font-semibold transition">
                 <UserMinus size={13} /> Remove

@@ -137,23 +137,25 @@ function ShopCard({ shop }: { shop: Shop }) {
 
 // ── Listing card ──────────────────────────────────────────────────────────────
 function ListingCard({ listing }: { listing: ShopListing }) {
+  const [, navigate] = useLocation();
   return (
-    <Link href={`/shop/${listing.shopSlug}`}>
-      <div className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden border border-gray-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow active:scale-[0.98] cursor-pointer">
-        {listing.photos[0] ? (
-          <img src={listing.photos[0]} alt="" className="w-full aspect-square object-cover" />
-        ) : (
-          <div className="w-full aspect-square bg-gradient-to-br from-gray-100 to-gray-200 dark:from-slate-700 dark:to-slate-600 flex items-center justify-center">
-            <Package size={32} className="text-gray-300 dark:text-slate-500" />
-          </div>
-        )}
-        <div className="p-3">
-          <p className="text-xs font-semibold text-gray-900 dark:text-slate-100 line-clamp-2 mb-1">{listing.title}</p>
-          <PriceTag listing={listing} />
-          <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5 truncate">{listing.shopName}</p>
+    <div
+      onClick={() => navigate(`/shop/${listing.shopSlug}?listing=${listing.id}`)}
+      className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden border border-gray-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow active:scale-[0.98] cursor-pointer"
+    >
+      {listing.photos[0] ? (
+        <img src={listing.photos[0]} alt="" className="w-full aspect-square object-cover" />
+      ) : (
+        <div className="w-full aspect-square bg-gradient-to-br from-gray-100 to-gray-200 dark:from-slate-700 dark:to-slate-600 flex items-center justify-center">
+          <Package size={32} className="text-gray-300 dark:text-slate-500" />
         </div>
+      )}
+      <div className="p-3">
+        <p className="text-xs font-semibold text-gray-900 dark:text-slate-100 line-clamp-2 mb-1">{listing.title}</p>
+        <PriceTag listing={listing} />
+        <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5 truncate">{listing.shopName}</p>
       </div>
-    </Link>
+    </div>
   );
 }
 

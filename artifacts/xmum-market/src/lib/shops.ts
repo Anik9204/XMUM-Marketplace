@@ -132,30 +132,60 @@ export async function getShopListings(shopId: string): Promise<ShopListing[]> {
 }
 
 export async function getAllShopListings(limitCount = 40): Promise<ShopListing[]> {
-  // orderBy on single field uses auto-created single-field index; filter isActive client-side
   const q = query(
     collection(db, "shopListings"),
     orderBy("createdAt", "desc"),
-    limit(limitCount * 2),
+    limit(limitCount * 3),
   );
   const snap = await getDocs(q);
-  return snap.docs
+  const listings = snap.docs
     .map((d) => ({ id: d.id, ...d.data() } as ShopListing))
-    .filter((l) => l.isActive !== false)
+    .filter((l) => l.isActive !== false);
+
+  const shopIds = [...new Set(listings.map((l) => l.shopId))];
+  const shopStatuses: Record<string, boolean> = {};
+  await Promise.all(
+    shopIds.map(async (id) => {
+      try {
+        const s = await getDoc(doc(db, "shops", id));
+        shopStatuses[id] = s.exists() && s.data()?.isActive !== false;
+      } catch {
+        shopStatuses[id] = false;
+      }
+    })
+  );
+
+  return listings
+    .filter((l) => shopStatuses[l.shopId] !== false)
     .slice(0, limitCount);
 }
 
 export async function getShopListingsByCategory(category: string, limitCount = 40): Promise<ShopListing[]> {
-  // Single equality filter — no composite index needed; filter + sort client-side
   const q = query(
     collection(db, "shopListings"),
     where("category", "==", category),
   );
   const snap = await getDocs(q);
-  return snap.docs
+  const listings = snap.docs
     .map((d) => ({ id: d.id, ...d.data() } as ShopListing))
     .filter((l) => l.isActive !== false)
-    .sort((a, b) => b.createdAt - a.createdAt)
+    .sort((a, b) => b.createdAt - a.createdAt);
+
+  const shopIds = [...new Set(listings.map((l) => l.shopId))];
+  const shopStatuses: Record<string, boolean> = {};
+  await Promise.all(
+    shopIds.map(async (id) => {
+      try {
+        const s = await getDoc(doc(db, "shops", id));
+        shopStatuses[id] = s.exists() && s.data()?.isActive !== false;
+      } catch {
+        shopStatuses[id] = false;
+      }
+    })
+  );
+
+  return listings
+    .filter((l) => shopStatuses[l.shopId] !== false)
     .slice(0, limitCount);
 }
 
@@ -217,23 +247,45 @@ export async function createInquiry(data: {
 }
 
 export async function getInquiriesForShop(shopId: string): Promise<ShopInquiry[]> {
-  const q = query(
-    collection(db, "shopInquiries"),
-    where("shopId", "==", shopId),
-    orderBy("createdAt", "desc")
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ShopInquiry));
+  try {
+    const q = query(
+      collection(db, "shopInquiries"),
+      where("shopId", "==", shopId),
+      orderBy("createdAt", "desc")
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ShopInquiry));
+  } catch (err: any) {
+    if (err?.code === "failed-precondition" || err?.message?.includes("index")) {
+      const q2 = query(collection(db, "shopInquiries"), where("shopId", "==", shopId));
+      const snap2 = await getDocs(q2);
+      return snap2.docs
+        .map((d) => ({ id: d.id, ...d.data() } as ShopInquiry))
+        .sort((a, b) => b.createdAt - a.createdAt);
+    }
+    throw err;
+  }
 }
 
 export async function getInquiriesForBuyer(buyerId: string): Promise<ShopInquiry[]> {
-  const q = query(
-    collection(db, "shopInquiries"),
-    where("buyerId", "==", buyerId),
-    orderBy("createdAt", "desc")
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ShopInquiry));
+  try {
+    const q = query(
+      collection(db, "shopInquiries"),
+      where("buyerId", "==", buyerId),
+      orderBy("createdAt", "desc")
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ShopInquiry));
+  } catch (err: any) {
+    if (err?.code === "failed-precondition" || err?.message?.includes("index")) {
+      const q2 = query(collection(db, "shopInquiries"), where("buyerId", "==", buyerId));
+      const snap2 = await getDocs(q2);
+      return snap2.docs
+        .map((d) => ({ id: d.id, ...d.data() } as ShopInquiry))
+        .sort((a, b) => b.createdAt - a.createdAt);
+    }
+    throw err;
+  }
 }
 
 export async function updateInquiryStatus(inquiryId: string, status: InquiryStatus): Promise<void> {
@@ -280,13 +332,24 @@ export async function leaveShopReview(data: {
 }
 
 export async function getShopReviews(shopId: string): Promise<ShopReview[]> {
-  const q = query(
-    collection(db, "shopReviews"),
-    where("shopId", "==", shopId),
-    orderBy("createdAt", "desc")
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ShopReview));
+  try {
+    const q = query(
+      collection(db, "shopReviews"),
+      where("shopId", "==", shopId),
+      orderBy("createdAt", "desc")
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ShopReview));
+  } catch (err: any) {
+    if (err?.code === "failed-precondition" || err?.message?.includes("index")) {
+      const q2 = query(collection(db, "shopReviews"), where("shopId", "==", shopId));
+      const snap2 = await getDocs(q2);
+      return snap2.docs
+        .map((d) => ({ id: d.id, ...d.data() } as ShopReview))
+        .sort((a, b) => b.createdAt - a.createdAt);
+    }
+    throw err;
+  }
 }
 
 // ── Shop Ads ──────────────────────────────────────────────────────────────────

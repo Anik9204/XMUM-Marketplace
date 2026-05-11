@@ -1,0 +1,679 @@
+You are a senior full-stack developer doing a comprehensive bug fix pass on the XMUM Marketplace app (`artifacts/xmum-market/`). The new Campus Market shop system has multiple bugs that need to be fixed. Go through every fix below carefully and completely.
+ 
+---
+ 
+## BUG 1 — CRITICAL: `CampusMarketPage.tsx` has `CreateShopPage` content accidentally appended to it
+ 
+**The problem:** The file `src/pages/CampusMarketPage.tsx` is 326 lines long when it should be about 230. The entire content of `CreateShopPage` was accidentally appended to the bottom of `CampusMarketPage.tsx` after the closing `}` of the `CampusMarketPage` component. This causes a fatal module parse error and is likely why the campus market tab crashes.
+ 
+**The fix:** Open `src/pages/CampusMarketPage.tsx`. Find where the `CampusMarketPage` function ends (the last `}` of `export default function CampusMarketPage()`). Delete everything after that closing `}`. The file should end cleanly after the closing brace of the default export.
+ 
+Then open `src/pages/CreateShopPage.tsx` and verify it has its own complete content starting with `import { useState, useEffect } from "react";`. If it does, no changes needed there. If it's empty or broken, restore it from the content below:
+ 
+```tsx
+import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
+import { useAuth } from "@/contexts/AuthContext";
+import { createShop, slugify, isSlugAvailable } from "@/lib/shops";
+import { ShopCategory } from "@/lib/types";
+import AuthModal from "@/components/AuthModal";
+import { Store, CheckCircle2, XCircle, Loader2, AlertCircle } from "lucide-react";
+ 
+const SHOP_CATEGORIES: ShopCategory[] = [
+  "Food & Beverage", "Tutoring & Education", "Fashion & Apparel", "Electronics",
+  "Beauty & Wellness", "Transport & Rental", "Handmade & Custom", "Books & Stationery",
+  "Services", "Travel & Lifestyle", "Others",
+];
+ 
+const inputCls = "w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 transition min-h-[44px]";
+const labelCls = "block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-1";
+ 
+export default function CreateShopPage() {
+  const { user } = useAuth();
+  const [, navigate] = useLocation();
+  const [showAuth, setShowAuth] = useState(false);
+  const [name, setName] = useState("");
+  const [slug, setSlug] = useState("");
+  const [slugManual, setSlugManual] = useState(false);
+  const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null);
+  const [slugChecking, setSlugChecking] = useState(false);
+  const [category, setCategory] = useState<ShopCategory>("Others");
+  const [bio, setBio] = useState("");
+  const [whatsapp, setWhatsapp] = useState("");
+  const [wechat, setWechat] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+ 
+  useEffect(() => {
+    if (!slugManual && name) setSlug(slugify(name));
+  }, [name, slugManual]);
+ 
+  useEffect(() => {
+    if (!slug) { setSlugAvailable(null); return; }
+    setSlugChecking(true);
+    setSlugAvailable(null);
+    const timer = setTimeout(async () => {
+      try {
+        const avail = await isSlugAvailable(slug);
+        setSlugAvailable(avail);
+      } catch {
+        setSlugAvailable(null);
+      } finally {
+        setSlugChecking(false);
+      }
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [slug]);
+ 
+  if (!user) {
+    return (
+      <div className="max-w-lg mx-auto px-4 py-16 text-center">
+        <Store size={48} className="mx-auto text-gray-300 dark:text-slate-600 mb-4" />
+        <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-2">Sign in to create a shop</h2>
+        <p className="text-sm text-gray-500 dark:text-slate-400 mb-6">You need an @xmu.edu.my account to open a Campus Market shop.</p>
+        <button onClick={() => setShowAuth(true)} className="bg-[#003366] text-white px-6 py-2.5 rounded-xl font-semibold text-sm hover:bg-[#002244] transition">Sign In</button>
+        {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
+      </div>
+    );
+  }
+ 
+  const handleSlugChange = (val: string) => {
+    setSlugManual(true);
+    setSlug(val.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 40));
+  };
+ 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (!name.trim()) { setError("Shop name is required."); return; }
+    if (!slug) { setError("URL slug is required."); return; }
+    if (slugAvailable === false) { setError("That slug is already taken. Choose another."); return; }
+    if (slugChecking) { setError("Please wait while we check slug availability."); return; }
+    if (!user?.email) { setError("You must be signed in with an XMUM email."); return; }
+    setLoading(true);
+    try {
+      const shopId = await createShop(user.uid, user.email, { name, slug, bio, category, whatsapp, wechat });
+      navigate(`/shop-dashboard/${shopId}`);
+    } catch (err: any) {
+      setError(err.message ?? "Failed to create shop. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+ 
+  return (
+    <div className="max-w-lg mx-auto px-4 py-6 pb-24">
+      <div className="flex items-center gap-3 mb-6">
+        <div className="w-10 h-10 rounded-xl bg-[#003366] flex items-center justify-center">
+          <Store size={20} className="text-white" />
+        </div>
+        <div>
+          <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100">Create a Shop</h1>
+          <p className="text-xs text-gray-500 dark:text-slate-400">Your own storefront on Campus Market</p>
+        </div>
+      </div>
+ 
+      <form onSubmit={handleSubmit} className="space-y-5">
+        {error && (
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl px-4 py-3 flex items-start gap-2">
+            <AlertCircle size={15} className="text-red-500 shrink-0 mt-0.5" />
+            <p className="text-xs text-red-700 dark:text-red-400">{error}</p>
+          </div>
+        )}
+ 
+        <div>
+          <label className={labelCls}>Shop Name <span className="text-red-500">*</span></label>
+          <input className={inputCls} maxLength={60} placeholder="e.g. Mei's Kitchen, TechFix XMUM" value={name} onChange={(e) => setName(e.target.value)} />
+          <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">{name.length}/60</p>
+        </div>
+ 
+        <div>
+          <label className={labelCls}>Shop URL <span className="text-red-500">*</span></label>
+          <div className="relative">
+            <input className={`${inputCls} pr-8`} placeholder="my-shop-name" value={slug} onChange={(e) => handleSlugChange(e.target.value)} />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2">
+              {slugChecking && <Loader2 size={14} className="animate-spin text-gray-400" />}
+              {!slugChecking && slugAvailable === true && <CheckCircle2 size={14} className="text-green-500" />}
+              {!slugChecking && slugAvailable === false && <XCircle size={14} className="text-red-500" />}
+            </span>
+          </div>
+          <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
+            Your shop URL: <span className="font-mono text-[#003366] dark:text-blue-400">/shop/{slug || "your-slug"}</span>
+          </p>
+          {slugAvailable === false && <p className="text-xs text-red-500 mt-0.5">This slug is already taken.</p>}
+          {slugAvailable === true && <p className="text-xs text-green-600 dark:text-green-400 mt-0.5">Slug is available!</p>}
+        </div>
+ 
+        <div>
+          <label className={labelCls}>Category <span className="text-red-500">*</span></label>
+          <select className="w-full bg-white text-gray-900 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600 dark:[color-scheme:dark] focus:outline-none focus:ring-2 focus:ring-blue-500 transition min-h-[44px]" value={category} onChange={(e) => setCategory(e.target.value as ShopCategory)}>
+            {SHOP_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+ 
+        <div>
+          <label className={labelCls}>Bio / Description</label>
+          <textarea className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none" rows={3} maxLength={300} placeholder="Tell customers what your shop is about..." value={bio} onChange={(e) => setBio(e.target.value)} />
+          <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">{bio.length}/300</p>
+        </div>
+ 
+        <div>
+          <label className={labelCls}>WhatsApp (optional)</label>
+          <input className={inputCls} placeholder="+60123456789" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} />
+        </div>
+ 
+        <div>
+          <label className={labelCls}>WeChat ID (optional)</label>
+          <input className={inputCls} placeholder="your_wechat_id" value={wechat} onChange={(e) => setWechat(e.target.value)} />
+        </div>
+ 
+        <div className="sticky bottom-0 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-700 px-4 pt-3 pb-4 -mx-4 md:static md:bg-transparent md:border-0 md:p-0 md:mt-2">
+          <button type="submit" disabled={loading || slugAvailable === false || slugChecking} className="w-full min-h-[52px] bg-[#003366] dark:bg-blue-600 text-white font-semibold text-base rounded-xl hover:bg-[#002244] dark:hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center justify-center gap-2 shadow">
+            {loading ? <><Loader2 size={18} className="animate-spin" /> Creating…</> : "Create Shop"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+```
+ 
+---
+ 
+## BUG 2 — CRITICAL: Shop not found / listings not loading on `ShopPublicPage`
+ 
+**The problem:** In `src/pages/ShopPublicPage.tsx`, the `useEffect` that loads the shop data has a race condition. When `getShopBySlug()` returns, it sets `shop` state but then immediately calls `getShopListings()` and `getShopReviews()`. However `finally(() => setLoading(false))` runs after `getShopBySlug` resolves — before the listings/reviews finish loading. This causes a premature "Shop not found" render if the shop lookup itself takes time.
+ 
+Also, the `getShopReviews` query in `src/lib/shops.ts` uses `orderBy("createdAt", "desc")` which requires a composite index in Firestore that may not exist yet. Until the index is built, this query silently fails and throws, causing the whole shop load to error.
+ 
+**The fix for `ShopPublicPage.tsx`:** Replace the entire `useEffect` data loading block with this robust version:
+ 
+```tsx
+useEffect(() => {
+  if (!slug) return;
+  let cancelled = false;
+  setLoading(true);
+  setShop(null);
+  setListings([]);
+  setReviews([]);
+ 
+  (async () => {
+    try {
+      const s = await getShopBySlug(slug);
+      if (cancelled) return;
+      if (!s) { setLoading(false); return; }
+      setShop(s);
+ 
+      // Load listings and reviews in parallel, but don't fail if reviews error
+      const [lArr, rArr] = await Promise.allSettled([
+        getShopListings(s.id),
+        getShopReviews(s.id),
+      ]);
+      if (cancelled) return;
+      if (lArr.status === "fulfilled") setListings(lArr.value);
+      if (rArr.status === "fulfilled") setReviews(rArr.value);
+    } catch (err) {
+      console.error("[ShopPublicPage] load error:", err);
+    } finally {
+      if (!cancelled) setLoading(false);
+    }
+  })();
+ 
+  return () => { cancelled = true; };
+}, [slug]);
+```
+ 
+**The fix for `src/lib/shops.ts` — `getShopReviews`:** Replace the function with a version that handles missing index gracefully:
+ 
+```ts
+export async function getShopReviews(shopId: string): Promise<ShopReview[]> {
+  try {
+    const q = query(
+      collection(db, "shopReviews"),
+      where("shopId", "==", shopId),
+      orderBy("createdAt", "desc")
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ShopReview));
+  } catch (err: any) {
+    // If index not yet built, fall back to unordered query
+    if (err?.code === "failed-precondition" || err?.message?.includes("index")) {
+      const q2 = query(collection(db, "shopReviews"), where("shopId", "==", shopId));
+      const snap2 = await getDocs(q2);
+      return snap2.docs
+        .map((d) => ({ id: d.id, ...d.data() } as ShopReview))
+        .sort((a, b) => b.createdAt - a.createdAt);
+    }
+    throw err;
+  }
+}
+```
+ 
+Do the same fallback pattern for `getInquiriesForShop` and `getInquiriesForBuyer` in `shops.ts` — wrap both in try/catch and fall back to unordered queries with client-side sort if index error occurs:
+ 
+```ts
+export async function getInquiriesForShop(shopId: string): Promise<ShopInquiry[]> {
+  try {
+    const q = query(
+      collection(db, "shopInquiries"),
+      where("shopId", "==", shopId),
+      orderBy("createdAt", "desc")
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ShopInquiry));
+  } catch (err: any) {
+    if (err?.code === "failed-precondition" || err?.message?.includes("index")) {
+      const q2 = query(collection(db, "shopInquiries"), where("shopId", "==", shopId));
+      const snap2 = await getDocs(q2);
+      return snap2.docs
+        .map((d) => ({ id: d.id, ...d.data() } as ShopInquiry))
+        .sort((a, b) => b.createdAt - a.createdAt);
+    }
+    throw err;
+  }
+}
+ 
+export async function getInquiriesForBuyer(buyerId: string): Promise<ShopInquiry[]> {
+  try {
+    const q = query(
+      collection(db, "shopInquiries"),
+      where("buyerId", "==", buyerId),
+      orderBy("createdAt", "desc")
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ShopInquiry));
+  } catch (err: any) {
+    if (err?.code === "failed-precondition" || err?.message?.includes("index")) {
+      const q2 = query(collection(db, "shopInquiries"), where("buyerId", "==", buyerId));
+      const snap2 = await getDocs(q2);
+      return snap2.docs
+        .map((d) => ({ id: d.id, ...d.data() } as ShopInquiry))
+        .sort((a, b) => b.createdAt - a.createdAt);
+    }
+    throw err;
+  }
+}
+```
+ 
+---
+ 
+## BUG 3 — Clicking a listing card in Campus Market goes to shop page instead of opening the listing detail
+ 
+**The problem:** In `CampusMarketPage.tsx`, the `ListingCard` component wraps everything in `<Link href={'/shop/${listing.shopSlug}'}>`. This takes the user to the shop's main page instead of opening the specific listing. There is no way for a user browsing Campus Market to open a listing directly and send an inquiry without manually finding it on the shop page.
+ 
+**The fix:** The `ListingCard` in `CampusMarketPage.tsx` should navigate to the shop page AND automatically open that listing's detail modal. The simplest correct fix is to navigate to `/shop/${listing.shopSlug}?listing=${listing.id}` so the shop page can auto-open the correct listing.
+ 
+In `CampusMarketPage.tsx`, change the `ListingCard` component to use `useLocation` for navigation instead of `Link`, and navigate with the listing query param:
+ 
+```tsx
+function ListingCard({ listing }: { listing: ShopListing }) {
+  const [, navigate] = useLocation();
+  return (
+    <div
+      onClick={() => navigate(`/shop/${listing.shopSlug}?listing=${listing.id}`)}
+      className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden border border-gray-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow active:scale-[0.98] cursor-pointer"
+    >
+      {listing.photos[0] ? (
+        <img src={listing.photos[0]} alt="" className="w-full aspect-square object-cover" />
+      ) : (
+        <div className="w-full aspect-square bg-gradient-to-br from-gray-100 to-gray-200 dark:from-slate-700 dark:to-slate-600 flex items-center justify-center">
+          <Package size={32} className="text-gray-300 dark:text-slate-500" />
+        </div>
+      )}
+      <div className="p-3">
+        <p className="text-xs font-semibold text-gray-900 dark:text-slate-100 line-clamp-2 mb-1">{listing.title}</p>
+        <PriceTag listing={listing} />
+        <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5 truncate">{listing.shopName}</p>
+      </div>
+    </div>
+  );
+}
+```
+ 
+Then in `ShopPublicPage.tsx`, read the `listing` query param from the URL and auto-open that listing once data loads. Add this after the existing state declarations:
+ 
+```tsx
+// Auto-open a specific listing if ?listing=ID is in the URL
+useEffect(() => {
+  if (!listings.length) return;
+  const params = new URLSearchParams(window.location.search);
+  const targetId = params.get("listing");
+  if (targetId) {
+    const found = listings.find((l) => l.id === targetId);
+    if (found) setSelectedListing(found);
+  }
+}, [listings]);
+```
+ 
+Also add `import { useLocation } from "wouter";` to CampusMarketPage if not already imported.
+ 
+---
+ 
+## BUG 4 — Editors tab shows raw UIDs instead of names
+ 
+**The problem:** In `ShopDashboardPage.tsx`, the Editors tab shows each editor's raw Firebase UID (e.g. `abc123xyz`) which is meaningless to the shop owner. There's no way to identify who the editor is.
+ 
+**The fix:** In `ShopDashboardPage.tsx`, update the `EditorsTab` component to look up each editor's display name from Firestore when the tab loads. Add a state variable `editorProfiles` that maps UID → display info:
+ 
+```tsx
+function EditorsTab({ shop, editorEmail, setEditorEmail, editorLoading, editorError, onAdd, onRemove }: {
+  shop: Shop; editorEmail: string; setEditorEmail: (v: string) => void;
+  editorLoading: boolean; editorError: string;
+  onAdd: () => void; onRemove: (uid: string) => void;
+}) {
+  const [editorProfiles, setEditorProfiles] = useState<Record<string, { name: string; email: string }>>({});
+ 
+  useEffect(() => {
+    if (!shop.editorIds.length) return;
+    // Fetch each editor's profile from Firestore
+    Promise.all(
+      shop.editorIds.map(async (uid) => {
+        try {
+          const snap = await getDoc(doc(db, "users", uid));
+          if (snap.exists()) {
+            const data = snap.data();
+            return [uid, { name: data.displayName || data.fullName || "Unknown", email: data.email || "" }] as const;
+          }
+        } catch {}
+        return [uid, { name: "Unknown User", email: uid }] as const;
+      })
+    ).then((results) => {
+      setEditorProfiles(Object.fromEntries(results));
+    });
+  }, [shop.editorIds]);
+ 
+  // ... rest of the component replacing the UID display with:
+  // editorProfiles[uid]?.name ?? "Loading..."
+  // editorProfiles[uid]?.email ?? uid
+```
+ 
+Make sure to add `import { getDoc, doc } from "firebase/firestore";` at the top of `ShopDashboardPage.tsx` if not already there (it should already be imported via `{ collection, query, where, getDocs, limit }` — just add `getDoc, doc` to that import).
+ 
+Full replacement for the editor rows inside `EditorsTab`:
+ 
+```tsx
+{shop.editorIds.map((uid) => (
+  <div key={uid} className="flex items-center justify-between bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 px-4 py-3">
+    <div>
+      <p className="text-sm font-semibold text-gray-700 dark:text-slate-300">
+        {editorProfiles[uid]?.name ?? "Loading..."}
+      </p>
+      <p className="text-xs text-gray-400 dark:text-slate-500">
+        {editorProfiles[uid]?.email ?? uid}
+      </p>
+    </div>
+    <button onClick={() => onRemove(uid)} className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 font-semibold transition">
+      <UserMinus size={13} /> Remove
+    </button>
+  </div>
+))}
+```
+ 
+---
+ 
+## BUG 5 — Shop owner can send inquiry to their own shop
+ 
+**The problem:** In `ShopPublicPage.tsx`, the `ListingModal` shows a "Send Inquiry" button to everyone including the shop owner and editors. A shop owner should not be able to send an inquiry to their own shop.
+ 
+**The fix:** In `ShopPublicPage.tsx`, pass `canManage` into `ListingModal` and hide the inquiry button if `canManage` is true:
+ 
+In the `ListingModal` function signature, add `canManage?: boolean`:
+```tsx
+function ListingModal({ listing, shop, onClose, canManage }: { 
+  listing: ShopListing; shop: Shop; onClose: () => void; canManage?: boolean;
+})
+```
+ 
+Then replace the Send Inquiry button section at the bottom of the modal with:
+```tsx
+{canManage ? (
+  <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl px-4 py-3 text-xs text-amber-700 dark:text-amber-400 text-center font-medium">
+    You manage this shop — go to your dashboard to view inquiries.
+  </div>
+) : sent ? (
+  <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl px-4 py-3 text-sm text-green-700 dark:text-green-400 font-semibold text-center">
+    ✅ Inquiry sent! The shop will contact you soon.
+  </div>
+) : showInquiry ? (
+  // ... existing inquiry form
+) : (
+  // ... existing Send Inquiry button
+)}
+```
+ 
+And where `ListingModal` is rendered at the bottom of `ShopPublicPage`, pass `canManage`:
+```tsx
+{selectedListing && (
+  <ListingModal listing={selectedListing} shop={shop} onClose={() => setSelectedListing(null)} canManage={canManage} />
+)}
+```
+ 
+---
+ 
+## BUG 6 — `ProfilePage` doesn't load editor shops (only owner shops)
+ 
+**The problem:** In `src/pages/ProfilePage.tsx`, only `getShopsByOwner(user.uid)` is called to populate "My Shops". If a user is an editor of someone else's shop (not the owner), that shop never appears in their profile.
+ 
+**The fix:** In `ProfilePage.tsx`, also call `getShopsWhereEditor` and merge the results. Find the useEffect that loads shops (around line 223) and replace it with:
+ 
+```tsx
+import { getShopsByOwner, getShopsWhereEditor, getInquiriesForBuyer, leaveShopReview } from "@/lib/shops";
+ 
+// In the useEffect:
+setShopsLoading(true);
+Promise.all([
+  getShopsByOwner(user.uid),
+  getShopsWhereEditor(user.uid),
+]).then(([owned, editing]) => {
+  // Merge, dedup by id, owned shops first
+  const seen = new Set<string>();
+  const merged: Shop[] = [];
+  for (const s of [...owned, ...editing]) {
+    if (!seen.has(s.id)) { seen.add(s.id); merged.push(s); }
+  }
+  setMyShops(merged);
+}).catch(() => {}).finally(() => setShopsLoading(false));
+```
+ 
+Also add a visual badge in the shop card to distinguish owned vs editor shops. After fetching, store which IDs are owned. In each shop card, show "(Owner)" or "(Editor)" as a small label.
+ 
+---
+ 
+## BUG 7 — Inquiry form allows empty note with quantity=0
+ 
+**The problem:** In `ShopPublicPage.tsx` `ListingModal`, a user can submit an inquiry with `quantity=0` (typing 0 in the number field or deleting the value) and an empty note. This creates a meaningless inquiry.
+ 
+**The fix:** In `handleInquiry`, add validation before calling `createInquiry`:
+ 
+```tsx
+const handleInquiry = async (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!user || !userProfile) { setShowAuth(true); return; }
+  if (quantity < 1) { setInquiryError("Quantity must be at least 1."); return; }
+  // note is optional, no required check needed
+  setInquiryError("");
+  setSending(true);
+  // ... rest unchanged
+};
+```
+ 
+Also change the quantity input `min` to enforce `1` properly:
+```tsx
+onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+```
+ 
+---
+ 
+## BUG 8 — `getAllShopListings` and `getShopListingsByCategory` may return listings from deleted/inactive shops
+ 
+**The problem:** In `src/lib/shops.ts`, `getAllShopListings()` fetches listings where `isActive !== false` but it doesn't check if the parent shop itself is still active. If a shop is deleted (set `isActive: false`), its listings still show up in Campus Market browse.
+ 
+**The fix:** In `getAllShopListings` and `getShopListingsByCategory` in `shops.ts`, after fetching listings, filter out any where the shop is inactive. We can do this efficiently by cross-referencing the shops list. Add a helper:
+ 
+```ts
+export async function getAllShopListings(limitCount = 40): Promise<ShopListing[]> {
+  const q = query(
+    collection(db, "shopListings"),
+    orderBy("createdAt", "desc"),
+    limit(limitCount * 3),
+  );
+  const snap = await getDocs(q);
+  const listings = snap.docs
+    .map((d) => ({ id: d.id, ...d.data() } as ShopListing))
+    .filter((l) => l.isActive !== false);
+ 
+  // Filter out listings from inactive shops (fetch shop status in batches)
+  const shopIds = [...new Set(listings.map((l) => l.shopId))];
+  const shopStatuses: Record<string, boolean> = {};
+  await Promise.all(
+    shopIds.map(async (id) => {
+      try {
+        const s = await getDoc(doc(db, "shops", id));
+        shopStatuses[id] = s.exists() && s.data()?.isActive !== false;
+      } catch {
+        shopStatuses[id] = false;
+      }
+    })
+  );
+ 
+  return listings
+    .filter((l) => shopStatuses[l.shopId] !== false)
+    .slice(0, limitCount);
+}
+```
+ 
+Apply the same shop-status filter to `getShopListingsByCategory`.
+ 
+---
+ 
+## BUG 9 — No success feedback after creating a listing in ShopDashboard
+ 
+**The problem:** In `ShopDashboardPage.tsx`, after successfully adding a listing via `AddListingForm`, the form closes and the list refreshes but there's no visible success toast or confirmation. The user may think nothing happened, especially if the list refresh takes a moment.
+ 
+**The fix:** In `AddListingForm`, add a brief success state before calling `onCreated()`:
+ 
+Change the `handleSubmit` success path:
+```tsx
+// After await createShopListing(...)
+setLoading(false);
+// Show brief success before closing
+setError(""); 
+onCreated(); // This already closes and refreshes
+```
+ 
+And in the parent `ListingsTab`, after `onRefresh()` completes, show a toast. Add a `toast` state to `ListingsTab`:
+ 
+```tsx
+const [listingAdded, setListingAdded] = useState(false);
+ 
+// Change onCreated call in AddListingForm:
+onCreated={() => {
+  setShowAdd(false);
+  setListingAdded(true);
+  setTimeout(() => setListingAdded(false), 3000);
+  onRefresh();
+}}
+ 
+// Add after the "Add Listing" button in ListingsTab header:
+{listingAdded && (
+  <span className="text-xs text-green-600 dark:text-green-400 font-semibold animate-in fade-in">
+    ✅ Listing added!
+  </span>
+)}
+```
+ 
+---
+ 
+## BUG 10 — Mobile bottom nav has 6 items which is too crowded
+ 
+**The problem:** In `src/components/Layout.tsx`, the mobile bottom nav now has 6 items: Home, Search, Post, Market, Messages, Profile. On small screens this is very tight and the icons/labels become unreadable.
+ 
+**The fix:** In `Layout.tsx`, update the mobile bottom nav to show 5 items max. Remove "Messages" from the bottom nav on mobile (it's accessible via the top header or profile). Keep: Home, Search, Market, Post, Profile.
+ 
+Find the mobile nav items array in `Layout.tsx` and update it so the bottom nav shows these 5 in this order:
+```
+Home | Search | Market | Post | Profile
+```
+ 
+Messages should remain accessible in the desktop header nav but be removed from the mobile bottom nav bar. If there's a `navItems` array, reorder/remove accordingly.
+ 
+---
+ 
+## BUG 11 — Shop dashboard doesn't show real-time inquiry count badge
+ 
+**The problem:** When a shop owner is on the dashboard Listings tab, there's no indication that new inquiries have arrived. They have to manually click the Inquiries tab to check.
+ 
+**The fix:** In `ShopDashboardPage.tsx`, load the inquiry count alongside shop data and show a badge on the Inquiries tab. In the main component's `useEffect` that loads the shop, also fetch inquiries count:
+ 
+```tsx
+useEffect(() => {
+  if (!shopId) return;
+  setLoadingShop(true);
+  getShopById(shopId).then(async (s) => {
+    setShop(s);
+    if (s) {
+      setSettingsName(s.name);
+      setSettingsBio(s.bio);
+      setSettingsCategory(s.category);
+      setSettingsWhatsApp(s.whatsapp ?? "");
+      setSettingsWeChat(s.wechat ?? "");
+      // Load pending inquiry count for badge
+      try {
+        const inqs = await getInquiriesForShop(shopId);
+        const pendingCount = inqs.filter(i => i.status === "pending").length;
+        setPendingInquiryCount(pendingCount);
+      } catch {}
+    }
+  }).finally(() => setLoadingShop(false));
+}, [shopId]);
+```
+ 
+Add `const [pendingInquiryCount, setPendingInquiryCount] = useState(0);` to state.
+ 
+In the TABS array, update the inquiries tab label:
+```tsx
+{ key: "inquiries", label: "Inquiries", icon: <MessageSquare size={15} />, badge: pendingInquiryCount }
+```
+ 
+And in the tab button render, show the badge:
+```tsx
+{t.label}
+{t.badge ? (
+  <span className="ml-1 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none">
+    {t.badge}
+  </span>
+) : null}
+```
+ 
+Update the TABS type to include optional `badge?: number`.
+ 
+---
+ 
+## BUG 12 — `VerificationBanner` component still references old verification system
+ 
+**The problem:** `src/components/VerificationBanner.tsx` likely still contains references to the old "Verified Seller" / `verificationStatus` system that was removed in Prompt 1. This banner may still appear and confuse users.
+ 
+**The fix:** Open `src/components/VerificationBanner.tsx` and check its content. If it references `verificationStatus`, `shopName`, `shopSlug`, or "Verified Seller" language, remove the entire component or replace it with an empty export:
+ 
+If the banner is only for email verification (telling users to verify their email), keep it. If it references shop/seller verification, either delete the file entirely and remove its import from `App.tsx` or `Layout.tsx`, or replace the content with just `export default function VerificationBanner() { return null; }`.
+ 
+---
+ 
+## FINAL STEPS
+ 
+After all fixes above, run:
+ 
+```bash
+cd artifacts/xmum-market && pnpm run typecheck
+```
+ 
+Fix any TypeScript errors. Then:
+ 
+```bash
+cd /home/user/workspace
+git add -A
+git commit -m "fix: Campus Market comprehensive bug fixes - shop loading, listing navigation, inquiry validation, editor display"
+git push origin main
+```
+ 
+Tell me: ✅ All Campus Market bugs fixed and pushed to GitHub.

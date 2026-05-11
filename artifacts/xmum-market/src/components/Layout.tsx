@@ -50,7 +50,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { href: "/", icon: Home, label: t.home },
     { href: "/search", icon: Search, label: t.search },
     { href: "/campus-market", icon: Store, label: "Market" },
-    { href: "/messages", icon: MessageCircle, label: t.messages },
     { href: "/post", icon: PlusSquare, label: t.post },
     { href: "/profile", icon: User, label: t.profile, activeFor: ["/profile", "/settings"] },
   ];
