@@ -1,0 +1,114 @@
+I need to add three improvements to the inquiry system and shop settings in `pages/ShopDashboardPage.tsx`.
+ 
+**Part A — Remove Confirm/Cancel from Inquiries Tab**
+ 
+In the `InquiriesTab` component (or wherever inquiries are rendered), find any "Confirm" and "Cancel" status update buttons and remove them entirely. Inquiries are now only for pre-order conversation — they should NOT have confirm/cancel actions. Keep the status badge display (pending, etc.) but remove action buttons.
+ 
+Also remove the `updateInquiryStatus` call from the inquiries tab (it's now only used internally if needed). Remove `updateInquiryStatus` from the imports if it's only used for that.
+ 
+**Part B — Auto-Reply Setting in Settings Tab**
+ 
+In the `SettingsTab` component, add a new section at the bottom (before the danger zone / delete shop section):
+ 
+```tsx
+{/* Auto-Reply for Inquiries */}
+<div className="bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-2xl p-4 mt-4">
+  <h3 className="text-sm font-bold text-gray-900 dark:text-slate-100 mb-3">Auto-Reply for Inquiries</h3>
+  <p className="text-xs text-gray-500 dark:text-slate-400 mb-3">
+    This message will be automatically shown to users right after they send an inquiry.
+    Use it to set expectations (response time, ordering process, etc.).
+  </p>
+  <div className="flex items-center gap-2 mb-3">
+    <input
+      type="checkbox"
+      id="autoReplyEnabled"
+      checked={autoReplyEnabled}
+      onChange={(e) => setAutoReplyEnabled(e.target.checked)}
+      className="w-4 h-4 accent-[#003366]"
+    />
+    <label htmlFor="autoReplyEnabled" className="text-sm font-medium text-gray-700 dark:text-slate-300">
+      Enable auto-reply
+    </label>
+  </div>
+  {autoReplyEnabled && (
+    <textarea
+      rows={4}
+      value={autoReplyMessage}
+      onChange={(e) => setAutoReplyMessage(e.target.value)}
+      placeholder="e.g. Thanks for reaching out! We usually reply within 2 hours. To order, click 'Order This Item' on any listing."
+      maxLength={500}
+      className="w-full bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+    />
+  )}
+</div>
+```
+ 
+Add state: `const [autoReplyEnabled, setAutoReplyEnabled] = useState(false)` and `const [autoReplyMessage, setAutoReplyMessage] = useState("")`.
+ 
+Load these in the settings `useEffect` from `shop.autoReplyEnabled` and `shop.autoReplyMessage`.
+ 
+In the settings save handler, also call:
+```typescript
+await saveAutoReply(shopId, autoReplyEnabled ? autoReplyMessage : "");
+```
+ 
+Import `saveAutoReply` from `@/lib/shops`.
+ 
+**Part C — Order Questions Setting in Settings Tab**
+ 
+Add another section in `SettingsTab` for custom order questions:
+ 
+```tsx
+{/* Order Form Questions */}
+<div className="bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-2xl p-4 mt-4">
+  <h3 className="text-sm font-bold text-gray-900 dark:text-slate-100 mb-1">Order Form Questions</h3>
+  <p className="text-xs text-gray-500 dark:text-slate-400 mb-3">
+    Customers will answer these questions when they place an order. Quantity is always included by default.
+  </p>
+  {orderQuestions.map((q, idx) => (
+    <div key={q.id} className="flex items-center gap-2 mb-2">
+      <input
+        className="flex-1 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        placeholder={`Question ${idx + 1} label`}
+        value={q.label}
+        onChange={(e) => setOrderQuestions((prev) => prev.map((x, i) => i === idx ? { ...x, label: e.target.value } : x))}
+      />
+      <select
+        value={q.type}
+        onChange={(e) => setOrderQuestions((prev) => prev.map((x, i) => i === idx ? { ...x, type: e.target.value as any } : x))}
+        className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-xl px-2 py-2 text-xs focus:outline-none"
+      >
+        <option value="text">Text</option>
+        <option value="textarea">Long text</option>
+        <option value="number">Number</option>
+        <option value="date">Date</option>
+      </select>
+      <label className="flex items-center gap-1 text-xs text-gray-600 dark:text-slate-400 whitespace-nowrap">
+        <input type="checkbox" checked={q.required} onChange={(e) => setOrderQuestions((prev) => prev.map((x, i) => i === idx ? { ...x, required: e.target.checked } : x))} />
+        Req.
+      </label>
+      <button onClick={() => setOrderQuestions((prev) => prev.filter((_, i) => i !== idx))} className="text-red-400 hover:text-red-600 p-1">
+        <X size={14} />
+      </button>
+    </div>
+  ))}
+  {orderQuestions.length < 8 && (
+    <button
+      onClick={() => setOrderQuestions((prev) => [...prev, { id: `q${Date.now()}`, label: "", type: "text", required: false }])}
+      className="text-xs text-[#003366] dark:text-blue-400 font-semibold hover:underline mt-1"
+    >
+      + Add question
+    </button>
+  )}
+</div>
+```
+ 
+Add state: `const [orderQuestions, setOrderQuestions] = useState<ShopOrderQuestion[]>([])`.
+ 
+Load in useEffect from `shop.orderQuestions ?? []`.
+ 
+In the settings save handler, also call: `await saveOrderQuestions(shopId, orderQuestions)`.
+ 
+Import `saveOrderQuestions` and `ShopOrderQuestion` from their respective files.
+ 
+---

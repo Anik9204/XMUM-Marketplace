@@ -3,14 +3,14 @@ import { useRoute, useLocation, Link } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   getShopById, getShopListings, createShopListing, updateShopListing, deleteShopListing,
-  uploadShopListingPhoto, getInquiriesForShop, updateInquiryStatus,
+  uploadShopListingPhoto, getInquiriesForShop,
   addShopEditor, removeShopEditor, updateShop, uploadShopBanner, uploadShopLogo,
-  getOrdersForShop, updateOrderStatus,
+  getOrdersForShop, updateOrderStatus, saveAutoReply, saveOrderQuestions,
 } from "@/lib/shops";
 import { collection, query, where, getDocs, limit, getDoc, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { notifyEditorAdded, notifyEditorRemoved, notifyOrderConfirmed, notifyOrderCancelled } from "@/lib/notifications";
-import { Shop, ShopListing, ShopInquiry, ShopCategory, InquiryStatus, ShopOrder } from "@/lib/types";
+import { Shop, ShopListing, ShopInquiry, ShopCategory, InquiryStatus, ShopOrder, ShopOrderQuestion } from "@/lib/types";
 import {
   Loader2, Plus, Trash2, Edit2, CheckCircle2, XCircle, Clock, Package,
   MessageSquare, Users, Settings, ArrowLeft, ImagePlus, X, AlertTriangle,
@@ -238,10 +238,6 @@ export default function ShopDashboardPage() {
         <InquiriesTab
           inquiries={inquiries}
           loading={loadingInquiries}
-          onStatusChange={async (id, status) => {
-            await updateInquiryStatus(id, status);
-            setInquiries((prev) => prev.map((i) => i.id === id ? { ...i, status } : i));
-          }}
         />
       )}
 
@@ -743,18 +739,9 @@ function AddListingForm({ shopId, shop, onClose, onCreated }: {
 
 // ── Inquiries Tab ─────────────────────────────────────────────────────────────
 
-function InquiriesTab({ inquiries, loading, onStatusChange }: {
+function InquiriesTab({ inquiries, loading }: {
   inquiries: ShopInquiry[]; loading: boolean;
-  onStatusChange: (id: string, status: InquiryStatus) => Promise<void>;
 }) {
-  const [updating, setUpdating] = useState<string | null>(null);
-
-  const handle = async (id: string, status: InquiryStatus) => {
-    setUpdating(id + status);
-    await onStatusChange(id, status);
-    setUpdating(null);
-  };
-
   if (loading) return <div className="flex items-center justify-center py-12"><Loader2 size={22} className="animate-spin text-gray-400" /></div>;
   if (inquiries.length === 0) return (
     <div className="text-center py-12 text-gray-400 dark:text-slate-500">
@@ -779,23 +766,6 @@ function InquiriesTab({ inquiries, loading, onStatusChange }: {
           {inq.status === "completed" && !inq.reviewLeft && (
             <span className="text-xs text-amber-600 dark:text-amber-400 font-medium mt-1 inline-block">Review left: No</span>
           )}
-          <div className="flex gap-2 mt-3 flex-wrap">
-            {inq.status === "pending" && (
-              <>
-                <button onClick={() => handle(inq.id, "confirmed")} disabled={updating === inq.id + "confirmed"} className="flex items-center gap-1 text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 px-3 py-1.5 rounded-lg font-semibold hover:bg-blue-200 transition disabled:opacity-40">
-                  {updating === inq.id + "confirmed" ? <Loader2 size={11} className="animate-spin" /> : <CheckCircle2 size={11} />} Confirm
-                </button>
-                <button onClick={() => handle(inq.id, "cancelled")} disabled={updating === inq.id + "cancelled"} className="flex items-center gap-1 text-xs bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400 px-3 py-1.5 rounded-lg font-semibold hover:bg-red-100 transition disabled:opacity-40">
-                  {updating === inq.id + "cancelled" ? <Loader2 size={11} className="animate-spin" /> : <XCircle size={11} />} Cancel
-                </button>
-              </>
-            )}
-            {inq.status === "confirmed" && (
-              <button onClick={() => handle(inq.id, "completed")} disabled={updating === inq.id + "completed"} className="flex items-center gap-1 text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-3 py-1.5 rounded-lg font-semibold hover:bg-green-200 transition disabled:opacity-40">
-                {updating === inq.id + "completed" ? <Loader2 size={11} className="animate-spin" /> : <CheckCircle2 size={11} />} Mark Complete
-              </button>
-            )}
-          </div>
         </div>
       ))}
     </div>
@@ -895,9 +865,20 @@ function SettingsTab({
   const [bannerUploading, setBannerUploading] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [autoReplyEnabled, setAutoReplyEnabled] = useState(false);
+  const [autoReplyMessage, setAutoReplyMessage] = useState("");
+  const [orderQuestions, setOrderQuestions] = useState<ShopOrderQuestion[]>([]);
+
+  useEffect(() => {
+    setAutoReplyEnabled(shop.autoReplyEnabled ?? false);
+    setAutoReplyMessage(shop.autoReplyMessage ?? "");
+    setOrderQuestions(shop.orderQuestions ?? []);
+  }, [shop.id]);
 
   const handleSave = async () => {
     await onSave();
+    await saveAutoReply(shop.id, autoReplyEnabled ? autoReplyMessage : "");
+    await saveOrderQuestions(shop.id, orderQuestions);
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   };
@@ -999,6 +980,80 @@ function SettingsTab({
       <button onClick={handleSave} disabled={loading} className="w-full min-h-[48px] bg-[#003366] dark:bg-blue-600 text-white font-semibold text-sm rounded-xl hover:bg-[#002244] disabled:opacity-50 transition flex items-center justify-center gap-2">
         {loading ? <><Loader2 size={15} className="animate-spin" /> Saving…</> : saved ? <><CheckCircle2 size={15} /> Saved!</> : "Save Changes"}
       </button>
+
+      {/* Auto-Reply for Inquiries */}
+      <div className="bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-2xl p-4 mt-4">
+        <h3 className="text-sm font-bold text-gray-900 dark:text-slate-100 mb-3">Auto-Reply for Inquiries</h3>
+        <p className="text-xs text-gray-500 dark:text-slate-400 mb-3">
+          This message will be automatically shown to users right after they send an inquiry.
+          Use it to set expectations (response time, ordering process, etc.).
+        </p>
+        <div className="flex items-center gap-2 mb-3">
+          <input
+            type="checkbox"
+            id="autoReplyEnabled"
+            checked={autoReplyEnabled}
+            onChange={(e) => setAutoReplyEnabled(e.target.checked)}
+            className="w-4 h-4 accent-[#003366]"
+          />
+          <label htmlFor="autoReplyEnabled" className="text-sm font-medium text-gray-700 dark:text-slate-300">
+            Enable auto-reply
+          </label>
+        </div>
+        {autoReplyEnabled && (
+          <textarea
+            rows={4}
+            value={autoReplyMessage}
+            onChange={(e) => setAutoReplyMessage(e.target.value)}
+            placeholder="e.g. Thanks for reaching out! We usually reply within 2 hours. To order, click 'Order This Item' on any listing."
+            maxLength={500}
+            className="w-full bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+          />
+        )}
+      </div>
+
+      {/* Order Form Questions */}
+      <div className="bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-2xl p-4 mt-4">
+        <h3 className="text-sm font-bold text-gray-900 dark:text-slate-100 mb-1">Order Form Questions</h3>
+        <p className="text-xs text-gray-500 dark:text-slate-400 mb-3">
+          Customers will answer these questions when they place an order. Quantity is always included by default.
+        </p>
+        {orderQuestions.map((q, idx) => (
+          <div key={q.id} className="flex items-center gap-2 mb-2">
+            <input
+              className="flex-1 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder={`Question ${idx + 1} label`}
+              value={q.label}
+              onChange={(e) => setOrderQuestions((prev) => prev.map((x, i) => i === idx ? { ...x, label: e.target.value } : x))}
+            />
+            <select
+              value={q.type}
+              onChange={(e) => setOrderQuestions((prev) => prev.map((x, i) => i === idx ? { ...x, type: e.target.value as any } : x))}
+              className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-xl px-2 py-2 text-xs focus:outline-none"
+            >
+              <option value="text">Text</option>
+              <option value="textarea">Long text</option>
+              <option value="number">Number</option>
+              <option value="date">Date</option>
+            </select>
+            <label className="flex items-center gap-1 text-xs text-gray-600 dark:text-slate-400 whitespace-nowrap">
+              <input type="checkbox" checked={q.required} onChange={(e) => setOrderQuestions((prev) => prev.map((x, i) => i === idx ? { ...x, required: e.target.checked } : x))} />
+              Req.
+            </label>
+            <button onClick={() => setOrderQuestions((prev) => prev.filter((_, i) => i !== idx))} className="text-red-400 hover:text-red-600 p-1">
+              <X size={14} />
+            </button>
+          </div>
+        ))}
+        {orderQuestions.length < 8 && (
+          <button
+            onClick={() => setOrderQuestions((prev) => [...prev, { id: `q${Date.now()}`, label: "", type: "text", required: false }])}
+            className="text-xs text-[#003366] dark:text-blue-400 font-semibold hover:underline mt-1"
+          >
+            + Add question
+          </button>
+        )}
+      </div>
 
       {isOwner && (
         <div className="border-t border-red-100 dark:border-red-900/30 pt-4">
