@@ -1,0 +1,66 @@
+I need to ensure that users can only review a shop or its listing if the shop has confirmed their order, and I need to add a few missing notification touch-ups.
+ 
+**Part A — Lock reviews behind confirmed orders**
+ 
+In `lib/shops.ts`, update the `leaveShopReview` function to add a gate:
+ 
+```typescript
+export async function leaveShopReview(data: { ... }): Promise<void> {
+  // Gate: buyer must have a confirmed order for this shop
+  const q = query(
+    collection(db, "shopOrders"),
+    where("shopId", "==", data.shopId),
+    where("buyerId", "==", data.reviewerId),
+    where("status", "==", "confirmed")
+  );
+  const confirmedOrders = await getDocs(q);
+  if (confirmedOrders.empty) {
+    throw new Error("You can only review a shop after the shop has confirmed your order.");
+  }
+  // ... rest of existing leaveShopReview logic unchanged
+}
+```
+ 
+In `pages/ShopPublicPage.tsx`, find wherever reviews can be submitted (if there is a review form — if not, this is already handled by the above gate on the backend). If there's a "Leave Review" button anywhere visible to users, wrap it in a check:
+- Fetch the user's confirmed orders for this shop on page load
+- Only show the "Leave Review" button if `confirmedOrders.length > 0`
+- If not, show a tooltip or small note: "Order from this shop and get confirmed to leave a review."
+**Part B — Also notify editors when a new order/inquiry comes in**
+ 
+In `lib/shops.ts`, update `createOrder` to also notify editors:
+ 
+```typescript
+  // Notify owner
+  await notifyShopOrderReceived(shop.ownerId, data.shopName, data.buyerName, docRef.id, data.shopId).catch(() => {});
+  // Notify each editor
+  for (const editorId of shop.editorIds) {
+    await notifyShopOrderReceived(editorId, data.shopName, data.buyerName, docRef.id, data.shopId).catch(() => {});
+  }
+```
+ 
+Similarly update `createInquiry` in `lib/shops.ts` to also notify editors:
+```typescript
+  for (const editorId of shop.editorIds) {
+    notifyShopInquiryReceived(editorId, data.shopName, data.buyerName, docRef.id, data.shopId).catch(() => {});
+  }
+```
+ 
+**Part C — User-side: show orders placed by the user**
+ 
+In `pages/ProfilePage.tsx` (or wherever a user sees their activity), add a "My Orders" section that calls `getOrdersForBuyer(user.uid)` and shows:
+- Order listing title
+- Shop name
+- Status badge (Pending / Confirmed / Cancelled)
+- Date placed
+- If cancelled, show the cancellation reason in a collapsed "Why was this cancelled?" expander
+If `ProfilePage.tsx` is too large to modify safely, create this as a new tab in the profile page's existing tab system. Keep it minimal — just a list.
+ 
+**Part D — Notification bell updates**
+ 
+In `components/NotificationBell.tsx`, ensure the notification `type` values `"shop_order_received"`, `"shop_order_confirmed"`, `"shop_order_cancelled"`, `"shop_editor_added"`, `"shop_editor_removed"` are handled in any switch/if rendering. Map them to appropriate icons:
+- `shop_order_received` → `ShoppingCart` icon
+- `shop_order_confirmed` → `CheckCircle2` icon (green)
+- `shop_order_cancelled` → `XCircle` icon (red)
+- `shop_editor_added` → `UserPlus` icon (blue)
+- `shop_editor_removed` → `UserMinus` icon (amber)
+---

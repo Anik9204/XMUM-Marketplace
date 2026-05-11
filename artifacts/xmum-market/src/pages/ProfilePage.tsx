@@ -4,12 +4,12 @@ import { useAuth } from "@/contexts/AuthContext";
 import { getUserListings, deleteListing, markAsSold, bumpListing, getListing, LISTING_EXPIRY_MS, LISTING_REMINDER_MS, BUMP_COOLDOWN_MS } from "@/lib/listings";
 import { getUserConversations } from "@/lib/messaging";
 import { sendDailyDigestIfDue } from "@/lib/notifications";
-import { Listing, Shop, ShopInquiry, InquiryStatus } from "@/lib/types";
+import { Listing, Shop, ShopInquiry, ShopOrder, InquiryStatus } from "@/lib/types";
 import { getSavedListings } from "@/lib/savedListings";
-import { getShopsByOwner, getShopsWhereEditor, getInquiriesForBuyer, leaveShopReview } from "@/lib/shops";
+import { getShopsByOwner, getShopsWhereEditor, getInquiriesForBuyer, getOrdersForBuyer, leaveShopReview } from "@/lib/shops";
 import ListingCard from "@/components/ListingCard";
 import AuthModal from "@/components/AuthModal";
-import { User, CheckCircle, AlertCircle, LogOut, CheckCircle2, Settings, Clock, X, ArrowUp, Bookmark, Store, Star, MessageSquare, Plus } from "lucide-react";
+import { User, CheckCircle, AlertCircle, LogOut, CheckCircle2, Settings, Clock, X, ArrowUp, Bookmark, Store, Star, MessageSquare, Plus, ShoppingCart } from "lucide-react";
 import { logOut } from "@/lib/auth";
 import { useLocation, Link } from "wouter";
 import { addNotification } from "@/lib/notifications";
@@ -154,6 +154,9 @@ export default function ProfilePage() {
   const [myInquiries, setMyInquiries] = useState<ShopInquiry[]>([]);
   const [inquiriesLoading, setInquiriesLoading] = useState(false);
   const [reviewTarget, setReviewTarget] = useState<ShopInquiry | null>(null);
+  const [myOrders, setMyOrders] = useState<ShopOrder[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [expandedCancelReason, setExpandedCancelReason] = useState<string | null>(null);
 
   const listingsCache = useRef<Listing[]>([]);
 
@@ -234,6 +237,8 @@ export default function ProfilePage() {
     }).catch(() => {}).finally(() => setShopsLoading(false));
     setInquiriesLoading(true);
     getInquiriesForBuyer(user.uid).then(setMyInquiries).catch(() => {}).finally(() => setInquiriesLoading(false));
+    setOrdersLoading(true);
+    getOrdersForBuyer(user.uid).then(setMyOrders).catch(() => {}).finally(() => setOrdersLoading(false));
   }, [user?.uid]);
 
   if (!user) {
@@ -718,6 +723,72 @@ export default function ProfilePage() {
                     >
                       <Star size={11} /> Leave Review
                     </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ── My Orders ─────────────────────────────────────────────────────── */}
+      <div className="mt-8">
+        <div className="flex items-center gap-2 mb-3">
+          <h2 className="text-base font-bold text-gray-900 dark:text-slate-100 flex items-center gap-2">
+            <ShoppingCart size={16} className="text-[#003366] dark:text-blue-400" /> My Orders
+          </h2>
+        </div>
+        {ordersLoading ? (
+          <div className="space-y-3">
+            {[1, 2].map((i) => (
+              <div key={i} className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-4 animate-pulse h-20" />
+            ))}
+          </div>
+        ) : myOrders.length === 0 ? (
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-6 text-center">
+            <ShoppingCart size={28} className="mx-auto text-gray-200 dark:text-slate-600 mb-2" />
+            <p className="text-sm text-gray-500 dark:text-slate-400">No orders yet. Place one from a Campus Market shop!</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {myOrders.map((order) => {
+              const orderStatusMap: Record<string, { label: string; cls: string }> = {
+                pending:   { label: "Pending",   cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
+                confirmed: { label: "Confirmed", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
+                completed: { label: "Completed", cls: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
+                cancelled: { label: "Cancelled", cls: "bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-slate-400" },
+              };
+              const { label, cls } = orderStatusMap[order.status] ?? orderStatusMap.pending;
+              const isExpanded = expandedCancelReason === order.id;
+              return (
+                <div key={order.id} className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 dark:text-slate-100 truncate">{order.listingTitle}</p>
+                      <p className="text-xs text-gray-500 dark:text-slate-400">{order.shopName}</p>
+                      <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">
+                        Qty: {order.quantity}
+                        {order.offeredPrice != null && ` · RM ${order.offeredPrice.toFixed(2)}`}
+                        {" · "}
+                        {new Date(order.createdAt).toLocaleDateString("en-MY", { month: "short", day: "numeric", year: "numeric" })}
+                      </p>
+                    </div>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${cls}`}>{label}</span>
+                  </div>
+                  {order.status === "cancelled" && order.cancellationReason && (
+                    <div className="mt-2">
+                      <button
+                        onClick={() => setExpandedCancelReason(isExpanded ? null : order.id)}
+                        className="text-xs text-gray-400 dark:text-slate-500 underline underline-offset-2"
+                      >
+                        {isExpanded ? "Hide reason" : "Show cancellation reason"}
+                      </button>
+                      {isExpanded && (
+                        <p className="mt-1 text-xs text-gray-600 dark:text-slate-300 bg-gray-50 dark:bg-slate-700/50 rounded-lg px-3 py-2">
+                          {order.cancellationReason}
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
               );

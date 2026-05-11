@@ -9,6 +9,7 @@ import { Shop, ShopListing, ShopInquiry, ShopReview, ShopAd, InquiryStatus, Shop
 import {
   notifyShopInquiryReceived,
   notifyInquiryStatusChanged,
+  notifyShopOrderReceived,
 } from "@/lib/notifications";
 
 // ── Slug helpers ──────────────────────────────────────────────────────────────
@@ -248,7 +249,7 @@ export async function createInquiry(data: {
     updateDoc(doc(db, "shops", data.shopId), { totalInquiries: increment(1) }),
   ]).catch(() => {}); // Silently ignore counter update failures
 
-  // Notify the shop owner — non-critical, fire and forget
+  // Notify the shop owner and editors — non-critical, fire and forget
   const shop = await getShopById(data.shopId);
   if (shop) {
     notifyShopInquiryReceived(
@@ -258,6 +259,9 @@ export async function createInquiry(data: {
       docRef.id,
       data.shopId,
     ).catch(() => {});
+    for (const editorId of shop.editorIds) {
+      notifyShopInquiryReceived(editorId, data.shopName, data.buyerName, docRef.id, data.shopId).catch(() => {});
+    }
   }
 
   return docRef.id;
@@ -337,6 +341,16 @@ export async function leaveShopReview(data: {
   rating: number;
   comment: string;
 }): Promise<void> {
+  const confirmedQ = query(
+    collection(db, "shopOrders"),
+    where("shopId", "==", data.shopId),
+    where("buyerId", "==", data.reviewerId),
+    where("status", "==", "confirmed")
+  );
+  const confirmedOrders = await getDocs(confirmedQ);
+  if (confirmedOrders.empty) {
+    throw new Error("You can only review a shop after the shop has confirmed your order.");
+  }
   await addDoc(collection(db, "shopReviews"), { ...data, createdAt: Date.now() });
   await updateDoc(doc(db, "shopInquiries", data.inquiryId), { reviewLeft: true });
   const reviewsSnap = await getDocs(query(collection(db, "shopReviews"), where("shopId", "==", data.shopId)));
@@ -416,6 +430,13 @@ export async function createOrder(data: {
     updatedAt: Date.now(),
     reviewLeft: false,
   });
+  // Notify owner + editors — non-critical, fire and forget
+  const shop = await getShopById(data.shopId);
+  if (shop) {
+    notifyShopOrderReceived(
+      shop.ownerId, data.shopName, data.buyerName, docRef.id, data.shopId, shop.editorIds,
+    ).catch(() => {});
+  }
   return docRef.id;
 }
 

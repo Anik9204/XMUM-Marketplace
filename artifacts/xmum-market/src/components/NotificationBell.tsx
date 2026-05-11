@@ -1,14 +1,29 @@
 import { useState, useEffect, useRef } from "react";
-import { Bell } from "lucide-react";
+import { Bell, ShoppingCart, CheckCircle2, XCircle, UserPlus, UserMinus } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { subscribeToNotifications, markNotificationsRead } from "@/lib/notifications";
 import { AppNotification } from "@/lib/types";
 
-const NOTIF_ICONS: Record<string, string> = {
+const NOTIF_EMOJI: Record<string, string> = {
   listing_deleted: "🗑️",
   listing_sold: "✅",
   welcome: "👋",
 };
+
+function NotifIcon({ type }: { type: string }) {
+  if (type === "shop_order_received")
+    return <ShoppingCart size={15} className="text-blue-500 dark:text-blue-400 shrink-0 mt-0.5" />;
+  if (type === "shop_order_confirmed")
+    return <CheckCircle2 size={15} className="text-green-500 dark:text-green-400 shrink-0 mt-0.5" />;
+  if (type === "shop_order_cancelled")
+    return <XCircle size={15} className="text-red-500 dark:text-red-400 shrink-0 mt-0.5" />;
+  if (type === "shop_editor_added")
+    return <UserPlus size={15} className="text-blue-500 dark:text-blue-400 shrink-0 mt-0.5" />;
+  if (type === "shop_editor_removed")
+    return <UserMinus size={15} className="text-amber-500 dark:text-amber-400 shrink-0 mt-0.5" />;
+  const emoji = NOTIF_EMOJI[type] ?? "🔔";
+  return <span className="text-base shrink-0 mt-0.5">{emoji}</span>;
+}
 
 function relativeTime(ms: number): string {
   const diff = Date.now() - ms;
@@ -127,7 +142,7 @@ export default function NotificationBell() {
                     key={n.id}
                     className={`px-4 py-3 border-b border-gray-50 dark:border-slate-700/50 last:border-0 flex items-start gap-3 ${!n.read ? "bg-blue-50 dark:bg-blue-950/40 font-medium" : "bg-transparent"}`}
                   >
-                    <span className="text-base shrink-0 mt-0.5">{NOTIF_ICONS[n.type] ?? "🔔"}</span>
+                    <NotifIcon type={n.type} />
                     <div className="flex-1 min-w-0">
                       <p className={`text-xs text-gray-800 dark:text-slate-100 ${!n.read ? "font-semibold" : "font-normal text-slate-500 dark:text-slate-400"}`}>{n.title}</p>
                       <p className={`text-xs mt-0.5 ${!n.read ? "text-gray-600 dark:text-slate-300" : "text-gray-400 dark:text-slate-500"}`}>{n.body}</p>
