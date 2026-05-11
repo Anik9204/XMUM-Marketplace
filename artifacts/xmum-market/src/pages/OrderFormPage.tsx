@@ -4,7 +4,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { getDoc, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { getShopById, createOrder } from "@/lib/shops";
-import { notifyShopOrderReceived } from "@/lib/notifications";
 import { Shop, ShopListing } from "@/lib/types";
 import AuthModal from "@/components/AuthModal";
 import {
@@ -79,7 +78,7 @@ export default function OrderFormPage() {
       const buyerName =
         userProfile.fullName || userProfile.displayName || user.email || "Anonymous";
 
-      const orderId = await createOrder({
+      await createOrder({
         shopId: shop.id,
         shopName: shop.name,
         shopListingId: listing.id,
@@ -95,15 +94,6 @@ export default function OrderFormPage() {
           : undefined,
         answers,
       });
-
-      await notifyShopOrderReceived(
-        shop.ownerId,
-        shop.name,
-        buyerName,
-        orderId,
-        shop.id,
-        shop.editorIds,
-      ).catch(() => {});
 
       setSubmitted(true);
     } catch (err: any) {
