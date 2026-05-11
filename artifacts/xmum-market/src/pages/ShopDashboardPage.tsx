@@ -683,6 +683,9 @@ function SettingsTab({
   onSave: () => void; onBannerUpload: (f: File) => void; onLogoUpload: (f: File) => void; onDelete: () => void;
 }) {
   const [saved, setSaved] = useState(false);
+  const [bannerUploading, setBannerUploading] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
 
   const handleSave = async () => {
     await onSave();
@@ -699,26 +702,49 @@ function SettingsTab({
           style={{ background: shop.bannerUrl ? undefined : "linear-gradient(135deg, #003366 0%, #0066cc 100%)" }}
         >
           {shop.bannerUrl && <img src={shop.bannerUrl} alt="" className="w-full h-full object-cover" />}
-          <button onClick={() => bannerInputRef.current?.click()} className="absolute top-2 right-2 bg-black/40 text-white p-1.5 rounded-lg hover:bg-black/60 transition">
-            <Camera size={14} />
+          <button
+            onClick={() => !bannerUploading && bannerInputRef.current?.click()}
+            disabled={bannerUploading}
+            className="absolute top-2 right-2 bg-black/40 text-white p-1.5 rounded-lg hover:bg-black/60 transition disabled:opacity-60"
+          >
+            {bannerUploading ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
           </button>
-          <input ref={bannerInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { if (e.target.files?.[0]) onBannerUpload(e.target.files[0]); }} />
+          <input ref={bannerInputRef} type="file" accept="image/*" className="hidden" onChange={async (e) => {
+            if (!e.target.files?.[0]) return;
+            setUploadError("");
+            setBannerUploading(true);
+            try { await onBannerUpload(e.target.files[0]); }
+            catch (err: any) { setUploadError("Banner upload failed: " + (err?.message ?? "Unknown error")); }
+            finally { setBannerUploading(false); }
+          }} />
         </div>
         <div className="px-4 pb-4 -mt-6 flex items-end gap-3">
           <div className="relative">
             <div className="w-16 h-16 rounded-xl border-2 border-white dark:border-slate-800 bg-gray-100 dark:bg-slate-700 overflow-hidden">
               {shop.logoUrl ? <img src={shop.logoUrl} alt="" className="w-full h-full object-cover" /> : <Store size={28} className="text-gray-400 dark:text-slate-500 m-auto mt-3" />}
             </div>
-            <button onClick={() => logoInputRef.current?.click()} className="absolute -bottom-1 -right-1 bg-[#003366] text-white p-1 rounded-full hover:bg-[#002244] transition">
-              <Camera size={10} />
+            <button
+              onClick={() => !logoUploading && logoInputRef.current?.click()}
+              disabled={logoUploading}
+              className="absolute -bottom-1 -right-1 bg-[#003366] text-white p-1 rounded-full hover:bg-[#002244] transition disabled:opacity-60"
+            >
+              {logoUploading ? <Loader2 size={10} className="animate-spin" /> : <Camera size={10} />}
             </button>
-            <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { if (e.target.files?.[0]) onLogoUpload(e.target.files[0]); }} />
+            <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={async (e) => {
+              if (!e.target.files?.[0]) return;
+              setUploadError("");
+              setLogoUploading(true);
+              try { await onLogoUpload(e.target.files[0]); }
+              catch (err: any) { setUploadError("Logo upload failed: " + (err?.message ?? "Unknown error")); }
+              finally { setLogoUploading(false); }
+            }} />
           </div>
           <div className="pb-1">
             <p className="text-sm font-bold text-gray-900 dark:text-slate-100">{shop.name}</p>
             <p className="text-xs text-gray-500 dark:text-slate-400">{shop.category}</p>
           </div>
         </div>
+        {uploadError && <p className="text-xs text-red-500 mt-2 px-4 pb-3">{uploadError}</p>}
       </div>
 
       <div>

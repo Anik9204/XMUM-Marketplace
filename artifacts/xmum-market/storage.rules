@@ -30,13 +30,12 @@ service firebase.storage {
                   && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    // Shop banners — owner write, public read
-    match /shopBanners/{userId}/{allPaths=**} {
+    // Shop banners — any authenticated user write (path uses shopId not userId), public read
+    match /shopBanners/{shopId}/{allPaths=**} {
+      allow read: if true;
       allow write: if request.auth != null
-                   && request.auth.uid == userId
                    && request.resource.size < 3 * 1024 * 1024
                    && request.resource.contentType.matches('image/.*');
-      allow read: if true;
     }
 
     // Shop listing photos — any authenticated @xmu.edu.my user can upload, public read

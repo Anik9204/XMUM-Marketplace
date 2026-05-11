@@ -1,0 +1,191 @@
+
+You are a senior developer fixing 3 specific bugs in the XMUM Marketplace app (`artifacts/xmum-market/`). Fix all 3 exactly as described.
+
+---
+
+### BUG FIX 1 — Back button on ShopPublicPage causes "Shop not found"
+
+**The problem:** In `src/pages/ShopPublicPage.tsx`, the back button uses `navigate(-1 as any)`. In Wouter (this app's router), `-1` is not a valid navigation target — it doesn't trigger browser history back. Instead Wouter treats it as navigating to the route `"-1"` which doesn't exist, so the page re-renders and shows "Shop not found".
+
+**The fix:** Replace the back button's onClick with `window.history.back()`:
+
+Find this line in `ShopPublicPage.tsx`:
+```tsx
+<button onClick={() => navigate(-1 as any)} className="absolute top-3 left-3 bg-black/30 text-white p-2 rounded-full hover:bg-black/50 transition">
+```
+
+Replace with:
+```tsx
+<button onClick={() => window.history.back()} className="absolute top-3 left-3 bg-black/30 text-white p-2 rounded-full hover:bg-black/50 transition">
+```
+
+Also remove the `navigate` destructure from `useLocation` in `ShopPublicPage` if it is no longer used anywhere else in that file. Check first — if `navigate` is used elsewhere in the file, keep it. If it's only used for the back button, replace:
+```tsx
+const [, navigate] = useLocation();
+```
+with:
+```tsx
+const [location] = useLocation();
+```
+or remove it entirely.
+
+---
+
+### BUG FIX 2 — Banner and logo upload broken in Shop Settings
+
+**The problem:** In `storage.rules`, the `shopBanners` rule is:
+```
+match /shopBanners/{userId}/{allPaths=**} {
+  allow write: if request.auth != null
+               && request.auth.uid == userId
+```
+
+But in `src/lib/shops.ts`, the upload path is:
+```ts
+const storageRef = ref(storage, `shopBanners/${shopId}/banner.jpg`);
+```
+
+The storage rule checks `request.auth.uid == userId` but the path uses `shopId` (the Firestore document ID of the shop), **not** the user's UID. These never match, so every banner upload is silently rejected by Firebase Storage.
+
+**Fix Part A — Update `storage.rules`:**
+
+Replace the `shopBanners` rule:
+```
+match /shopBanners/{shopId}/{allPaths=**} {
+  allow read: if true;
+  allow write: if request.auth != null
+               && request.resource.size < 3 * 1024 * 1024
+               && request.resource.contentType.matches('image/.*');
+}
+```
+
+Replace the `shopLogos` rule:
+```
+match /shopLogos/{shopId}/{allPaths=**} {
+  allow read: if true;
+  allow write: if request.auth != null
+               && request.resource.size < 2 * 1024 * 1024
+               && request.resource.contentType.matches('image/.*');
+}
+```
+
+**Fix Part B — Add upload loading state and error feedback in `ShopDashboardPage.tsx`:**
+
+The camera button currently gives zero feedback when clicked — no spinner, no error if it fails silently. Add proper loading and error states to the banner and logo upload buttons in the `SettingsTab` component.
+
+Add two state variables inside `SettingsTab`:
+```tsx
+const [bannerUploading, setBannerUploading] = useState(false);
+const [logoUploading, setLogoUploading] = useState(false);
+const [uploadError, setUploadError] = useState("");
+```
+
+Wrap the `onBannerUpload` call in the input's `onChange`:
+```tsx
+onChange={async (e) => {
+  if (!e.target.files?.[0]) return;
+  setUploadError("");
+  setBannerUploading(true);
+  try {
+    await onBannerUpload(e.target.files[0]);
+  } catch (err: any) {
+    setUploadError("Banner upload failed: " + (err.message ?? "Unknown error"));
+  } finally {
+    setBannerUploading(false);
+  }
+}}
+```
+
+Show a spinner on the camera button while uploading:
+```tsx
+<button
+  onClick={() => !bannerUploading && bannerInputRef.current?.click()}
+  disabled={bannerUploading}
+  className="absolute top-2 right-2 bg-black/40 text-white p-1.5 rounded-lg hover:bg-black/60 transition disabled:opacity-60"
+>
+  {bannerUploading ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
+</button>
+```
+
+Do the same for the logo upload:
+```tsx
+onChange={async (e) => {
+  if (!e.target.files?.[0]) return;
+  setUploadError("");
+  setLogoUploading(true);
+  try {
+    await onLogoUpload(e.target.files[0]);
+  } catch (err: any) {
+    setUploadError("Logo upload failed: " + (err.message ?? "Unknown error"));
+  } finally {
+    setLogoUploading(false);
+  }
+}}
+```
+
+Logo camera button:
+```tsx
+<button
+  onClick={() => !logoUploading && logoInputRef.current?.click()}
+  disabled={logoUploading}
+  className="absolute -bottom-1 -right-1 bg-[#003366] text-white p-1 rounded-full hover:bg-[#002244] transition disabled:opacity-60"
+>
+  {logoUploading ? <Loader2 size={10} className="animate-spin" /> : <Camera size={10} />}
+</button>
+```
+
+Show the upload error below the banner/logo section if it occurs:
+```tsx
+{uploadError && (
+  <p className="text-xs text-red-500 mt-2 px-1">{uploadError}</p>
+)}
+```
+
+Make sure `Loader2` is imported in `ShopDashboardPage.tsx` — it should already be there.
+
+---
+
+### BUG FIX 3 — Shop public page layout is not clean when entering from Campus Market
+
+**The problem:** When navigating from the Campus Market Featured Shops row into a shop page, the page has no top padding and the banner image clips into the app header. Also the shop page has no scroll-to-top behavior, so if the user was scrolled down in Campus Market, the shop page opens mid-scroll.
+
+**The fix:** In `src/pages/ShopPublicPage.tsx`:
+
+**Part A — Scroll to top on load:**
+Add this inside the component, before the return statement:
+```tsx
+useEffect(() => {
+  window.scrollTo({ top: 0, behavior: "instant" });
+}, [slug]);
+```
+
+**Part B — Fix the page wrapper to account for the fixed header:**
+The outer div currently starts at `max-w-2xl mx-auto pb-24`. On mobile the fixed header is 56px tall. Wrap the entire page in a container that adds appropriate top offset. Change the outermost div:
+
+From:
+```tsx
+<div className="max-w-2xl mx-auto pb-24">
+```
+
+To:
+```tsx
+<div className="max-w-2xl mx-auto pb-24 min-h-screen">
+```
+
+And ensure the banner section `h-40 sm:h-52` starts flush — this is correct already. The real issue is the scroll position. The `scrollTo` fix above resolves this.
+
+---
+
+### AFTER ALL FIXES:
+
+Run:
+```bash
+cd artifacts/xmum-market && pnpm run typecheck
+```
+
+Fix any TypeScript errors. Then push:
+```bash
+cd /home/user/workspace && git add -A && git commit -m "fix: back button navigation, banner upload storage rules, scroll-to-top on shop page" && git push origin main
+```
+
+Tell me: ✅ 3 bugs fixed and pushed.

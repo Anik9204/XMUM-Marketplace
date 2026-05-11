@@ -180,7 +180,7 @@ function ListingModal({
 
 export default function ShopPublicPage() {
   const [, params] = useRoute("/shop/:slug");
-  const [, navigate] = useLocation();
+  const [location] = useLocation();
   const { user } = useAuth();
   const slug = params?.slug ?? "";
 
@@ -189,6 +189,10 @@ export default function ShopPublicPage() {
   const [reviews, setReviews] = useState<ShopReview[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedListing, setSelectedListing] = useState<ShopListing | null>(null);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, [slug]);
 
   useEffect(() => {
     if (!slug) return;
@@ -262,7 +266,7 @@ export default function ShopPublicPage() {
   const canManage = isOwner || isEditor;
 
   return (
-    <div className="max-w-2xl mx-auto pb-24">
+    <div className="max-w-2xl mx-auto pb-24 min-h-screen">
       {/* Banner */}
       <div
         className="relative h-40 sm:h-52"
@@ -271,7 +275,7 @@ export default function ShopPublicPage() {
         }}
       >
         {shop.bannerUrl && <img src={shop.bannerUrl} alt="" className="w-full h-full object-cover" />}
-        <button onClick={() => navigate(-1 as any)} className="absolute top-3 left-3 bg-black/30 text-white p-2 rounded-full hover:bg-black/50 transition">
+        <button onClick={() => window.history.back()} className="absolute top-3 left-3 bg-black/30 text-white p-2 rounded-full hover:bg-black/50 transition">
           <ArrowLeft size={18} />
         </button>
         {canManage && (
