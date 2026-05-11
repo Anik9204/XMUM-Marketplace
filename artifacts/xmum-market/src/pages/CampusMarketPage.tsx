@@ -140,7 +140,7 @@ function ListingCard({ listing }: { listing: ShopListing }) {
   const [, navigate] = useLocation();
   return (
     <div
-      onClick={() => navigate(`/shop/${listing.shopSlug}?listing=${listing.id}`)}
+      onClick={() => navigate(`/shop-listing/${listing.id}`)}
       className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden border border-gray-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow active:scale-[0.98] cursor-pointer"
     >
       {listing.photos[0] ? (
@@ -154,6 +154,13 @@ function ListingCard({ listing }: { listing: ShopListing }) {
         <p className="text-xs font-semibold text-gray-900 dark:text-slate-100 line-clamp-2 mb-1">{listing.title}</p>
         <PriceTag listing={listing} />
         <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5 truncate">{listing.shopName}</p>
+        <Link
+          href={`/shop/${listing.shopSlug}`}
+          onClick={(e) => e.stopPropagation()}
+          className="text-[10px] text-[#003366] dark:text-blue-400 font-semibold hover:underline mt-0.5 inline-block"
+        >
+          View Shop →
+        </Link>
       </div>
     </div>
   );

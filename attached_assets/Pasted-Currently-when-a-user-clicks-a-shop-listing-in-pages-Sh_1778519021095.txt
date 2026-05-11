@@ -1,0 +1,65 @@
+Currently when a user clicks a shop listing in `pages/ShopPublicPage.tsx`, it opens a modal popup. I need this to navigate to a proper full-page route like the regular listing detail page. I also need shop name, "created by", and "View Shop" button on every shop listing card.
+ 
+**Step 1 — Add a new route in `App.tsx`**
+ 
+In `App.tsx`, add a new route for shop listing detail:
+```tsx
+<Route path="/shop-listing/:listingId" component={ShopListingDetailPage} />
+```
+ 
+Import `ShopListingDetailPage` from `@/pages/ShopListingDetailPage`.
+ 
+**Step 2 — Create `pages/ShopListingDetailPage.tsx`**
+ 
+Create a new file `artifacts/xmum-market/src/pages/ShopListingDetailPage.tsx`. This page should:
+ 
+- Accept the route param `listingId` via `useRoute("/shop-listing/:listingId")`
+- Fetch the `ShopListing` from Firestore: `getDoc(doc(db, "shopListings", listingId))`
+- Fetch the parent `Shop` using the listing's `shopId` field via `getShopById`
+- Call `incrementShopListingView(listingId)` once on load
+- Render a full-page layout matching the style of `ListingDetailPage.tsx` (the regular listing detail page):
+  - Back arrow (navigates to `/shop/${shop.slug}`)
+  - Photo gallery with left/right chevrons and dot indicators (same as ListingDetailPage)
+  - Title, price label (use the `PriceLabel` component logic: negotiable badge or `RM X.XX /suffix`)
+  - Category badge
+  - Description (full, no truncation)
+  - **Shop info card** showing:
+    - Shop logo (small, rounded) + shop name in bold
+    - "Created by [shop name]" subtitle
+    - Star rating if `shop.reviewCount > 0`
+    - A `Link` to `/shop/${shop.slug}` styled as a "View Shop →" button
+  - **Contact section** showing shop's WhatsApp and WeChat buttons (same style as ShopPublicPage — green WhatsApp button, green WeChat display)
+  - **Action buttons** at the bottom (sticky footer on mobile):
+    - Primary button: "Order This Item" (blue/brand color) — for now just show a toast "Coming soon — orders feature launching next!" (this will be replaced in Prompt 5)
+    - Secondary button: "Send Inquiry" (outlined) — triggers the inquiry form
+  - **Inquiry form** (same as current modal inquiry form but inline, below the buttons): text area for message, no quantity field, submit button. On success show green confirmation.
+  - If user is shop owner or editor, show a banner "You manage this shop" instead of the action buttons
+- Show loading spinner while fetching, and "Listing not found" if listingId is invalid
+**Step 3 — Update `ShopPublicPage.tsx`**
+ 
+Remove the `ListingModal` component and its state (`selectedListing`, `setSelectedListing`).
+ 
+Change the listing grid item `<button onClick={() => handleSelectListing(l)}>` to a `<Link href={/shop-listing/${l.id}}>` that navigates to the new page.
+ 
+Remove the `handleSelectListing` function and the `{selectedListing && <ListingModal ... />}` render at the bottom.
+ 
+Remove the `auto-open ?listing=ID` URL param logic (the `useEffect` that reads `window.location.search`) since we now use direct routes.
+ 
+**Step 4 — Add shop info to listing cards in ShopPublicPage**
+ 
+The listing grid cards currently show only the photo, title, and price. Add the shop name below the price:
+```tsx
+<div className="p-3">
+  <p className="text-xs font-semibold text-gray-900 dark:text-slate-100 line-clamp-2 mb-1">{l.title}</p>
+  <PriceLabel listing={l} />
+  <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5 truncate">{shop.name}</p>
+</div>
+```
+ 
+**Step 5 — Update CampusMarketPage shop listing cards**
+ 
+In `pages/CampusMarketPage.tsx`, find where shop listings are rendered (they likely open a modal or have limited info). Update each shop listing card to:
+- Navigate to `/shop-listing/${listing.id}` on click (using `Link` or `navigate`)
+- Show shop name below the price: `<p className="text-[10px] text-gray-400 mt-0.5">{listing.shopName}</p>`
+- Show a "View Shop" link: `<Link href={/shop/${listing.shopSlug}} className="...">View Shop</Link>` (small, subtle, below the shop name)
+---
