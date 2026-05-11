@@ -5,16 +5,18 @@ import {
   getShopById, getShopListings, createShopListing, updateShopListing, deleteShopListing,
   uploadShopListingPhoto, getInquiriesForShop, updateInquiryStatus,
   addShopEditor, removeShopEditor, updateShop, uploadShopBanner, uploadShopLogo,
+  getOrdersForShop, updateOrderStatus,
 } from "@/lib/shops";
 import { collection, query, where, getDocs, limit, getDoc, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { notifyEditorAdded, notifyEditorRemoved } from "@/lib/notifications";
-import { Shop, ShopListing, ShopInquiry, ShopCategory, InquiryStatus } from "@/lib/types";
+import { notifyEditorAdded, notifyEditorRemoved, notifyOrderConfirmed, notifyOrderCancelled } from "@/lib/notifications";
+import { Shop, ShopListing, ShopInquiry, ShopCategory, InquiryStatus, ShopOrder } from "@/lib/types";
 import {
   Loader2, Plus, Trash2, Edit2, CheckCircle2, XCircle, Clock, Package,
   MessageSquare, Users, Settings, ArrowLeft, ImagePlus, X, AlertTriangle,
-  Store, UserMinus, UserPlus, Camera,
+  Store, UserMinus, UserPlus, Camera, ShoppingCart,
 } from "lucide-react";
+import { SiWhatsapp } from "react-icons/si";
 
 function countWords(text: string): number {
   return text.trim() === "" ? 0 : text.trim().split(/\s+/).length;
@@ -29,7 +31,7 @@ const SHOP_CATEGORIES: ShopCategory[] = [
 const inputCls = "w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition min-h-[44px]";
 const labelCls = "block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-1";
 
-type Tab = "listings" | "inquiries" | "editors" | "settings";
+type Tab = "listings" | "inquiries" | "orders" | "editors" | "settings";
 
 function StatusBadge({ status }: { status: InquiryStatus }) {
   const map: Record<InquiryStatus, { label: string; cls: string }> = {
@@ -72,6 +74,11 @@ export default function ShopDashboardPage() {
   const [inquiries, setInquiries] = useState<ShopInquiry[]>([]);
   const [loadingInquiries, setLoadingInquiries] = useState(false);
 
+  // Orders state
+  const [orders, setOrders] = useState<ShopOrder[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+  const [pendingOrderCount, setPendingOrderCount] = useState(0);
+
   // Editors state
   const [editorEmail, setEditorEmail] = useState("");
   const [editorLoading, setEditorLoading] = useState(false);
@@ -103,6 +110,8 @@ export default function ShopDashboardPage() {
         try {
           const inqs = await getInquiriesForShop(shopId);
           setPendingInquiryCount(inqs.filter((i) => i.status === "pending").length);
+          const ords = await getOrdersForShop(shopId);
+          setPendingOrderCount(ords.filter((o) => o.status === "pending").length);
         } catch {}
       }
     }).finally(() => setLoadingShop(false));
@@ -118,6 +127,10 @@ export default function ShopDashboardPage() {
     if (tab === "inquiries") {
       setLoadingInquiries(true);
       getInquiriesForShop(shopId).then(setInquiries).finally(() => setLoadingInquiries(false));
+    }
+    if (tab === "orders") {
+      setLoadingOrders(true);
+      getOrdersForShop(shopId).then(setOrders).finally(() => setLoadingOrders(false));
     }
   }, [tab, shop]);
 
@@ -155,6 +168,7 @@ export default function ShopDashboardPage() {
   const TABS: { key: Tab; label: string; icon: React.ReactNode; badge?: number }[] = [
     { key: "listings",  label: "Listings",  icon: <Package size={15} /> },
     { key: "inquiries", label: "Inquiries", icon: <MessageSquare size={15} />, badge: pendingInquiryCount },
+    { key: "orders",    label: "Orders",    icon: <ShoppingCart size={15} />, badge: pendingOrderCount },
     ...(isOwner ? [{ key: "editors" as Tab, label: "Editors", icon: <Users size={15} /> }] : []),
     { key: "settings",  label: "Settings",  icon: <Settings size={15} /> },
   ];
@@ -227,6 +241,20 @@ export default function ShopDashboardPage() {
           onStatusChange={async (id, status) => {
             await updateInquiryStatus(id, status);
             setInquiries((prev) => prev.map((i) => i.id === id ? { ...i, status } : i));
+          }}
+        />
+      )}
+
+      {/* ── ORDERS TAB ── */}
+      {tab === "orders" && (
+        <OrdersTab
+          orders={orders}
+          loading={loadingOrders}
+          shopId={shopId}
+          shop={shop}
+          onOrderUpdated={(orderId, newStatus, reason) => {
+            setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status: newStatus, cancellationReason: reason } : o));
+            setPendingOrderCount((n) => Math.max(0, n - 1));
           }}
         />
       )}
@@ -317,6 +345,179 @@ export default function ShopDashboardPage() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+// ── Orders Tab ────────────────────────────────────────────────────────────────
+
+function OrdersTab({ orders, loading, shopId, shop, onOrderUpdated }: {
+  orders: ShopOrder[];
+  loading: boolean;
+  shopId: string;
+  shop: Shop;
+  onOrderUpdated: (orderId: string, newStatus: "confirmed" | "cancelled", reason?: string) => void;
+}) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [cancellationReason, setCancellationReason] = useState("");
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  const countWords = (t: string) => t.trim() === "" ? 0 : t.trim().split(/\s+/).length;
+
+  const handleConfirm = async (order: ShopOrder) => {
+    setActionLoading(order.id);
+    try {
+      await updateOrderStatus(order.id, "confirmed");
+      await notifyOrderConfirmed(order.buyerId, shop.name, order.id, shopId).catch(() => {});
+      onOrderUpdated(order.id, "confirmed");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleCancel = async (order: ShopOrder) => {
+    const words = countWords(cancellationReason);
+    if (words === 0) return;
+    if (words > 100) return;
+    setActionLoading(order.id);
+    try {
+      await updateOrderStatus(order.id, "cancelled", cancellationReason);
+      await notifyOrderCancelled(order.buyerId, shop.name, cancellationReason, order.id, shopId).catch(() => {});
+      onOrderUpdated(order.id, "cancelled", cancellationReason);
+      setCancellingId(null);
+      setCancellationReason("");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  if (loading) return <div className="flex items-center justify-center py-12"><Loader2 size={22} className="animate-spin text-gray-400" /></div>;
+
+  if (orders.length === 0) {
+    return (
+      <div className="text-center py-16 bg-white dark:bg-slate-800/50 rounded-2xl">
+        <ShoppingCart size={32} className="mx-auto mb-2 text-gray-300 dark:text-slate-600" />
+        <p className="text-sm text-gray-400 dark:text-slate-500">No orders yet.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {orders.map((order) => (
+        <div key={order.id} className="bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-2xl p-4 shadow-sm">
+          {/* Order header */}
+          <div className="flex items-start justify-between gap-2 mb-2">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-gray-900 dark:text-slate-100 truncate">{order.listingTitle}</p>
+              <p className="text-xs text-gray-500 dark:text-slate-400">{order.buyerName} • {new Date(order.createdAt).toLocaleDateString("en-MY")}</p>
+            </div>
+            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+              order.status === "confirmed" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
+              order.status === "cancelled" ? "bg-gray-100 text-gray-400 dark:bg-slate-700 dark:text-slate-500" :
+              "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+            }`}>{order.status.charAt(0).toUpperCase() + order.status.slice(1)}</span>
+          </div>
+
+          {/* Expand/collapse */}
+          <button
+            onClick={() => setExpandedId(expandedId === order.id ? null : order.id)}
+            className="text-xs text-[#003366] dark:text-blue-400 font-semibold hover:underline"
+          >
+            {expandedId === order.id ? "Hide details ▲" : "View details ▼"}
+          </button>
+
+          {expandedId === order.id && (
+            <div className="mt-3 space-y-3">
+              {/* Buyer contact */}
+              <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-3 text-xs space-y-1">
+                <p className="font-semibold text-gray-700 dark:text-slate-300 mb-1">Customer Info</p>
+                <p className="text-gray-600 dark:text-slate-400">Email: <span className="font-medium">{order.buyerEmail}</span></p>
+                {order.buyerWhatsapp && (
+                  <a href={`https://wa.me/${order.buyerWhatsapp.replace(/[^0-9]/g, "")}`} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-green-600 dark:text-green-400 font-semibold">
+                    <SiWhatsapp size={12} /> WhatsApp: {order.buyerWhatsapp}
+                  </a>
+                )}
+                {order.buyerWechat && (
+                  <p className="text-gray-600 dark:text-slate-400">WeChat: <span className="font-medium">{order.buyerWechat}</span></p>
+                )}
+              </div>
+
+              {/* Order details */}
+              <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-3 text-xs space-y-1">
+                <p className="font-semibold text-gray-700 dark:text-slate-300 mb-1">Order Details</p>
+                <p className="text-gray-600 dark:text-slate-400">Quantity: <span className="font-medium">{order.quantity}</span></p>
+                {order.offeredPrice !== undefined && (
+                  <p className="text-gray-600 dark:text-slate-400">Offered Price: <span className="font-medium text-[#003366] dark:text-blue-400">RM {order.offeredPrice.toFixed(2)}</span></p>
+                )}
+                {Object.entries(order.answers).map(([qId, answer]) => {
+                  const q = shop.orderQuestions?.find((x) => x.id === qId);
+                  return q ? (
+                    <p key={qId} className="text-gray-600 dark:text-slate-400">{q.label}: <span className="font-medium">{answer}</span></p>
+                  ) : null;
+                })}
+              </div>
+
+              {/* Actions for pending orders */}
+              {order.status === "pending" && (
+                <div className="space-y-2">
+                  {cancellingId === order.id ? (
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold text-gray-700 dark:text-slate-300">Reason for cancellation (required, max 100 words):</p>
+                      <textarea
+                        rows={3}
+                        value={cancellationReason}
+                        onChange={(e) => {
+                          const w = e.target.value.trim() === "" ? 0 : e.target.value.trim().split(/\s+/).length;
+                          if (w <= 100) setCancellationReason(e.target.value);
+                        }}
+                        placeholder="Explain why you are cancelling this order..."
+                        className="w-full bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-xl px-3 py-2 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-red-400"
+                      />
+                      <p className="text-xs text-gray-400">{cancellationReason.trim() === "" ? 0 : cancellationReason.trim().split(/\s+/).length}/100 words</p>
+                      <div className="flex gap-2">
+                        <button onClick={() => { setCancellingId(null); setCancellationReason(""); }} className="flex-1 text-xs bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-300 font-semibold py-2 rounded-xl hover:bg-gray-200 transition">Back</button>
+                        <button
+                          onClick={() => handleCancel(order)}
+                          disabled={countWords(cancellationReason) === 0 || !!actionLoading}
+                          className="flex-1 text-xs bg-red-500 text-white font-semibold py-2 rounded-xl hover:bg-red-600 transition disabled:opacity-50"
+                        >
+                          {actionLoading === order.id ? "Cancelling..." : "Confirm Cancel"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleConfirm(order)}
+                        disabled={!!actionLoading}
+                        className="flex-1 text-xs bg-[#003366] dark:bg-blue-600 text-white font-semibold py-2 rounded-xl hover:bg-[#002244] transition disabled:opacity-50"
+                      >
+                        {actionLoading === order.id ? "..." : "✓ Confirm Order"}
+                      </button>
+                      <button
+                        onClick={() => setCancellingId(order.id)}
+                        className="flex-1 text-xs border border-red-300 dark:border-red-700 text-red-500 font-semibold py-2 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition"
+                      >
+                        ✗ Cancel Order
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {order.status === "cancelled" && order.cancellationReason && (
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-xl px-3 py-2 text-xs text-red-600 dark:text-red-400">
+                  <p className="font-semibold mb-0.5">Cancellation reason:</p>
+                  <p>{order.cancellationReason}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
