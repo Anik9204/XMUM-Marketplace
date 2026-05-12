@@ -139,10 +139,16 @@ function defaultCategoryForType(type: ListingType): string {
   return "dorm_moving";
 }
 
+function formatCents(cents: number): string {
+  const ringgit = Math.floor(cents / 100);
+  const sen = cents % 100;
+  return ringgit.toLocaleString("en-MY") + "." + sen.toString().padStart(2, "0");
+}
+
 function CentsInput({
   value,
   onChange,
-  placeholder = "0.00",
+  placeholder: _placeholder = "0.00",
   className,
   onBlur,
 }: {
@@ -152,27 +158,33 @@ function CentsInput({
   className?: string;
   onBlur?: () => void;
 }) {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace") {
+      e.preventDefault();
+      onChange(Math.floor(value / 10));
+    } else if (e.key >= "0" && e.key <= "9") {
+      e.preventDefault();
+      const digit = parseInt(e.key, 10);
+      const newCents = value * 10 + digit;
+      if (newCents <= 100_000_000) {
+        onChange(newCents);
+      }
+    } else {
+      e.preventDefault();
+    }
+  };
+
   return (
-    <div className={`relative ${className ?? ""}`}>
-      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-400 text-sm font-medium pointer-events-none z-10">RM</span>
+    <div className={`flex items-center gap-2 ${className ?? ""}`}>
+      <span className="text-gray-500 dark:text-slate-400 text-sm font-semibold shrink-0">RM</span>
       <input
-        type="number"
-        inputMode="decimal"
-        min={0}
-        max={1000000}
-        step={0.01}
-        value={value === 0 ? "" : (value / 100).toFixed(2)}
-        placeholder={placeholder}
-        onChange={(e) => {
-          const raw = e.target.value;
-          if (!raw) { onChange(0); return; }
-          const num = parseFloat(raw);
-          if (isNaN(num) || num < 0) { onChange(0); return; }
-          onChange(Math.min(Math.round(num * 100), 100000000));
-        }}
-        onFocus={(e) => e.target.select()}
+        type="text"
+        inputMode="numeric"
+        value={formatCents(value)}
+        onChange={() => {}}
+        onKeyDown={handleKeyDown}
         onBlur={onBlur}
-        className={`${inputCls} pl-10 text-right font-mono tracking-wide appearance-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none`}
+        className={`${inputCls} text-right font-mono tracking-wide`}
       />
     </div>
   );

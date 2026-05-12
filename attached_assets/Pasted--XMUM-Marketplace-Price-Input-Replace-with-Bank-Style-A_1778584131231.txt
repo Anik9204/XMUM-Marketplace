@@ -1,0 +1,96 @@
+
+
+## XMUM Marketplace — Price Input: Replace with Bank-Style Amount Entry
+
+You are a senior full-stack developer working on the XMUM Marketplace project (React + Vite + TypeScript + Tailwind CSS 4). Read `artifacts/xmum-market/src/pages/PostPage.tsx` completely before writing a single line of code.
+
+---
+
+### The Problem
+
+The current `CentsInput` component (found at around line 143 in `PostPage.tsx`) uses a standard HTML `<input type="number">`. This breaks completely on mobile because:
+
+- On mobile keyboards, typing digits into a number input behaves unpredictably — the browser's native number input handling conflicts with the cents-based internal state, causing the field to freeze, reject input, or display wrong values
+- Backspace does not work correctly when the field is at or near its maximum value
+- The user has to manually position a decimal point, which is error-prone on a phone keyboard
+- The field does not format the number with comma separators (e.g. `1,234.50`)
+
+---
+
+### What It Should Do Instead
+
+Replace the `CentsInput` component entirely with a **bank-style amount input** — exactly like the amount entry field in Maybank2u or any Malaysian banking app. The behaviour must be:
+
+- The field always displays a value with exactly **2 decimal places**, e.g. `0.00`
+- The internal state stores the amount as an **integer number of cents** (e.g. RM 12.50 = `1250` cents) — this is already how the rest of the form works, so do not change the state variables `priceCents`, `rentalPricePerDayCents`, `rentalPricePerHourCents`, `depositCents`
+- When the user types a digit, it is appended on the **right** and the decimal point stays fixed at 2 places from the right:
+  - Start: `0.00`
+  - Type `1` → `0.01`
+  - Type `5` → `0.15`
+  - Type `0` → `1.50`
+  - Type `0` → `15.00`
+  - Type `5` → `150.05`
+- When the user presses **Backspace**, the last digit is removed and everything shifts back right:
+  - `150.05` → Backspace → `15.00`
+  - `15.00` → Backspace → `1.50`
+  - `1.50` → Backspace → `0.15`
+  - `0.15` → Backspace → `0.01`
+  - `0.01` → Backspace → `0.00`
+- The displayed value uses **comma separators** for thousands: e.g. `1,234.50`, `10,000.00`, `1,000,000.00`
+- The maximum allowed value is **RM 1,000,000.00** (i.e. `100000000` cents). If adding a digit would exceed this limit, the digit is silently ignored
+- Only digit keys (0–9) and Backspace are accepted. All other keys (letters, symbols, decimal point, minus) are ignored entirely — use `onKeyDown` to intercept and `e.preventDefault()` on anything that is not a digit or Backspace
+- The input must use `inputMode="numeric"` (not `type="number"`) so mobile devices show a **numeric keypad** without the browser's built-in number input behaviour interfering
+- Use `type="text"` on the input element so the browser does not apply any number-input native handling
+- The `RM` currency symbol must appear to the left of the field, outside the input, as a label prefix — do not put it inside the input value string itself
+- The field must always show the formatted display value as a **controlled input** — the displayed string is derived from the cents integer state on every render
+- On focus, do NOT select all or clear the field — the user should be able to start typing digits immediately and they will push from the right as described above
+- The component must accept the same props as the current `CentsInput`: `value: number`, `onChange: (v: number) => void`, `placeholder?: string`, `className?: string`, `onBlur?: () => void`
+
+---
+
+### Implementation Approach
+
+Replace the entire `CentsInput` function with a new implementation using this logic:
+
+```
+const formatCents = (cents: number): string => {
+  const ringgit = Math.floor(cents / 100);
+  const sen = cents % 100;
+  return ringgit.toLocaleString("en-MY") + "." + sen.toString().padStart(2, "0");
+};
+
+// On digit key press:
+// newCents = Math.min(currentCents * 10 + digit, 100_000_000)
+// onChange(newCents)
+
+// On Backspace:
+// newCents = Math.floor(currentCents / 10)
+// onChange(newCents)
+```
+
+---
+
+### Scope
+
+- Replace `CentsInput` in `PostPage.tsx` only
+- Do not touch any state variables, form submission logic, Firestore writes, or any other component
+- The `CentsInput` component is used in these places within `PostPage.tsx`:
+  - Buy & Sell / Assistance / Jobs price field (`priceCents`)
+  - Rental: Per Day price (`rentalPricePerDayCents`)
+  - Rental: Per Hour price (`rentalPricePerHourCents`)
+  - Rental: Deposit amount (`depositCents`)
+- All four usages must use the new component and all four must behave identically
+
+---
+
+### Final Checklist
+
+- [ ] Typing digits pushes from the right with a fixed 2-decimal-place display on both mobile and desktop
+- [ ] Backspace correctly removes the last digit and shifts right at all values including `0.00`
+- [ ] The numeric keypad appears on mobile (no letters, no decimal key needed)
+- [ ] Comma separators appear correctly for values above 999 (e.g. `1,234.50`)
+- [ ] The maximum value of RM 1,000,000.00 is enforced silently
+- [ ] All four price fields in the form use the new component
+- [ ] Form submission still correctly converts cents to ringgit (`priceCents / 100`) — no change needed here
+- [ ] The app builds with zero TypeScript errors: `pnpm --filter @workspace/xmum-market run build`
+- [ ] No other functionality in `PostPage.tsx` is affected
