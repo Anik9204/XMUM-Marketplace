@@ -102,6 +102,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 )}
               </Link>
               <Link href="/campus-market" className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${location === "/campus-market" ? "text-white bg-white/20" : "text-white/70 hover:text-white hover:bg-white/10"}`}>Market</Link>
+              <Link href="/post" className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${location === "/post" ? "text-white bg-white/20" : "text-white/70 hover:text-white hover:bg-white/10"}`}>{t.post}</Link>
               {user ? (
                 <div className="relative">
                   <button
@@ -191,8 +192,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </nav>
 
-      {/* Floating Action Button — authenticated, mobile only, hidden on pages with their own sticky bars */}
-      {user && !location.startsWith("/shop-listing") && !location.startsWith("/order") && (
+      {/* Floating Action Button — Home and Search only, authenticated, mobile only */}
+      {user && (location === "/" || location === "/search") && (
         <Link href="/post">
           <button className="fixed bottom-20 right-4 z-50 w-14 h-14 bg-[#003366] hover:bg-[#002244] text-white rounded-full shadow-modal flex items-center justify-center transition-transform hover:scale-105 active:scale-95 md:hidden">
             <Plus className="w-6 h-6" />

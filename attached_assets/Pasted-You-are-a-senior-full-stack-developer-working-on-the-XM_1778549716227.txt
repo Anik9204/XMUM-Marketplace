@@ -1,0 +1,91 @@
+You are a senior full-stack developer working on the XMUM Marketplace project (React + Vite + TypeScript + Firebase + Tailwind CSS 4). Read every relevant file completely before writing a single line of code. Fix and implement all issues listed below without breaking any existing working functionality. Work through each issue one by one in the exact order given.
+
+Issue 1 — Post Form: Price Field Limited to 99,999.99 on Mobile & Backspace Does Not Work After Max Value
+What is happening:
+When a user is creating a listing on mobile, the price input field only accepts values up to 99,999.99. Any attempt to type a higher value is blocked. Additionally, once the field has reached its maximum value of 99,999.99, the user cannot erase any digit using the backspace key — the field becomes effectively frozen and the user is forced to clear the entire field to start over.
+Where to look:
+The price input field inside artifacts/xmum-market/src/pages/PostPage.tsx — look for the max, maxLength, or any validation logic that caps the price value or blocks input changes when a threshold is reached.
+What needs to change:
+
+Raise the maximum allowed price from 99,999.99 to 1,000,000.00 (one million)
+Fix the input handling so that backspace and any editing keystrokes work correctly at all times, including when the field is at or near its maximum value
+Ensure the fix works correctly on both mobile numeric keyboards and desktop keyboards
+
+
+Issue 2 — Desktop Site: "Post" Tab Removed From Desktop Navigation
+What is happening:
+The "Post" tab has been removed from the desktop navigation bar as well as the mobile bottom nav. The original instruction was to remove it only from the mobile bottom navigation bar because mobile users have the "+" floating action button as an alternative. Desktop users have no such alternative — there is no "+" FAB on desktop — so removing the Post tab from the desktop nav has left desktop users with no way to create a listing.
+Where to look:
+
+artifacts/xmum-market/src/components/Layout.tsx — the desktop <nav> inside the <header> and the mobile bottom <nav> are two separate sections. The Post/Create link should only be absent from the mobile bottom nav, not from the desktop header nav.
+
+What needs to change:
+
+Restore the "Post" or "Sell" link in the desktop header navigation only (hidden md:flex nav section inside the header)
+The mobile bottom nav (md:hidden fixed bottom-0) must continue to have no Post tab — this was intentional and must not be reverted
+Do not add the Post tab back to the mobile bottom nav under any circumstances
+
+
+Issue 3 — Shop Orders: Customer Cannot Place an Order (Firebase undefined Field Error)
+What is happening:
+When a customer attempts to place an order from a shop listing, the order submission fails with the following Firebase error:
+Function addDoc() called with invalid data. Unsupported field value: undefined
+(found in field offeredPrice in document shopOrders/Fo8NfJzH2SxznTZ3AEtW)
+This means the offeredPrice field is being passed as undefined to Firestore's addDoc() call, which Firestore strictly rejects. Orders cannot be placed by any customer on any shop listing.
+Where to look:
+
+artifacts/xmum-market/src/pages/OrderFormPage.tsx — where the order object is assembled and createOrder() is called
+artifacts/xmum-market/src/lib/shops.ts — the createOrder() function that calls addDoc()
+
+What needs to change:
+
+Before calling addDoc(), every field in the order object must be checked for undefined. Any field that is optional and currently undefined must be replaced with null or an appropriate default value (empty string "" for text fields, 0 for numeric fields) before being passed to Firestore
+Specifically for offeredPrice: this field is only relevant when the listing's pricingModel is "negotiable". For all other pricing models, offeredPrice should be explicitly set to null rather than left as undefined
+Apply the same undefined safety check to all other optional fields in the order payload to prevent this class of error from appearing on any other field in the future
+
+
+Issue 4 — Shop Inquiries Tab: Missing In-App Chat, "Replied" Status, and Delete Options for Owner/Editor
+What is happening:
+The Inquiries tab in the Shop Dashboard currently only shows incoming customer inquiries with a "Reply via Email" option. Three important actions are completely missing:
+4a — In-App Chat with Inquirer
+There is no way for the shop owner or editor to directly chat with the customer inside the app from the Inquiries tab. The owner must leave the app and use email, which is a poor experience.
+What needs to change:
+
+Add a "Chat in App" button beside the existing "Reply via Email" button on each inquiry card
+When the owner or editor taps/clicks "Chat in App", the app should open or navigate to an existing conversation thread with that customer in the Messages system, or create a new one if it does not yet exist
+The conversation must be created using the shop's owner UID (or the logged-in editor's UID) and the inquirer's UID as the two participants
+Use the existing messaging.ts conversation creation logic (conversations collection with participants: [ownerUid, inquirerUid])
+The conversation should carry the shop name and the inquiry context (listing title if available) as the listingTitle field so it is identifiable in the Messages tab
+
+4b — Mark Inquiry as "Replied"
+Currently all inquiries permanently show a "Pending" status badge with no way to update it. There is no way for the owner to acknowledge that they have already responded to an inquiry.
+What needs to change:
+
+Add a "Mark as Replied" button on each inquiry card that currently shows "Pending" status
+When the owner or editor clicks this button, the inquiry's status field in Firestore should be updated from "pending" to "replied"
+Once marked as replied, the "Pending" badge on that inquiry card must disappear and be replaced with a "Replied" badge in a distinct colour (e.g. green) so the owner can visually distinguish handled inquiries from new ones
+The "Mark as Replied" button should only be visible on inquiries that are still in "pending" status
+
+4c — Delete Inquiry
+There is currently no way for the shop owner or editor to remove an inquiry from the list, even for spam, accidental, or already-resolved ones.
+What needs to change:
+
+Add a "Delete" button (or a trash icon button) on each inquiry card
+When the owner or editor clicks Delete, show a brief confirmation prompt before proceeding
+On confirmation, permanently delete the inquiry document from Firestore
+The inquiry should disappear from the Inquiries tab in real time immediately after deletion without requiring a page refresh
+
+
+Final Checklist Before Submitting
+
+ Price field on PostPage accepts values up to 1,000,000.00 and backspace works correctly at all values on mobile and desktop
+ The "Post" or "Sell" link is restored in the desktop header nav only — mobile bottom nav remains unchanged with no Post tab
+ Customers can successfully place orders on all shop listings with no Firebase undefined field errors
+ All optional fields in the order payload are sanitised (no undefined values) before being passed to Firestore
+ Each inquiry card in the Shop Dashboard shows a "Chat in App" button that correctly opens or creates a conversation with the inquirer
+ Each pending inquiry card shows a "Mark as Replied" button that updates the status in Firestore and changes the badge in real time
+ Each inquiry card shows a "Delete" button that removes the document from Firestore in real time after confirmation
+ No existing working functionality is broken
+ The app builds with zero TypeScript errors: pnpm --filter @workspace/xmum-market run build
+ Dark mode is unaffected by all UI changes
+ Both EN and ZH language strings are updated wherever new UI text was introduced

@@ -1,0 +1,108 @@
+## Issue 1 — Conversation List: Cannot Scroll on Mobile When Entering the Messages Tab
+ 
+**What is happening:**
+When the user navigates to the `/messages` tab on mobile, the conversation list panel is not scrollable by touch. The user cannot swipe up or down through their conversations on a phone.
+ 
+**Root cause in the code:**
+In `MessagesPage.tsx`, the outer container uses:
+```
+h-[calc(100dvh-56px)] sm:h-[calc(100dvh-64px)]
+```
+The left panel (conversation list) has `overflow-hidden` on the outer wrapper `div`, and while the inner list `div` has `flex-1 overflow-y-auto`, the parent flex column is not correctly constraining the height to allow the child to scroll. On mobile, the outer `div` wrapping both panels uses `overflow-hidden overscroll-none` which blocks touch scroll propagation to the inner list.
+ 
+**Fix:**
+- Ensure the left panel (conversation list) root `div` is `flex flex-col overflow-hidden` with an explicit height so the inner `div className="flex-1 overflow-y-auto"` has a bounded parent to scroll within
+- Add `touch-action: pan-y` and `-webkit-overflow-scrolling: touch` as inline styles on the inner scrollable list `div` (the one that wraps the conversation rows), the same way it is already applied on the messages area
+- Verify the outer two-panel container does not clip the scroll of the left panel on iOS Safari
+---
+ 
+## Issue 2 — Active Chat: Cannot Scroll Up to Read Previous Messages on Mobile
+ 
+**What is happening:**
+When a user opens a conversation and tries to scroll up to read older messages on a phone, the message list does not respond to touch swipe gestures. The chat area is frozen — the user is stuck seeing only the most recent messages.
+ 
+**Root cause in the code:**
+In `MessagesPage.tsx`, the messages scroll container is:
+```jsx
+<div className="flex-1 overflow-y-auto px-3 py-3 space-y-1 bg-gray-50 dark:bg-slate-950 overscroll-contain"
+  style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}>
+```
+While `overflow-y-auto` is set, the parent `chatContent` container is:
+```jsx
+<div className="flex flex-col h-full overflow-hidden">
+```
+The `h-full` here requires the parent to have a defined height. The right panel that wraps `chatContent` is `flex-1 flex-col overflow-hidden` — but `flex-1` without a `min-h-0` on a flex child means the child can expand beyond the container, making the actual scrollable area taller than the viewport, so iOS treats the whole page as the scroll container instead of the inner div.
+ 
+**Fix:**
+- Add `min-h-0` to the right panel wrapper div: `flex-1 flex flex-col overflow-hidden min-h-0`
+- Add `min-h-0` to the `chatContent` root div: `flex flex-col h-full overflow-hidden min-h-0`
+- Add `min-h-0` to the messages scroll container div so it correctly stays within bounds: `flex-1 overflow-y-auto min-h-0 px-3 py-3 ...`
+- This forces iOS Safari to recognise the inner div as the scroll container rather than the document body
+---
+ 
+## Issue 3 — Active Chat: The "+" FAB Button Covers the Send Message Button on Mobile
+ 
+**What is happening:**
+The floating action button (the `+` circle button fixed at `bottom-20 right-4`) overlaps and completely covers the Send button in the message input bar when the user is in an active chat on mobile. The user cannot tap Send to send a message.
+ 
+**Root cause in the code:**
+In `Layout.tsx`, the FAB renders on all pages except `/shop-listing` and `/order` paths:
+```jsx
+{user && !location.startsWith("/shop-listing") && !location.startsWith("/order") && (
+  <Link href="/post">
+    <button className="fixed bottom-20 right-4 z-50 w-14 h-14 ...">
+      <Plus className="w-6 h-6" />
+    </button>
+  </Link>
+)}
+```
+The FAB is not hidden on `/messages`, so it sits on top of the Send button in the chat input area.
+ 
+**Fix:**
+- Also hide the FAB when `location === "/messages"` or `location.startsWith("/messages")`
+- The updated condition should be:
+```jsx
+{user &&
+  !location.startsWith("/shop-listing") &&
+  !location.startsWith("/order") &&
+  !location.startsWith("/messages") && (
+  ...
+)}
+```
+- Do not remove the FAB from any other pages — it must continue to appear on `/`, `/search`, and all other pages where it currently shows
+---
+ 
+## Issue 4 — FAB Should Only Appear on Home and Search Pages
+ 
+**What is happening:**
+Per the product requirement, the `+` floating action button should only be visible on the **Home tab** (`/`) and the **Search tab** (`/search`). It should not appear on Campus Market, Profile, Settings, Listing Detail, Shop pages, Messages, or any other route.
+ 
+**Root cause in the code:**
+The current FAB condition in `Layout.tsx` only excludes `/shop-listing` and `/order` paths, meaning it shows on Campus Market, Profile, and all other pages.
+ 
+**Fix:**
+- Replace the current broad exclusion logic with an explicit allowlist
+- Only render the FAB when the current route is exactly `/` or `/search`:
+```jsx
+{user && (location === "/" || location === "/search") && (
+  <Link href="/post">
+    <button className="fixed bottom-20 right-4 z-50 w-14 h-14 bg-[#003366] hover:bg-[#002244] text-white rounded-full shadow-modal flex items-center justify-center transition-transform hover:scale-105 active:scale-95 md:hidden">
+      <Plus className="w-6 h-6" />
+    </button>
+  </Link>
+)}
+```
+- This is cleaner and future-proof — any new page added will not accidentally show the FAB
+---
+ 
+## Final Checklist Before Submitting
+ 
+- [ ] The conversation list on the Messages tab is fully scrollable by touch on mobile (375px viewport)
+- [ ] The active chat message area can be scrolled up and down by touch on mobile while the keyboard is open
+- [ ] The `+` FAB does not appear on the `/messages` page at all
+- [ ] The `+` FAB appears only on `/` (Home) and `/search` (Search) on mobile
+- [ ] The Send button in the chat input is fully visible and tappable on mobile with no FAB overlapping it
+- [ ] Auto-scroll to the latest message on new message receipt still works correctly
+- [ ] All existing desktop layout behaviour is unchanged
+- [ ] The app builds with zero TypeScript errors: `pnpm --filter @workspace/xmum-market run build`
+- [ ] Dark mode is unaffected

@@ -382,7 +382,7 @@ export default function MessagesPage() {
       )}
 
       {/* List */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto min-h-0" style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" } as React.CSSProperties}>
         {loadingConvs ? (
           <div className="flex flex-col divide-y divide-gray-50 dark:divide-slate-800">
             {[...Array(4)].map((_, i) => (
@@ -493,7 +493,7 @@ export default function MessagesPage() {
   });
 
   const chatContent = activeConv ? (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden min-h-0">
       {/* Chat header */}
       <div className="flex items-center gap-3 px-3 py-2.5 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shrink-0 shadow-sm">
         <button
@@ -591,7 +591,7 @@ export default function MessagesPage() {
       )}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1 bg-gray-50 dark:bg-slate-950 overscroll-contain" style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" } as React.CSSProperties}>
+      <div className="flex-1 overflow-y-auto min-h-0 px-3 py-3 space-y-1 bg-gray-50 dark:bg-slate-950 overscroll-contain" style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" } as React.CSSProperties}>
         {visibleMessages.length === 0 && (
           <div className="flex justify-center mt-6">
             {clearedSince > 0 && messages.length > 0 ? (
@@ -723,7 +723,7 @@ export default function MessagesPage() {
         </div>
 
         {/* Right panel: active chat or empty state */}
-        <div className={`flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-slate-950 ${activeConv ? "flex" : "hidden md:flex"}`}>
+        <div className={`flex-1 flex-col overflow-hidden min-h-0 bg-gray-50 dark:bg-slate-950 ${activeConv ? "flex" : "hidden md:flex"}`}>
           {activeConv ? chatContent : emptyState}
         </div>
 

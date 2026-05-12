@@ -3,10 +3,11 @@ import { useRoute, useLocation, Link } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   getShopById, getShopListings, createShopListing, updateShopListing, deleteShopListing,
-  uploadShopListingPhoto, getInquiriesForShop,
+  uploadShopListingPhoto, getInquiriesForShop, updateInquiryStatus, deleteInquiry,
   addShopEditor, removeShopEditor, updateShop, uploadShopBanner, uploadShopLogo,
   getOrdersForShop, updateOrderStatus, saveAutoReply, saveOrderQuestions,
 } from "@/lib/shops";
+import { getOrCreateConversation } from "@/lib/messaging";
 import { collection, query, where, getDocs, limit, getDoc, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { notifyEditorAdded, notifyEditorRemoved, notifyOrderConfirmed, notifyOrderCancelled } from "@/lib/notifications";
@@ -36,11 +37,12 @@ type Tab = "listings" | "inquiries" | "orders" | "settings";
 function StatusBadge({ status }: { status: InquiryStatus }) {
   const map: Record<InquiryStatus, { label: string; cls: string }> = {
     pending:   { label: "Pending",   cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
+    replied:   { label: "Replied",   cls: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
     confirmed: { label: "Confirmed", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
-    completed: { label: "Completed", cls: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
+    completed: { label: "Completed", cls: "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400" },
     cancelled: { label: "Cancelled", cls: "bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-slate-400" },
   };
-  const { label, cls } = map[status];
+  const { label, cls } = map[status] ?? map.pending;
   return <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${cls}`}>{label}</span>;
 }
 
@@ -238,6 +240,23 @@ export default function ShopDashboardPage() {
         <InquiriesTab
           inquiries={inquiries}
           loading={loadingInquiries}
+          onMarkReplied={async (id) => {
+            await updateInquiryStatus(id, "replied");
+            setInquiries((prev) => prev.map((i) => i.id === id ? { ...i, status: "replied" as InquiryStatus } : i));
+            setPendingInquiryCount((prev) => Math.max(0, prev - 1));
+          }}
+          onDelete={async (id) => {
+            await deleteInquiry(id);
+            setInquiries((prev) => prev.filter((i) => i.id !== id));
+          }}
+          onChat={async (inq) => {
+            await getOrCreateConversation(
+              user!.uid,
+              inq.buyerId,
+              { id: inq.shopListingId, title: inq.listingTitle, photos: [] },
+            );
+            navigate("/messages");
+          }}
         />
       )}
 
@@ -737,9 +756,27 @@ function AddListingForm({ shopId, shop, onClose, onCreated }: {
 
 // ── Inquiries Tab ─────────────────────────────────────────────────────────────
 
-function InquiriesTab({ inquiries, loading }: {
-  inquiries: ShopInquiry[]; loading: boolean;
+function InquiriesTab({
+  inquiries,
+  loading,
+  onMarkReplied,
+  onDelete,
+  onChat,
+}: {
+  inquiries: ShopInquiry[];
+  loading: boolean;
+  onMarkReplied: (id: string) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+  onChat: (inq: ShopInquiry) => Promise<void>;
 }) {
+  const [actionLoading, setActionLoading] = useState<Record<string, string>>({});
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
+  const wrap = async (id: string, key: string, fn: () => Promise<void>) => {
+    setActionLoading((prev) => ({ ...prev, [id]: key }));
+    try { await fn(); } finally { setActionLoading((prev) => { const n = { ...prev }; delete n[id]; return n; }); }
+  };
+
   if (loading) return <div className="flex items-center justify-center py-12"><Loader2 size={22} className="animate-spin text-gray-400" /></div>;
   if (inquiries.length === 0) return (
     <div className="text-center py-12 text-gray-400 dark:text-slate-500">
@@ -750,30 +787,89 @@ function InquiriesTab({ inquiries, loading }: {
 
   return (
     <div className="space-y-3">
-      {inquiries.map((inq) => (
-        <div key={inq.id} className="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 p-4">
-          <div className="flex items-start justify-between gap-2 mb-1">
-            <div>
-              <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">{inq.listingTitle}</p>
-              <p className="text-xs text-gray-500 dark:text-slate-400">From: {inq.buyerName} · {relativeTime(inq.createdAt)}</p>
+      {inquiries.map((inq) => {
+        const busy = actionLoading[inq.id];
+        return (
+          <div key={inq.id} className="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 p-4">
+            <div className="flex items-start justify-between gap-2 mb-1">
+              <div>
+                <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">{inq.listingTitle}</p>
+                <p className="text-xs text-gray-500 dark:text-slate-400">From: {inq.buyerName} · {relativeTime(inq.createdAt)}</p>
+              </div>
+              <StatusBadge status={inq.status} />
             </div>
-            <StatusBadge status={inq.status} />
+            {inq.note && <p className="text-xs text-gray-600 dark:text-slate-300 bg-gray-50 dark:bg-slate-700/50 rounded-lg px-3 py-2 mt-2">"{inq.note}"</p>}
+            {inq.quantity && <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">Qty: {inq.quantity}</p>}
+
+            {/* Action buttons */}
+            <div className="flex flex-wrap gap-2 mt-3">
+              {/* Chat in App */}
+              <button
+                onClick={() => wrap(inq.id, "chat", () => onChat(inq))}
+                disabled={!!busy}
+                className="inline-flex items-center gap-1 text-xs text-white bg-[#003366] dark:bg-blue-600 font-semibold px-3 py-1.5 rounded-lg hover:bg-[#002244] dark:hover:bg-blue-700 disabled:opacity-50 transition min-h-[32px]"
+              >
+                {busy === "chat" ? <Loader2 size={11} className="animate-spin" /> : <MessageSquare size={11} />}
+                Chat in App
+              </button>
+
+              {/* Reply via Email */}
+              {inq.buyerEmail && (
+                <a
+                  href={`mailto:${inq.buyerEmail}?subject=${encodeURIComponent(`Re: ${inq.listingTitle}`)}&body=${encodeURIComponent(`Hi ${inq.buyerName},\n\nThank you for your inquiry about "${inq.listingTitle}". `)}`}
+                  className="inline-flex items-center gap-1 text-xs text-[#003366] dark:text-blue-400 font-semibold border border-[#003366]/30 dark:border-blue-500/40 px-3 py-1.5 rounded-lg hover:bg-[#003366]/5 dark:hover:bg-blue-500/10 transition min-h-[32px]"
+                >
+                  <Send size={11} /> Email
+                </a>
+              )}
+
+              {/* Mark as Replied */}
+              {inq.status === "pending" && (
+                <button
+                  onClick={() => wrap(inq.id, "reply", () => onMarkReplied(inq.id))}
+                  disabled={!!busy}
+                  className="inline-flex items-center gap-1 text-xs text-green-700 dark:text-green-400 font-semibold border border-green-200 dark:border-green-700 px-3 py-1.5 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20 disabled:opacity-50 transition min-h-[32px]"
+                >
+                  {busy === "reply" ? <Loader2 size={11} className="animate-spin" /> : <CheckCircle2 size={11} />}
+                  Mark Replied
+                </button>
+              )}
+
+              {/* Delete */}
+              {deleteConfirm === inq.id ? (
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => wrap(inq.id, "delete", async () => { await onDelete(inq.id); setDeleteConfirm(null); })}
+                    disabled={!!busy}
+                    className="text-xs text-white bg-red-500 font-semibold px-3 py-1.5 rounded-lg hover:bg-red-600 disabled:opacity-50 transition min-h-[32px] flex items-center gap-1"
+                  >
+                    {busy === "delete" ? <Loader2 size={11} className="animate-spin" /> : null}
+                    Confirm
+                  </button>
+                  <button
+                    onClick={() => setDeleteConfirm(null)}
+                    className="text-xs text-gray-500 dark:text-slate-400 font-semibold px-2 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition min-h-[32px]"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setDeleteConfirm(inq.id)}
+                  disabled={!!busy}
+                  className="inline-flex items-center gap-1 text-xs text-red-500 dark:text-red-400 font-semibold border border-red-200 dark:border-red-700 px-3 py-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 transition min-h-[32px]"
+                >
+                  <Trash2 size={11} /> Delete
+                </button>
+              )}
+            </div>
+
+            {inq.status === "completed" && !inq.reviewLeft && (
+              <span className="text-xs text-amber-600 dark:text-amber-400 font-medium mt-2 inline-block">Review left: No</span>
+            )}
           </div>
-          {inq.note && <p className="text-xs text-gray-600 dark:text-slate-300 bg-gray-50 dark:bg-slate-700/50 rounded-lg px-3 py-2 mt-2">"{inq.note}"</p>}
-          {inq.quantity && <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">Qty: {inq.quantity}</p>}
-          {inq.buyerEmail && (
-            <a
-              href={`mailto:${inq.buyerEmail}?subject=${encodeURIComponent(`Re: ${inq.listingTitle}`)}&body=${encodeURIComponent(`Hi ${inq.buyerName},\n\nThank you for your inquiry about "${inq.listingTitle}". `)}`}
-              className="inline-flex items-center gap-1 mt-2 text-xs text-[#003366] dark:text-blue-400 font-semibold hover:underline"
-            >
-              <Send size={11} /> Reply via Email
-            </a>
-          )}
-          {inq.status === "completed" && !inq.reviewLeft && (
-            <span className="text-xs text-amber-600 dark:text-amber-400 font-medium mt-1 inline-block">Review left: No</span>
-          )}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

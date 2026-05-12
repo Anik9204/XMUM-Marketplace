@@ -705,11 +705,12 @@ export default function ProfilePage() {
             {myInquiries.map((inq) => {
               const statusMap: Record<InquiryStatus, { label: string; cls: string }> = {
                 pending:   { label: "Pending",   cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
+                replied:   { label: "Replied",   cls: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
                 confirmed: { label: "Confirmed", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
                 completed: { label: "Completed", cls: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
                 cancelled: { label: "Cancelled", cls: "bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-slate-400" },
               };
-              const { label, cls } = statusMap[inq.status];
+              const { label, cls } = statusMap[inq.status] ?? statusMap.pending;
               const canReview = inq.status === "completed" && !inq.reviewLeft;
               return (
                 <div key={inq.id} className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-4">

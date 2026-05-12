@@ -409,6 +409,10 @@ export async function getApprovedShopAds(): Promise<ShopAd[]> {
 }
 
 // ── Orders ────────────────────────────────────────────────────────────────────
+export async function deleteInquiry(inquiryId: string): Promise<void> {
+  await deleteDoc(doc(db, "shopInquiries", inquiryId));
+}
+
 export async function createOrder(data: {
   shopId: string;
   shopName: string;
@@ -417,19 +421,17 @@ export async function createOrder(data: {
   buyerId: string;
   buyerName: string;
   buyerEmail: string;
-  buyerWhatsapp?: string;
-  buyerWechat?: string;
+  buyerWhatsapp?: string | null;
+  buyerWechat?: string | null;
   quantity: number;
-  offeredPrice?: number;
+  offeredPrice?: number | null;
   answers: Record<string, string>;
 }): Promise<string> {
-  const docRef = await addDoc(collection(db, "shopOrders"), {
-    ...data,
-    status: "pending",
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-    reviewLeft: false,
-  });
+  const payload = Object.fromEntries(
+    Object.entries({ ...data, status: "pending", createdAt: Date.now(), updatedAt: Date.now(), reviewLeft: false })
+      .map(([k, v]) => [k, v === undefined ? null : v])
+  );
+  const docRef = await addDoc(collection(db, "shopOrders"), payload);
   // Notify owner + editors — non-critical, fire and forget
   const shop = await getShopById(data.shopId);
   if (shop) {

@@ -86,12 +86,12 @@ export default function OrderFormPage() {
         buyerId: user.uid,
         buyerName,
         buyerEmail: user.email ?? "",
-        buyerWhatsapp: userProfile.whatsapp ?? undefined,
-        buyerWechat: userProfile.wechat ?? undefined,
+        buyerWhatsapp: userProfile.whatsapp ?? null,
+        buyerWechat: userProfile.wechat ?? null,
         quantity,
         offeredPrice: listing.pricingModel === "negotiable" && offeredPrice
           ? parseFloat(offeredPrice)
-          : undefined,
+          : null,
         answers,
       });
 

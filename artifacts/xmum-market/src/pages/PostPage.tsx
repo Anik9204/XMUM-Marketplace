@@ -154,25 +154,25 @@ function CentsInput({
 }) {
   return (
     <div className={`relative ${className ?? ""}`}>
-      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-400 text-sm font-medium">RM</span>
+      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-400 text-sm font-medium pointer-events-none z-10">RM</span>
       <input
-        type="text"
-        inputMode="numeric"
+        type="number"
+        inputMode="decimal"
+        min={0}
+        max={1000000}
+        step={0.01}
         value={value === 0 ? "" : (value / 100).toFixed(2)}
         placeholder={placeholder}
-        onKeyDown={(e) => {
-          if (e.key >= "0" && e.key <= "9") {
-            e.preventDefault();
-            onChange(Math.min(value * 10 + parseInt(e.key), 9999999));
-          } else if (e.key === "Backspace") {
-            e.preventDefault();
-            onChange(Math.floor(value / 10));
-          }
+        onChange={(e) => {
+          const raw = e.target.value;
+          if (!raw) { onChange(0); return; }
+          const num = parseFloat(raw);
+          if (isNaN(num) || num < 0) { onChange(0); return; }
+          onChange(Math.min(Math.round(num * 100), 100000000));
         }}
         onFocus={(e) => e.target.select()}
         onBlur={onBlur}
-        readOnly={false}
-        className={`${inputCls} pl-10 text-right font-mono tracking-wide`}
+        className={`${inputCls} pl-10 text-right font-mono tracking-wide appearance-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none`}
       />
     </div>
   );
