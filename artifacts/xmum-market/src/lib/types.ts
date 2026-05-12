@@ -233,8 +233,9 @@ export interface AppNotification {
 export interface ShopOrderQuestion {
   id: string;
   label: string;
-  type: "text" | "number" | "date" | "textarea";
+  type: "text" | "number" | "date" | "textarea" | "select";
   required: boolean;
+  options?: string[]; // only for type "select"
 }
 
 export interface ShopOrder {

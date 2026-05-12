@@ -286,6 +286,20 @@ export default function OrderFormPage() {
                 }
                 className={`${inputCls} resize-none`}
               />
+            ) : q.type === "select" ? (
+              <select
+                required={q.required}
+                value={answers[q.id] ?? ""}
+                onChange={(e) =>
+                  setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))
+                }
+                className={`${inputCls} dark:[color-scheme:dark]`}
+              >
+                <option value="">Select an option…</option>
+                {(q.options ?? []).filter(Boolean).map((opt) => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
             ) : (
               <input
                 type={q.type}

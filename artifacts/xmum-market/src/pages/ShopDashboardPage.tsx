@@ -554,38 +554,82 @@ function OrderQuestionsEditor({
         These override the shop-level questions for this listing only. Leave empty to use shop defaults.
       </p>
       {questions.map((q, idx) => (
-        <div key={q.id} className="flex items-center gap-2 mb-2">
-          <input
-            className="flex-1 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-slate-100"
-            placeholder={`Question ${idx + 1}`}
-            value={q.label}
-            onChange={(e) => onChange(questions.map((x, i) => i === idx ? { ...x, label: e.target.value } : x))}
-          />
-          <select
-            value={q.type}
-            onChange={(e) => onChange(questions.map((x, i) => i === idx ? { ...x, type: e.target.value as ShopOrderQuestion["type"] } : x))}
-            className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-xl px-2 py-2 text-xs text-gray-900 dark:text-slate-100 focus:outline-none"
-          >
-            <option value="text">Text</option>
-            <option value="textarea">Long text</option>
-            <option value="number">Number</option>
-            <option value="date">Date</option>
-          </select>
-          <label className="flex items-center gap-1 text-xs text-gray-600 dark:text-slate-400 whitespace-nowrap cursor-pointer">
+        <div key={q.id} className="border border-gray-200 dark:border-slate-700 rounded-xl p-3 mb-2 space-y-2">
+          <div className="flex items-center gap-2">
             <input
-              type="checkbox"
-              checked={q.required}
-              onChange={(e) => onChange(questions.map((x, i) => i === idx ? { ...x, required: e.target.checked } : x))}
+              className="flex-1 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-slate-100"
+              placeholder={`Question ${idx + 1}`}
+              value={q.label}
+              onChange={(e) => onChange(questions.map((x, i) => i === idx ? { ...x, label: e.target.value } : x))}
             />
-            Req.
-          </label>
-          <button
-            type="button"
-            onClick={() => onChange(questions.filter((_, i) => i !== idx))}
-            className="text-red-400 hover:text-red-600 p-1"
-          >
-            <X size={14} />
-          </button>
+            <select
+              value={q.type}
+              onChange={(e) => {
+                const newType = e.target.value as ShopOrderQuestion["type"];
+                onChange(questions.map((x, i) => i === idx ? { ...x, type: newType, options: newType === "select" ? (x.options?.length ? x.options : [""]) : [] } : x));
+              }}
+              className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-xl px-2 py-2 text-xs text-gray-900 dark:text-slate-100 focus:outline-none"
+            >
+              <option value="text">Text</option>
+              <option value="textarea">Long text</option>
+              <option value="number">Number</option>
+              <option value="date">Date</option>
+              <option value="select">Multiple choice</option>
+            </select>
+            <label className="flex items-center gap-1 text-xs text-gray-600 dark:text-slate-400 whitespace-nowrap cursor-pointer">
+              <input
+                type="checkbox"
+                checked={q.required}
+                onChange={(e) => onChange(questions.map((x, i) => i === idx ? { ...x, required: e.target.checked } : x))}
+              />
+              Req.
+            </label>
+            <button
+              type="button"
+              onClick={() => onChange(questions.filter((_, i) => i !== idx))}
+              className="text-red-400 hover:text-red-600 p-1"
+            >
+              <X size={14} />
+            </button>
+          </div>
+          {q.type === "select" && (
+            <div className="pl-1 space-y-1.5">
+              <p className="text-xs text-gray-500 dark:text-slate-400 font-medium">Options (one per line):</p>
+              {(q.options ?? [""]).map((opt, oi) => (
+                <div key={oi} className="flex items-center gap-2">
+                  <input
+                    className="flex-1 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-900 dark:text-slate-100"
+                    placeholder={`Option ${oi + 1}`}
+                    value={opt}
+                    onChange={(e) => {
+                      const newOpts = [...(q.options ?? [""])];
+                      newOpts[oi] = e.target.value;
+                      onChange(questions.map((x, i) => i === idx ? { ...x, options: newOpts } : x));
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newOpts = (q.options ?? [""]).filter((_, j) => j !== oi);
+                      onChange(questions.map((x, i) => i === idx ? { ...x, options: newOpts.length ? newOpts : [""] } : x));
+                    }}
+                    className="text-red-400 hover:text-red-600 p-0.5"
+                  >
+                    <X size={11} />
+                  </button>
+                </div>
+              ))}
+              {(q.options ?? []).length < 10 && (
+                <button
+                  type="button"
+                  onClick={() => onChange(questions.map((x, i) => i === idx ? { ...x, options: [...(x.options ?? []), ""] } : x))}
+                  className="text-xs text-[#003366] dark:text-blue-400 hover:underline"
+                >
+                  + Add option
+                </button>
+              )}
+            </div>
+          )}
         </div>
       ))}
       {questions.length < 8 && (

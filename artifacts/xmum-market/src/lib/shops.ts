@@ -1,16 +1,30 @@
 import {
   collection, doc, addDoc, getDoc, getDocs, updateDoc, deleteDoc,
   query, where, orderBy, limit, serverTimestamp, increment,
-  onSnapshot, Timestamp,
+  onSnapshot, Timestamp, deleteField,
 } from "firebase/firestore";
+
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { db, storage, auth } from "@/lib/firebase";
 import { Shop, ShopListing, ShopInquiry, ShopReview, ShopAd, InquiryStatus, ShopOrder, ShopOrderQuestion } from "@/lib/types";
+
 import {
   notifyShopInquiryReceived,
   notifyInquiryStatusChanged,
   notifyShopOrderReceived,
 } from "@/lib/notifications";
+
+function stripUndefined(obj: Record<string, any>): Record<string, any> {
+  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined));
+}
+
+function cleanQuestions(questions: ShopOrderQuestion[]): ShopOrderQuestion[] {
+  return questions.map((q) => {
+    const clean: any = { id: q.id, label: q.label, type: q.type, required: q.required };
+    if (q.type === "select") clean.options = (q.options ?? []).filter(Boolean);
+    return clean;
+  });
+}
 
 // ── Slug helpers ──────────────────────────────────────────────────────────────
 export function slugify(str: string): string {
@@ -122,13 +136,15 @@ export async function removeShopEditor(shopId: string, editorUid: string, curren
 
 // ── Shop Listings ─────────────────────────────────────────────────────────────
 export async function createShopListing(data: Omit<ShopListing, "id" | "viewCount" | "inquiryCount" | "createdAt">): Promise<string> {
-  const docRef = await addDoc(collection(db, "shopListings"), {
+  const payload = stripUndefined({
     ...data,
     createdAt: Date.now(),
     viewCount: 0,
     inquiryCount: 0,
     isActive: true,
   });
+  if (payload.orderQuestions) payload.orderQuestions = cleanQuestions(payload.orderQuestions);
+  const docRef = await addDoc(collection(db, "shopListings"), payload);
   await updateDoc(doc(db, "shops", data.shopId), { totalListings: increment(1) });
   return docRef.id;
 }
@@ -206,7 +222,16 @@ export async function getShopListingsByCategory(category: string, limitCount = 4
 
 export async function updateShopListing(listingId: string, data: Partial<ShopListing>): Promise<void> {
   const { id, ...rest } = data as any;
-  await updateDoc(doc(db, "shopListings", listingId), rest);
+  const clean = stripUndefined(rest);
+  if ("orderQuestions" in rest) {
+    if (Array.isArray(rest.orderQuestions) && rest.orderQuestions.length > 0) {
+      clean.orderQuestions = cleanQuestions(rest.orderQuestions);
+    } else {
+      // empty array → remove the field so listing falls back to shop-level questions
+      clean.orderQuestions = deleteField();
+    }
+  }
+  await updateDoc(doc(db, "shopListings", listingId), clean);
 }
 
 export async function deleteShopListing(listingId: string, shopId: string): Promise<void> {
@@ -452,14 +477,21 @@ export async function getOrdersForShop(shopId: string): Promise<ShopOrder[]> {
     const snap = await getDocs(q);
     return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ShopOrder));
   } catch (err: any) {
-    if (err?.code === "failed-precondition" || err?.message?.includes("index")) {
-      const q2 = query(collection(db, "shopOrders"), where("shopId", "==", shopId));
-      const snap2 = await getDocs(q2);
-      return snap2.docs
-        .map((d) => ({ id: d.id, ...d.data() } as ShopOrder))
-        .sort((a, b) => b.createdAt - a.createdAt);
+    const code = err?.code ?? "";
+    if (code === "failed-precondition" || code === "unimplemented" || err?.message?.includes("index")) {
+      try {
+        const q2 = query(collection(db, "shopOrders"), where("shopId", "==", shopId));
+        const snap2 = await getDocs(q2);
+        return snap2.docs
+          .map((d) => ({ id: d.id, ...d.data() } as ShopOrder))
+          .sort((a, b) => b.createdAt - a.createdAt);
+      } catch {
+        return [];
+      }
     }
-    throw err;
+    // Permission errors or other failures — return empty rather than crashing the UI
+    console.warn("[shops] getOrdersForShop failed:", err?.code, err?.message);
+    return [];
   }
 }
 
@@ -498,7 +530,9 @@ export async function saveOrderQuestions(
   shopId: string,
   questions: ShopOrderQuestion[]
 ): Promise<void> {
-  await updateDoc(doc(db, "shops", shopId), { orderQuestions: questions });
+  await updateDoc(doc(db, "shops", shopId), {
+    orderQuestions: questions.length > 0 ? cleanQuestions(questions) : deleteField(),
+  });
 }
 
 // ── Automated Inquiry Reply ───────────────────────────────────────────────────
