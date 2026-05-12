@@ -6,10 +6,10 @@ import { getListingsPage, getTabCounts } from "@/lib/listings";
 import { getActiveAds } from "@/lib/ads";
 import { Listing, ListingType, SponsoredAd } from "@/lib/types";
 import { QueryDocumentSnapshot } from "firebase/firestore";
+import ListingCard from "@/components/ListingCard";
 import SponsoredAdCard from "@/components/SponsoredAdCard";
 import AuthModal from "@/components/AuthModal";
-import { Search, MapPin, Clock, Loader2, SlidersHorizontal, Bookmark, BookmarkCheck, Eye, Wifi, ChevronDown } from "lucide-react";
-import { saveListing, unsaveListing, isListingSaved } from "@/lib/savedListings";
+import { Search, Loader2 } from "lucide-react";
 
 const BUY_SELL_CATEGORIES = [
   "electronics", "books", "clothing", "furniture", "food", "services", "others",
@@ -67,32 +67,7 @@ const TAB_ICONS: Record<ListingType, string> = {
   "shop-listing": "🏪",
 };
 
-const TYPE_BORDER_COLOR: Record<string, string> = {
-  "buy-sell":   "#003366",
-  "lost-found": "#0D9488",
-  "jobs":       "#7C3AED",
-  "assistance": "#EA580C",
-  "rental":     "#D97706",
-};
-
-const VEHICLE_ICONS: Record<string, string> = {
-  car: "🚗", bike: "🏍️", motorcycle: "🏍️", scooter: "🛵", bicycle: "🚲",
-};
-
 const ALL_TABS: ListingType[] = ["buy-sell", "lost-found", "jobs", "assistance", "rental"];
-
-const BROWSE_CATEGORIES = [
-  { icon: "💻", name: "Electronics", tab: "buy-sell" as ListingType, cat: "electronics" },
-  { icon: "📚", name: "Books", tab: "buy-sell" as ListingType, cat: "books" },
-  { icon: "👕", name: "Clothing", tab: "buy-sell" as ListingType, cat: "clothing" },
-  { icon: "🪑", name: "Furniture", tab: "buy-sell" as ListingType, cat: "furniture" },
-  { icon: "🍜", name: "Food", tab: "buy-sell" as ListingType, cat: "food" },
-  { icon: "🛠️", name: "Services", tab: "buy-sell" as ListingType, cat: "services" },
-  { icon: "🔍", name: "Lost & Found", tab: "lost-found" as ListingType, cat: "all" },
-  { icon: "💼", name: "Jobs", tab: "jobs" as ListingType, cat: "all" },
-  { icon: "🤝", name: "Assistance", tab: "assistance" as ListingType, cat: "all" },
-  { icon: "🚗", name: "Rentals", tab: "rental" as ListingType, cat: "all" },
-];
 
 function getCategoriesForTab(tab: ListingType): string[] {
   if (tab === "buy-sell") return BUY_SELL_CATEGORIES;
@@ -102,247 +77,6 @@ function getCategoriesForTab(tab: ListingType): string[] {
   return ASSISTANCE_CATEGORIES;
 }
 
-function relativeTime(ms: number): string {
-  const diff = Date.now() - ms;
-  const mins = Math.floor(diff / 60000);
-  const hours = Math.floor(diff / 3600000);
-  const days = Math.floor(diff / 86400000);
-  if (mins < 60) return mins <= 1 ? "Just now" : `${mins}m ago`;
-  if (hours < 24) return `${hours}h ago`;
-  return `${days}d ago`;
-}
-
-function fmtRM(n: number) {
-  return n.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function getPriceDisplay(listing: Listing, t: any): string | null {
-  if (listing.type === "buy-sell") {
-    if (!listing.price || listing.price === 0) return t.free;
-    return `RM ${fmtRM(listing.price)}`;
-  }
-  if (listing.type === "jobs" && listing.price && listing.price > 0) return `RM ${fmtRM(listing.price)}/hr`;
-  if (listing.type === "assistance" && listing.price != null) return `RM ${fmtRM(listing.price)}`;
-  if (listing.type === "rental" && listing.rentalPricePerDay != null) return `RM ${fmtRM(listing.rentalPricePerDay)}/day`;
-  if (listing.type === "lost-found") return listing.category === "lostItem" ? "Lost" : "Found";
-  return null;
-}
-
-/* ─── Mobile card (2-column grid, mudah.my style) ─── */
-function MobileListingCard({ listing }: { listing: Listing }) {
-  const { t } = useLang();
-  const { user } = useAuth();
-  const isSold = listing.status === "sold";
-  const isOwnListing = !!user && user.uid === listing.userId;
-  const isRental = listing.type === "rental";
-  const borderColor = TYPE_BORDER_COLOR[listing.type] ?? "#003366";
-
-  const [isSaved, setIsSaved] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [showAuthModal, setShowAuthModal] = useState(false);
-
-  useEffect(() => {
-    if (!user || isOwnListing) return;
-    isListingSaved(user.uid, listing.id).then(setIsSaved).catch(() => {});
-  }, [user?.uid, listing.id, isOwnListing]);
-
-  const handleSave = async (e: React.MouseEvent) => {
-    e.preventDefault(); e.stopPropagation();
-    if (!user) { setShowAuthModal(true); return; }
-    if (isOwnListing || saving) return;
-    setSaving(true);
-    try {
-      if (isSaved) { await unsaveListing(user.uid, listing.id); setIsSaved(false); }
-      else { await saveListing(user.uid, listing); setIsSaved(true); }
-    } catch { /* silent */ } finally { setSaving(false); }
-  };
-
-  const price = getPriceDisplay(listing, t);
-
-  return (
-    <>
-      <Link href={`/listing/${listing.id}`}>
-        <div
-          className={`bg-white dark:bg-slate-800 rounded-xl overflow-hidden border border-gray-100 dark:border-slate-700 border-t-4 active:scale-[0.98] transition-transform ${isSold ? "opacity-60" : ""}`}
-          style={{ borderTopColor: borderColor }}
-        >
-          {/* Image */}
-          <div className="relative aspect-square bg-gray-100 dark:bg-slate-700">
-            {listing.photos.length > 0 ? (
-              <img
-                src={listing.photos[0]}
-                alt={listing.title}
-                className="w-full h-full object-cover"
-                loading="lazy"
-                decoding="async"
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-4xl">
-                {isRental && listing.vehicleType ? VEHICLE_ICONS[listing.vehicleType] : CATEGORY_ICONS[listing.category] ?? "📦"}
-              </div>
-            )}
-            {isSold && (
-              <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                <span className="text-white text-[10px] font-black tracking-widest uppercase border border-white/50 px-2 py-1 rounded">
-                  {listing.type === "lost-found" ? "Resolved" : "Sold"}
-                </span>
-              </div>
-            )}
-            {/* Save button */}
-            {!isOwnListing && (
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center"
-              >
-                {isSaved
-                  ? <BookmarkCheck size={13} className="text-white" />
-                  : <Bookmark size={13} className="text-white" />
-                }
-              </button>
-            )}
-          </div>
-
-          {/* Details */}
-          <div className="p-2.5">
-            <p className="text-xs font-semibold text-[#0F172A] dark:text-slate-100 line-clamp-2 leading-snug mb-1">
-              {listing.title}
-            </p>
-            {price && (
-              <p className={`text-sm font-bold mb-1.5 ${isSold ? "text-gray-400 line-through" : "text-[#003366] dark:text-blue-400"}`}>
-                {price}
-              </p>
-            )}
-            {listing.type === "jobs" && listing.isRemote && (
-              <span className="inline-flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-700 dark:bg-sky-900/60 dark:text-sky-300 mb-1">
-                <Wifi size={8} /> Remote
-              </span>
-            )}
-            <div className="flex items-center justify-between text-[10px] text-gray-400 dark:text-slate-500">
-              <span className="flex items-center gap-0.5 truncate">
-                <MapPin size={9} />
-                <span className="truncate">{listing.meetupSpot ?? "XMUM"}</span>
-              </span>
-              <span className="shrink-0 ml-1">{relativeTime(listing.createdAt)}</span>
-            </div>
-          </div>
-        </div>
-      </Link>
-      {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} />}
-    </>
-  );
-}
-
-/* ─── Desktop row (classified-ads style) ─── */
-function ListingRow({ listing }: { listing: Listing }) {
-  const { t } = useLang();
-  const { user } = useAuth();
-  const isSold = listing.status === "sold";
-  const isOwnListing = !!user && user.uid === listing.userId;
-  const isRental = listing.type === "rental";
-  const isJobs = listing.type === "jobs";
-  const isAssistance = listing.type === "assistance";
-  const borderColor = TYPE_BORDER_COLOR[listing.type] ?? "#003366";
-
-  const [isSaved, setIsSaved] = useState(false);
-  const [savingInProgress, setSavingInProgress] = useState(false);
-  const [showAuthModal, setShowAuthModal] = useState(false);
-
-  useEffect(() => {
-    if (!user || isOwnListing) return;
-    isListingSaved(user.uid, listing.id).then(setIsSaved).catch(() => {});
-  }, [user?.uid, listing.id, isOwnListing]);
-
-  const handleSaveToggle = async (e: React.MouseEvent) => {
-    e.preventDefault(); e.stopPropagation();
-    if (!user) { setShowAuthModal(true); return; }
-    if (isOwnListing || savingInProgress) return;
-    setSavingInProgress(true);
-    try {
-      if (isSaved) { await unsaveListing(user.uid, listing.id); setIsSaved(false); }
-      else { await saveListing(user.uid, listing); setIsSaved(true); }
-    } catch { /* silent */ } finally { setSavingInProgress(false); }
-  };
-
-  const price = getPriceDisplay(listing, t);
-
-  const conditionBadge = () => {
-    if (listing.type === "buy-sell") return listing.condition === "new" ? t.conditionNew : t.conditionUsed;
-    if (isJobs) return listing.jobSubtype === "offering" ? "Offering" : "Seeking";
-    if (listing.type === "lost-found") return listing.category === "lostItem" ? "Lost" : "Found";
-    if (isAssistance) return "Help Wanted";
-    if (isRental) return listing.vehicleType ? `${VEHICLE_ICONS[listing.vehicleType]} For Rent` : "For Rent";
-    return null;
-  };
-
-  return (
-    <>
-      <Link href={`/listing/${listing.id}`}>
-        <div
-          className={`flex gap-3 p-4 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors cursor-pointer border-l-4 ${isSold ? "opacity-60" : ""}`}
-          style={{ borderLeftColor: borderColor }}
-        >
-          <div className="w-28 h-28 shrink-0 rounded-lg overflow-hidden bg-gray-100 dark:bg-slate-700 relative">
-            {listing.photos.length > 0 ? (
-              <img src={listing.photos[0]} alt={listing.title} className="w-full h-full object-cover" loading="lazy" decoding="async" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-4xl bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-600">
-                {isRental && listing.vehicleType ? VEHICLE_ICONS[listing.vehicleType] : CATEGORY_ICONS[listing.category] ?? "📦"}
-              </div>
-            )}
-            {isSold && (
-              <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                <span className="text-white text-[10px] font-black tracking-widest uppercase">
-                  {listing.type === "lost-found" ? "Resolved" : "Sold"}
-                </span>
-              </div>
-            )}
-          </div>
-
-          <div className="flex flex-col flex-1 min-w-0 py-0.5">
-            <h3 className="font-semibold text-sm text-[#0F172A] dark:text-slate-100 line-clamp-2 leading-snug">{listing.title}</h3>
-            {price && (
-              <p className={`mt-1 font-bold text-lg ${isSold ? "text-gray-400 line-through" : "text-[#003366] dark:text-blue-400"}`}>
-                {price}
-              </p>
-            )}
-            {isJobs && listing.isRemote && (
-              <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 dark:bg-sky-900/60 dark:text-sky-300 w-fit">
-                <Wifi size={9} /> Remote
-              </span>
-            )}
-            <div className="mt-auto pt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-slate-400">
-              {conditionBadge() && (
-                <span className="bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 px-2 py-0.5 rounded font-medium">
-                  {conditionBadge()}
-                </span>
-              )}
-              <span className="flex items-center gap-1"><MapPin size={11} />{listing.meetupSpot ?? "XMUM Campus"}</span>
-              <span>by @{listing.userName}</span>
-              {typeof listing.viewCount === "number" && listing.viewCount > 0 && (
-                <span className="flex items-center gap-1"><Eye size={11} /> {listing.viewCount}</span>
-              )}
-              <span className="flex items-center gap-1 ml-auto shrink-0"><Clock size={11} />{relativeTime(listing.createdAt)}</span>
-            </div>
-          </div>
-
-          {!isOwnListing && (
-            <button
-              onClick={handleSaveToggle}
-              disabled={savingInProgress}
-              className="shrink-0 self-start p-2 text-gray-400 hover:text-[#003366] dark:hover:text-blue-400 transition-colors"
-            >
-              {isSaved ? <BookmarkCheck size={18} className="text-[#003366] dark:text-blue-400" /> : <Bookmark size={18} />}
-            </button>
-          )}
-        </div>
-      </Link>
-      {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} />}
-    </>
-  );
-}
-
-/* ─── Main Page ─── */
 export default function HomePage() {
   const { t, lang } = useLang();
   const { user, userProfile } = useAuth();
@@ -361,7 +95,6 @@ export default function HomePage() {
   const chipRowRef = useRef<HTMLDivElement>(null);
   const [showLeftShadow, setShowLeftShadow] = useState(false);
   const [showRightShadow, setShowRightShadow] = useState(true);
-  const [sortOrder, setSortOrder] = useState<"recent" | "price_asc" | "price_desc">("recent");
 
   const tabLabel = (tab: ListingType) => {
     if (tab === "buy-sell") return t.buySell;
@@ -372,19 +105,36 @@ export default function HomePage() {
   };
 
   const loadFirst = useCallback(async (tab: ListingType) => {
-    setLoading(true); setListings([]); setCursor(null); setHasMore(false);
+    setLoading(true);
+    setListings([]);
+    setCursor(null);
+    setHasMore(false);
     try {
       const result = await getListingsPage(tab, null);
-      setListings(result.listings); setCursor(result.cursor); setHasMore(result.hasMore);
+      setListings(result.listings);
+      setCursor(result.cursor);
+      setHasMore(result.hasMore);
     } catch (err: any) {
       const code: string = err?.code ?? err?.message ?? "";
-      if (!code.includes("unavailable") && !code.includes("offline")) console.error("[HomePage] Failed to load listings:", err);
-    } finally { setLoading(false); }
+      const isOffline = code.includes("unavailable") || code.includes("offline");
+      if (!isOffline) console.error("[HomePage] Failed to load listings:", err);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  useEffect(() => { setCategoryFilter("all"); loadFirst(activeTab); }, [activeTab, loadFirst]);
-  useEffect(() => { getActiveAds(2).then(setAds); }, []);
-  useEffect(() => { getTabCounts().then(setTabCounts).catch(() => {}); }, []);
+  useEffect(() => {
+    setCategoryFilter("all");
+    loadFirst(activeTab);
+  }, [activeTab, loadFirst]);
+
+  useEffect(() => {
+    getActiveAds(2).then(setAds);
+  }, []);
+
+  useEffect(() => {
+    getTabCounts().then(setTabCounts).catch(() => {});
+  }, []);
 
   const handleLoadMore = async () => {
     if (loadingMore || !hasMore) return;
@@ -392,9 +142,13 @@ export default function HomePage() {
     try {
       const result = await getListingsPage(activeTab, cursor);
       setListings((prev) => [...prev, ...result.listings]);
-      setCursor(result.cursor); setHasMore(result.hasMore);
-    } catch (err: any) { console.error("[HomePage] Load more failed:", err); }
-    finally { setLoadingMore(false); }
+      setCursor(result.cursor);
+      setHasMore(result.hasMore);
+    } catch (err: any) {
+      console.error("[HomePage] Load more failed:", err);
+    } finally {
+      setLoadingMore(false);
+    }
   };
 
   const handleChipScroll = () => {
@@ -405,166 +159,108 @@ export default function HomePage() {
   };
 
   const handleTabChange = (tab: ListingType) => {
-    setActiveTab(tab); setCategoryFilter("all");
+    setActiveTab(tab);
     const el = chipRowRef.current;
-    if (el) { el.scrollLeft = 0; setShowLeftShadow(false); setShowRightShadow(el.scrollWidth > el.clientWidth); }
-  };
-
-  const handleCategoryTile = (tab: ListingType, cat: string) => {
-    setActiveTab(tab); setCategoryFilter(cat);
+    if (el) {
+      el.scrollLeft = 0;
+      setShowLeftShadow(false);
+      setShowRightShadow(el.scrollWidth > el.clientWidth);
+    }
   };
 
   useEffect(() => {
     const el = chipRowRef.current;
     if (!el) return;
-    el.scrollLeft = 0; handleChipScroll();
+    el.scrollLeft = 0;
+    handleChipScroll();
     el.addEventListener("scroll", handleChipScroll, { passive: true });
     return () => el.removeEventListener("scroll", handleChipScroll);
   }, [activeTab]);
 
   const handleSearchKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && searchQuery.trim()) navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+    if (e.key === "Enter" && searchQuery.trim()) {
+      navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+    }
   };
 
-  const handleSearchSubmit = () => {
-    if (searchQuery.trim()) navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
-    else navigate("/search");
+  const handleSearchFocus = () => {
+    if (searchQuery.trim()) {
+      navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+    } else {
+      navigate("/search");
+    }
   };
 
-  const displayedListings = categoryFilter === "all" ? listings : listings.filter((l) => l.category === categoryFilter);
-  const sortedListings = [...displayedListings].sort((a, b) => {
-    if (sortOrder === "price_asc") return (a.price ?? 0) - (b.price ?? 0);
-    if (sortOrder === "price_desc") return (b.price ?? 0) - (a.price ?? 0);
-    return b.createdAt - a.createdAt;
-  });
+  const displayedListings = categoryFilter === "all"
+    ? listings
+    : listings.filter((l) => l.category === categoryFilter);
 
-  /* Skeleton loaders */
-  const SkeletonCard = () => (
-    <div className="bg-white dark:bg-slate-800 rounded-xl overflow-hidden border border-gray-100 dark:border-slate-700 animate-pulse">
-      <div className="aspect-square bg-gray-200 dark:bg-slate-700" />
-      <div className="p-2.5 space-y-1.5">
-        <div className="h-3 bg-gray-200 dark:bg-slate-700 rounded w-5/6" />
-        <div className="h-3 bg-gray-200 dark:bg-slate-700 rounded w-3/4" />
-        <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded w-2/5 mt-1" />
-      </div>
-    </div>
-  );
-
-  const SkeletonRow = () => (
-    <div className="flex gap-3 p-4 border-l-4 border-gray-200 dark:border-slate-700 animate-pulse">
-      <div className="w-28 h-28 shrink-0 rounded-lg bg-gray-200 dark:bg-slate-700" />
-      <div className="flex-1 space-y-2 py-1">
-        <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded w-4/5" />
-        <div className="h-5 bg-gray-200 dark:bg-slate-700 rounded w-1/3" />
-        <div className="h-3 bg-gray-200 dark:bg-slate-700 rounded w-2/3 mt-4" />
-      </div>
+  const SkeletonGrid = () => (
+    <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {[...Array(6)].map((_, i) => (
+        <div key={i} className="bg-white dark:bg-[#1E293B] rounded-xl border border-[#E2E8F0] dark:border-slate-700 overflow-hidden animate-pulse">
+          <div className="aspect-[4/3] bg-[#F8FAFC] dark:bg-slate-700" />
+          <div className="p-3 space-y-2.5">
+            <div className="h-2.5 bg-[#E2E8F0] dark:bg-slate-700 rounded-full w-1/3" />
+            <div className="h-3.5 bg-[#E2E8F0] dark:bg-slate-700 rounded w-4/5" />
+            <div className="h-2.5 bg-[#E2E8F0] dark:bg-slate-700 rounded w-3/5" />
+          </div>
+        </div>
+      ))}
     </div>
   );
 
   return (
-    <div className="animate-in fade-in duration-200 bg-gray-50 dark:bg-slate-900 min-h-screen">
-
-      {/* ── Search bar ── */}
-      <div className="bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 px-3 py-3 sm:px-4 sm:py-4">
+    <div className="animate-in fade-in duration-200">
+      {/* Hero — not sticky, scrolls away */}
+      <div className="bg-gradient-to-br from-[#003366] via-[#004488] to-[#0055CC] text-white px-4 pt-8 pb-10">
         <div className="max-w-5xl mx-auto">
-          {/* Greeting — desktop only */}
-          <p className="hidden sm:block text-xs text-gray-400 dark:text-slate-500 mb-2">
-            {user && userProfile
-              ? `${lang === "en" ? "Good day" : "你好"}, ${userProfile.displayName} 👋 · Student-only marketplace`
-              : "Student-only marketplace · @xmu.edu.my"
-            }
-          </p>
-          <div className="flex gap-2">
-            {/* Input */}
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={17} />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={handleSearchKey}
-                placeholder={lang === "en" ? "Search items, services…" : "搜索商品、服务…"}
-                className="w-full pl-9 pr-3 py-2.5 text-sm bg-gray-100 dark:bg-slate-700 border border-transparent rounded-xl text-gray-800 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:bg-white dark:focus:bg-slate-600 focus:border-[#003366] dark:focus:border-blue-500 transition-all"
-              />
-            </div>
-            {/* Category dropdown — desktop only */}
-            <div className="relative hidden sm:block w-40">
-              <select
-                className="w-full appearance-none bg-gray-100 dark:bg-slate-700 border border-transparent rounded-xl px-3 py-2.5 pr-8 text-sm text-gray-700 dark:text-slate-200 focus:outline-none focus:border-[#003366] dark:focus:border-blue-500 cursor-pointer"
-                onChange={(e) => { if (e.target.value !== "all") navigate(`/search?q=&cat=${e.target.value}`); }}
-              >
-                <option value="all">{lang === "en" ? "All Categories" : "所有分类"}</option>
-                <option value="buy-sell">{t.buySell}</option>
-                <option value="lost-found">{t.lostFound}</option>
-                <option value="jobs">{t.jobs}</option>
-                <option value="assistance">{t.assistance}</option>
-                <option value="rental">{t.rental ?? "Rentals"}</option>
-              </select>
-              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={14} />
-            </div>
-            {/* Search button */}
-            <button
-              onClick={handleSearchSubmit}
-              className="flex items-center justify-center gap-1.5 bg-[#003366] hover:bg-[#002244] dark:bg-blue-600 dark:hover:bg-blue-700 text-white font-semibold px-4 py-2.5 rounded-xl text-sm transition-colors shrink-0"
-            >
-              <Search size={16} />
-              <span className="hidden sm:inline">{lang === "en" ? "Search" : "搜索"}</span>
-            </button>
-          </div>
+          {user && userProfile && (
+            <p className="text-sm text-white/70 mb-1">
+              Good day, {userProfile.displayName} 👋
+            </p>
+          )}
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold mt-1 leading-tight">
+            {t.hero1}<br />{t.hero2}
+          </h1>
+          <p className="text-white/70 text-sm mt-2 max-w-sm">{t.heroSub}</p>
         </div>
       </div>
 
-      {/* ── Browse Categories ── */}
-      <div className="bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
-        {/* Desktop: label */}
-        <div className="hidden sm:block max-w-5xl mx-auto px-4 pt-4 pb-1">
-          <h2 className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wide">
-            {lang === "en" ? "Browse Categories" : "浏览分类"}
-          </h2>
-        </div>
+      {/* ── Sticky group: search + tabs + chips ── */}
+      <div data-sticky-subheader className="sticky top-14 sm:top-16 z-30 bg-white dark:bg-[#1E293B] shadow-sm">
 
-        {/* Mobile: horizontal scrollable row (mudah.my style) */}
-        <div className="sm:hidden overflow-x-auto scrollbar-hide px-3 py-3">
-          <div className="flex gap-3" style={{ width: "max-content" }}>
-            {BROWSE_CATEGORIES.map((item, idx) => (
+        {/* Search bar */}
+        <div className="border-b border-[#E2E8F0] dark:border-slate-700 px-4 py-2.5">
+          <div className="max-w-xl mx-auto relative">
+            <Search
+              size={17}
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+            />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onFocus={handleSearchFocus}
+              onKeyDown={handleSearchKey}
+              placeholder="Search listings, services, rentals..."
+              className="w-full rounded-xl pl-10 pr-4 py-2.5 text-sm text-gray-800 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 bg-[#F8FAFC] dark:bg-slate-800 border border-[#E2E8F0] dark:border-slate-600 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#003366]/30 dark:focus:ring-blue-500/30 focus:border-[#003366] dark:focus:border-blue-500 transition-all cursor-pointer"
+              readOnly
+            />
+            {!user && (
               <button
-                key={idx}
-                onClick={() => handleCategoryTile(item.tab, item.cat)}
-                className="flex flex-col items-center gap-1.5 w-16 shrink-0"
+                onClick={() => setShowAuth(true)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 bg-[#003366] dark:bg-blue-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-[#002244] dark:hover:bg-blue-700 transition-colors"
               >
-                <div className="w-14 h-14 rounded-2xl bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 flex items-center justify-center text-2xl active:scale-95 transition-transform">
-                  {item.icon}
-                </div>
-                <span className="text-[10px] font-medium text-gray-600 dark:text-slate-400 text-center leading-tight w-full">
-                  {item.name}
-                </span>
+                {t.getStarted}
               </button>
-            ))}
+            )}
           </div>
         </div>
 
-        {/* Desktop: 5×2 grid */}
-        <div className="hidden sm:block max-w-5xl mx-auto px-4 pb-4">
-          <div className="grid grid-cols-5 md:grid-cols-10 gap-2 mt-3">
-            {BROWSE_CATEGORIES.map((item, idx) => (
-              <button
-                key={idx}
-                onClick={() => handleCategoryTile(item.tab, item.cat)}
-                className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl border border-gray-100 dark:border-slate-700 hover:border-[#003366] dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all group"
-              >
-                <span className="text-2xl group-hover:scale-110 transition-transform">{item.icon}</span>
-                <span className="text-[10px] font-medium text-gray-600 dark:text-slate-400 text-center leading-tight">{item.name}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* ── Sticky tabs + chips ── */}
-      <div data-sticky-subheader className="sticky top-14 sm:top-16 z-30 bg-white dark:bg-slate-800 shadow-sm">
         {/* Tab bar */}
-        <div className="border-b border-gray-200 dark:border-slate-700">
-          <div className="max-w-5xl mx-auto px-2 sm:px-4 flex overflow-x-auto scrollbar-hide">
+        <div className="border-b border-[#E2E8F0] dark:border-slate-700">
+          <div className="max-w-5xl mx-auto px-4 flex overflow-x-auto scrollbar-hide">
             {ALL_TABS.map((tab) => {
               const count = tabCounts[tab];
               const isActive = activeTab === tab;
@@ -573,19 +269,27 @@ export default function HomePage() {
                   key={tab}
                   onClick={() => handleTabChange(tab)}
                   className={`
-                    flex-shrink-0 sm:flex-1 flex items-center gap-1.5 py-3 px-3 sm:px-4
+                    flex-shrink-0 md:flex-1 flex items-center gap-1.5 py-3 px-3 md:px-4
                     text-xs sm:text-sm font-semibold border-b-2 whitespace-nowrap
                     transition-all duration-200 justify-center
                     ${isActive
                       ? "border-[#003366] dark:border-blue-400 text-[#003366] dark:text-blue-400"
-                      : "border-transparent text-gray-500 dark:text-slate-500 hover:text-gray-800 dark:hover:text-slate-300"
+                      : "border-transparent text-[#64748B] dark:text-slate-500 hover:text-[#0F172A] dark:hover:text-slate-300"
                     }
                   `}
                 >
-                  <span className="text-sm leading-none">{TAB_ICONS[tab]}</span>
-                  <span className="hidden xs:inline sm:inline">{tabLabel(tab)}</span>
+                  <span className="text-base leading-none">{TAB_ICONS[tab]}</span>
+                  <span>{tabLabel(tab)}</span>
                   {count != null && count > 0 && (
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none ${isActive ? "bg-[#003366] dark:bg-blue-500 text-white" : "bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400"}`}>
+                    <span
+                      className={`
+                        text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none
+                        ${isActive
+                          ? "bg-[#003366] dark:bg-blue-500 text-white"
+                          : "bg-[#F1F5F9] dark:bg-slate-700 text-[#64748B] dark:text-slate-400"
+                        }
+                      `}
+                    >
                       {count > 99 ? "99+" : count}
                     </span>
                   )}
@@ -595,203 +299,134 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Category chips */}
-        <div className="relative border-b border-gray-100 dark:border-slate-700">
-          {showLeftShadow && <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-8 z-10 bg-gradient-to-r from-white dark:from-slate-800 to-transparent" />}
-          {showRightShadow && <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 z-10 bg-gradient-to-l from-white dark:from-slate-800 to-transparent" />}
-          <div ref={chipRowRef} className="max-w-5xl mx-auto flex gap-2 overflow-x-auto scrollbar-hide px-3 sm:px-4 py-2">
+        {/* Category chips with scroll shadow gradients */}
+        <div className="relative border-b border-[#E2E8F0] dark:border-slate-700">
+          {showLeftShadow && (
+            <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-10 z-10 bg-gradient-to-r from-white dark:from-[#1E293B] to-transparent" />
+          )}
+          {showRightShadow && (
+            <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-10 z-10 bg-gradient-to-l from-white dark:from-[#1E293B] to-transparent" />
+          )}
+          <div
+            ref={chipRowRef}
+            className="max-w-5xl mx-auto flex gap-2 overflow-x-auto scrollbar-hide px-4 py-2.5"
+          >
             {["all", ...getCategoriesForTab(activeTab)].map((cat) => (
               <button
                 key={cat}
                 onClick={() => setCategoryFilter(cat)}
                 className={`
-                  flex-shrink-0 px-3 py-1.5 whitespace-nowrap rounded-full text-xs font-medium border transition-all
+                  flex-shrink-0 min-h-[36px] min-w-fit px-3.5 whitespace-nowrap
+                  flex items-center gap-1.5 rounded-full text-xs font-medium
+                  border transition-all duration-150
                   ${categoryFilter === cat
-                    ? "bg-[#003366] text-white border-[#003366] dark:bg-blue-600 dark:border-blue-600"
-                    : "bg-white dark:bg-slate-800 text-gray-500 dark:text-slate-300 border-gray-200 dark:border-slate-600 hover:border-[#003366] hover:text-[#003366] dark:hover:border-blue-400"
+                    ? "bg-[#003366] text-white border-[#003366] shadow-sm dark:bg-blue-600 dark:border-blue-600"
+                    : "bg-white dark:bg-slate-800 text-[#64748B] dark:text-slate-300 border-[#E2E8F0] dark:border-slate-600 hover:border-[#003366] hover:text-[#003366] dark:hover:border-blue-400"
                   }
                 `}
               >
-                <span className="mr-1">{CATEGORY_ICONS[cat] ?? "📦"}</span>
-                {cat === "all" ? (lang === "en" ? "All" : "全部") : t.categories[cat as keyof typeof t.categories]}
+                <span>{CATEGORY_ICONS[cat] ?? "📦"}</span>
+                <span>{cat === "all" ? (lang === "en" ? "All" : "全部") : t.categories[cat as keyof typeof t.categories]}</span>
               </button>
             ))}
           </div>
         </div>
       </div>
+      {/* ── End sticky group ── */}
 
-      {/* ── Main: listings + sidebar ── */}
-      <div className="max-w-5xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
-        <div className="flex gap-5 items-start">
+      {/* "Near You" location context — mobile only */}
+      <div className="md:hidden max-w-5xl mx-auto px-4 pt-3 pb-0">
+        <p className="text-xs text-gray-400 dark:text-slate-500 italic">
+          📍 XMUM Campus, Sepang
+        </p>
+      </div>
 
-          {/* Feed */}
-          <div className="flex-1 min-w-0">
-
-            {/* Signup nudge */}
-            {!user && (
-              <div className="mb-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-xl px-3 py-2.5 flex items-center justify-between">
-                <span className="text-xs text-blue-700 dark:text-blue-300">🎓 XMUM students only</span>
-                <button onClick={() => setShowAuth(true)} className="text-xs font-semibold text-blue-600 dark:text-blue-400 underline ml-2 shrink-0">
-                  Sign up free
-                </button>
-              </div>
-            )}
-
-            {/* Section header + sort */}
-            {!loading && sortedListings.length > 0 && (
-              <div className="flex items-center justify-between mb-2.5">
-                <span className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wide">
-                  Latest Listings
-                  <span className="ml-1.5 font-normal normal-case text-gray-400">
-                    ({sortedListings.length}{hasMore && "+"})
-                    {categoryFilter !== "all" && ` · ${t.categories[categoryFilter as keyof typeof t.categories] ?? categoryFilter}`}
-                  </span>
-                </span>
-                <div className="flex items-center gap-1">
-                  <select
-                    value={sortOrder}
-                    onChange={(e) => setSortOrder(e.target.value as typeof sortOrder)}
-                    className="text-xs border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-700 dark:text-slate-200 rounded-lg px-2 py-1.5 focus:outline-none"
-                  >
-                    <option value="recent">Recent</option>
-                    <option value="price_asc">Price ↑</option>
-                    <option value="price_desc">Price ↓</option>
-                  </select>
-                  <SlidersHorizontal size={13} className="text-gray-400 dark:text-slate-500 ml-0.5" />
-                </div>
-              </div>
-            )}
-
-            {/* ─ MOBILE: 2-column card grid ─ */}
-            <div className="sm:hidden">
-              {loading ? (
-                <div className="grid grid-cols-2 gap-2.5">
-                  {[...Array(6)].map((_, i) => <SkeletonCard key={i} />)}
-                </div>
-              ) : sortedListings.length === 0 ? (
-                <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 flex flex-col items-center py-14 text-center px-4">
-                  <span className="text-5xl mb-3">{TAB_ICONS[activeTab]}</span>
-                  <p className="text-sm font-semibold text-gray-700 dark:text-slate-300">No listings yet</p>
-                  <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">Be the first to post!</p>
-                  {categoryFilter !== "all" ? (
-                    <button onClick={() => setCategoryFilter("all")} className="mt-4 text-[#003366] dark:text-blue-400 text-sm font-semibold underline">
-                      Show all
-                    </button>
-                  ) : (
-                    <Link href="/post" className="mt-4 inline-block bg-[#003366] dark:bg-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold">
-                      {t.postItem}
-                    </Link>
-                  )}
-                </div>
-              ) : (
-                <>
-                  <div className="grid grid-cols-2 gap-2.5">
-                    {sortedListings.map((listing, i) => (
-                      <Fragment key={listing.id}>
-                        <MobileListingCard listing={listing} />
-                        {/* Sponsored ad every 6 items — full width */}
-                        {(i + 1) % 6 === 0 && ads[0] && (
-                          <div className="col-span-2">
-                            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Sponsored</p>
-                            <SponsoredAdCard ad={ads[0]} />
-                          </div>
-                        )}
-                      </Fragment>
-                    ))}
-                  </div>
-                  {categoryFilter === "all" && hasMore && (
-                    <button
-                      onClick={handleLoadMore}
-                      disabled={loadingMore}
-                      className="mt-4 w-full py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-[#003366] dark:text-blue-400 flex items-center justify-center gap-2 disabled:opacity-50"
-                    >
-                      {loadingMore ? <><Loader2 size={14} className="animate-spin" /> Loading…</> : t.loadMore}
-                    </button>
-                  )}
-                  {!hasMore && listings.length > 0 && categoryFilter === "all" && (
-                    <p className="mt-4 text-xs text-center text-gray-400 dark:text-slate-500">{t.noMoreListings}</p>
-                  )}
-                </>
-              )}
-            </div>
-
-            {/* ─ DESKTOP: classified-ads rows ─ */}
-            <div className="hidden sm:block">
-              {loading ? (
-                <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden divide-y divide-gray-100 dark:divide-slate-700">
-                  {[...Array(5)].map((_, i) => <SkeletonRow key={i} />)}
-                </div>
-              ) : sortedListings.length === 0 ? (
-                <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 flex flex-col items-center py-16 text-center px-4">
-                  <span className="text-5xl mb-4">{TAB_ICONS[activeTab]}</span>
-                  <p className="text-base font-semibold text-gray-700 dark:text-slate-300">No listings yet</p>
-                  <p className="text-sm text-gray-400 dark:text-slate-500 mt-1">Be the first to post something!</p>
-                  {categoryFilter !== "all" ? (
-                    <button onClick={() => setCategoryFilter("all")} className="mt-4 text-[#003366] dark:text-blue-400 text-sm font-semibold underline">Show all categories</button>
-                  ) : (
-                    <Link href="/post" className="mt-4 inline-block bg-[#003366] dark:bg-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-[#002244] transition-colors">
-                      {t.postItem}
-                    </Link>
-                  )}
-                </div>
-              ) : (
-                <>
-                  <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden divide-y divide-gray-100 dark:divide-slate-700/60 shadow-sm">
-                    {sortedListings.map((listing, i) => (
-                      <Fragment key={listing.id}>
-                        <ListingRow listing={listing} />
-                        {(i + 1) % 6 === 0 && ads[1] && (
-                          <div className="px-4 py-3 bg-amber-50/30 dark:bg-amber-900/10">
-                            <p className="text-[10px] font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide mb-1.5">Sponsored</p>
-                            <SponsoredAdCard ad={ads[1]} />
-                          </div>
-                        )}
-                      </Fragment>
-                    ))}
-                  </div>
-                  {categoryFilter === "all" && (
-                    <div className="mt-4 flex justify-center">
-                      {hasMore ? (
-                        <button onClick={handleLoadMore} disabled={loadingMore} className="flex items-center gap-2 px-6 py-3 w-full bg-white dark:bg-slate-800 text-[#003366] dark:text-blue-400 border border-gray-200 dark:border-slate-700 rounded-lg text-sm font-semibold hover:border-[#003366] disabled:opacity-50 transition-all justify-center">
-                          {loadingMore ? <><Loader2 size={15} className="animate-spin" /> {t.loading}</> : t.loadMore}
-                        </button>
-                      ) : listings.length > 0 ? (
-                        <p className="text-xs text-gray-400 dark:text-slate-500 py-2">{t.noMoreListings}</p>
-                      ) : null}
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* Desktop sidebar */}
-          <div className="hidden lg:flex flex-col gap-4 w-64 shrink-0">
-            {ads.length > 0 && (
-              <div>
-                <p className="text-[10px] font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide mb-1.5">Sponsored</p>
-                <SponsoredAdCard ad={ads[0]} />
-              </div>
-            )}
-            <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 p-4">
-              <h3 className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wide mb-3">Quick Links</h3>
-              <div className="space-y-2.5">
-                <Link href="/post" className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300 hover:text-[#003366] dark:hover:text-blue-400 transition-colors">📝 Post a listing</Link>
-                <Link href="/search" className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300 hover:text-[#003366] dark:hover:text-blue-400 transition-colors">🔍 Advanced search</Link>
-                <Link href="/campus-market" className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300 hover:text-[#003366] dark:hover:text-blue-400 transition-colors">🏪 Campus Market</Link>
-                {!user && (
-                  <button onClick={() => setShowAuth(true)} className="flex items-center gap-2 text-sm text-[#003366] dark:text-blue-400 font-semibold hover:underline w-full text-left">🎓 Sign up with XMUM email</button>
-                )}
-              </div>
-            </div>
-            {ads.length > 1 && (
-              <div>
-                <p className="text-[10px] font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide mb-1.5">Sponsored</p>
-                <SponsoredAdCard ad={ads[1]} />
-              </div>
-            )}
+      {/* Signup nudge — unauthenticated users only */}
+      {!user && (
+        <div className="max-w-5xl mx-auto px-4 mt-3">
+          <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-xl px-4 py-3 flex items-center justify-between">
+            <span className="text-sm text-blue-700 dark:text-blue-300">
+              🎓 Exclusive to XMUM students
+            </span>
+            <button
+              onClick={() => setShowAuth(true)}
+              className="text-sm font-medium text-blue-600 dark:text-blue-400 underline min-h-[44px]"
+            >
+              Sign up free
+            </button>
           </div>
         </div>
+      )}
+
+      {ads.length > 0 && (
+        <div className="max-w-5xl mx-auto px-4 mt-4">
+          <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1">Sponsored</p>
+          <SponsoredAdCard ad={ads[0]} />
+        </div>
+      )}
+
+      {/* Listings grid */}
+      <div className="max-w-5xl mx-auto px-4 py-5">
+        {loading ? (
+          <SkeletonGrid />
+        ) : displayedListings.length === 0 ? (
+          <div className="col-span-full flex flex-col items-center py-16 text-center">
+            <span className="text-5xl mb-4">🛍️</span>
+            <p className="text-base font-semibold text-slate-700 dark:text-slate-300">No listings yet</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Be the first to post something!</p>
+            {categoryFilter !== "all" ? (
+              <button onClick={() => setCategoryFilter("all")} className="mt-4 inline-block text-[#003366] dark:text-blue-400 text-sm font-semibold underline">
+                Show all categories
+              </button>
+            ) : (
+              <Link href="/post" className="mt-4 inline-block bg-[#003366] dark:bg-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-[#002244] dark:hover:bg-blue-700 transition-colors">
+                {t.postItem}
+              </Link>
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                {displayedListings.length} {displayedListings.length === 1 ? "listing" : "listings"}
+                {categoryFilter !== "all" && ` in ${t.categories[categoryFilter as keyof typeof t.categories] ?? categoryFilter}`}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {displayedListings.map((listing, i) => (
+                <Fragment key={listing.id}>
+                  <ListingCard listing={listing} showSaveButton />
+                  {(i + 1) % 6 === 0 && ads[1] && (
+                    <>
+                      <p className="col-span-full text-[10px] font-medium text-slate-400 uppercase tracking-wide -mb-2">Sponsored</p>
+                      <div className="col-span-full"><SponsoredAdCard ad={ads[1]} /></div>
+                    </>
+                  )}
+                </Fragment>
+              ))}
+            </div>
+
+            {categoryFilter === "all" && (
+              <div className="mt-6 flex justify-center">
+                {hasMore ? (
+                  <button
+                    onClick={handleLoadMore}
+                    disabled={loadingMore}
+                    className="flex items-center gap-2 px-6 py-2.5 min-h-[44px] bg-white dark:bg-[#1E293B] text-[#003366] dark:text-blue-400 border border-[#E2E8F0] dark:border-slate-700 rounded-full text-sm font-semibold hover:border-[#003366] dark:hover:border-blue-500 disabled:opacity-50 transition-all duration-200 shadow-card"
+                  >
+                    {loadingMore ? (
+                      <><Loader2 size={15} className="animate-spin" /> {t.loading}</>
+                    ) : (
+                      t.loadMore
+                    )}
+                  </button>
+                ) : listings.length > 0 ? (
+                  <p className="text-xs text-gray-400 dark:text-slate-500">{t.noMoreListings}</p>
+                ) : null}
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
