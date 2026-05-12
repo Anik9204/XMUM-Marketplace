@@ -1086,6 +1086,11 @@ export default function PostPage() {
               </div>
             )}
             <CentsInput value={priceCents} onChange={(v) => { setPriceCents(v); setIsDirty(true); }} onBlur={saveDraft} />
+            {priceCents > 50_000_000 && (
+              <p className="mt-1.5 text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                ⚠ Double-check — this is an unusually high price for a student marketplace.
+              </p>
+            )}
           </div>
         )}
 
@@ -1094,6 +1099,11 @@ export default function PostPage() {
           <div>
             <label className={labelCls}>{t.pricePerHour} <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
             <CentsInput value={priceCents} onChange={(v) => { setPriceCents(v); setIsDirty(true); }} onBlur={saveDraft} />
+            {priceCents > 50_000_000 && (
+              <p className="mt-1.5 text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                ⚠ Double-check — this is an unusually high price for a student marketplace.
+              </p>
+            )}
           </div>
         )}
 

@@ -670,6 +670,11 @@ export default function EditListingPage() {
               />
             </div>
             <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-1">Type digits to enter price — backspace to correct</p>
+            {priceCents > 50_000_000 && (
+              <p className="mt-1.5 text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                ⚠ Double-check — this is an unusually high price for a student marketplace.
+              </p>
+            )}
           </div>
         )}
 
@@ -771,6 +776,11 @@ export default function EditListingPage() {
               />
             </div>
             <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-1">Type digits to enter price — backspace to correct</p>
+            {priceCents > 50_000_000 && (
+              <p className="mt-1.5 text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                ⚠ Double-check — this is an unusually high price for a student marketplace.
+              </p>
+            )}
           </div>
         )}
 
