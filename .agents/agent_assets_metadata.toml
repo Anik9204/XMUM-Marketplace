@@ -1,0 +1,55 @@
+uploads = []
+
+[[generated]]
+id = "Ogj-TRD6WNu9vdghQ1l7u"
+uri = "file://artifacts/mockup-sandbox/public/images/bugatti.png"
+type = "image"
+title = "Bugatti Chiron parked outdoors"
+
+[[generated]]
+id = "tTYaUK0OB3e7tsfEtWJen"
+uri = "file://artifacts/mockup-sandbox/public/images/iphone.png"
+type = "image"
+title = "iPhone 14 Pro lying flat"
+
+[[generated]]
+id = "-yQzUirabU5FIU4U4jphV"
+uri = "file://artifacts/mockup-sandbox/public/images/textbook.png"
+type = "image"
+title = "Calculus university textbook"
+
+[[generated]]
+id = "9QUCgHibhVRgWuS_hmaIy"
+uri = "file://artifacts/mockup-sandbox/public/images/guitar.png"
+type = "image"
+title = "Acoustic guitar"
+
+[[generated]]
+id = "N53xSTx7zJdkOX2b05U6t"
+uri = "file://artifacts/mockup-sandbox/public/images/airpods.png"
+type = "image"
+title = "Apple AirPods in case"
+
+[[outputs]]
+id = "pSQM8naRgPxg8AFURXu3I"
+uri = "file://artifacts/mockup-sandbox/public/images/macbook.jpg"
+type = "image"
+title = "A Macbook laptop on a desk"
+
+[[outputs]]
+id = "inAwphjU5aBBxbatYQZhW"
+uri = "file://artifacts/mockup-sandbox/public/images/calculus-textbook.jpg"
+type = "image"
+title = "A thick math or calculus textbook"
+
+[[outputs]]
+id = "8Z5KL86DRhExdfIohhfAi"
+uri = "file://artifacts/mockup-sandbox/public/images/guitar.jpg"
+type = "image"
+title = "An acoustic guitar"
+
+[[outputs]]
+id = "nXZFlcBKnlhUh5DYF8Vh8"
+uri = "file://artifacts/mockup-sandbox/public/images/airpods-case.jpg"
+type = "image"
+title = "Apple AirPods charging case on a table"
