@@ -31,6 +31,10 @@ export async function unsaveListing(uid: string, listingId: string): Promise<voi
   );
 }
 
+// NOTE: Returns placeholder metadata (savedAt: 0, listingTitle: "", etc.) —
+// only the listingId is populated. The caller must enrich each entry by calling
+// getListing(id) before displaying data to the user. The Profile page's Saved
+// tab handles this enrichment via individual getListing() calls per saved ID.
 export async function getSavedListings(uid: string): Promise<SavedListing[]> {
   const ids = await getUserSavedIds(uid);
   return ids.map((id) => ({

@@ -1,0 +1,242 @@
+# XMUM Marketplace — Full Codebase Audit & Fix Prompt
+
+You are a senior full-stack developer and security engineer performing a complete production-readiness audit on the XMUM Marketplace project (React + Vite + TypeScript + Firebase Firestore + Firebase Storage + Tailwind CSS 4).
+
+Before writing a single line of code, read **every file** in `artifacts/xmum-market/src/` and `artifacts/xmum-admin/src/` completely, including all files in `lib/`, `pages/`, `components/`, `contexts/`, `hooks/`, and `firestore.rules`. This is a thorough audit — do not skip any file.
+
+Work through every category below in the exact order listed. For each issue you find, state the file name and line number, describe the problem, and apply the fix. Do not break any existing working functionality. After all fixes are applied, the app must build with zero TypeScript errors: `pnpm --filter @workspace/xmum-market run build`.
+
+---
+
+## CATEGORY 1 — Logical & Mathematical Errors
+
+### 1A — Off-by-One Errors
+Audit every loop, array index access, pagination cursor, and slice/splice call across the entire codebase.
+
+Specific areas to check:
+- `lib/listings.ts` — the `PAGE_SIZE = 12` Firestore cursor pagination: confirm `startAfter` is called with the correct last document and that the `hasMore` flag is set accurately (it should be `results.length === PAGE_SIZE`, not `> PAGE_SIZE` or `>= PAGE_SIZE`)
+- Any `.slice(0, n)` calls — verify the end index is correct and not cutting one item too many or too few
+- Notification limit query `limit(20)` — confirm this is intentional and documents it
+
+### 1B — Arithmetic Precision & Rounding Errors
+The app uses a cents-based system (`priceCents`, `rentalPricePerDayCents`, etc.) to avoid floating-point issues. Audit every place where cents are converted to ringgit or ringgit to cents.
+
+Specific areas to check:
+- `lib/sanitize.ts` — `sanitizeListingData` caps `price` at `Math.max(0, Math.min(50000, out.price))` but the rest of the app now supports prices up to RM 1,000,000. Update this cap to `Math.min(1_000_000, out.price)` to match the new limit
+- `PostPage.tsx` — every `priceCents / 100` conversion before writing to Firestore: confirm no floating-point drift by using `Math.round(priceCents) / 100` instead of bare division
+- `ShopDashboardPage.tsx` and `OrderFormPage.tsx` — any place an `offeredPrice` is converted between cents and ringgit: apply the same `Math.round()` guard
+- Any displayed price that uses `.toFixed(2)` — confirm it rounds correctly and does not silently truncate
+
+### 1C — Inverted Logic
+Audit every boolean condition, especially negations (`!`, `!==`, `===false`), to confirm the logic is not accidentally inverted.
+
+Specific areas to check:
+- `lib/listings.ts` — the daily post limit check: confirm the condition reads "if count is **greater than or equal to** 6, block" not "less than"
+- `firestore.rules` — the `isXmuEmail()` function uses `request.auth.token.email.matches('.*@xmu\\.edu\\.my')`: confirm this is a suffix match that cannot be bypassed by an email like `attacker@xmu.edu.my.evil.com`. If so, tighten to `request.auth.token.email.matches('.*@xmu\\.edu\\.my$')`
+- `ProfilePage.tsx` — the "saved listings" real-time vs one-time fetch: confirm the condition that shows/hides the saved tab is not accidentally inverted
+
+### 1D — Null / Undefined Reference Errors
+Audit every place a value from Firestore, a URL param, or an optional prop is accessed without a null check.
+
+Specific areas to check:
+- `ShopDashboardPage.tsx` — `user!.uid` non-null assertions: replace every `!` assertion with a proper guard (`if (!user) return`) so a race condition between auth state loading and component render does not throw
+- `MessagesPage.tsx` — `activeConv.participants.find(...)` — the result of `find()` can be `undefined`. Every usage must be guarded before accessing properties on it
+- `OrderFormPage.tsx` — the `offeredPrice` field: confirm it is never `undefined` before being passed to `addDoc()`. If `pricingModel !== "negotiable"`, it must be explicitly set to `null`
+- `lib/notifications.ts` — `getUserConversations` is imported but search for whether it is actually called anywhere in this file; if not, remove the unused import as it creates a dead dependency
+- Any `.data()` call on a Firestore snapshot: confirm `.exists()` is always checked before `.data()` is accessed
+
+### 1E — Race Conditions
+Audit all async operations that depend on state set by a prior async operation.
+
+Specific areas to check:
+- `AuthContext.tsx` — `setLoading(false)` is called inside `onAuthChange` before the `onSnapshot` profile listener has returned its first result. This means `loading === false` but `userProfile === null` for a brief window. Any page that reads `userProfile` without checking `loading` may render an incorrect empty state. Add a separate `profileLoading` state or delay `setLoading(false)` until the first profile snapshot fires
+- `PostPage.tsx` — the draft is auto-saved to `localStorage` every 30 seconds via `setInterval`. If the user submits the form and the component unmounts before the interval fires, the interval is not always cleared. Confirm `clearInterval` is called in the `useEffect` cleanup
+- `ShopDashboardPage.tsx` — `getInquiriesForShop` is a one-time `getDocs` call, not a real-time listener. If an inquiry is deleted or updated by another editor while the owner is looking at the list, the UI will show stale data. Convert to an `onSnapshot` listener with proper cleanup
+
+### 1F — Integer Overflow
+- The cents integer can reach up to `100_000_000` (RM 1,000,000 in cents). Confirm this fits safely in a JavaScript number (it does — JS numbers are 64-bit floats safe up to 2^53) and document this in a comment next to the `MAX_PRICE_CENTS` constant
+- Firestore `increment()` counters (`totalListings`, `totalInquiries`, `viewCount`) have no upper bound. This is acceptable but add a comment noting these are not reset
+
+---
+
+## CATEGORY 2 — Integration & Communication Errors
+
+### 2A — CORS Errors
+The app is a client-side SPA communicating directly with Firebase SDKs. Firebase handles CORS automatically via its SDK. However:
+- `artifacts/api-server/` contains an Express backend. Confirm it has a `cors` middleware configured with an explicit `origin` allowlist (not `origin: '*'`) before any route handler. If it does not, add `cors({ origin: ['https://xmum-market.vercel.app'] })` — wildcard CORS on an API server is a security risk
+- Check whether the Express server is actually called by any frontend code. If it is not, document this clearly in a comment
+
+### 2B — API Data Shape Mismatch
+Audit every Firestore write (`addDoc`, `setDoc`, `updateDoc`) to confirm the fields written match the TypeScript interface definitions in `lib/types.ts`.
+
+Specific areas to check:
+- `OrderFormPage.tsx` / `lib/shops.ts` `createOrder()` — audit every field in the order payload against the `ShopOrder` type. Any optional field that could be `undefined` must be replaced with `null` before the `addDoc()` call, since Firestore rejects `undefined` values with a runtime error
+- `lib/auth.ts` `signUp()` — the profile written to Firestore must match the `UserProfile` interface exactly. Confirm no field is missing and no extra undeclared field is written
+- `lib/savedListings.ts` `getSavedListings()` — the returned `SavedListing` objects have `savedAt: 0`, `listingTitle: ""`, `listingPhoto: ""`, `listingUserId: ""` as placeholder values. If these placeholders are ever displayed in the UI (in the Saved tab), the user will see blank/zero values. Either fetch the real listing data for each saved ID, or document clearly that this function only returns IDs and the caller is responsible for enriching the data
+
+### 2C — Broken Endpoints / 404 Routes
+- Audit `artifacts/xmum-market/src/App.tsx` (or wherever Wouter routes are defined) and confirm every `<Link href="...">` and every `navigate("...")` call in the codebase points to a route that is actually registered. Any href that points to a non-existent route will silently render the 404 page
+- Specifically check the "Chat in App" navigation in `ShopDashboardPage.tsx` — confirm the constructed `/messages?conv=...&draft=...` URL actually triggers the deep-link handler in `MessagesPage.tsx`
+- Confirm the shop public page slug routing (`/shop/:slug`) correctly handles shops with slugs containing hyphens
+
+### 2D — Timeout Errors
+- `lib/userProfile.ts` uses a `deleteDocWithTimeout` that resolves after 6 seconds regardless of whether the delete succeeded or failed. This means a failed delete is silently treated as a success. Replace `resolve` with `reject` in the timeout so the caller knows when the operation timed out:
+```typescript
+new Promise<void>((_, reject) => setTimeout(() => reject(new Error("timeout")), 6_000))
+```
+- Then in the account deletion flow, catch this timeout error and show the user a clear message ("Deletion timed out — please try again on a stable connection") instead of silently succeeding
+
+### 2E — Payload Too Large (413)
+- Firebase Storage has a 5MB per file upload limit. `PostPage.tsx` checks `MAX_FILE_BYTES = 5 * 1024 * 1024`. Confirm this check runs **before** the upload attempt and returns a user-facing error if exceeded. If the check only happens client-side with no server-side enforcement, add a note that Firebase Storage rules should also enforce this
+- Confirm the shop banner and logo uploads in `ShopDashboardPage.tsx` also have a file size check before upload. If they do not, add one with the same 5MB cap
+
+### 2F — Unprocessable Entity / Invalid Business Data (422-equivalent)
+Audit every form submission for missing server-side-equivalent validation.
+
+Specific areas to check:
+- `PostPage.tsx` — price validation: confirm a negative price cannot be submitted. The `CentsInput` component should prevent this via its digit-push logic, but also confirm the Firestore security rule for listings validates `price >= 0`
+- `ShopDashboardPage.tsx` — shop name: confirm an empty string or whitespace-only name cannot be saved to Firestore
+- `OrderFormPage.tsx` — quantity field: confirm it accepts only positive integers and cannot be submitted as 0, negative, or non-integer
+- `firestore.rules` — the `shops` create rule validates `name.size() <= 60` but does not check `name.size() > 0`. Add a minimum length check: `request.resource.data.name.size() > 0`
+
+### 2G — Stale Data Errors
+Audit every place a one-time `getDocs` fetch is used where a real-time `onSnapshot` would be more appropriate.
+
+Specific areas to check:
+- `ShopDashboardPage.tsx` — `getInquiriesForShop` and `getOrdersForShop` are called once when the tab is switched. If data changes while the tab is open, the user sees stale data. Convert both to `onSnapshot` listeners
+- `ProfilePage.tsx` — `getSavedListings` is a one-time fetch that only returns IDs with placeholder data. If a saved listing is deleted by its owner, the saved tab will still show it. Implement real-time sync or at minimum re-fetch on every tab visit
+- Listing view count increments (`viewCount: increment(1)`) — confirm these use Firestore's atomic `increment()` and not a read-then-write pattern, which would cause incorrect counts under concurrent views
+
+---
+
+## CATEGORY 3 — Business Logic & Security Errors
+
+### 3A — Broken Access Control
+Audit every page and every Firestore operation for missing or incorrect access control.
+
+Specific areas to check:
+- `ShopDashboardPage.tsx` — when the page loads with a `shopId`, it fetches the shop and checks if `user.uid === shop.ownerId || shop.editorIds.includes(user.uid)`. Confirm this check happens **before** any shop data mutation is allowed, not just for display gating
+- `firestore.rules` — `shopInquiries` delete rule: confirm shop owners and editors are explicitly permitted to delete inquiry documents where `resource.data.shopId` matches their shop. If the rule is missing or only allows the buyer to delete, this is the cause of the inquiry delete bug
+- `firestore.rules` — `conversations` collection: confirm only the two participants (`request.auth.uid in resource.data.participants`) can read or write to a conversation. If the rule uses `==` instead of `in`, it will only allow one participant
+- Admin panel routes: confirm every admin page checks the user's role from Firestore on load and redirects unauthenticated or unauthorised users to the login page. A client-side-only role check is insufficient — the Firestore rules must also enforce admin-only access
+
+### 3B — Broken Authentication
+- `lib/auth.ts` `signUp()` — the Firestore profile write is fire-and-forget (`.catch` only logs a warning). If this write fails silently, the user has a Firebase Auth account but no Firestore profile. Subsequent reads of `users/{uid}` will return null, breaking the profile page and all contact detail displays. Add a recovery mechanism: on sign-in, if `userProfile === null` after auth, attempt to re-create the profile document
+- Email verification gate: confirm that listing creation, inquiry submission, and order placement all check `user.emailVerified === true` before proceeding, both in the UI and in Firestore security rules. If the rules only check `isXmuEmail()` (which checks the token email domain) but not email verification status, unverified users can write to Firestore via the API even if the UI blocks them. Add `request.auth.token.email_verified == true` to the `isXmuEmail()` function in `firestore.rules`
+
+### 3C — IDOR (Insecure Direct Object Reference)
+- `SettingsPage.tsx` / `lib/userProfile.ts` — account deletion: the deletion flow deletes the Firestore document at `users/{uid}` using the currently authenticated user's UID. Confirm it cannot be manipulated to delete another user's document by verifying the Firestore rule enforces `isOwner(userId)`
+- `ShopDashboardPage.tsx` — when editing shop settings, confirm the `shopId` used in `updateShop(shopId, ...)` comes from the authenticated user's own shop data fetched from Firestore, not from a URL parameter that a user could manipulate to edit another person's shop
+- `OrderFormPage.tsx` — confirm the `shopId` and `shopListingId` written into a new order document are validated against real Firestore documents before the order is created, not just passed through from URL params
+
+### 3D — Validation Bypass
+Audit every form for client-side-only validation that could be bypassed.
+
+Specific areas to check:
+- Price field: confirm that even with the new bank-style `CentsInput`, the maximum of RM 1,000,000 is also enforced in `firestore.rules` (e.g. `request.resource.data.price <= 1000000`)
+- WhatsApp number validation in `PostPage.tsx` uses `validateWhatsApp()` — confirm this validation also runs on the server side (Firestore rules) or at minimum sanitises the value in `sanitizeListingData()`
+- `lib/contentFilter.ts` — the content filter only runs client-side. A malicious user posting directly to the Firestore API bypasses it entirely. This is acceptable since Firestore rules handle the structural validation, but add a comment documenting this limitation clearly
+
+### 3E — Coupon / Discount Abuse
+Not applicable to this app (no coupon system). Mark as N/A and document.
+
+### 3F — CSRF (Cross-Site Request Forgery)
+Firebase Authentication uses short-lived ID tokens sent as Authorization headers, not cookies. This makes traditional CSRF attacks not applicable to Firebase SDK calls. However:
+- The Express API server in `artifacts/api-server/` — if it ever adds mutation endpoints, confirm they require a valid Firebase ID token in the `Authorization` header and do not rely on cookies or sessions
+- Document this clearly in the codebase
+
+### 3G — XSS (Cross-Site Scripting)
+Audit every place user-supplied data is rendered to the DOM.
+
+Specific areas to check:
+- `lib/sanitize.ts` `sanitizeText()` strips HTML tags via `replace(/<[^>]*>/g, "")`. This is a basic strip, not a proper sanitiser. It does not handle malformed tags like `<scr<script>ipt>` or HTML entities. Replace with DOMPurify: `npm install dompurify @types/dompurify` and use `DOMPurify.sanitize(input)` for any field that is rendered as HTML. For fields rendered as plain React text nodes (not `dangerouslySetInnerHTML`), the existing strip is sufficient since React escapes text by default
+- Search the entire codebase for any use of `dangerouslySetInnerHTML`. If found, ensure the content passed to it goes through `DOMPurify.sanitize()` first
+- Listing titles, descriptions, shop names, and bio fields: confirm these are always rendered as React text nodes and never injected as raw HTML
+
+---
+
+## CATEGORY 4 — Environment & UI Errors
+
+### 4A — Mobile Responsiveness
+Audit every page at 375px, 390px, and 430px viewport widths.
+
+Specific areas to check:
+- `MessagesPage.tsx` — the two-panel layout height calculation `h-[calc(100dvh-56px)]` must account for both the app header (56px mobile / 64px desktop) and the optional verification banner (48px). Confirm the calculation is correct with and without the banner
+- `ShopDashboardPage.tsx` — the tab bar must be horizontally scrollable on mobile with `overflow-x-auto whitespace-nowrap` so all tabs are reachable without being squished
+- Shop public page and listing detail pages — confirm the "Place Order" and "Send Inquiry" buttons always have sufficient `padding-bottom` to clear the sticky bottom navigation bar (minimum `pb-24` or equivalent)
+- All modal and drawer components — confirm they have `max-h-[90vh] overflow-y-auto` so they do not overflow the screen on small phones
+- All touch targets — confirm every interactive button, link, and tab has a minimum height of 44px (`min-h-[44px]`) and minimum width of 44px
+
+### 4B — Browser Compatibility
+- The app uses `100dvh` (dynamic viewport height). This is supported on all modern iOS Safari 15.4+ and Android Chrome. Add a fallback: `height: calc(var(--vh, 1vh) * 100)` with a JavaScript hook that sets `--vh` on resize for older devices
+- `overscroll-contain` is used in `MessagesPage.tsx`. Confirm this is supported on the target browsers (it is, on iOS Safari 16+ and Android Chrome 63+). Add a comment documenting the minimum supported browser versions
+- Confirm `inputMode="numeric"` on the new `CentsInput` triggers a numeric keypad on iOS Safari. On iOS, `type="text"` with `inputMode="numeric"` shows the number pad correctly — confirm this is the implementation
+
+### 4C — Missing Environment Variables
+- `lib/firebase.ts` checks for `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, and `VITE_FIREBASE_APP_ID` and logs a console error if missing. However, the app continues to initialise with `undefined` values, causing cryptic Firebase errors later
+- Change this: if any required env var is missing, throw an error immediately with a clear human-readable message listing exactly which variables are missing and where to set them (Vercel → Project Settings → Environment Variables)
+- Confirm that `VITE_FIREBASE_STORAGE_BUCKET` and `VITE_FIREBASE_MESSAGING_SENDER_ID` are also in the required list, since Storage uploads will fail without the bucket
+
+### 4D — Memory Leaks
+Audit every `useEffect` that sets up a Firestore `onSnapshot` listener, a `setInterval`, a `setTimeout`, or an event listener.
+
+Specific areas to check:
+- `MessagesPage.tsx` — confirm every `onSnapshot` subscription (`subscribeToConversations`, `subscribeToMessages`, `subscribeToTyping`) returns an unsubscribe function and that this function is returned from the `useEffect` cleanup
+- `AuthContext.tsx` — confirm the `onSnapshot` profile listener is unsubscribed when the auth user changes (it is, via `profileUnsub()` inside `onAuthChange`) and on component unmount
+- `ProfilePage.tsx` — `sendDailyDigestIfDue` is an async function called inside a `useEffect`. If the component unmounts before this resolves, any subsequent state updates (`setListings`, etc.) will cause "Can't perform a React state update on an unmounted component" warnings. Add an `isMounted` flag or use `AbortController`
+- `Layout.tsx` — the `subscribeToUnreadCount` listener: confirm it is unsubscribed in the `useEffect` cleanup
+- `PostPage.tsx` — the `setInterval` for draft auto-save: confirm `clearInterval` is in the cleanup
+
+### 4E — Resource Exhaustion
+- `lib/listings.ts` uses `sessionStorage` for a 60-second listing cache. `sessionStorage` has a typical 5–10MB per-origin limit. The cache key includes listing type and cursor, so many cache entries can accumulate. Add a cleanup step: on every `writeCache`, count existing `listings_cache_` keys in `sessionStorage` and delete the oldest ones if more than 20 exist
+- Firebase Storage uploads have no concurrent upload limit. If a user rapidly taps the photo upload button, multiple uploads can run simultaneously. Add a loading/disabled state to the photo upload button while any upload is in progress
+
+### 4F — Z-index / Layering Errors
+Audit every fixed and sticky element for z-index conflicts.
+
+Current z-index inventory (reconstruct from the codebase):
+- App header: `z-50`
+- Mobile bottom nav: `z-40`
+- FAB button: `z-50`
+- Modals / overlays: `z-50` or `z-[70]`
+- Online/offline banner: `z-[60]`
+- Notification bell dropdown: (check current value)
+- Report modal in MessagesPage: `z-50`
+
+Specific conflicts to fix:
+- The FAB button (`z-50`) and the app header (`z-50`) are at the same z-index level, which can cause the FAB to render above or below the header unpredictably depending on DOM order. The FAB should be `z-[45]` (above bottom nav at `z-40`, below header at `z-50`)
+- The online/offline banner at `z-[60]` renders above the app header at `z-50` — confirm this is intentional (it is, as it should overlay everything)
+- Modals at `z-[70]` — confirm they appear above the online/offline banner at `z-[60]`
+- The notification bell dropdown — audit its z-index and confirm it appears above the main content but below modals
+- Shop public page and listing detail pages — confirm "Place Order" and "Send Inquiry" buttons are not obscured by the bottom nav bar. The page content must have `pb-24` on mobile to ensure these buttons are scrollable above the nav
+
+### 4G — Broken Redirects / Loops
+- `AuthContext.tsx` — the email verification polling runs every 5 seconds when `user.emailVerified === false`. Confirm this polling stops correctly once `emailVerified` becomes `true` and does not continue indefinitely after verification
+- `ResetPasswordPage.tsx` — confirm the password reset flow does not redirect back to itself if the OOB code in the URL is already consumed or expired
+- `ProfilePage.tsx` — if a user who is not signed in navigates to `/profile`, confirm they are redirected to the home page or shown an auth modal, and that this redirect does not loop (e.g. auth modal opens → user logs in → redirect back to `/profile` correctly)
+- `ShopPublicPage.tsx` — if a shop slug does not exist in Firestore, confirm the page renders a clear "Shop not found" state and does not loop or redirect repeatedly
+
+---
+
+## Final Checklist
+
+After completing all fixes:
+
+- [ ] All Firestore `onSnapshot` listeners have cleanup functions in their `useEffect` returns
+- [ ] All `setInterval` and `setTimeout` calls have corresponding `clearInterval` / `clearTimeout` in cleanup
+- [ ] `undefined` values are never passed to `addDoc()` or `updateDoc()` — all optional fields use `null`
+- [ ] `firestore.rules` `isXmuEmail()` uses an anchored regex ending in `$`
+- [ ] `firestore.rules` `isXmuEmail()` includes `request.auth.token.email_verified == true`
+- [ ] `firestore.rules` `shopInquiries` explicitly allows delete by shop owner and editors
+- [ ] `firestore.rules` `shops` create rule includes `name.size() > 0`
+- [ ] `firestore.rules` `listings` create rule validates `price >= 0` and `price <= 1000000`
+- [ ] `lib/sanitize.ts` price cap updated from 50,000 to 1,000,000
+- [ ] `lib/userProfile.ts` `deleteDocWithTimeout` rejects on timeout instead of resolving silently
+- [ ] `lib/firebase.ts` throws a hard error (not just a console warning) when required env vars are missing
+- [ ] The FAB z-index is `z-[45]` (below header, above bottom nav)
+- [ ] All shop and listing action buttons on mobile are never obscured by the bottom nav (`pb-24` on page containers)
+- [ ] No `dangerouslySetInnerHTML` is used without `DOMPurify.sanitize()`
+- [ ] The app builds with zero TypeScript errors: `pnpm --filter @workspace/xmum-market run build`
+- [ ] The admin panel builds with zero TypeScript errors: `pnpm --filter @workspace/xmum-admin run build`
+- [ ] No existing working functionality is broken
+- [ ] Dark mode is unaffected by all changes

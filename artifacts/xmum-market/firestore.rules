@@ -2,108 +2,159 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ── Helpers ────────────────────────────────────────────────────────────────
+
     function isSignedIn() {
       return request.auth != null;
     }
+
     function isOwner(uid) {
       return isSignedIn() && request.auth.uid == uid;
     }
+
+    // Anchored regex ($) prevents bypass via e.g. attacker@xmu.edu.my.evil.com
+    // Also requires email_verified so unverified accounts cannot write.
     function isXmuEmail() {
-      return isSignedIn() &&
-        request.auth.token.email.matches('.*@xmu\\.edu\\.my');
+      return isSignedIn()
+        && request.auth.token.email.matches('.*@xmu\\.edu\\.my$')
+        && request.auth.token.email_verified == true;
     }
+
     function getUserRole() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
     }
+
     function isAdmin() {
       return isSignedIn() && getUserRole() == 'admin';
     }
-    function isEditor() {
+
+    function isEditorRole() {
       return isSignedIn() && (getUserRole() == 'editor' || getUserRole() == 'admin');
     }
+
     function isShopOwner(shopId) {
-      return isSignedIn() &&
-        get(/databases/$(database)/documents/shops/$(shopId)).data.ownerId == request.auth.uid;
+      return isSignedIn()
+        && get(/databases/$(database)/documents/shops/$(shopId)).data.ownerId == request.auth.uid;
     }
+
     function isShopMember(shopId) {
-      return isSignedIn() && (
-        get(/databases/$(database)/documents/shops/$(shopId)).data.ownerId == request.auth.uid ||
-        request.auth.uid in get(/databases/$(database)/documents/shops/$(shopId)).data.editorIds
-      );
+      let shop = get(/databases/$(database)/documents/shops/$(shopId)).data;
+      return isSignedIn()
+        && (shop.ownerId == request.auth.uid
+            || request.auth.uid in shop.editorIds);
     }
 
+    // ── Users ──────────────────────────────────────────────────────────────────
     match /users/{userId} {
-      allow read: if true;
-      allow write: if isOwner(userId) || isAdmin();
+      // Only signed-in users may read profiles (not anonymous public)
+      allow read: if isSignedIn();
+      allow create: if isOwner(userId) && isXmuEmail();
+      allow update: if isOwner(userId) || isAdmin();
+      allow delete: if isOwner(userId) || isAdmin();
+
+      match /notifications/{notifId} {
+        allow read: if isOwner(userId);
+        // Any signed-in user can create notifications for another user
+        // (e.g. when sending a message or an inquiry).
+        allow create: if isXmuEmail();
+        allow update: if isOwner(userId);
+        allow delete: if isOwner(userId);
+      }
     }
 
+    // ── Listings ───────────────────────────────────────────────────────────────
     match /listings/{listingId} {
       allow read: if true;
       allow create: if isXmuEmail()
-                    && request.resource.data.title is string
-                    && request.resource.data.title.size() <= 100
-                    && request.resource.data.description is string
-                    && request.resource.data.description.size() <= 1000
-                    && request.resource.data.type in
-                       ["buy-sell","lost-found","jobs","assistance","rental"];
-      allow update, delete: if isOwner(resource.data.userId) || isEditor();
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 100
+        && request.resource.data.description is string
+        && request.resource.data.description.size() <= 1000
+        && request.resource.data.type in
+           ["buy-sell", "lost-found", "jobs", "assistance", "rental"]
+        // Price must be 0–1,000,000 RM when present (stored as a float)
+        && (!request.resource.data.keys().hasAny(["price"])
+            || (request.resource.data.price >= 0
+                && request.resource.data.price <= 1000000));
+      allow update: if isXmuEmail()
+        && resource.data.userId == request.auth.uid
+        && (!request.resource.data.keys().hasAny(["price"])
+            || (request.resource.data.price >= 0
+                && request.resource.data.price <= 1000000));
+      allow delete: if (isXmuEmail() && resource.data.userId == request.auth.uid)
+        || isEditorRole();
     }
 
-    // ── Campus Market Shops ───────────────────────────────────────────────────
+    // ── Campus Market Shops ────────────────────────────────────────────────────
     match /shops/{shopId} {
       allow read: if true;
       allow create: if isXmuEmail()
-                    && request.resource.data.ownerId == request.auth.uid
-                    && request.resource.data.name is string
-                    && request.resource.data.name.size() <= 60
-                    && request.resource.data.editorIds.size() <= 3;
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 60
+        && request.resource.data.editorIds.size() <= 3;
       allow update: if isShopOwner(shopId) || isAdmin() || (
-        isXmuEmail() &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['totalInquiries'])
+        isXmuEmail()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['totalInquiries'])
       );
       allow delete: if isShopOwner(shopId) || isAdmin();
     }
 
-    // ── Shop Listings ─────────────────────────────────────────────────────────
+    // ── Shop Listings ──────────────────────────────────────────────────────────
     match /shopListings/{listingId} {
       allow read: if true;
-      allow create: if isSignedIn() && isShopMember(request.resource.data.shopId);
-      allow update: if isSignedIn() && (
-        isShopMember(resource.data.shopId) ||
-        (
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['inquiryCount']) &&
-          isXmuEmail()
-        )
-      );
-      allow delete: if isSignedIn() && isShopMember(resource.data.shopId);
-    }
-
-    // ── Shop Inquiries ────────────────────────────────────────────────────────
-    match /shopInquiries/{inquiryId} {
-      allow read: if isSignedIn() && (
-        resource.data.buyerId == request.auth.uid ||
+      allow create: if isXmuEmail() && isShopMember(request.resource.data.shopId);
+      allow update: if isXmuEmail() && (
         isShopMember(resource.data.shopId)
+        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['inquiryCount'])
       );
-      allow create: if isXmuEmail()
-                    && request.resource.data.buyerId == request.auth.uid
-                    && request.resource.data.note is string
-                    && request.resource.data.note.size() <= 500;
-      allow update: if isSignedIn() && (
-        isShopMember(resource.data.shopId) ||
-        resource.data.buyerId == request.auth.uid
-      );
-      allow delete: if isSignedIn() && isShopMember(resource.data.shopId);
+      allow delete: if isXmuEmail() && isShopMember(resource.data.shopId);
     }
 
-    // ── Shop Reviews ──────────────────────────────────────────────────────────
+    // ── Shop Inquiries ─────────────────────────────────────────────────────────
+    match /shopInquiries/{inquiryId} {
+      allow read: if isSignedIn()
+        && (resource.data.buyerId == request.auth.uid
+            || isShopMember(resource.data.shopId));
+      allow create: if isXmuEmail()
+        && request.resource.data.buyerId == request.auth.uid
+        && request.resource.data.note is string
+        && request.resource.data.note.size() <= 500;
+      allow update: if isSignedIn()
+        && (isShopMember(resource.data.shopId)
+            || resource.data.buyerId == request.auth.uid);
+      // Shop owners/editors and the buyer may delete inquiries
+      allow delete: if isSignedIn()
+        && (isShopMember(resource.data.shopId)
+            || resource.data.buyerId == request.auth.uid);
+    }
+
+    // ── Shop Orders ────────────────────────────────────────────────────────────
+    match /shopOrders/{orderId} {
+      allow read: if isSignedIn()
+        && (resource.data.buyerId == request.auth.uid
+            || isShopMember(resource.data.shopId));
+      allow create: if isXmuEmail()
+        && request.resource.data.buyerId == request.auth.uid;
+      allow update: if isSignedIn()
+        && (isShopMember(resource.data.shopId)
+            || resource.data.buyerId == request.auth.uid);
+      allow delete: if false;
+    }
+
+    // ── Shop Reviews ───────────────────────────────────────────────────────────
     match /shopReviews/{reviewId} {
       allow read: if true;
       allow create: if isXmuEmail()
-                    && request.resource.data.reviewerId == request.auth.uid;
+        && request.resource.data.reviewerId == request.auth.uid;
       allow update, delete: if isAdmin();
     }
 
-    // ── Shop Ads ──────────────────────────────────────────────────────────────
+    // ── Shop Ads ───────────────────────────────────────────────────────────────
     match /shopAds/{adId} {
       allow read: if true;
       allow create: if isSignedIn() && isShopOwner(request.resource.data.shopId);
@@ -111,55 +162,68 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ── Reports ────────────────────────────────────────────────────────────────
     match /reports/{reportId} {
       allow create: if isXmuEmail()
-                    && request.resource.data.reportedBy == request.auth.uid
-                    && request.resource.data.reason is string
-                    && request.resource.data.reason.size() <= 500;
-      allow read, update: if isEditor();
+        && request.resource.data.reportedBy == request.auth.uid
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() <= 500;
+      allow read, update: if isEditorRole();
       allow delete: if isAdmin();
     }
 
+    // ── Platform Ads ───────────────────────────────────────────────────────────
     match /ads/{adId} {
       allow read: if true;
-      allow create, update: if isEditor();
+      allow create, update: if isEditorRole();
       allow delete: if isAdmin();
     }
 
+    // ── Analytics ─────────────────────────────────────────────────────────────
     match /analytics/{docId} {
-      allow read: if isEditor();
+      allow read: if isEditorRole();
       allow write: if isAdmin();
     }
 
-    match /users/{userId}/notifications/{notifId} {
-      allow read: if isOwner(userId);
-      allow write: if isOwner(userId) || isEditor() || isXmuEmail();
-    }
-
+    // ── Rental Audit Logs ──────────────────────────────────────────────────────
     match /rentalAuditLogs/{logId} {
       allow create: if isXmuEmail()
-                    && request.resource.data.userId == request.auth.uid;
+        && request.resource.data.userId == request.auth.uid;
       allow read, update, delete: if isAdmin();
     }
 
+    // ── Seller TC Audit Logs ───────────────────────────────────────────────────
     match /sellerTcAuditLogs/{logId} {
       allow create: if isXmuEmail()
-                    && request.resource.data.userId == request.auth.uid;
+        && request.resource.data.userId == request.auth.uid;
       allow read: if isAdmin();
     }
 
+    // ── Conversations ──────────────────────────────────────────────────────────
     match /conversations/{convId} {
-      allow read, write: if isSignedIn() &&
-        request.auth.uid in resource.data.participants;
-      allow create: if isSignedIn() &&
-        request.auth.uid in request.resource.data.participants;
+      // Only the two participants may read or update (not arbitrary signed-in users)
+      allow read, update: if isSignedIn()
+        && request.auth.uid in resource.data.participants;
+      // Separate create rule: resource.data is unavailable before document exists
+      allow create: if isXmuEmail()
+        && request.auth.uid in request.resource.data.participants;
+      allow delete: if false;
     }
 
+    // ── Messages ───────────────────────────────────────────────────────────────
     match /conversations/{convId}/messages/{msgId} {
-      allow read: if isSignedIn() &&
-        request.auth.uid in get(/databases/$(database)/documents/conversations/$(convId)).data.participants;
-      allow create: if isSignedIn() &&
-        request.auth.uid in get(/databases/$(database)/documents/conversations/$(convId)).data.participants;
+      allow read: if isSignedIn()
+        && request.auth.uid in
+           get(/databases/$(database)/documents/conversations/$(convId)).data.participants;
+      allow create: if isXmuEmail()
+        && request.auth.uid in
+           get(/databases/$(database)/documents/conversations/$(convId)).data.participants
+        && request.resource.data.senderId == request.auth.uid;
+      // Allow marking messages as read (isRead flag update)
+      allow update: if isSignedIn()
+        && request.auth.uid in
+           get(/databases/$(database)/documents/conversations/$(convId)).data.participants;
+      allow delete: if false;
     }
   }
 }

@@ -48,16 +48,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (profileUnsub) { profileUnsub(); profileUnsub = null; }
 
       if (u) {
+        // Delay setLoading(false) until the first profile snapshot fires so
+        // consumers never see loading=false with userProfile still null.
+        let firstSnap = true;
         profileUnsub = onSnapshot(
           doc(db, "users", u.uid),
-          (snap) => setUserProfile(snap.exists() ? (snap.data() as UserProfile) : null),
-          () => setUserProfile(null)
+          (snap) => {
+            setUserProfile(snap.exists() ? (snap.data() as UserProfile) : null);
+            if (firstSnap) { firstSnap = false; setLoading(false); }
+          },
+          () => {
+            setUserProfile(null);
+            if (firstSnap) { firstSnap = false; setLoading(false); }
+          }
         );
       } else {
         setUserProfile(null);
         setAvatarOverride(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => {

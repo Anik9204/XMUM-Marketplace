@@ -1004,10 +1004,15 @@ function SettingsTab({
             {bannerUploading ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
           </button>
           <input ref={bannerInputRef} type="file" accept="image/*" className="hidden" onChange={async (e) => {
-            if (!e.target.files?.[0]) return;
+            const file = e.target.files?.[0];
+            if (!file) return;
+            if (file.size > 5 * 1024 * 1024) {
+              setUploadError("Banner image must be under 5 MB.");
+              return;
+            }
             setUploadError("");
             setBannerUploading(true);
-            try { await onBannerUpload(e.target.files[0]); }
+            try { await onBannerUpload(file); }
             catch (err: any) { setUploadError("Banner upload failed: " + (err?.message ?? "Unknown error")); }
             finally { setBannerUploading(false); }
           }} />
@@ -1025,10 +1030,15 @@ function SettingsTab({
               {logoUploading ? <Loader2 size={10} className="animate-spin" /> : <Camera size={10} />}
             </button>
             <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={async (e) => {
-              if (!e.target.files?.[0]) return;
+              const file = e.target.files?.[0];
+              if (!file) return;
+              if (file.size > 5 * 1024 * 1024) {
+                setUploadError("Logo image must be under 5 MB.");
+                return;
+              }
               setUploadError("");
               setLogoUploading(true);
-              try { await onLogoUpload(e.target.files[0]); }
+              try { await onLogoUpload(file); }
               catch (err: any) { setUploadError("Logo upload failed: " + (err?.message ?? "Unknown error")); }
               finally { setLogoUploading(false); }
             }} />

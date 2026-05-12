@@ -195,7 +195,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* Floating Action Button — Home and Search only, authenticated, mobile only */}
       {user && (location === "/" || location === "/search") && (
         <Link href="/post">
-          <button className="fixed bottom-20 right-4 z-50 w-14 h-14 bg-[#003366] hover:bg-[#002244] text-white rounded-full shadow-modal flex items-center justify-center transition-transform hover:scale-105 active:scale-95 md:hidden">
+          <button className="fixed bottom-20 right-4 z-[45] w-14 h-14 bg-[#003366] hover:bg-[#002244] text-white rounded-full shadow-modal flex items-center justify-center transition-transform hover:scale-105 active:scale-95 md:hidden">
             <Plus className="w-6 h-6" />
           </button>
         </Link>

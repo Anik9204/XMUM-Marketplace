@@ -1,3 +1,7 @@
+// NOTE: This content filter runs CLIENT-SIDE ONLY. A user posting directly to
+// Firestore via the Firebase SDK will bypass it entirely. Firestore security
+// rules handle structural validation; this filter provides a UI-level guard.
+// For server-side enforcement, add a Firestore onCreate Cloud Function trigger.
 const PROHIBITED_ITEMS = [
   "weapon", "knife", "parang", "gun", "pistol", "rifle", "explosive", "bomb",
   "grenade", "ammo", "ammunition", "firearm", "blade",

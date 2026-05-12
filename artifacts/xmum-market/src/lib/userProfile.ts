@@ -35,10 +35,13 @@ function storagePathFromUrl(url: string): string | null {
 // Race against 6s timeout as a safety net in case of slow server response
 // in Replit's proxy environment. (Offline persistence is disabled so writes
 // fail fast, but network latency can still cause slow responses.)
+// Rejects on timeout so callers know the operation did not complete.
 function deleteDocWithTimeout(ref: Parameters<typeof deleteDoc>[0]): Promise<void> {
   return Promise.race([
     deleteDoc(ref),
-    new Promise<void>((resolve) => setTimeout(resolve, 6_000)),
+    new Promise<void>((_, reject) =>
+      setTimeout(() => reject(new Error("timeout:delete-doc")), 6_000)
+    ),
   ]);
 }
 

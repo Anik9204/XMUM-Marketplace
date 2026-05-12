@@ -163,6 +163,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!user) return;
+    let isMounted = true;
     if (listingsCache.current.length > 0) {
       setListings(listingsCache.current);
       return;
@@ -170,12 +171,14 @@ export default function ProfilePage() {
     setLoading(true);
     getUserListings(user.uid)
       .then((data) => {
+        if (!isMounted) return;
         const now = Date.now();
         const expired = data.filter(l => now - l.createdAt >= LISTING_EXPIRY_MS && l.status === "active");
         const active = data.filter(l => !(now - l.createdAt >= LISTING_EXPIRY_MS && l.status === "active"));
 
         if (expired.length > 0) {
           Promise.allSettled(expired.map(l => deleteListing(l))).then(() => {
+            if (!isMounted) return;
             if (expired.length === 1) {
               setSuccessToast(`"${expired[0].title}" has been automatically removed after 30 days.`);
             } else {
@@ -196,6 +199,7 @@ export default function ProfilePage() {
         setListings(active);
         sendDailyDigestIfDue(user.uid, active);
         getUserConversations(user.uid).then(convs => {
+          if (!isMounted) return;
           const msgs = convs.reduce((sum, c) => sum + (c.unreadCount?.[user.uid] ?? 0), 0);
           setTotalMessages(msgs);
         }).catch(() => {});
@@ -207,7 +211,8 @@ export default function ProfilePage() {
         );
         if (expiringSoon.length > 0) setExpiryReminders(expiringSoon);
       })
-      .finally(() => setLoading(false));
+      .finally(() => { if (isMounted) setLoading(false); });
+    return () => { isMounted = false; };
   }, [user]);
 
   // Fetch saved count on mount so the stat is correct before the saved tab is opened

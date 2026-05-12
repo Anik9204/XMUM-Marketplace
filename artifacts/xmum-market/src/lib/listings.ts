@@ -52,6 +52,12 @@ const PAGE_SIZE = 12;
 
 const CACHE_TTL_MS = 60_000;
 
+/**
+ * Maximum listing price in cents (RM 1,000,000.00).
+ * JS numbers are 64-bit floats safe up to 2^53 — 100_000_000 is well within range.
+ */
+export const MAX_PRICE_CENTS = 100_000_000;
+
 function getCacheKey(type: string, cursor: string | null): string {
   return `listings_cache_${type}_${cursor ?? "first"}`;
 }
@@ -71,6 +77,19 @@ function readCache<T>(key: string): T | null {
 
 function writeCache<T>(key: string, data: T): void {
   try {
+    // Evict oldest half when the cache grows beyond 20 slots to prevent
+    // sessionStorage (typically 5–10 MB) from filling up across many page/cursor combinations.
+    const allKeys = Object.keys(sessionStorage).filter((k) => k.startsWith("listings_cache_"));
+    if (allKeys.length >= 20) {
+      const sorted = allKeys.sort((a, b) => {
+        try {
+          const ta = (JSON.parse(sessionStorage.getItem(a) ?? "{}") as { ts?: number }).ts ?? 0;
+          const tb = (JSON.parse(sessionStorage.getItem(b) ?? "{}") as { ts?: number }).ts ?? 0;
+          return ta - tb;
+        } catch { return 0; }
+      });
+      sorted.slice(0, Math.ceil(allKeys.length / 2)).forEach((k) => sessionStorage.removeItem(k));
+    }
     sessionStorage.setItem(key, JSON.stringify({ data, ts: Date.now() }));
   } catch {}
 }
@@ -196,6 +215,8 @@ export async function bumpListing(
 }
 
 export async function markAsSold(id: string): Promise<void> {
+  // Firestore atomic increment() counters (totalListings, totalInquiries, viewCount)
+  // are never reset — this is intentional; they serve as monotonically increasing metrics.
   await Promise.race([
     updateDoc(doc(db, "listings", id), { status: "sold" }),
     new Promise<void>((resolve) => setTimeout(resolve, 6_000)),
