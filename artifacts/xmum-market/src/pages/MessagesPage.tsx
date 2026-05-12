@@ -93,6 +93,7 @@ export default function MessagesPage() {
   const [participantProfiles, setParticipantProfiles] = useState<Record<string, UserProfile | null>>({});
   const [otherIsTyping, setOtherIsTyping] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [clearingConvId, setClearingConvId] = useState<string | null>(null);
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportReason, setReportReason] = useState<UserReportReason>("spam");
   const [submittingReport, setSubmittingReport] = useState(false);
@@ -285,6 +286,20 @@ export default function MessagesPage() {
     }
   }, [activeConv?.id, user?.uid]);
 
+  const handleClearFromList = useCallback(async (convId: string) => {
+    if (!user) return;
+    if (!window.confirm("Clear this conversation? Only you will see it as cleared — the other person's view won't change.")) return;
+    setClearingConvId(convId);
+    try {
+      await clearConversation(convId, user.uid);
+      if (activeConv?.id === convId) closeConv();
+    } catch {
+      // silent
+    } finally {
+      setClearingConvId(null);
+    }
+  }, [user?.uid, activeConv?.id]);
+
   const handleReport = useCallback(async () => {
     if (!user || !activeConv) return;
     const otherUid = activeConv.participants.find((p) => p !== user.uid) ?? "";
@@ -357,8 +372,8 @@ export default function MessagesPage() {
         </h1>
       </div>
 
-      {/* Search bar — only when 3+ conversations */}
-      {conversations.length >= 3 && (
+      {/* Search bar — visible whenever there are conversations */}
+      {conversations.length > 0 && (
         <div className="px-3 py-2 border-b border-gray-100 dark:border-slate-800 shrink-0">
           <div className="relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
@@ -415,58 +430,76 @@ export default function MessagesPage() {
               const isActive = activeConv?.id === conv.id;
 
               return (
-                <button
+                <div
                   key={conv.id}
-                  onClick={() => openConv(conv)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-800/60 transition-colors text-left min-h-[72px] ${
+                  className={`flex items-center transition-colors ${
                     isActive
                       ? "bg-blue-50 dark:bg-slate-700"
                       : unread > 0
-                        ? "bg-blue-50/40 dark:bg-blue-950/20"
-                        : "bg-white dark:bg-slate-900"
+                        ? "bg-blue-50/40 dark:bg-blue-950/20 hover:bg-blue-50/60 dark:hover:bg-blue-950/30"
+                        : "bg-white dark:bg-slate-900 hover:bg-gray-50 dark:hover:bg-slate-800/60"
                   }`}
                 >
-                  {/* Left: other participant's avatar */}
-                  <Avatar name={displayName} avatarUrl={profile?.avatarUrl} size={48} />
+                  {/* Main clickable area */}
+                  <button
+                    onClick={() => openConv(conv)}
+                    className="flex-1 flex items-center gap-3 px-4 py-3 text-left min-h-[72px] min-w-0"
+                  >
+                    {/* Left: other participant's avatar */}
+                    <Avatar name={displayName} avatarUrl={profile?.avatarUrl} size={48} />
 
-                  {/* Middle: name + listing + last message */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-1 mb-0.5">
-                      <p className={`text-sm truncate ${unread > 0 ? "font-bold text-gray-900 dark:text-slate-50" : "font-semibold text-gray-800 dark:text-slate-100"}`}>
-                        {displayName}
-                      </p>
-                      <span className="text-[10px] text-gray-400 dark:text-slate-500 shrink-0">
-                        {relativeTime(conv.lastMessageAt)}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-400 dark:text-slate-500 italic truncate leading-tight mb-0.5">
-                      {conv.listingTitle}
-                    </p>
-                    <p className={`text-xs truncate leading-tight ${unread > 0 ? "font-semibold text-gray-700 dark:text-slate-200" : "text-gray-500 dark:text-slate-400"}`}>
-                      {conv.lastMessage || t.noMessages}
-                    </p>
-                  </div>
-
-                  {/* Right: listing thumbnail + unread badge */}
-                  <div className="flex flex-col items-end gap-1.5 shrink-0">
-                    {conv.listingPhoto ? (
-                      <img
-                        src={conv.listingPhoto}
-                        className="w-10 h-10 rounded-lg object-cover border border-gray-100 dark:border-slate-600"
-                        alt=""
-                      />
-                    ) : (
-                      <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0">
-                        <MessageCircle size={16} className="text-slate-400" />
+                    {/* Middle: name + listing + last message */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1 mb-0.5">
+                        <p className={`text-sm truncate ${unread > 0 ? "font-bold text-gray-900 dark:text-slate-50" : "font-semibold text-gray-800 dark:text-slate-100"}`}>
+                          {displayName}
+                        </p>
+                        <span className="text-[10px] text-gray-400 dark:text-slate-500 shrink-0">
+                          {relativeTime(conv.lastMessageAt)}
+                        </span>
                       </div>
-                    )}
-                    {unread > 0 && (
-                      <span className="min-w-[20px] h-5 bg-[#003366] dark:bg-blue-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1.5">
-                        {unread > 99 ? "99+" : unread}
-                      </span>
-                    )}
-                  </div>
-                </button>
+                      <p className="text-[11px] text-slate-400 dark:text-slate-500 italic truncate leading-tight mb-0.5">
+                        {conv.listingTitle}
+                      </p>
+                      <p className={`text-xs truncate leading-tight ${unread > 0 ? "font-semibold text-gray-700 dark:text-slate-200" : "text-gray-500 dark:text-slate-400"}`}>
+                        {conv.lastMessage || t.noMessages}
+                      </p>
+                    </div>
+
+                    {/* Right: listing thumbnail + unread badge */}
+                    <div className="flex flex-col items-end gap-1.5 shrink-0">
+                      {conv.listingPhoto ? (
+                        <img
+                          src={conv.listingPhoto}
+                          className="w-10 h-10 rounded-lg object-cover border border-gray-100 dark:border-slate-600"
+                          alt=""
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0">
+                          <MessageCircle size={16} className="text-slate-400" />
+                        </div>
+                      )}
+                      {unread > 0 && (
+                        <span className="min-w-[20px] h-5 bg-[#003366] dark:bg-blue-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1.5">
+                          {unread > 99 ? "99+" : unread}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+
+                  {/* Clear/delete affordance — always visible on mobile */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleClearFromList(conv.id); }}
+                    disabled={clearingConvId === conv.id}
+                    title="Clear conversation"
+                    aria-label="Clear conversation"
+                    className="shrink-0 pr-3 self-stretch flex items-center justify-center text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 transition-colors disabled:opacity-40 min-w-[36px]"
+                  >
+                    {clearingConvId === conv.id
+                      ? <Loader2 size={15} className="animate-spin text-red-400" />
+                      : <Trash2 size={15} />}
+                  </button>
+                </div>
               );
             })}
           </div>
@@ -715,7 +748,7 @@ export default function MessagesPage() {
         }
       `}</style>
 
-      <div className={`flex overflow-hidden overscroll-none ${!!user && !user.emailVerified ? "h-[calc(100dvh-56px-48px)] sm:h-[calc(100dvh-64px-48px)]" : "h-[calc(100dvh-56px)] sm:h-[calc(100dvh-64px)]"}`}>
+      <div className={`flex overflow-hidden overscroll-none ${!!user && !user.emailVerified ? "h-[calc(100dvh-184px)] sm:h-[calc(100dvh-192px)] md:h-[calc(100dvh-112px)]" : "h-[calc(100dvh-136px)] sm:h-[calc(100dvh-144px)] md:h-[calc(100dvh-64px)]"}`}>
 
         {/* Left panel: conversation list */}
         <div className={`flex flex-col border-r border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden w-full md:w-80 md:shrink-0 ${activeConv ? "hidden md:flex" : "flex"}`}>

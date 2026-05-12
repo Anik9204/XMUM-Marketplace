@@ -250,12 +250,13 @@ export default function ShopDashboardPage() {
             setInquiries((prev) => prev.filter((i) => i.id !== id));
           }}
           onChat={async (inq) => {
-            await getOrCreateConversation(
+            const convId = await getOrCreateConversation(
               user!.uid,
               inq.buyerId,
               { id: inq.shopListingId, title: inq.listingTitle, photos: [] },
             );
-            navigate("/messages");
+            const greeting = `Hi ${inq.buyerName}, thank you for your inquiry about "${inq.listingTitle}"! `;
+            navigate(`/messages?conv=${convId}&draft=${encodeURIComponent(greeting)}`);
           }}
         />
       )}

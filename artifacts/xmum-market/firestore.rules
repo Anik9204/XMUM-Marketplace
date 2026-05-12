@@ -92,6 +92,7 @@ service cloud.firestore {
         isShopMember(resource.data.shopId) ||
         resource.data.buyerId == request.auth.uid
       );
+      allow delete: if isSignedIn() && isShopMember(resource.data.shopId);
     }
 
     // ── Shop Reviews ──────────────────────────────────────────────────────────

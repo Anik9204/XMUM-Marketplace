@@ -1,0 +1,111 @@
+# XMUM Marketplace — Bug Report & Feature Fix List (Batch 4)
+
+You are a senior full-stack developer working on the XMUM Marketplace project (React + Vite + TypeScript + Firebase + Tailwind CSS 4). Read every relevant file completely before writing a single line of code. Fix and implement all issues listed below **without breaking any existing working functionality**. Work through each issue one by one in the exact order given.
+
+**Primary files to read first:**
+- `artifacts/xmum-market/src/pages/ShopDashboardPage.tsx`
+- `artifacts/xmum-market/src/pages/MessagesPage.tsx`
+- `artifacts/xmum-market/src/lib/messaging.ts`
+- `artifacts/xmum-market/src/components/Layout.tsx`
+
+---
+
+## Issue 1 — "Chat in App" From Inquiries Tab Does Not Open the Chat Directly or Send an Automatic Greeting
+
+**What is happening:**
+When the shop owner or editor clicks "Chat in App" on an inquiry card, the app calls `getOrCreateConversation()` and then navigates to `/messages`. However:
+
+- The user lands on the conversations list page, not inside the specific chat thread that was just opened or created. They have to manually find and tap the correct conversation from the list.
+- No automatic greeting message such as `"Hi [buyer name], thank you for your inquiry about [listing title]!"` is sent into the chat when the conversation is opened this way. The chat opens completely empty with no context.
+
+**Where to look:**
+In `ShopDashboardPage.tsx`, the `onChat` handler at around line 251:
+```
+onChat={async (inq) => {
+  await getOrCreateConversation(user!.uid, ...)
+  navigate("/messages");
+}}
+```
+The `navigate("/messages")` call lands on the list view, not the specific conversation. The `MessagesPage.tsx` supports a `?conv=` query parameter and a `?draft=` query parameter for deep-linking directly into a specific conversation with a pre-filled draft message — this mechanism exists but is not being used here.
+
+**What needs to change:**
+- `getOrCreateConversation()` returns the conversation ID. After calling it, navigate to `/messages?conv={conversationId}&draft={encodedGreetingMessage}` instead of just `/messages`
+- The greeting draft should be pre-populated as something like: `"Hi [buyerName], thank you for your inquiry about \"[listingTitle]\"! "`
+- The existing deep-link handler in `MessagesPage.tsx` (which reads `?conv=` and `?draft=` from the URL on load) will then automatically open the correct conversation and pre-fill the input box with the greeting, so the owner just needs to press Send
+
+---
+
+## Issue 2 — Delete Inquiry: Confirmation Does Nothing, Inquiry Is Not Deleted
+
+**What is happening:**
+When the shop owner or editor clicks "Delete" on an inquiry card and then confirms the action, nothing happens. The inquiry remains in the list and is not removed from Firestore. No error is shown — the confirmation dialog just closes silently.
+
+**Where to look:**
+In `ShopDashboardPage.tsx`, the `InquiriesTab` component uses a `deleteConfirm` state and an `onDelete` prop. The `onDelete` handler calls `deleteInquiry(id)` from `shops.ts`, which runs `deleteDoc(doc(db, "shopInquiries", inquiryId))`. The Firestore `deleteInquiry()` function itself looks correct. The problem is most likely one of:
+- The `deleteConfirm` state is being set but the confirmation UI is not correctly wired to call `onDelete` with the right inquiry ID
+- The `wrap()` helper that manages `actionLoading` state is swallowing the error silently or not awaiting the deletion correctly
+- A Firestore security rule is blocking the delete operation for the owner/editor role
+
+**What needs to change:**
+- Trace the full delete flow from button click → `deleteConfirm` state → confirmation button → `onDelete(id)` → `deleteInquiry(id)` → Firestore and identify exactly where the chain breaks
+- Fix the broken link in the chain so that confirming a delete actually removes the document from Firestore and immediately removes it from the local `inquiries` state so it disappears from the UI in real time
+- Check `firestore.rules` to confirm that shop owners and editors are permitted to delete documents in the `shopInquiries` collection where `shopId` matches their shop, and fix the rule if it is blocking the operation
+
+---
+
+## Issue 3 — Messages Page: Conversation Search Bar Missing on Mobile & Users Cannot Delete Conversations
+
+**What is happening:**
+Two features that exist in the codebase are not accessible on mobile:
+
+**3a — Search bar is gone:**
+The conversation search bar (which filters conversations by name or listing title) is no longer visible on the mobile Messages page. It appears the search bar is either hidden via a CSS class or has been conditionally removed and only shows on desktop.
+
+**3b — Delete/clear conversation button is missing:**
+Users have no way to delete or clear a conversation from the conversation list view on mobile. The clear/delete option only appears once the user has already opened a conversation (via the trash icon inside the chat header), but there is no way to swipe-to-delete or long-press to delete from the conversation list itself, and on mobile the trash icon inside the active chat header may also be out of view or inaccessible.
+
+**Where to look:**
+- In `MessagesPage.tsx`, the `conversationListContent` section — check whether the search bar `div` has any `hidden` class or conditional rendering that suppresses it on small screens
+- The conversation list rows are `<button>` elements with no delete affordance. There is no swipe action, no context menu, and no trash icon on the list row itself
+
+**What needs to change:**
+- The search bar must be visible and usable on mobile whenever there are 3 or more conversations, exactly as it behaves on desktop
+- Each conversation row in the list must have a visible delete/clear button (a small trash icon on the right side of the row, or revealed by a swipe gesture) so the user can remove a conversation directly from the list without having to open it first
+- Deleting from the list should call the existing `clearConversation()` function with the current user's UID so the behaviour is consistent with the existing trash icon inside the chat view
+
+---
+
+## Issue 4 — Active Chat: Recipient Details Hidden Behind the App Header on Mobile
+
+**What is happening:**
+When a user opens an active conversation on mobile, the chat header (which shows the other person's avatar, name, and email) is partially or fully hidden behind the main app navigation header ("XMUM Market" bar at the top of the screen). The user cannot see who they are chatting with. This is visible in the attached screenshot — the chat header content is obscured by the blue XMUM Market top bar.
+
+**Where to look:**
+In `MessagesPage.tsx`, the two-panel container uses:
+```
+h-[calc(100dvh-56px)] sm:h-[calc(100dvh-64px)]
+```
+The `56px` and `64px` values represent the height of the top navigation bar. If the app header height has changed, or if the `VerificationBanner` (48px) is also present when the email is unverified, the calculated height offset is wrong and the chat panel overflows under the top bar.
+
+Also check the chat header `div` inside `chatContent` — it uses `shrink-0` but may not have the correct `top` offset or `z-index` to clear the sticky app header.
+
+**What needs to change:**
+- The chat panel's total height calculation must correctly account for the app header height (`56px` mobile / `64px` desktop) and the optional verification banner (`48px`) so the chat header is never hidden behind the app header
+- The active chat header row (avatar + name + email) must always be fully visible at the top of the chat view on all mobile screen sizes (375px, 390px, 430px)
+- Test with and without the verification banner present
+
+---
+
+
+## Final Checklist Before Submitting
+
+- [ ] Clicking "Chat in App" on an inquiry navigates directly into the correct conversation thread with a pre-filled greeting message in the input box
+- [ ] Confirming "Delete" on an inquiry card removes the document from Firestore and removes the card from the UI in real time
+- [ ] Firestore security rules permit shop owners and editors to delete their own shop's inquiry documents
+- [ ] The conversation search bar is visible and functional on mobile in the Messages tab
+- [ ] Each conversation row in the Messages list has a delete/clear affordance accessible on mobile
+- [ ] The active chat header (avatar, name, email of recipient) is fully visible and never hidden behind the app top bar on mobile at all screen sizes
+- [ ] The `attached_assets/` and `.agents/` folders are deleted only after confirming no source file references them
+- [ ] The app builds with zero TypeScript errors after all changes: `pnpm --filter @workspace/xmum-market run build`
+- [ ] No existing working functionality is broken
+- [ ] Dark mode is unaffected by all UI changes
