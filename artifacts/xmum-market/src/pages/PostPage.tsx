@@ -294,6 +294,17 @@ export default function PostPage() {
     return () => clearTimeout(previewDebounceRef.current);
   }, [title, priceCents, previews, category, type, condition, description]);
 
+  // Pre-select listing type from URL ?type= param on mount (overrides draft)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlType = params.get("type") as ListingType | null;
+    const validTypes: ListingType[] = ["buy-sell", "lost-found", "jobs", "assistance", "rental"];
+    if (urlType && validTypes.includes(urlType)) {
+      setType(urlType);
+      setCategory(defaultCategoryForType(urlType));
+    }
+  }, []);
+
   // FIX 5: Draft restore on mount
   useEffect(() => {
     const raw = localStorage.getItem(DRAFT_KEY);
@@ -478,7 +489,7 @@ export default function PostPage() {
     setFieldError(null);
     setLoading(true);
 
-    if (!checkRateLimit(`post_${user.uid}`, 3, 60 * 60 * 1000)) {
+    if (!checkRateLimit(`post_daily_${user.uid}`, 6, 24 * 60 * 60 * 1000)) {
       setError("You've posted too many listings in the last hour. Please wait before posting again.");
       setLoading(false);
       return;

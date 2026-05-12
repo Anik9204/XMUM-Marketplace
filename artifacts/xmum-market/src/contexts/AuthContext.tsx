@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { User } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { onSnapshot, doc } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
 import { onAuthChange } from "@/lib/auth";
-import { getProfile } from "@/lib/userProfile";
 import { UserProfile } from "@/lib/types";
 
 interface AuthContextValue {
@@ -36,34 +36,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // detect the emailVerified change without this nudge.
   const [, setTick] = useState(0);
 
-  const fetchProfile = useCallback(async (uid: string) => {
-    try {
-      const profile = await getProfile(uid);
-      setUserProfile(profile);
-    } catch {
-      // Firestore may be offline on first load — silently return null.
-      setUserProfile(null);
-    }
+  const refetchProfile = useCallback(async () => {
+    // onSnapshot keeps the profile in real-time sync automatically
   }, []);
 
-  const refetchProfile = useCallback(async () => {
-    if (!auth.currentUser?.uid) return;
-    await fetchProfile(auth.currentUser.uid);
-  }, [fetchProfile]);
-
   useEffect(() => {
-    const unsub = onAuthChange(async (u) => {
+    let profileUnsub: (() => void) | null = null;
+
+    const authUnsub = onAuthChange((u) => {
       setUser(u);
+      if (profileUnsub) { profileUnsub(); profileUnsub = null; }
+
       if (u) {
-        await fetchProfile(u.uid);
+        profileUnsub = onSnapshot(
+          doc(db, "users", u.uid),
+          (snap) => setUserProfile(snap.exists() ? (snap.data() as UserProfile) : null),
+          () => setUserProfile(null)
+        );
       } else {
         setUserProfile(null);
-        setAvatarOverride(null); // clear any in-flight preview on sign-out
+        setAvatarOverride(null);
       }
       setLoading(false);
     });
-    return unsub;
-  }, [fetchProfile]);
+
+    return () => {
+      authUnsub();
+      if (profileUnsub) profileUnsub();
+    };
+  }, []);
 
   // Poll only when a user is signed in but unverified.
   // Stops automatically once emailVerified flips to true.

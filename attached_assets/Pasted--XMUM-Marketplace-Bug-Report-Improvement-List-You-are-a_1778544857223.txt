@@ -1,0 +1,98 @@
+
+
+
+
+## XMUM Marketplace — Bug Report & Improvement List
+
+You are a senior full-stack developer working on the XMUM Marketplace project (React + Vite + TypeScript + Firebase + Tailwind CSS 4). Read every relevant file before writing a single line of code. Fix all issues listed below **without breaking any existing working functionality**. Work through each issue one by one in the exact order given.
+
+---
+
+### Issue 1 — Account Deletion: Firebase Storage Permission Error
+
+When a user attempts to delete their account after entering the correct password, the following error is thrown:
+`Firebase Storage: User does not have permission to access 'avatars/8iiCF0tWHBavSIxa05GW9mIeO9r1/avatar.jpg'. (storage/unauthorized)`
+The account deletion flow fails completely as a result.
+
+---
+
+### Issue 2 — Saved Listings: Not Updating in Real Time & Resetting to 0 on Refresh
+
+When a user saves a listing, it does not appear in the saved list in real time — the user must manually navigate to "Saved" under "My Listings" to see it. Additionally, the saved count resets to 0 after every page refresh.
+
+---
+
+### Issue 3 — App Performance: General Slowness
+
+The app has become noticeably slow across all pages and interactions.
+
+---
+
+### Issue 4 — Mobile Navigation: Messages Tab Missing
+
+The Messages tab is present in the desktop navigation but is completely missing from the mobile bottom navigation bar.
+
+---
+
+### Issue 5 — Post Rate Limiting: Enforce 6 Listings Per Day
+
+There is currently no daily posting limit. A limit of 6 posts per day needs to be enforced for all users. Users can post more only by deleting existing listings.
+
+---
+
+### Issue 6 — Shop Dashboard Mobile UI: Tabs Are Squished
+
+The Shop Dashboard tabs (Listings, Inquiries, Orders, Editors, Settings) are poorly optimised for mobile — all tab labels are squished together and unreadable on small screens.
+
+---
+
+### Issue 7 — Shop Dashboard: Move "Editors" Tab Into Settings
+
+The "Editors" tab takes up valuable space in the tab bar on mobile. It should be moved inside the Settings tab to save space, as shown in the first attached photo.
+
+---
+
+### Issue 8 — Inquiries Tab: Owner Cannot Reply to Customer
+
+Shop owners and editors can see incoming customer inquiries but have no way to directly respond to the customer from within the Inquiries tab.
+
+---
+
+### Issue 9 — Shop Public Page: Order & Inquiry Buttons Covered by Bottom Nav on Mobile
+
+On mobile, the "Place Order" and "Send Inquiry" buttons on the shop public page and listing detail page are permanently obscured by the sticky bottom navigation bar, making them completely inaccessible to the user, as shown in the second attached photo.
+
+---
+
+### Issue 10 — My Listings: Remove the "Archived" Tab
+
+The "Archived" tab in "My Listings" serves no useful purpose for the end user and adds unnecessary clutter to the interface. The underlying soft-delete/archive logic should remain intact — only the UI tab needs to be removed.
+
+---
+
+### Issue 11 — Delete Shop: Real-Time Storefront Update Not Working
+
+When a shop is deleted, its data is correctly removed from Firebase Storage and disappears from the Market tab, but the shop continues to appear under "My Shop" until the page is manually refreshed. The deletion is not reflected in real time.
+
+---
+
+### Issue 12 — Messages: Cannot Scroll While Typing
+
+In the Messages page, users cannot scroll up or down to read previous messages while the message input field is focused, on both mobile and desktop.
+
+---
+
+### Issue 13 — Mobile Navigation: Remove "Post" Tab & Make "+" Context-Aware
+
+The "Post" tab in the mobile bottom navigation bar is redundant because the "+" floating action button already handles posting, as shown in the third attached photo. Additionally, the "+" button always starts the form from Buy & Sell regardless of which tab or category the user is currently viewing — it should instead open the relevant form directly based on the user's current context.
+
+---
+
+### Final Checklist Before Submitting
+
+- [ ] All 13 issues are resolved
+- [ ] No existing working features are broken
+- [ ] The app builds successfully with `pnpm --filter @workspace/xmum-market run build` with zero TypeScript errors
+- [ ] All fixes are mobile-tested at 375px viewport width
+- [ ] Dark mode is unaffected by all UI changes
+- [ ] Both EN and ZH language strings are updated wherever new UI text was added

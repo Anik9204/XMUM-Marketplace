@@ -115,9 +115,7 @@ export async function deleteAccount(password: string): Promise<void> {
             photos.map((url) => {
               const path = storagePathFromUrl(url);
               if (!path) return Promise.resolve();
-              return deleteObject(ref(storage, path)).catch((err) => {
-                if (err?.code !== "storage/object-not-found") throw err;
-              });
+              return deleteObject(ref(storage, path)).catch(() => {});
             })
           );
         }
@@ -134,9 +132,7 @@ export async function deleteAccount(password: string): Promise<void> {
     if (profile?.avatarUrl) {
       const avatarPath = storagePathFromUrl(profile.avatarUrl);
       if (avatarPath) {
-        await deleteObject(ref(storage, avatarPath)).catch((err) => {
-          if (err?.code !== "storage/object-not-found") throw err;
-        });
+        await deleteObject(ref(storage, avatarPath)).catch(() => {});
       }
     }
     console.log("[deleteAccount] Step 5 Complete");

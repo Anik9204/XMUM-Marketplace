@@ -591,7 +591,7 @@ export default function MessagesPage() {
       )}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1 bg-gray-50 dark:bg-slate-950 overscroll-contain">
+      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1 bg-gray-50 dark:bg-slate-950 overscroll-contain" style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" } as React.CSSProperties}>
         {visibleMessages.length === 0 && (
           <div className="flex justify-center mt-6">
             {clearedSince > 0 && messages.length > 0 ? (

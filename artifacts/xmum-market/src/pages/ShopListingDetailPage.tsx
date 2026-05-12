@@ -147,7 +147,7 @@ export default function ShopListingDetailPage() {
   const photos = listing.photos ?? [];
 
   return (
-    <div className="max-w-2xl mx-auto pb-36">
+    <div className="max-w-2xl mx-auto pb-48 md:pb-36">
       {/* Photo gallery */}
       <div className="relative bg-gray-100 dark:bg-slate-800 aspect-square sm:aspect-video overflow-hidden sm:max-h-[480px]">
         {photos.length > 0 ? (
@@ -364,7 +364,7 @@ export default function ShopListingDetailPage() {
 
       {/* Sticky action bar */}
       {!canManage && !sent && !showInquiry && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-700 px-4 py-3 flex gap-3 shadow-lg">
+        <div className="fixed bottom-14 md:bottom-0 left-0 right-0 z-40 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-700 px-4 py-3 flex gap-3 shadow-lg">
           <button
             onClick={() => {
               if (!user) {

@@ -147,6 +147,7 @@ export default function ProfilePage() {
 
   const [savedListings, setSavedListings] = useState<Listing[]>([]);
   const [savedLoading, setSavedLoading] = useState(false);
+  const [savedCount, setSavedCount] = useState(0);
   const [totalMessages, setTotalMessages] = useState(0);
 
   const [myShops, setMyShops] = useState<Shop[]>([]);
@@ -209,11 +210,20 @@ export default function ProfilePage() {
       .finally(() => setLoading(false));
   }, [user]);
 
+  // Fetch saved count on mount so the stat is correct before the saved tab is opened
+  useEffect(() => {
+    if (!user) return;
+    getSavedListings(user.uid)
+      .then((saved) => setSavedCount(saved.length))
+      .catch(() => {});
+  }, [user?.uid]);
+
   useEffect(() => {
     if (tab !== "saved" || !user) return;
     setSavedLoading(true);
     getSavedListings(user.uid)
       .then(async (saved) => {
+        setSavedCount(saved.length);
         const results = await Promise.all(saved.map(s => getListing(s.listingId).catch(() => null)));
         setSavedListings(results.filter((l): l is Listing => l !== null));
       })
@@ -233,7 +243,7 @@ export default function ProfilePage() {
       for (const s of [...owned, ...editing]) {
         if (!seen.has(s.id)) { seen.add(s.id); merged.push(s); }
       }
-      setMyShops(merged);
+      setMyShops(merged.filter(s => s.isActive !== false));
     }).catch(() => {}).finally(() => setShopsLoading(false));
     setInquiriesLoading(true);
     getInquiriesForBuyer(user.uid).then(setMyInquiries).catch(() => {}).finally(() => setInquiriesLoading(false));
@@ -362,15 +372,12 @@ export default function ProfilePage() {
   // Stats
   const activeCount = listings.filter(l => !l.isArchived && l.status !== "sold").length;
   const soldCount = listings.filter(l => l.status === "sold").length;
-  const archivedCount = listings.filter(l => l.isArchived && l.status !== "sold").length;
   const viewCount = listings.reduce((sum, l) => sum + (l.viewCount ?? 0), 0);
-  const savedCount = savedListings.length;
 
   const subTabs: { key: ListingTab; label: string; count: number }[] = [
-    { key: "active",   label: "Active",   count: activeCount },
-    { key: "sold",     label: "Sold",     count: soldCount },
-    { key: "archived", label: "Archived", count: archivedCount },
-    { key: "saved",    label: "Saved",    count: savedCount },
+    { key: "active", label: "Active", count: activeCount },
+    { key: "sold",   label: "Sold",   count: soldCount },
+    { key: "saved",  label: "Saved",  count: savedCount },
   ];
 
   return (

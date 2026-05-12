@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { logOut } from "@/lib/auth";
 import AuthModal from "@/components/AuthModal";
 import VerificationBanner from "@/components/VerificationBanner";
-import { Home, Search, PlusSquare, User, Globe, MessageCircle, Plus, Store } from "lucide-react";
+import { Home, Search, User, Globe, MessageCircle, Plus, Store } from "lucide-react";
 import { useState, useEffect } from "react";
 import NotificationBell from "@/components/NotificationBell";
 import { subscribeToUnreadCount } from "@/lib/messaging";
@@ -38,7 +38,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const isHomePage = location === "/";
 
   useEffect(() => {
     if (!user) { setUnreadMessages(0); return; }
@@ -50,7 +49,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { href: "/", icon: Home, label: t.home },
     { href: "/search", icon: Search, label: t.search },
     { href: "/campus-market", icon: Store, label: "Market" },
-    { href: "/post", icon: PlusSquare, label: t.post },
+    { href: "/messages", icon: MessageCircle, label: t.messages },
     { href: "/profile", icon: User, label: t.profile, activeFor: ["/profile", "/settings"] },
   ];
 
@@ -103,7 +102,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 )}
               </Link>
               <Link href="/campus-market" className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${location === "/campus-market" ? "text-white bg-white/20" : "text-white/70 hover:text-white hover:bg-white/10"}`}>Market</Link>
-              <Link href="/post" className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${location === "/post" ? "text-white bg-white/20" : "text-white/70 hover:text-white hover:bg-white/10"}`}>{t.post}</Link>
               {user ? (
                 <div className="relative">
                   <button
@@ -193,8 +191,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </nav>
 
-      {/* Floating Action Button — home page, authenticated, mobile only */}
-      {user && isHomePage && (
+      {/* Floating Action Button — authenticated, mobile only, hidden on pages with their own sticky bars */}
+      {user && !location.startsWith("/shop-listing") && !location.startsWith("/order") && (
         <Link href="/post">
           <button className="fixed bottom-20 right-4 z-50 w-14 h-14 bg-[#003366] hover:bg-[#002244] text-white rounded-full shadow-modal flex items-center justify-center transition-transform hover:scale-105 active:scale-95 md:hidden">
             <Plus className="w-6 h-6" />

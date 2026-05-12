@@ -14,7 +14,7 @@ import { Shop, ShopListing, ShopInquiry, ShopCategory, InquiryStatus, ShopOrder,
 import {
   Loader2, Plus, Trash2, Edit2, CheckCircle2, XCircle, Clock, Package,
   MessageSquare, Users, Settings, ArrowLeft, ImagePlus, X, AlertTriangle,
-  Store, UserMinus, UserPlus, Camera, ShoppingCart,
+  Store, UserMinus, UserPlus, Camera, ShoppingCart, Send,
 } from "lucide-react";
 import { SiWhatsapp } from "react-icons/si";
 
@@ -31,7 +31,7 @@ const SHOP_CATEGORIES: ShopCategory[] = [
 const inputCls = "w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition min-h-[44px]";
 const labelCls = "block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-1";
 
-type Tab = "listings" | "inquiries" | "orders" | "editors" | "settings";
+type Tab = "listings" | "inquiries" | "orders" | "settings";
 
 function StatusBadge({ status }: { status: InquiryStatus }) {
   const map: Record<InquiryStatus, { label: string; cls: string }> = {
@@ -169,7 +169,6 @@ export default function ShopDashboardPage() {
     { key: "listings",  label: "Listings",  icon: <Package size={15} /> },
     { key: "inquiries", label: "Inquiries", icon: <MessageSquare size={15} />, badge: pendingInquiryCount },
     { key: "orders",    label: "Orders",    icon: <ShoppingCart size={15} />, badge: pendingOrderCount },
-    ...(isOwner ? [{ key: "editors" as Tab, label: "Editors", icon: <Users size={15} /> }] : []),
     { key: "settings",  label: "Settings",  icon: <Settings size={15} /> },
   ];
 
@@ -198,13 +197,14 @@ export default function ShopDashboardPage() {
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 min-h-[40px] rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
+            className={`flex-1 flex items-center justify-center gap-1 sm:gap-1.5 py-2 min-h-[40px] rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
               tab === t.key
                 ? "bg-white dark:bg-slate-700 shadow text-[#003366] dark:text-slate-100"
                 : "text-gray-500 dark:text-slate-400"
             }`}
           >
-            {t.icon}{t.label}
+            {t.icon}
+            <span className="hidden sm:inline">{t.label}</span>
             {t.badge ? (
               <span className="ml-1 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none">
                 {t.badge}
@@ -255,40 +255,6 @@ export default function ShopDashboardPage() {
         />
       )}
 
-      {/* ── EDITORS TAB ── */}
-      {tab === "editors" && isOwner && (
-        <EditorsTab
-          shop={shop}
-          editorEmail={editorEmail}
-          setEditorEmail={setEditorEmail}
-          editorLoading={editorLoading}
-          editorError={editorError}
-          onAdd={async () => {
-            setEditorError("");
-            setEditorLoading(true);
-            try {
-              const q = query(collection(db, "users"), where("email", "==", editorEmail.trim()), limit(1));
-              const snap = await getDocs(q);
-              if (snap.empty) { setEditorError("No XMUM user found with that email."); return; }
-              const uid = snap.docs[0].id;
-              await addShopEditor(shopId, uid, shop.editorIds);
-              setShop((prev) => prev ? { ...prev, editorIds: [...prev.editorIds, uid] } : prev);
-              setEditorEmail("");
-              notifyEditorAdded(uid, shop.name, shopId).catch(() => {});
-            } catch (err: any) {
-              setEditorError(err.message ?? "Failed to add editor.");
-            } finally {
-              setEditorLoading(false);
-            }
-          }}
-          onRemove={async (uid) => {
-            await removeShopEditor(shopId, uid, shop.editorIds);
-            setShop((prev) => prev ? { ...prev, editorIds: prev.editorIds.filter((e) => e !== uid) } : prev);
-            notifyEditorRemoved(uid, shop.name).catch(() => {});
-          }}
-        />
-      )}
-
       {/* ── SETTINGS TAB ── */}
       {tab === "settings" && (
         <SettingsTab
@@ -309,6 +275,38 @@ export default function ShopDashboardPage() {
           setShowDeleteConfirm={setShowDeleteConfirm}
           bannerInputRef={bannerInputRef}
           logoInputRef={logoInputRef}
+          editorContent={isOwner ? (
+            <EditorsTab
+              shop={shop}
+              editorEmail={editorEmail}
+              setEditorEmail={setEditorEmail}
+              editorLoading={editorLoading}
+              editorError={editorError}
+              onAdd={async () => {
+                setEditorError("");
+                setEditorLoading(true);
+                try {
+                  const q = query(collection(db, "users"), where("email", "==", editorEmail.trim()), limit(1));
+                  const snap = await getDocs(q);
+                  if (snap.empty) { setEditorError("No XMUM user found with that email."); return; }
+                  const uid = snap.docs[0].id;
+                  await addShopEditor(shopId, uid, shop.editorIds);
+                  setShop((prev) => prev ? { ...prev, editorIds: [...prev.editorIds, uid] } : prev);
+                  setEditorEmail("");
+                  notifyEditorAdded(uid, shop.name, shopId).catch(() => {});
+                } catch (err: any) {
+                  setEditorError(err.message ?? "Failed to add editor.");
+                } finally {
+                  setEditorLoading(false);
+                }
+              }}
+              onRemove={async (uid) => {
+                await removeShopEditor(shopId, uid, shop.editorIds);
+                setShop((prev) => prev ? { ...prev, editorIds: prev.editorIds.filter((e) => e !== uid) } : prev);
+                notifyEditorRemoved(uid, shop.name).catch(() => {});
+              }}
+            />
+          ) : undefined}
           onSave={async () => {
             if (countWords(settingsBio) > 500) return;
             setSettingsLoading(true);
@@ -763,6 +761,14 @@ function InquiriesTab({ inquiries, loading }: {
           </div>
           {inq.note && <p className="text-xs text-gray-600 dark:text-slate-300 bg-gray-50 dark:bg-slate-700/50 rounded-lg px-3 py-2 mt-2">"{inq.note}"</p>}
           {inq.quantity && <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">Qty: {inq.quantity}</p>}
+          {inq.buyerEmail && (
+            <a
+              href={`mailto:${inq.buyerEmail}?subject=${encodeURIComponent(`Re: ${inq.listingTitle}`)}&body=${encodeURIComponent(`Hi ${inq.buyerName},\n\nThank you for your inquiry about "${inq.listingTitle}". `)}`}
+              className="inline-flex items-center gap-1 mt-2 text-xs text-[#003366] dark:text-blue-400 font-semibold hover:underline"
+            >
+              <Send size={11} /> Reply via Email
+            </a>
+          )}
           {inq.status === "completed" && !inq.reviewLeft && (
             <span className="text-xs text-amber-600 dark:text-amber-400 font-medium mt-1 inline-block">Review left: No</span>
           )}
@@ -851,7 +857,7 @@ function SettingsTab({
   shop, isOwner, name, bio, category, whatsapp, wechat,
   setName, setBio, setCategory, setWhatsApp, setWeChat,
   loading, showDeleteConfirm, setShowDeleteConfirm,
-  bannerInputRef, logoInputRef, onSave, onBannerUpload, onLogoUpload, onDelete,
+  bannerInputRef, logoInputRef, editorContent, onSave, onBannerUpload, onLogoUpload, onDelete,
 }: {
   shop: Shop; isOwner: boolean;
   name: string; bio: string; category: ShopCategory; whatsapp: string; wechat: string;
@@ -859,6 +865,7 @@ function SettingsTab({
   setWhatsApp: (v: string) => void; setWeChat: (v: string) => void;
   loading: boolean; showDeleteConfirm: boolean; setShowDeleteConfirm: (v: boolean) => void;
   bannerInputRef: React.RefObject<HTMLInputElement | null>; logoInputRef: React.RefObject<HTMLInputElement | null>;
+  editorContent?: React.ReactNode;
   onSave: () => void; onBannerUpload: (f: File) => void; onLogoUpload: (f: File) => void; onDelete: () => void;
 }) {
   const [saved, setSaved] = useState(false);
@@ -1011,6 +1018,16 @@ function SettingsTab({
           />
         )}
       </div>
+
+      {/* Editors — owner only, embedded in Settings */}
+      {editorContent && (
+        <div className="bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-2xl p-4 mt-4">
+          <h3 className="text-sm font-bold text-gray-900 dark:text-slate-100 mb-3 flex items-center gap-2">
+            <Users size={14} /> Editors
+          </h3>
+          {editorContent}
+        </div>
+      )}
 
       {/* Order Form Questions */}
       <div className="bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-2xl p-4 mt-4">

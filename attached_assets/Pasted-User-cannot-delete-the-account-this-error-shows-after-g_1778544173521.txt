@@ -1,0 +1,29 @@
+User cannot delete the account; this error shows after giving the right password:  
+
+Firebase Storage: User does not have permission to access 'avatars/8iiCF0tWHBavSIxa05GW9mIeO9r1/avatar.jpg'. (storage/unauthorized)  
+
+User saving a post but not going to the saving list in real time. User has to click on 'saved' in my listing to see the saved, and after every refresh, the saving shows 0.  
+
+The app has become a bit slow.  
+
+The 'message' tab is gone from the mobile site but is present on the desktop site.  
+
+Make the limit 6 posts/day for all users. They can post more by deleting existing listings.  
+
+The tabs for shop owners to see orders, inquiries, and everything are not well optimized in a UI sense for mobile; all the things are squished with each other.  
+
+Look at this photo:  
+
+Go to manage shop and put the 'editor' option inside 'settings.' It'll save some space on mobile.  
+
+Owner/editor cannot reply to the customer from the inquiries tab; make it so the owner can directly chat with the customer from the inquiry tab.  
+
+User cannot place orders or send inquiries to the shop from mobile because those options are always covered by the tab that contains home, search, market, and profile. See the photo.  
+
+The archived tab on my listing is useless; delete that option safely.  
+
+When deleting a shop, all the data of the shop is getting deleted from Firebase storage but is not getting deleted from the storefront in real time. It is still showing on the 'My Shop' tab but getting removed from the 'Market' tab. Fix this issue.  
+
+In the 'message,' user cannot scroll up or down to see the previous messages while writing the message, both on phone and desktop site.  
+
+Look at the photo; remove the 'post' tab for the mobile screen because the user can simply post by clicking the '+' sign on the phone. Also, make the '+' sign operation more practical; like if the user is in the 'job' tab and then presses the '+' icon, it should directly take him to the form for posting jobs, not start from buy and sell. Do this for all categories as well.
