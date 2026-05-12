@@ -166,40 +166,81 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </footer>
 
-      {/* Mobile bottom nav */}
+      {/* Mobile bottom nav — mudah.my style with centre Post button */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-700 z-40">
-        <div className="flex pb-[env(safe-area-inset-bottom)]">
-          {navItems.map(({ href, icon: Icon, label, activeFor }) => {
-            const active = activeFor ? activeFor.includes(location) : location === href;
+        <div className="flex items-end pb-[env(safe-area-inset-bottom)]">
+          {/* Home */}
+          {(() => {
+            const { href, icon: Icon, label } = navItems[0];
+            const active = location === href;
             return (
-              <Link
-                key={href}
-                href={href}
-                className={`flex-1 flex flex-col items-center justify-center min-h-[56px] gap-0.5 transition-colors ${active ? "text-[#003366] dark:text-blue-400" : "text-slate-400 dark:text-slate-500"}`}
+              <Link key={href} href={href} className={`flex-1 flex flex-col items-center justify-center min-h-[56px] gap-0.5 transition-colors ${active ? "text-[#003366] dark:text-blue-400" : "text-slate-400 dark:text-slate-500"}`}>
+                <Icon size={20} strokeWidth={active ? 2.5 : 1.8} />
+                <span className="text-[9px] font-medium leading-none">{label}</span>
+              </Link>
+            );
+          })()}
+
+          {/* Search */}
+          {(() => {
+            const { href, icon: Icon, label } = navItems[1];
+            const active = location === href;
+            return (
+              <Link key={href} href={href} className={`flex-1 flex flex-col items-center justify-center min-h-[56px] gap-0.5 transition-colors ${active ? "text-[#003366] dark:text-blue-400" : "text-slate-400 dark:text-slate-500"}`}>
+                <Icon size={20} strokeWidth={active ? 2.5 : 1.8} />
+                <span className="text-[9px] font-medium leading-none">{label}</span>
+              </Link>
+            );
+          })()}
+
+          {/* Centre POST button (elevated, mudah.my style) */}
+          <div className="flex-1 flex flex-col items-center justify-end pb-1 relative" style={{ marginTop: "-16px" }}>
+            <Link href="/post">
+              <button
+                className={`w-14 h-14 rounded-full shadow-lg flex items-center justify-center transition-transform active:scale-95 ${
+                  location === "/post"
+                    ? "bg-[#002244] dark:bg-blue-700"
+                    : "bg-[#003366] dark:bg-blue-600 hover:bg-[#002244] dark:hover:bg-blue-700"
+                }`}
               >
+                <Plus className="w-7 h-7 text-white" />
+              </button>
+            </Link>
+            <span className="text-[9px] font-medium leading-none mt-1 text-[#003366] dark:text-blue-400">{t.post}</span>
+          </div>
+
+          {/* Messages */}
+          {(() => {
+            const { href, icon: Icon, label } = navItems[3];
+            const active = location === href;
+            return (
+              <Link key={href} href={href} className={`flex-1 flex flex-col items-center justify-center min-h-[56px] gap-0.5 transition-colors ${active ? "text-[#003366] dark:text-blue-400" : "text-slate-400 dark:text-slate-500"}`}>
                 <div className="relative">
                   <Icon size={20} strokeWidth={active ? 2.5 : 1.8} />
-                  {href === "/messages" && unreadMessages > 0 && (
+                  {unreadMessages > 0 && (
                     <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-0.5 leading-none">
                       {unreadMessages > 9 ? "9+" : unreadMessages}
                     </span>
                   )}
                 </div>
-                <span className="text-[9px] xs:text-[10px] font-medium leading-none">{label}</span>
+                <span className="text-[9px] font-medium leading-none">{label}</span>
               </Link>
             );
-          })}
+          })()}
+
+          {/* Profile */}
+          {(() => {
+            const { href, icon: Icon, label, activeFor } = navItems[4];
+            const active = activeFor ? activeFor.includes(location) : location === href;
+            return (
+              <Link key={href} href={href} className={`flex-1 flex flex-col items-center justify-center min-h-[56px] gap-0.5 transition-colors ${active ? "text-[#003366] dark:text-blue-400" : "text-slate-400 dark:text-slate-500"}`}>
+                <Icon size={20} strokeWidth={active ? 2.5 : 1.8} />
+                <span className="text-[9px] font-medium leading-none">{label}</span>
+              </Link>
+            );
+          })()}
         </div>
       </nav>
-
-      {/* Floating Action Button — Home and Search only, authenticated, mobile only */}
-      {user && (location === "/" || location === "/search") && (
-        <Link href="/post">
-          <button className="fixed bottom-20 right-4 z-[45] w-14 h-14 bg-[#003366] hover:bg-[#002244] text-white rounded-full shadow-modal flex items-center justify-center transition-transform hover:scale-105 active:scale-95 md:hidden">
-            <Plus className="w-6 h-6" />
-          </button>
-        </Link>
-      )}
 
       {/* Auth modal — global, triggered from header */}
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
