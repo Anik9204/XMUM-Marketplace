@@ -94,6 +94,8 @@ export default function MessagesPage() {
   const [otherIsTyping, setOtherIsTyping] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [clearingConvId, setClearingConvId] = useState<string | null>(null);
+  const [confirmClearId, setConfirmClearId] = useState<string | null>(null);
+  const [confirmClearChat, setConfirmClearChat] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportReason, setReportReason] = useState<UserReportReason>("spam");
   const [submittingReport, setSubmittingReport] = useState(false);
@@ -275,8 +277,8 @@ export default function MessagesPage() {
 
   const handleClear = useCallback(async () => {
     if (!activeConv || !user) return;
-    if (!window.confirm("Clear this conversation? Only you will see it as cleared — the other person's view won't change.")) return;
     setClearing(true);
+    setConfirmClearChat(false);
     try {
       await clearConversation(activeConv.id, user.uid);
     } catch {
@@ -288,7 +290,7 @@ export default function MessagesPage() {
 
   const handleClearFromList = useCallback(async (convId: string) => {
     if (!user) return;
-    if (!window.confirm("Clear this conversation? Only you will see it as cleared — the other person's view won't change.")) return;
+    setConfirmClearId(null);
     setClearingConvId(convId);
     try {
       await clearConversation(convId, user.uid);
@@ -334,15 +336,21 @@ export default function MessagesPage() {
   };
 
   // ── Filtered conversations ────────────────────────────────────────────────────
+  // Hide conversations the current user has cleared (unless new messages arrived after the clear)
+  const visibleConversations = conversations.filter((c) => {
+    const clearedAt = c.clearedAt?.[user?.uid ?? ""] ?? 0;
+    return clearedAt === 0 || c.lastMessageAt > clearedAt;
+  });
+
   const filteredConversations = searchQuery.trim()
-    ? conversations.filter((c) => {
+    ? visibleConversations.filter((c) => {
         const q = searchQuery.toLowerCase();
         const otherUid = c.participants.find((p) => p !== user?.uid);
         const profile = otherUid ? participantProfiles[otherUid] : null;
         const name = (profile?.fullName || profile?.displayName || "").toLowerCase();
         return c.listingTitle.toLowerCase().includes(q) || name.includes(q);
       })
-    : conversations;
+    : visibleConversations;
 
   // ── Not signed in ────────────────────────────────────────────────────────────
   if (!user) {
@@ -487,18 +495,35 @@ export default function MessagesPage() {
                     </div>
                   </button>
 
-                  {/* Clear/delete affordance — always visible on mobile */}
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleClearFromList(conv.id); }}
-                    disabled={clearingConvId === conv.id}
-                    title="Clear conversation"
-                    aria-label="Clear conversation"
-                    className="shrink-0 pr-3 self-stretch flex items-center justify-center text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 transition-colors disabled:opacity-40 min-w-[36px]"
-                  >
-                    {clearingConvId === conv.id
-                      ? <Loader2 size={15} className="animate-spin text-red-400" />
-                      : <Trash2 size={15} />}
-                  </button>
+                  {/* Clear/delete affordance — inline confirm to avoid window.confirm iframe block */}
+                  {confirmClearId === conv.id ? (
+                    <div className="shrink-0 pr-2 self-stretch flex items-center gap-1">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleClearFromList(conv.id); }}
+                        className="text-[11px] font-semibold text-white bg-red-500 hover:bg-red-600 px-2 py-1 rounded-lg transition-colors min-h-[32px]"
+                      >
+                        Delete
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setConfirmClearId(null); }}
+                        className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 px-2 py-1 rounded-lg transition-colors min-h-[32px]"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setConfirmClearId(conv.id); }}
+                      disabled={clearingConvId === conv.id}
+                      title="Clear conversation"
+                      aria-label="Clear conversation"
+                      className="shrink-0 pr-3 self-stretch flex items-center justify-center text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 transition-colors disabled:opacity-40 min-w-[36px]"
+                    >
+                      {clearingConvId === conv.id
+                        ? <Loader2 size={15} className="animate-spin text-red-400" />
+                        : <Trash2 size={15} />}
+                    </button>
+                  )}
                 </div>
               );
             })}
@@ -557,14 +582,32 @@ export default function MessagesPage() {
         >
           <Flag size={16} />
         </button>
-        <button
-          onClick={handleClear}
-          disabled={clearing}
-          title="Clear conversation"
-          className="shrink-0 flex items-center justify-center w-9 h-9 rounded-xl text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-40"
-        >
-          {clearing ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-        </button>
+        {confirmClearChat ? (
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={handleClear}
+              disabled={clearing}
+              className="text-[11px] font-semibold text-white bg-red-500 hover:bg-red-600 px-2.5 py-1.5 rounded-lg transition-colors min-h-[36px] disabled:opacity-50"
+            >
+              {clearing ? <Loader2 size={13} className="animate-spin" /> : "Delete"}
+            </button>
+            <button
+              onClick={() => setConfirmClearChat(false)}
+              className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 px-2 py-1.5 rounded-lg transition-colors min-h-[36px]"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setConfirmClearChat(true)}
+            disabled={clearing}
+            title="Clear conversation"
+            className="shrink-0 flex items-center justify-center w-9 h-9 rounded-xl text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-40"
+          >
+            {clearing ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+          </button>
+        )}
       </div>
 
       {/* Report user modal */}
