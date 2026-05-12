@@ -24,6 +24,6 @@ export function sanitizeListingData(
   if (typeof out.whatsapp === "string")
     out.whatsapp = out.whatsapp.replace(/[^\d+]/g, "").slice(0, 20);
   if (typeof out.price === "number")
-    out.price = Math.max(0, Math.min(50000, out.price));
+    out.price = Math.max(0, Math.min(1_000_000, out.price));
   return out;
 }
