@@ -4,5 +4,8 @@ export const modules: ModuleMap = {
   "./components/mockups/homepage-layouts/BentoLayout.tsx": () => import("../components/mockups/homepage-layouts/BentoLayout.tsx"),
   "./components/mockups/homepage-layouts/FeedLayout.tsx": () => import("../components/mockups/homepage-layouts/FeedLayout.tsx"),
   "./components/mockups/homepage-layouts/MudahInspired.tsx": () => import("../components/mockups/homepage-layouts/MudahInspired.tsx"),
-  "./components/mockups/homepage-layouts/SidebarLayout.tsx": () => import("../components/mockups/homepage-layouts/SidebarLayout.tsx")
+  "./components/mockups/homepage-layouts/SidebarLayout.tsx": () => import("../components/mockups/homepage-layouts/SidebarLayout.tsx"),
+  "./components/mockups/usability/AccessibilityVariant.tsx": () => import("../components/mockups/usability/AccessibilityVariant.tsx"),
+  "./components/mockups/usability/AffordanceVariant.tsx": () => import("../components/mockups/usability/AffordanceVariant.tsx"),
+  "./components/mockups/usability/HierarchyVariant.tsx": () => import("../components/mockups/usability/HierarchyVariant.tsx")
 };
