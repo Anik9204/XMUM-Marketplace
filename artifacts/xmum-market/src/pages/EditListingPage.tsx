@@ -29,6 +29,12 @@ const ASSISTANCE_CATEGORIES = [
 const RENTAL_VEHICLE_TYPES = ["car", "bike", "motorcycle", "bicycle", "scooter"] as const;
 type VehicleType = typeof RENTAL_VEHICLE_TYPES[number];
 
+function formatCents(cents: number): string {
+  const ringgit = Math.floor(cents / 100);
+  const sen = cents % 100;
+  return ringgit.toLocaleString("en-MY") + "." + sen.toString().padStart(2, "0");
+}
+
 function getCategoriesForType(type: ListingType): string[] {
   if (type === "buy-sell") return BUY_SELL_CATEGORIES;
   if (type === "lost-found") return LOST_FOUND_CATEGORIES;
@@ -645,19 +651,20 @@ export default function EditListingPage() {
               <input
                 type="text"
                 inputMode="numeric"
-                value={(priceCents / 100).toFixed(2)}
+                value={formatCents(priceCents)}
                 onKeyDown={(e) => {
                   if (e.key >= "0" && e.key <= "9") {
                     e.preventDefault();
-                    setPriceCents((prev) => { const next = prev * 10 + parseInt(e.key); return next > 9999999 ? prev : next; });
+                    setPriceCents((prev) => { const next = prev * 10 + parseInt(e.key); return next > 100_000_000 ? prev : next; });
                     setIsDirty(true);
                   } else if (e.key === "Backspace") {
                     e.preventDefault();
                     setPriceCents((prev) => Math.floor(prev / 10));
                     setIsDirty(true);
+                  } else {
+                    e.preventDefault();
                   }
                 }}
-                onFocus={(e) => e.target.select()}
                 readOnly={false}
                 className={`${inputCls} pl-10 text-right font-mono tracking-wide`}
               />
@@ -675,20 +682,21 @@ export default function EditListingPage() {
               <input
                 type="text"
                 inputMode="numeric"
-                value={priceCents === 0 ? "" : (priceCents / 100).toFixed(2)}
+                value={formatCents(priceCents)}
                 placeholder="0.00"
                 onKeyDown={(e) => {
                   if (e.key >= "0" && e.key <= "9") {
                     e.preventDefault();
-                    setPriceCents((prev) => { const next = prev * 10 + parseInt(e.key); return next > 9999999 ? prev : next; });
+                    setPriceCents((prev) => { const next = prev * 10 + parseInt(e.key); return next > 100_000_000 ? prev : next; });
                     setIsDirty(true);
                   } else if (e.key === "Backspace") {
                     e.preventDefault();
                     setPriceCents((prev) => Math.floor(prev / 10));
                     setIsDirty(true);
+                  } else {
+                    e.preventDefault();
                   }
                 }}
-                onFocus={(e) => e.target.select()}
                 readOnly={false}
                 className={`${inputCls} pl-10 text-right font-mono tracking-wide`}
               />
@@ -744,19 +752,20 @@ export default function EditListingPage() {
               <input
                 type="text"
                 inputMode="numeric"
-                value={(priceCents / 100).toFixed(2)}
+                value={formatCents(priceCents)}
                 onKeyDown={(e) => {
                   if (e.key >= "0" && e.key <= "9") {
                     e.preventDefault();
-                    setPriceCents((prev) => { const next = prev * 10 + parseInt(e.key); return next > 9999999 ? prev : next; });
+                    setPriceCents((prev) => { const next = prev * 10 + parseInt(e.key); return next > 100_000_000 ? prev : next; });
                     setIsDirty(true);
                   } else if (e.key === "Backspace") {
                     e.preventDefault();
                     setPriceCents((prev) => Math.floor(prev / 10));
                     setIsDirty(true);
+                  } else {
+                    e.preventDefault();
                   }
                 }}
-                onFocus={(e) => e.target.select()}
                 readOnly={false}
                 className={`${inputCls} pl-10 text-right font-mono tracking-wide`}
               />

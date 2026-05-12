@@ -21,6 +21,9 @@ import { MdGroups } from "react-icons/md";
 import { useToast } from "@/hooks/use-toast";
 import { saveListing, unsaveListing, isListingSaved } from "@/lib/savedListings";
 
+const fmtRM = (n: number) =>
+  n.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 function relativeTime(ms: number): string {
   const diff = Date.now() - ms;
   const mins = Math.floor(diff / 60000);
@@ -534,17 +537,17 @@ export default function ListingDetailPage() {
             <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100 leading-tight">{listing.title}</h1>
             {listing.type === "buy-sell" && (
               <p className={`mt-1 text-3xl font-bold ${isSold ? "text-gray-400 dark:text-slate-500 line-through" : "text-blue-600 dark:text-blue-400"}`}>
-                {listing.price === 0 ? "Free / Return Item" : `RM ${listing.price?.toFixed(2)}`}
+                {listing.price === 0 ? "Free / Return Item" : `RM ${fmtRM(listing.price ?? 0)}`}
               </p>
             )}
             {isRental && listing.rentalPricePerDay != null && (
               <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 <p className={`text-3xl font-bold ${isSold ? "text-gray-400 dark:text-slate-500 line-through" : "text-yellow-700 dark:text-yellow-400"}`}>
-                  RM {listing.rentalPricePerDay.toFixed(2)}{t.rentalPerDay}
+                  RM {fmtRM(listing.rentalPricePerDay)}{t.rentalPerDay}
                 </p>
                 {listing.rentalPricePerHour != null && (
                   <p className="text-base font-semibold text-yellow-600 dark:text-yellow-500">
-                    RM {listing.rentalPricePerHour.toFixed(2)} / hr
+                    RM {fmtRM(listing.rentalPricePerHour)} / hr
                   </p>
                 )}
               </div>
@@ -613,19 +616,19 @@ export default function ListingDetailPage() {
                   {listing.rentalPricePerDay != null && (
                     <div>
                       <span className="text-xs text-gray-400 dark:text-slate-500 block">Per Day</span>
-                      <span className="font-bold text-yellow-700 dark:text-yellow-400">RM {listing.rentalPricePerDay.toFixed(2)}</span>
+                      <span className="font-bold text-yellow-700 dark:text-yellow-400">RM {fmtRM(listing.rentalPricePerDay)}</span>
                     </div>
                   )}
                   {listing.rentalPricePerHour != null && (
                     <div>
                       <span className="text-xs text-gray-400 dark:text-slate-500 block">Per Hour</span>
-                      <span className="font-bold text-yellow-700 dark:text-yellow-400">RM {listing.rentalPricePerHour.toFixed(2)}</span>
+                      <span className="font-bold text-yellow-700 dark:text-yellow-400">RM {fmtRM(listing.rentalPricePerHour)}</span>
                     </div>
                   )}
                   {listing.depositAmount != null && (
                     <div>
                       <span className="text-xs text-gray-400 dark:text-slate-500 block">{t.rentalDeposit}</span>
-                      <span className="font-semibold text-gray-800 dark:text-slate-200">RM {listing.depositAmount.toFixed(2)}</span>
+                      <span className="font-semibold text-gray-800 dark:text-slate-200">RM {fmtRM(listing.depositAmount)}</span>
                     </div>
                   )}
                   {listing.availableFrom && listing.availableTo && (
@@ -870,12 +873,12 @@ export default function ListingDetailPage() {
                           <p className="text-xs font-semibold text-gray-900 dark:text-slate-100 line-clamp-2 leading-snug">{sl.title}</p>
                           {sl.price != null && sl.type === "buy-sell" && (
                             <p className="text-xs font-bold text-blue-600 dark:text-blue-400 mt-1">
-                              {sl.price === 0 ? "Free" : `RM ${sl.price.toFixed(2)}`}
+                              {sl.price === 0 ? "Free" : `RM ${fmtRM(sl.price)}`}
                             </p>
                           )}
                           {sl.type === "rental" && sl.rentalPricePerDay != null && (
                             <p className="text-xs font-bold text-yellow-700 dark:text-yellow-400 mt-1">
-                              RM {sl.rentalPricePerDay.toFixed(2)}/day
+                              RM {fmtRM(sl.rentalPricePerDay)}/day
                             </p>
                           )}
                         </div>

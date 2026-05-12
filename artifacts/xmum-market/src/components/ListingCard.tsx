@@ -20,6 +20,9 @@ interface Props {
   sellerVerified?: boolean;
 }
 
+const fmtRM = (n: number) =>
+  n.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 function relativeTime(ms: number): string {
   const diff = Date.now() - ms;
   const mins = Math.floor(diff / 60000);
@@ -287,25 +290,25 @@ export default function ListingCard({
 
             {listing.type === "buy-sell" && (
               <p className={`mt-2 text-lg font-bold ${isSold ? "text-gray-400 dark:text-slate-500 line-through" : "text-blue-600 dark:text-blue-400"}`}>
-                {listing.price === 0 ? t.free : `${t.rmPrefix} ${listing.price?.toFixed(2)}`}
+                {listing.price === 0 ? t.free : `${t.rmPrefix} ${fmtRM(listing.price ?? 0)}`}
               </p>
             )}
 
             {isJobs && listing.price != null && listing.price > 0 && (
               <p className={`mt-2 text-base font-bold ${isSold ? "text-gray-400 dark:text-slate-500 line-through" : "text-emerald-600 dark:text-emerald-400"}`}>
-                {t.rmPrefix} {listing.price.toFixed(2)} {t.perHourSuffix}
+                {t.rmPrefix} {fmtRM(listing.price)} {t.perHourSuffix}
               </p>
             )}
 
             {isAssistance && listing.price != null && (
               <p className={`mt-2 text-base font-bold ${isSold ? "text-gray-400 dark:text-slate-500 line-through" : "text-orange-600 dark:text-orange-400"}`}>
-                {t.rmPrefix} {listing.price.toFixed(2)} {pricingModelSuffix(listing.pricingModel, t)}
+                {t.rmPrefix} {fmtRM(listing.price)} {pricingModelSuffix(listing.pricingModel, t)}
               </p>
             )}
 
             {isRental && listing.rentalPricePerDay != null && (
               <p className={`mt-2 text-base font-bold ${isSold ? "text-gray-400 dark:text-slate-500 line-through" : "text-yellow-700 dark:text-yellow-400"}`}>
-                {listing.vehicleType ? VEHICLE_ICONS[listing.vehicleType] : "🚗"} {t.rmPrefix} {listing.rentalPricePerDay.toFixed(2)}/day
+                {listing.vehicleType ? VEHICLE_ICONS[listing.vehicleType] : "🚗"} {t.rmPrefix} {fmtRM(listing.rentalPricePerDay)}/day
               </p>
             )}
 
