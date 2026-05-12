@@ -6,10 +6,12 @@ import {
   uploadShopListingPhoto, getInquiriesForShop, updateInquiryStatus, deleteInquiry,
   addShopEditor, removeShopEditor, updateShop, uploadShopBanner, uploadShopLogo,
   getOrdersForShop, updateOrderStatus, saveAutoReply, saveOrderQuestions,
+  deleteShopCompletely,
 } from "@/lib/shops";
 import { getOrCreateConversation } from "@/lib/messaging";
 import { collection, query, where, getDocs, limit, getDoc, doc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { ref, deleteObject } from "firebase/storage";
+import { db, storage } from "@/lib/firebase";
 import { notifyEditorAdded, notifyEditorRemoved, notifyOrderConfirmed, notifyOrderCancelled } from "@/lib/notifications";
 import { Shop, ShopListing, ShopInquiry, ShopCategory, InquiryStatus, ShopOrder, ShopOrderQuestion } from "@/lib/types";
 import {
@@ -354,7 +356,7 @@ export default function ShopDashboardPage() {
             setShop((prev) => prev ? { ...prev, logoUrl: url } : prev);
           }}
           onDelete={async () => {
-            await updateShop(shopId, { isActive: false });
+            await deleteShopCompletely(shopId);
             navigate("/profile");
           }}
         />
@@ -538,6 +540,67 @@ function OrdersTab({ orders, loading, shopId, shop, onOrderUpdated }: {
 
 // ── Listings Tab ──────────────────────────────────────────────────────────────
 
+function OrderQuestionsEditor({
+  questions,
+  onChange,
+}: {
+  questions: ShopOrderQuestion[];
+  onChange: (qs: ShopOrderQuestion[]) => void;
+}) {
+  return (
+    <div>
+      <label className={labelCls}>Per-Listing Order Questions</label>
+      <p className="text-xs text-gray-400 dark:text-slate-500 mb-2">
+        These override the shop-level questions for this listing only. Leave empty to use shop defaults.
+      </p>
+      {questions.map((q, idx) => (
+        <div key={q.id} className="flex items-center gap-2 mb-2">
+          <input
+            className="flex-1 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-slate-100"
+            placeholder={`Question ${idx + 1}`}
+            value={q.label}
+            onChange={(e) => onChange(questions.map((x, i) => i === idx ? { ...x, label: e.target.value } : x))}
+          />
+          <select
+            value={q.type}
+            onChange={(e) => onChange(questions.map((x, i) => i === idx ? { ...x, type: e.target.value as ShopOrderQuestion["type"] } : x))}
+            className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-xl px-2 py-2 text-xs text-gray-900 dark:text-slate-100 focus:outline-none"
+          >
+            <option value="text">Text</option>
+            <option value="textarea">Long text</option>
+            <option value="number">Number</option>
+            <option value="date">Date</option>
+          </select>
+          <label className="flex items-center gap-1 text-xs text-gray-600 dark:text-slate-400 whitespace-nowrap cursor-pointer">
+            <input
+              type="checkbox"
+              checked={q.required}
+              onChange={(e) => onChange(questions.map((x, i) => i === idx ? { ...x, required: e.target.checked } : x))}
+            />
+            Req.
+          </label>
+          <button
+            type="button"
+            onClick={() => onChange(questions.filter((_, i) => i !== idx))}
+            className="text-red-400 hover:text-red-600 p-1"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      ))}
+      {questions.length < 8 && (
+        <button
+          type="button"
+          onClick={() => onChange([...questions, { id: `q${Date.now()}`, label: "", type: "text", required: false }])}
+          className="text-xs text-[#003366] dark:text-blue-400 font-semibold hover:underline mt-1"
+        >
+          + Add question
+        </button>
+      )}
+    </div>
+  );
+}
+
 function ListingsTab({
   shopId, shop, listings, loading, showAdd, setShowAdd, onRefresh,
 }: {
@@ -545,6 +608,7 @@ function ListingsTab({
   showAdd: boolean; setShowAdd: (v: boolean) => void; onRefresh: () => void;
 }) {
   const [listingAdded, setListingAdded] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   return (
     <div>
@@ -557,7 +621,7 @@ function ListingsTab({
             </span>
           )}
           <button
-            onClick={() => setShowAdd(true)}
+            onClick={() => { setShowAdd(true); setEditingId(null); }}
             className="flex items-center gap-1.5 bg-[#003366] dark:bg-blue-600 text-white text-xs font-semibold px-3 py-2 rounded-lg hover:bg-[#002244] transition"
           >
             <Plus size={14} /> Add Listing
@@ -588,20 +652,37 @@ function ListingsTab({
         </div>
       ) : (
         <div className="space-y-3">
-          {listings.map((l) => (
-            <ListingRow key={l.id} listing={l} shopId={shopId} onRefresh={onRefresh} />
-          ))}
+          {listings.map((l) =>
+            editingId === l.id ? (
+              <EditShopListingForm
+                key={l.id}
+                listing={l}
+                shopId={shopId}
+                shop={shop}
+                onCancel={() => setEditingId(null)}
+                onSaved={() => { setEditingId(null); onRefresh(); }}
+              />
+            ) : (
+              <ListingRow
+                key={l.id}
+                listing={l}
+                shopId={shopId}
+                onRefresh={onRefresh}
+                onEdit={() => { setShowAdd(false); setEditingId(l.id); }}
+              />
+            )
+          )}
         </div>
       )}
     </div>
   );
 }
 
-function ListingRow({ listing, shopId, onRefresh }: { listing: ShopListing; shopId: string; onRefresh: () => void }) {
+function ListingRow({ listing, shopId, onRefresh, onEdit }: { listing: ShopListing; shopId: string; onRefresh: () => void; onEdit: () => void }) {
   const [deleting, setDeleting] = useState(false);
 
   const handleDelete = async () => {
-    if (!confirm("Archive this listing?")) return;
+    if (!confirm("Remove this listing? This cannot be undone.")) return;
     setDeleting(true);
     await deleteShopListing(listing.id, shopId);
     onRefresh();
@@ -626,9 +707,17 @@ function ListingRow({ listing, shopId, onRefresh }: { listing: ShopListing; shop
         <p className="text-xs text-gray-400 dark:text-slate-500">{relativeTime(listing.createdAt)}</p>
       </div>
       <button
+        onClick={onEdit}
+        className="p-2 text-blue-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition"
+        title="Edit listing"
+      >
+        <Edit2 size={14} />
+      </button>
+      <button
         onClick={handleDelete}
         disabled={deleting}
         className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition disabled:opacity-40"
+        title="Remove listing"
       >
         {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
       </button>
@@ -646,6 +735,7 @@ function AddListingForm({ shopId, shop, onClose, onCreated }: {
   const [category, setCategory] = useState<ShopCategory>(shop.category);
   const [photos, setPhotos] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
+  const [orderQuestions, setOrderQuestions] = useState<ShopOrderQuestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -684,6 +774,7 @@ function AddListingForm({ shopId, shop, onClose, onCreated }: {
         category,
         photos: photoUrls,
         isActive: true,
+        orderQuestions: orderQuestions.length > 0 ? orderQuestions : undefined,
       });
       onCreated();
     } catch (err: any) {
@@ -747,9 +838,172 @@ function AddListingForm({ shopId, shop, onClose, onCreated }: {
             <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => handlePhotos(e.target.files)} />
           </div>
         </div>
+        <OrderQuestionsEditor questions={orderQuestions} onChange={setOrderQuestions} />
         <button type="submit" disabled={loading} className="w-full min-h-[44px] bg-[#003366] dark:bg-blue-600 text-white font-semibold text-sm rounded-xl hover:bg-[#002244] disabled:opacity-50 transition flex items-center justify-center gap-2">
           {loading ? <><Loader2 size={15} className="animate-spin" /> Uploading…</> : "Add Listing"}
         </button>
+      </form>
+    </div>
+  );
+}
+
+function EditShopListingForm({ listing, shopId, shop, onCancel, onSaved }: {
+  listing: ShopListing; shopId: string; shop: Shop; onCancel: () => void; onSaved: () => void;
+}) {
+  const [title, setTitle] = useState(listing.title);
+  const [description, setDescription] = useState(listing.description);
+  const [price, setPrice] = useState(listing.price !== undefined ? String(listing.price) : "");
+  const [pricingModel, setPricingModel] = useState<ShopListing["pricingModel"]>(listing.pricingModel ?? "fixed");
+  const [category, setCategory] = useState<ShopCategory>(listing.category);
+  const [isActive, setIsActive] = useState(listing.isActive);
+  const [existingPhotos, setExistingPhotos] = useState<string[]>(listing.photos);
+  const [newPhotoFiles, setNewPhotoFiles] = useState<File[]>([]);
+  const [newPhotoPreviews, setNewPhotoPreviews] = useState<string[]>([]);
+  const [removedPhotoUrls, setRemovedPhotoUrls] = useState<string[]>([]);
+  const [orderQuestions, setOrderQuestions] = useState<ShopOrderQuestion[]>(listing.orderQuestions ?? []);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const totalPhotos = existingPhotos.length + newPhotoFiles.length;
+
+  const handleNewPhotos = (files: FileList | null) => {
+    if (!files) return;
+    const picked = Array.from(files).slice(0, 4 - totalPhotos);
+    setNewPhotoFiles((p) => [...p, ...picked]);
+    picked.forEach((f) => {
+      const reader = new FileReader();
+      reader.onload = (e) => setNewPhotoPreviews((p) => [...p, e.target?.result as string]);
+      reader.readAsDataURL(f);
+    });
+  };
+
+  const removeExisting = (url: string) => {
+    setExistingPhotos((prev) => prev.filter((u) => u !== url));
+    setRemovedPhotoUrls((prev) => [...prev, url]);
+  };
+
+  const removeNew = (i: number) => {
+    setNewPhotoFiles((prev) => prev.filter((_, j) => j !== i));
+    setNewPhotoPreviews((prev) => prev.filter((_, j) => j !== i));
+  };
+
+  function storagePathFromUrl(url: string): string | null {
+    try {
+      const match = decodeURIComponent(url).match(/\/o\/(.+?)(\?|$)/);
+      return match ? match[1] : null;
+    } catch { return null; }
+  }
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim()) { setError("Title is required."); return; }
+    setLoading(true);
+    setError("");
+    try {
+      await Promise.allSettled(
+        removedPhotoUrls.map((url) => {
+          const path = storagePathFromUrl(url);
+          return path ? deleteObject(ref(storage, path)).catch(() => {}) : Promise.resolve();
+        })
+      );
+      const newUrls: string[] = [];
+      for (let i = 0; i < newPhotoFiles.length; i++) {
+        const url = await uploadShopListingPhoto(shopId, newPhotoFiles[i], existingPhotos.length + i);
+        newUrls.push(url);
+      }
+      const finalPhotos = [...existingPhotos, ...newUrls];
+      await updateShopListing(listing.id, {
+        title: title.trim(),
+        description: description.trim(),
+        price: price ? parseFloat(price) : undefined,
+        pricingModel,
+        category,
+        isActive,
+        photos: finalPhotos,
+        orderQuestions: orderQuestions.length > 0 ? orderQuestions : undefined,
+      });
+      onSaved();
+    } catch (err: any) {
+      setError(err.message ?? "Failed to save.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="bg-amber-50 dark:bg-slate-800/60 border border-amber-200 dark:border-slate-700 rounded-2xl p-4 mb-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-bold text-gray-900 dark:text-slate-100">Edit Listing</h3>
+        <button type="button" onClick={onCancel} className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-300"><X size={16} /></button>
+      </div>
+      <form onSubmit={handleSave} className="space-y-3">
+        {error && <p className="text-xs text-red-500">{error}</p>}
+        <div>
+          <label className={labelCls}>Title <span className="text-red-500">*</span></label>
+          <input className={inputCls} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} />
+        </div>
+        <div>
+          <label className={labelCls}>Description</label>
+          <textarea className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className={labelCls}>Price (RM)</label>
+            <input className={inputCls} type="number" min="0" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00" />
+          </div>
+          <div>
+            <label className={labelCls}>Pricing</label>
+            <select className="w-full bg-white text-gray-900 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600 dark:[color-scheme:dark] focus:outline-none focus:ring-2 focus:ring-blue-500 transition min-h-[44px]" value={pricingModel} onChange={(e) => setPricingModel(e.target.value as ShopListing["pricingModel"])}>
+              <option value="fixed">Fixed</option>
+              <option value="per_hour">Per Hour</option>
+              <option value="per_day">Per Day</option>
+              <option value="negotiable">Negotiable</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label className={labelCls}>Category</label>
+          <select className="w-full bg-white text-gray-900 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600 dark:[color-scheme:dark] focus:outline-none focus:ring-2 focus:ring-blue-500 transition min-h-[44px]" value={category} onChange={(e) => setCategory(e.target.value as ShopCategory)}>
+            {SHOP_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+        <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300 cursor-pointer">
+          <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="w-4 h-4 accent-[#003366]" />
+          Listing is active (visible to buyers)
+        </label>
+        <div>
+          <label className={labelCls}>Photos (up to 4)</label>
+          <div className="flex flex-wrap gap-2">
+            {existingPhotos.map((url) => (
+              <div key={url} className="relative w-16 h-16">
+                <img src={url} className="w-16 h-16 object-cover rounded-lg" alt="" />
+                <button type="button" onClick={() => removeExisting(url)} className="absolute -top-1 -right-1 bg-red-500 rounded-full p-0.5 text-white"><X size={10} /></button>
+              </div>
+            ))}
+            {newPhotoPreviews.map((p, i) => (
+              <div key={`new-${i}`} className="relative w-16 h-16">
+                <img src={p} className="w-16 h-16 object-cover rounded-lg border-2 border-blue-300" alt="" />
+                <button type="button" onClick={() => removeNew(i)} className="absolute -top-1 -right-1 bg-red-500 rounded-full p-0.5 text-white"><X size={10} /></button>
+              </div>
+            ))}
+            {totalPhotos < 4 && (
+              <button type="button" onClick={() => fileRef.current?.click()} className="w-16 h-16 border-2 border-dashed border-gray-300 dark:border-slate-600 rounded-lg flex items-center justify-center text-gray-400 hover:border-[#003366] hover:text-[#003366] transition">
+                <ImagePlus size={18} />
+              </button>
+            )}
+            <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => handleNewPhotos(e.target.files)} />
+          </div>
+        </div>
+        <OrderQuestionsEditor questions={orderQuestions} onChange={setOrderQuestions} />
+        <div className="flex gap-2">
+          <button type="submit" disabled={loading} className="flex-1 min-h-[44px] bg-[#003366] dark:bg-blue-600 text-white font-semibold text-sm rounded-xl hover:bg-[#002244] disabled:opacity-50 transition flex items-center justify-center gap-2">
+            {loading ? <><Loader2 size={15} className="animate-spin" /> Saving…</> : "Save Changes"}
+          </button>
+          <button type="button" onClick={onCancel} className="px-4 min-h-[44px] bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-300 font-semibold text-sm rounded-xl hover:bg-gray-200 transition">
+            Cancel
+          </button>
+        </div>
       </form>
     </div>
   );
@@ -1188,7 +1442,7 @@ function SettingsTab({
           ) : (
             <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4">
               <p className="text-sm font-semibold text-red-700 dark:text-red-400 mb-1">Are you sure?</p>
-              <p className="text-xs text-red-600 dark:text-red-400 mb-3">This will archive your shop and hide it from the marketplace.</p>
+              <p className="text-xs text-red-600 dark:text-red-400 mb-3">This will permanently delete your shop, all listings, orders, inquiries, and reviews. This cannot be undone.</p>
               <div className="flex gap-2">
                 <button onClick={onDelete} className="flex-1 bg-red-600 text-white text-sm font-semibold rounded-xl py-2 hover:bg-red-700 transition">Yes, Delete</button>
                 <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-300 text-sm font-semibold rounded-xl py-2 hover:bg-gray-200 transition">Cancel</button>

@@ -3,12 +3,12 @@ import { useRoute, useLocation, Link } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { getDoc, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { getShopById, incrementShopListingView, createInquiry } from "@/lib/shops";
+import { getShopById, incrementShopListingView, createInquiry, deleteShopListing } from "@/lib/shops";
 import { Shop, ShopListing } from "@/lib/types";
 import AuthModal from "@/components/AuthModal";
 import {
   ArrowLeft, ChevronLeft, ChevronRight, Package, Star,
-  Loader2, Store, Send,
+  Loader2, Store, Send, Edit2, Trash2,
 } from "lucide-react";
 import { SiWhatsapp, SiWechat } from "react-icons/si";
 
@@ -62,6 +62,7 @@ export default function ShopListingDetailPage() {
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [inquiryError, setInquiryError] = useState("");
+  const [deletingListing, setDeletingListing] = useState(false);
 
   useEffect(() => {
     if (!listingId) return;
@@ -280,17 +281,46 @@ export default function ShopListingDetailPage() {
           </div>
         )}
 
-        {/* Manager notice */}
+        {/* Manager notice + Edit/Delete */}
         {canManage && (
-          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl px-4 py-3 text-xs text-amber-700 dark:text-amber-400 text-center font-medium">
-            You manage this shop —{" "}
-            <Link
-              href={`/shop-dashboard/${shop?.id}`}
-              className="underline font-bold"
-            >
-              go to your dashboard
-            </Link>{" "}
-            to view inquiries.
+          <div className="space-y-3">
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl px-4 py-3 text-xs text-amber-700 dark:text-amber-400 text-center font-medium">
+              You manage this shop —{" "}
+              <Link
+                href={`/shop-dashboard/${shop?.id}`}
+                className="underline font-bold"
+              >
+                go to your dashboard
+              </Link>{" "}
+              to view inquiries.
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => navigate(`/shop-dashboard/${shop?.id}`)}
+                className="flex-1 flex items-center justify-center gap-1.5 min-h-[44px] border border-gray-200 dark:border-slate-600 text-gray-700 dark:text-slate-300 rounded-xl text-sm font-semibold hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+              >
+                <Edit2 size={14} /> Edit in Dashboard
+              </button>
+              <button
+                onClick={async () => {
+                  if (!listing || !shop || !confirm("Remove this listing? This cannot be undone.")) return;
+                  setDeletingListing(true);
+                  try {
+                    await deleteShopListing(listing.id, listing.shopId);
+                    navigate(`/shop/${shop.slug}`);
+                  } catch (err: any) {
+                    console.error("[ShopListingDetailPage] delete error:", err);
+                  } finally {
+                    setDeletingListing(false);
+                  }
+                }}
+                disabled={deletingListing}
+                className="flex-1 flex items-center justify-center gap-1.5 min-h-[44px] border border-red-200 dark:border-red-800 text-red-500 dark:text-red-400 rounded-xl text-sm font-semibold hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 transition-colors"
+              >
+                {deletingListing ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                Remove
+              </button>
+            </div>
           </div>
         )}
 

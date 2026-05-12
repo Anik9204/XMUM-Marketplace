@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRoute, useLocation, Link } from "wouter";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { getListing, markAsSold, getSimilarListings } from "@/lib/listings";
+import { getListing, markAsSold, getSimilarListings, deleteListing } from "@/lib/listings";
 import { doc, updateDoc, increment } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { getProfile } from "@/lib/userProfile";
@@ -13,7 +13,7 @@ import {
   ArrowLeft, Clock, Tag, CheckCircle2, MapPin, MessageCircle,
   Loader2, ShieldAlert, ShieldCheck, Bookmark, BookmarkCheck,
   MoreHorizontal, Flag, Share2, ChevronLeft, ChevronRight, X, Star,
-  ArrowRight,
+  ArrowRight, Edit2, Trash2,
 } from "lucide-react";
 import { getOrCreateConversation } from "@/lib/messaging";
 import { SiWhatsapp, SiWechat } from "react-icons/si";
@@ -78,6 +78,7 @@ export default function ListingDetailPage() {
   const [contactBlocked, setContactBlocked] = useState<string | null>(null);
   const [markingAsSold, setMarkingAsSold] = useState(false);
   const [soldToast, setSoldToast] = useState(false);
+  const [deletingListing, setDeletingListing] = useState(false);
   const [sellerProfile, setSellerProfile] = useState<UserProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const [startingChat, setStartingChat] = useState(false);
@@ -265,6 +266,19 @@ export default function ListingDetailPage() {
       }
     } finally {
       setSavingListing(false);
+    }
+  };
+
+  const handleDeleteListing = async () => {
+    if (!listing || !confirm("Delete this listing? This cannot be undone.")) return;
+    setDeletingListing(true);
+    try {
+      await deleteListing(listing);
+      navigate("/profile");
+    } catch (err: any) {
+      console.error("[ListingDetailPage] delete error:", err);
+    } finally {
+      setDeletingListing(false);
     }
   };
 
@@ -727,7 +741,7 @@ export default function ListingDetailPage() {
             </div>
           </div>
 
-          {/* Owner: Mark as Sold */}
+          {/* Owner: Mark as Sold + Edit + Delete */}
           {isOwner && !isSold && (
             <button
               onClick={handleMarkAsSold}
@@ -736,6 +750,24 @@ export default function ListingDetailPage() {
             >
               {markingAsSold ? "Updating..." : (listing.type === "lost-found" ? t.markAsResolved : t.markAsSold)}
             </button>
+          )}
+          {isOwner && (
+            <div className="flex gap-2">
+              <button
+                onClick={() => navigate(`/edit/${listing.id}`)}
+                className="flex-1 flex items-center justify-center gap-1.5 min-h-[44px] border border-gray-200 dark:border-slate-600 text-gray-700 dark:text-slate-300 rounded-xl text-sm font-semibold hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+              >
+                <Edit2 size={14} /> Edit
+              </button>
+              <button
+                onClick={handleDeleteListing}
+                disabled={deletingListing}
+                className="flex-1 flex items-center justify-center gap-1.5 min-h-[44px] border border-red-200 dark:border-red-800 text-red-500 dark:text-red-400 rounded-xl text-sm font-semibold hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 transition-colors"
+              >
+                {deletingListing ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                Delete
+              </button>
+            </div>
           )}
 
           {/* Contact blocked notice */}

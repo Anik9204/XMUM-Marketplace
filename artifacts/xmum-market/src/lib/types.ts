@@ -55,6 +55,7 @@ export interface ShopListing {
   createdAt: number;
   viewCount: number;
   inquiryCount: number;
+  orderQuestions?: ShopOrderQuestion[];
 }
 
 export type InquiryStatus = "pending" | "replied" | "confirmed" | "completed" | "cancelled";

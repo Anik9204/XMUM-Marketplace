@@ -519,6 +519,65 @@ export async function getAutoReply(shopId: string): Promise<{ enabled: boolean; 
   };
 }
 
+// ── Storage path helper ───────────────────────────────────────────────────────
+function storagePathFromUrl(url: string): string | null {
+  try {
+    const decodedUrl = decodeURIComponent(url);
+    const match = decodedUrl.match(/\/o\/(.+?)(\?|$)/);
+    return match ? match[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+// ── Complete shop deletion ────────────────────────────────────────────────────
+export async function deleteShopCompletely(shopId: string): Promise<void> {
+  const { writeBatch } = await import("firebase/firestore");
+
+  // Fetch all sub-collections in parallel
+  const [listingsSnap, inquiriesSnap, ordersSnap, reviewsSnap] = await Promise.all([
+    getDocs(query(collection(db, "shopListings"), where("shopId", "==", shopId))),
+    getDocs(query(collection(db, "shopInquiries"), where("shopId", "==", shopId))),
+    getDocs(query(collection(db, "shopOrders"), where("shopId", "==", shopId))),
+    getDocs(query(collection(db, "shopReviews"), where("shopId", "==", shopId))),
+  ]);
+
+  // Delete all listing photos and shop media from storage (best-effort)
+  const storageJobs: Promise<void>[] = [];
+  for (const d of listingsSnap.docs) {
+    for (const url of (d.data().photos ?? []) as string[]) {
+      const path = storagePathFromUrl(url);
+      if (path) storageJobs.push(deleteObject(ref(storage, path)).catch(() => {}));
+    }
+  }
+  const shopSnap = await getDoc(doc(db, "shops", shopId));
+  if (shopSnap.exists()) {
+    const sd = shopSnap.data();
+    for (const url of [sd.bannerUrl, sd.logoUrl].filter(Boolean)) {
+      const path = storagePathFromUrl(url as string);
+      if (path) storageJobs.push(deleteObject(ref(storage, path)).catch(() => {}));
+    }
+  }
+  await Promise.allSettled(storageJobs);
+
+  // Batch-delete all Firestore documents (max 400 per batch)
+  const allDocs = [
+    ...listingsSnap.docs,
+    ...inquiriesSnap.docs,
+    ...ordersSnap.docs,
+    ...reviewsSnap.docs,
+  ];
+  const BATCH_SIZE = 400;
+  for (let i = 0; i < allDocs.length; i += BATCH_SIZE) {
+    const batch = writeBatch(db);
+    for (const d of allDocs.slice(i, i + BATCH_SIZE)) batch.delete(d.ref);
+    await batch.commit();
+  }
+
+  // Finally delete the shop document itself
+  await deleteDoc(doc(db, "shops", shopId));
+}
+
 export async function getAllShops(limitCount = 50): Promise<Shop[]> {
   // orderBy on single field uses auto-created single-field index; filter isActive client-side
   const q = query(

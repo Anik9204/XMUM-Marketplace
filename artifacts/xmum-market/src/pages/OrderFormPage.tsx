@@ -60,7 +60,7 @@ export default function OrderFormPage() {
     if (!user || !userProfile || !listing || !shop) return;
     setError("");
 
-    const questions = shop.orderQuestions ?? [];
+    const questions = (listing.orderQuestions?.length ? listing.orderQuestions : shop?.orderQuestions) ?? [];
     for (const q of questions) {
       if (q.required && !answers[q.id]?.trim()) {
         setError(`Please fill in: "${q.label}"`);
@@ -269,8 +269,8 @@ export default function OrderFormPage() {
           </div>
         )}
 
-        {/* Custom order questions */}
-        {(shop?.orderQuestions ?? []).map((q) => (
+        {/* Custom order questions (listing-level overrides shop-level) */}
+        {((listing.orderQuestions?.length ? listing.orderQuestions : shop?.orderQuestions) ?? []).map((q) => (
           <div key={q.id}>
             <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">
               {q.label}
