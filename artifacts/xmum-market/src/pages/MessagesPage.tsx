@@ -347,7 +347,8 @@ export default function MessagesPage() {
         const q = searchQuery.toLowerCase();
         const otherUid = c.participants.find((p) => p !== user?.uid);
         const profile = otherUid ? participantProfiles[otherUid] : null;
-        const name = (profile?.fullName || profile?.displayName || "").toLowerCase();
+        const isShopConv = !!(c.shopName && c.shopOwnerUid && c.shopOwnerUid === otherUid);
+        const name = isShopConv ? c.shopName!.toLowerCase() : (profile?.fullName || profile?.displayName || "").toLowerCase();
         return c.listingTitle.toLowerCase().includes(q) || name.includes(q);
       })
     : visibleConversations;
@@ -434,7 +435,8 @@ export default function MessagesPage() {
               const unread = conv.unreadCount?.[user.uid] ?? 0;
               const otherUid = conv.participants.find((p) => p !== user.uid) ?? "";
               const profile = participantProfiles[otherUid];
-              const displayName = profile?.fullName || profile?.displayName || "User";
+              const isShopConv = !!(conv.shopName && conv.shopOwnerUid && conv.shopOwnerUid === otherUid);
+              const displayName = isShopConv ? conv.shopName! : (profile?.fullName || profile?.displayName || "User");
               const isActive = activeConv?.id === conv.id;
 
               return (

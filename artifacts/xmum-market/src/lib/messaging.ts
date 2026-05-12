@@ -16,6 +16,8 @@ export interface Conversation {
   unreadCount: Record<string, number>;
   typing?: Record<string, boolean>;
   clearedAt?: Record<string, number>;
+  shopName?: string;
+  shopOwnerUid?: string;
 }
 
 export interface Message {
@@ -39,7 +41,8 @@ export function getConversationId(uid1: string, uid2: string, listingId: string)
 export async function getOrCreateConversation(
   myUid: string,
   otherUid: string,
-  listing: { id: string; title: string; photos: string[] }
+  listing: { id: string; title: string; photos: string[] },
+  shopContext?: { shopName: string; shopOwnerUid: string }
 ): Promise<string> {
   const convId = getConversationId(myUid, otherUid, listing.id);
   const convRef = doc(db, "conversations", convId);
@@ -48,6 +51,12 @@ export async function getOrCreateConversation(
   try {
     const snap = await getDoc(convRef);
     exists = snap.exists();
+    if (exists && shopContext && !snap.data()?.shopName) {
+      await updateDoc(convRef, {
+        shopName: shopContext.shopName,
+        shopOwnerUid: shopContext.shopOwnerUid,
+      }).catch(() => {});
+    }
   } catch {
     exists = false;
   }
@@ -62,6 +71,7 @@ export async function getOrCreateConversation(
       lastMessageAt: Date.now(),
       unreadCount: { [myUid]: 0, [otherUid]: 0 },
       typing: {},
+      ...(shopContext ? { shopName: shopContext.shopName, shopOwnerUid: shopContext.shopOwnerUid } : {}),
     });
   }
   return convId;

@@ -111,6 +111,7 @@ service cloud.firestore {
       allow update: if isXmuEmail() && (
         isShopMember(resource.data.shopId)
         || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['inquiryCount'])
+        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount'])
       );
       allow delete: if isXmuEmail() && isShopMember(resource.data.shopId);
     }

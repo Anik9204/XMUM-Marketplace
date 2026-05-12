@@ -3,9 +3,10 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   getAllShops, getAllShopListings, getShopListingsByCategory, getApprovedShopAds,
+  getShopsByOwner, getShopsWhereEditor, getInquiriesForShop, getOrdersForShop,
 } from "@/lib/shops";
 import { Shop, ShopListing, ShopAd, ShopCategory } from "@/lib/types";
-import { Store, ChevronRight, Package, Star, Plus } from "lucide-react";
+import { Store, ChevronRight, Package, Star, Plus, Settings2 } from "lucide-react";
 
 const SHOP_CATEGORIES: ShopCategory[] = [
   "Food & Beverage", "Tutoring & Education", "Fashion & Apparel", "Electronics",
@@ -179,6 +180,35 @@ function ListingSkeleton() {
   );
 }
 
+// ── My Shop card ──────────────────────────────────────────────────────────────
+function MyShopCard({ shop, pendingCount }: { shop: Shop; pendingCount: number }) {
+  return (
+    <Link href={`/shop/${shop.slug}`}>
+      <div className="flex items-center gap-3 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-2xl px-4 py-3 shadow-sm hover:shadow-md transition-shadow active:scale-[0.98] cursor-pointer">
+        <div className="w-12 h-12 rounded-xl bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 overflow-hidden shrink-0 flex items-center justify-center">
+          {shop.logoUrl ? (
+            <img src={shop.logoUrl} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <Store size={22} className="text-[#003366] dark:text-blue-400" />
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold text-gray-900 dark:text-slate-100 truncate">{shop.name}</p>
+          <p className="text-xs text-gray-400 dark:text-slate-500 truncate">{shop.category}</p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {pendingCount > 0 && (
+            <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full leading-none">
+              {pendingCount} pending
+            </span>
+          )}
+          <Settings2 size={14} className="text-gray-400 dark:text-slate-500" />
+        </div>
+      </div>
+    </Link>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function CampusMarketPage() {
   const { user } = useAuth();
@@ -192,6 +222,45 @@ export default function CampusMarketPage() {
   const [loadingShops, setLoadingShops] = useState(true);
   const [loadingListings, setLoadingListings] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+
+  const [myShops, setMyShops] = useState<Shop[]>([]);
+  const [myShopPending, setMyShopPending] = useState<Record<string, number>>({});
+  const [loadingMyShops, setLoadingMyShops] = useState(false);
+
+  // Load user's own shops
+  useEffect(() => {
+    if (!user) { setMyShops([]); return; }
+    setLoadingMyShops(true);
+    Promise.all([
+      getShopsByOwner(user.uid),
+      getShopsWhereEditor(user.uid),
+    ])
+      .then(([owned, edited]) => {
+        const combined = [...owned];
+        for (const s of edited) {
+          if (!combined.find((x) => x.id === s.id)) combined.push(s);
+        }
+        setMyShops(combined);
+        // Fetch pending counts for each shop
+        Promise.all(
+          combined.map(async (s) => {
+            try {
+              const [inqs, ords] = await Promise.all([
+                getInquiriesForShop(s.id),
+                getOrdersForShop(s.id),
+              ]);
+              const pending = inqs.filter((i) => i.status === "pending").length
+                + ords.filter((o) => o.status === "pending").length;
+              return [s.id, pending] as const;
+            } catch {
+              return [s.id, 0] as const;
+            }
+          })
+        ).then((pairs) => setMyShopPending(Object.fromEntries(pairs)));
+      })
+      .catch(() => setMyShops([]))
+      .finally(() => setLoadingMyShops(false));
+  }, [user?.uid]);
 
   // Initial data load
   useEffect(() => {
@@ -246,6 +315,23 @@ export default function CampusMarketPage() {
           </button>
         ))}
       </div>
+
+      {/* My Shop section — visible only for owners/editors */}
+      {user && myShops.length > 0 && (
+        <div className="px-4 mb-5">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-bold text-gray-900 dark:text-slate-100 flex items-center gap-1.5">
+              <Settings2 size={14} className="text-[#003366] dark:text-blue-400" />
+              My Shop
+            </h2>
+          </div>
+          <div className="space-y-2">
+            {myShops.map((s) => (
+              <MyShopCard key={s.id} shop={s} pendingCount={myShopPending[s.id] ?? 0} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Featured Shops */}
       <div className="mb-6">

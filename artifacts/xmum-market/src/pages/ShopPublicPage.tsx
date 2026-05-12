@@ -9,6 +9,7 @@ import {
   ArrowLeft, Star, Store, Loader2, Package, Settings2,
 } from "lucide-react";
 import { SiWhatsapp, SiWechat } from "react-icons/si";
+import ShopManagementPanel from "@/components/ShopManagementPanel";
 
 function relativeTime(ms: number): string {
   const diff = Date.now() - ms;
@@ -43,8 +44,6 @@ function PriceLabel({ listing }: { listing: ShopListing }) {
   return <span className="text-sm font-bold text-[#003366] dark:text-blue-300">RM {listing.price.toFixed(2)}{suffix}</span>;
 }
 
-// ── Shop Bio with Read More ───────────────────────────────────────────────────
-
 function ShopBio({ bio }: { bio?: string }) {
   const [bioExpanded, setBioExpanded] = useState(false);
   if (!bio) return null;
@@ -68,11 +67,10 @@ function ShopBio({ bio }: { bio?: string }) {
   );
 }
 
-// ── Main Page ─────────────────────────────────────────────────────────────────
-
 export default function ShopPublicPage() {
   const [, params] = useRoute("/shop/:slug");
   const { user } = useAuth();
+  const [, navigate] = useLocation();
   const slug = params?.slug ?? "";
 
   const [shop, setShop] = useState<Shop | null>(null);
@@ -159,15 +157,6 @@ export default function ShopPublicPage() {
         >
           <ArrowLeft size={18} />
         </button>
-
-        {canManage && (
-          <Link
-            href={`/shop-dashboard/${shop.id}`}
-            className="absolute top-4 right-4 bg-black/40 backdrop-blur-sm text-white text-xs font-semibold px-3 py-2 rounded-xl hover:bg-black/60 transition flex items-center gap-1.5 shadow-lg"
-          >
-            <Settings2 size={13} /> Manage
-          </Link>
-        )}
       </div>
 
       {/* Shop info card */}
@@ -310,6 +299,31 @@ export default function ShopPublicPage() {
         </div>
       )}
 
+      {/* Management Section — owners and editors only */}
+      {canManage && (
+        <div className="px-4 mt-8">
+          <div className="border-t-2 border-dashed border-gray-200 dark:border-slate-700 pt-6 mb-5">
+            <div className="flex items-center gap-2 mb-1">
+              <Settings2 size={16} className="text-[#003366] dark:text-blue-400" />
+              <h2 className="text-base font-bold text-gray-900 dark:text-slate-100">
+                Shop Management
+              </h2>
+              <span className="text-xs text-gray-400 dark:text-slate-500 font-normal">
+                ({isOwner ? "Owner" : "Editor"})
+              </span>
+            </div>
+            <p className="text-xs text-gray-400 dark:text-slate-500">Only you can see this section.</p>
+          </div>
+          <ShopManagementPanel
+            shopId={shop.id}
+            initialShop={shop}
+            isOwner={isOwner}
+            isEditor={isEditor}
+            onShopDeleted={() => navigate("/profile")}
+            onShopUpdated={(updated) => setShop(updated)}
+          />
+        </div>
+      )}
     </div>
   );
 }

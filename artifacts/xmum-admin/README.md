@@ -1,6 +1,6 @@
 # XMUM Admin Panel
 
-Last updated: Mon, 11 May 2026 17:31:26 GMT
+Last updated: Tue, 12 May 2026 21:49:21 GMT
 
 ---
 
@@ -45,7 +45,7 @@ XMUM Admin Panel is a separate React + Vite web application that connects to the
 
 ## 2. Current Project State
 
-Last updated: Mon, 11 May 2026 17:31:26 GMT
+Last updated: Tue, 12 May 2026 21:49:21 GMT
 
 **Working features:**
 - Login with `@xmu.edu.my` email — only users with `role: "admin"` or `role: "editor"` can enter

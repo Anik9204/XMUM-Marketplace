@@ -240,7 +240,7 @@ export default function ShopListingDetailPage() {
                 {shop.name}
               </p>
               <p className="text-xs text-gray-400 dark:text-slate-500">
-                Created by {shop.name}
+                Created by @{(shop.ownerEmail ?? "").split("@")[0] || shop.name}
               </p>
               {shop.reviewCount > 0 && (
                 <div className="flex items-center gap-1.5 mt-0.5">
@@ -287,19 +287,19 @@ export default function ShopListingDetailPage() {
             <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl px-4 py-3 text-xs text-amber-700 dark:text-amber-400 text-center font-medium">
               You manage this shop —{" "}
               <Link
-                href={`/shop-dashboard/${shop?.id}`}
+                href={`/shop/${shop?.slug}`}
                 className="underline font-bold"
               >
-                go to your dashboard
+                manage your shop
               </Link>{" "}
               to view inquiries.
             </div>
             <div className="flex gap-2">
               <button
-                onClick={() => navigate(`/shop-dashboard/${shop?.id}`)}
+                onClick={() => navigate(`/shop/${shop?.slug}`)}
                 className="flex-1 flex items-center justify-center gap-1.5 min-h-[44px] border border-gray-200 dark:border-slate-600 text-gray-700 dark:text-slate-300 rounded-xl text-sm font-semibold hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
               >
-                <Edit2 size={14} /> Edit in Dashboard
+                <Edit2 size={14} /> Edit Listing
               </button>
               <button
                 onClick={async () => {
