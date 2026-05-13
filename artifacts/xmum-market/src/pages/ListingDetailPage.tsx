@@ -3,6 +3,7 @@ import { useRoute, useLocation, Link } from "wouter";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { getListing, markAsSold, getSimilarListings, deleteListing } from "@/lib/listings";
+import ReportHoldModal from "@/components/ReportHoldModal";
 import { doc, updateDoc, increment } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { getProfile } from "@/lib/userProfile";
@@ -88,6 +89,8 @@ export default function ListingDetailPage() {
   const [savingListing, setSavingListing] = useState(false);
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
   const overflowRef = useRef<HTMLDivElement>(null);
+  const [showHoldModal, setShowHoldModal] = useState(false);
+  const [holdModalAction, setHoldModalAction] = useState<"delete" | "edit">("delete");
 
   // Lightbox state
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -276,7 +279,13 @@ export default function ListingDetailPage() {
       await deleteListing(listing);
       navigate("/profile");
     } catch (err: any) {
-      console.error("[ListingDetailPage] delete error:", err);
+      if (err?.code === "report-hold") {
+        setHoldModalAction("delete");
+        setShowHoldModal(true);
+      } else {
+        console.error("[ListingDetailPage] delete error:", err);
+        toast({ title: "Failed to delete listing. Please try again.", variant: "destructive" });
+      }
     } finally {
       setDeletingListing(false);
     }
@@ -754,7 +763,14 @@ export default function ListingDetailPage() {
           {isOwner && (
             <div className="flex gap-2">
               <button
-                onClick={() => navigate(`/edit/${listing.id}`)}
+                onClick={() => {
+                  if (listing.isReportHeld === true) {
+                    setHoldModalAction("edit");
+                    setShowHoldModal(true);
+                    return;
+                  }
+                  navigate(`/edit/${listing.id}`);
+                }}
                 className="flex-1 flex items-center justify-center gap-1.5 min-h-[44px] border border-gray-200 dark:border-slate-600 text-gray-700 dark:text-slate-300 rounded-xl text-sm font-semibold hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
               >
                 <Edit2 size={14} /> Edit
@@ -924,6 +940,9 @@ export default function ListingDetailPage() {
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
       {showReport && listing && (
         <ReportModal listing={listing} onClose={() => setShowReport(false)} />
+      )}
+      {showHoldModal && (
+        <ReportHoldModal action={holdModalAction} onClose={() => setShowHoldModal(false)} />
       )}
     </>
   );

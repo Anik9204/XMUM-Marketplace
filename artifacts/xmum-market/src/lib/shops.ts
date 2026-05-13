@@ -7,6 +7,7 @@ import {
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { db, storage, auth } from "@/lib/firebase";
 import { Shop, ShopListing, ShopInquiry, ShopAd, InquiryStatus } from "@/lib/types";
+import { shopListingHasActiveReport } from "@/lib/reportHold";
 
 import {
   notifyShopInquiryReceived,
@@ -277,6 +278,11 @@ export async function updateShopListing(listingId: string, data: Partial<ShopLis
 }
 
 export async function deleteShopListing(listingId: string, shopId: string): Promise<void> {
+  const held = await shopListingHasActiveReport(listingId);
+  if (held) {
+    await updateDoc(doc(db, "shopListings", listingId), { isActive: false });
+    throw Object.assign(new Error("report-hold"), { code: "report-hold" });
+  }
   await updateDoc(doc(db, "shopListings", listingId), { isActive: false });
   await updateDoc(doc(db, "shops", shopId), { totalListings: increment(-1) });
 }

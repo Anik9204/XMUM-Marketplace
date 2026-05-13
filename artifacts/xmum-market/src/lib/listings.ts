@@ -25,6 +25,7 @@ import {
 import { db, storage } from "./firebase";
 import { Listing, ListingType } from "./types";
 import { sanitizeListingData } from "./sanitize";
+import { listingHasActiveReport } from "./reportHold";
 
 // ── REQUIRED FIRESTORE COMPOSITE INDEXES ─────────────────────────
 // Deploy these via Firebase Console → Firestore → Indexes:
@@ -340,6 +341,23 @@ export async function getUserListings(userId: string): Promise<Listing[]> {
 }
 
 export async function deleteListing(listing: Listing): Promise<void> {
+  // Check if this listing has an active report hold
+  const held = await listingHasActiveReport(listing.id);
+  if (held) {
+    // Apply soft delete — hide from public but preserve evidence
+    await updateDoc(doc(db, "listings", listing.id), {
+      isArchived: true,
+      status: "sold",
+    });
+    if (listing.userId && listing.status !== "sold" && !listing.isArchived) {
+      updateDoc(doc(db, "users", listing.userId), {
+        activeListingCount: increment(-1),
+      }).catch(() => {});
+    }
+    throw Object.assign(new Error("report-hold"), { code: "report-hold" });
+  }
+
+  // No active report — proceed with hard delete (photos + Firestore doc)
   if (listing.photos.length > 0) {
     await Promise.allSettled(
       listing.photos.map((url) => {

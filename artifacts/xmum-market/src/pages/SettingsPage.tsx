@@ -15,6 +15,7 @@ import {
   Eye, EyeOff, Moon, Sun, Lock, Shield, LogOut,
   CheckCircle, MessageCircle,
 } from "lucide-react";
+import ReportHoldModal from "@/components/ReportHoldModal";
 import { useLocation } from "wouter";
 import { auth } from "@/lib/firebase";
 import { useDarkMode } from "@/hooks/use-dark-mode";
@@ -121,6 +122,7 @@ export default function SettingsPage() {
   const [deletePassword, setDeletePassword] = useState("");
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [showHoldModal, setShowHoldModal] = useState(false);
   const deletingAccountRef = useRef(false);
 
   useEffect(() => {
@@ -269,6 +271,12 @@ export default function SettingsPage() {
       navigate("/");
     } catch (err: any) {
       const code = err?.code ?? "";
+      if (code === "report-hold-account") {
+        setShowHoldModal(true);
+        deletingAccountRef.current = false;
+        setDeletingAccount(false);
+        return;
+      }
       if (code.includes("wrong-password") || code.includes("invalid-credential")) setDeleteError("Incorrect password. Please try again.");
       else if (code === "auth/requires-recent-login") setDeleteError("Session expired. Please sign out, sign back in, and try again.");
       else setDeleteError(err?.message ?? "Failed to delete account. Please try again.");
@@ -698,6 +706,9 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
+      )}
+      {showHoldModal && (
+        <ReportHoldModal action="delete" context="account" onClose={() => setShowHoldModal(false)} />
       )}
     </>
   );

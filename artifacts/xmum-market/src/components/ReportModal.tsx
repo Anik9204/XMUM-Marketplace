@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { X, Flag, Loader2, CheckCircle2 } from "lucide-react";
 import { addDoc, collection } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { applyReportHold } from "../lib/reportHold";
 import { useAuth } from "../contexts/AuthContext";
 import { Listing, ReportCategory } from "../lib/types";
 import { useToast } from "../hooks/use-toast";
@@ -65,6 +66,10 @@ export default function ReportModal({ listing, onClose }: Props) {
         ),
       ]);
       setSubmitted(true);
+      // Apply report hold — hides listing from public and locks edit/delete
+      applyReportHold(listing.id).catch((err) => {
+        console.warn("[ReportModal] Could not apply report hold:", err);
+      });
     } catch (err) {
       toast({ title: "Failed to submit report. Please try again.", variant: "destructive" });
     } finally {

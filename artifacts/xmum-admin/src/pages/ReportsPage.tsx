@@ -1,9 +1,48 @@
 import { useEffect, useState } from "react";
-import { collection, query, orderBy, updateDoc, doc, deleteDoc, addDoc, onSnapshot } from "firebase/firestore";
-import { db } from "../lib/firebase";
+import { collection, query, orderBy, updateDoc, doc, deleteDoc, addDoc, onSnapshot, getDoc } from "firebase/firestore";
+import { ref, deleteObject } from "firebase/storage";
+import { db, storage } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { ListingReport, ReportStatus } from "../lib/types";
 import { ExternalLink, Trash2, CheckCircle, XCircle, X } from "lucide-react";
+
+// Helper: lift report hold on a regular listing
+async function liftHoldOnListing(listingId: string): Promise<void> {
+  try {
+    await updateDoc(doc(db, "listings", listingId), {
+      isReportHeld: false,
+      reportHeldAt: null,
+      isArchived: false,
+    });
+  } catch (e) {
+    console.warn("[ReportsPage] liftHoldOnListing skipped:", e);
+  }
+}
+
+// Helper: lift report hold on a shop listing
+async function liftHoldOnShopListing(listingId: string): Promise<void> {
+  try {
+    await updateDoc(doc(db, "shopListings", listingId), {
+      isReportHeld: false,
+      reportHeldAt: null,
+      isActive: true,
+    });
+  } catch (e) {
+    console.warn("[ReportsPage] liftHoldOnShopListing skipped:", e);
+  }
+}
+
+// Helper: extract Firebase Storage path from a download URL
+function storagePathFromUrl(url: string): string | null {
+  try {
+    const u = new URL(url);
+    const encoded = u.pathname.split("/o/")[1];
+    if (!encoded) return null;
+    return decodeURIComponent(encoded.split("?")[0]);
+  } catch {
+    return null;
+  }
+}
 
 const STATUS_COLORS: Record<ReportStatus, string> = {
   pending:   "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300",
@@ -34,7 +73,7 @@ export default function ReportsPage() {
     return () => unsub();
   }, []);
 
-  async function updateStatus(id: string, status: ReportStatus) {
+  async function updateStatus(id: string, status: ReportStatus, report?: ListingReport) {
     try {
       await Promise.race([
         updateDoc(doc(db, "reports", id), {
@@ -46,6 +85,15 @@ export default function ReportsPage() {
       ]);
       if (selectedReport?.id === id) {
         setSelectedReport(prev => prev ? { ...prev, status } : null);
+      }
+      // Lift the report hold when admin dismisses the report
+      if (status === "dismissed" && report) {
+        const isShopListing = !!(report as any).shopId;
+        if (isShopListing) {
+          await liftHoldOnShopListing(report.listingId);
+        } else {
+          await liftHoldOnListing(report.listingId);
+        }
       }
     } catch (e) {
       console.error("[ReportsPage] updateStatus failed:", e);
@@ -60,6 +108,20 @@ export default function ReportsPage() {
     );
     if (!confirmed) return;
     try {
+      // Delete Storage photos first to preserve evidence cleanup
+      const listingSnap = await getDoc(doc(db, "listings", report.listingId));
+      if (listingSnap.exists()) {
+        const photos: string[] = listingSnap.data().photos ?? [];
+        await Promise.allSettled(
+          photos.map((url) => {
+            const path = storagePathFromUrl(url);
+            if (!path) return Promise.resolve();
+            return deleteObject(ref(storage, path)).catch((err) => {
+              if (err?.code !== "storage/object-not-found") console.warn("[ReportsPage] photo delete warn:", err);
+            });
+          })
+        );
+      }
       await deleteDoc(doc(db, "listings", report.listingId));
       await deleteDoc(doc(db, "reports", report.id));
       await addDoc(collection(db, `users/${report.listingUserId}/notifications`), {
@@ -174,7 +236,7 @@ export default function ReportsPage() {
                                          hover:bg-green-50 dark:hover:bg-green-900/20 min-h-[36px]">
                         <CheckCircle className="w-3 h-3" /> Action
                       </button>
-                      <button onClick={() => updateStatus(report.id, "dismissed")}
+                      <button onClick={() => updateStatus(report.id, "dismissed", report)}
                               className="flex items-center gap-1.5 text-xs text-slate-500
                                          border border-gray-200 dark:border-slate-600
                                          rounded-xl px-3 py-2 hover:bg-slate-50
@@ -303,7 +365,7 @@ export default function ReportsPage() {
                                        hover:bg-green-50 dark:hover:bg-green-900/20 min-h-[44px]">
                       <CheckCircle className="w-4 h-4" /> Mark Actioned
                     </button>
-                    <button onClick={() => updateStatus(selectedReport.id, "dismissed")}
+                    <button onClick={() => updateStatus(selectedReport.id, "dismissed", selectedReport)}
                             className="flex items-center justify-center gap-1.5 text-sm text-slate-500
                                        border border-gray-200 dark:border-slate-600 rounded-xl px-4
                                        py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 min-h-[44px]">

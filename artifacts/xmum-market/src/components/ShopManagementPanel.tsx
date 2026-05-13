@@ -21,6 +21,7 @@ import {
   Settings, ImagePlus, X, Store, UserMinus, UserPlus, Camera, Send,
   BarChart2,
 } from "lucide-react";
+import ReportHoldModal from "@/components/ReportHoldModal";
 import { SiWhatsapp } from "react-icons/si";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -65,11 +66,22 @@ function StatusBadge({ status }: { status: InquiryStatus }) {
 
 function ListingRow({ listing, shopId, onRefresh, onEdit }: { listing: ShopListing; shopId: string; onRefresh: () => void; onEdit: () => void }) {
   const [deleting, setDeleting] = useState(false);
+  const [showHoldModal, setShowHoldModal] = useState(false);
+  const [holdModalAction, setHoldModalAction] = useState<"delete" | "edit">("delete");
   const handleDelete = async () => {
     if (!confirm("Remove this listing? This cannot be undone.")) return;
     setDeleting(true);
-    await deleteShopListing(listing.id, shopId);
-    onRefresh();
+    try {
+      await deleteShopListing(listing.id, shopId);
+      onRefresh();
+    } catch (err: any) {
+      if (err?.code === "report-hold") {
+        setHoldModalAction("delete");
+        setShowHoldModal(true);
+      }
+    } finally {
+      setDeleting(false);
+    }
   };
   const priceLabel = listing.price !== undefined
     ? `RM ${listing.price.toFixed(2)}${listing.pricingModel && listing.pricingModel !== "fixed" ? ` / ${listing.pricingModel.replace("_", " ")}` : ""}`
@@ -82,14 +94,35 @@ function ListingRow({ listing, shopId, onRefresh, onEdit }: { listing: ShopListi
         <div className="w-14 h-14 rounded-lg bg-gray-100 dark:bg-slate-700 flex items-center justify-center shrink-0"><Package size={20} className="text-gray-300 dark:text-slate-500" /></div>
       )}
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-gray-900 dark:text-slate-100 truncate">{listing.title}</p>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <p className="text-sm font-semibold text-gray-900 dark:text-slate-100 truncate">{listing.title}</p>
+          {listing.isReportHeld && (
+            <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 uppercase tracking-wide">Under Review</span>
+          )}
+        </div>
         <p className="text-xs text-gray-500 dark:text-slate-400">{priceLabel}</p>
         <p className="text-xs text-gray-400 dark:text-slate-500">{relativeTime(listing.createdAt)}</p>
       </div>
-      <button onClick={onEdit} className="p-2 text-blue-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition" title="Edit"><Edit2 size={14} /></button>
+      <button
+        onClick={() => {
+          if (listing.isReportHeld === true) {
+            setHoldModalAction("edit");
+            setShowHoldModal(true);
+            return;
+          }
+          onEdit();
+        }}
+        className="p-2 text-blue-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition"
+        title="Edit"
+      >
+        <Edit2 size={14} />
+      </button>
       <button onClick={handleDelete} disabled={deleting} className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition disabled:opacity-40" title="Remove">
         {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
       </button>
+      {showHoldModal && (
+        <ReportHoldModal action={holdModalAction} onClose={() => setShowHoldModal(false)} />
+      )}
     </div>
   );
 }

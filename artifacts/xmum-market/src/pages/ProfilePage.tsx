@@ -9,6 +9,7 @@ import { getSavedListings } from "@/lib/savedListings";
 import { getShopsByOwner, getShopsWhereEditor, getInquiriesForBuyer } from "@/lib/shops";
 import ListingCard from "@/components/ListingCard";
 import AuthModal from "@/components/AuthModal";
+import ReportHoldModal from "@/components/ReportHoldModal";
 import {
   User, CheckCircle, AlertCircle, CheckCircle2, Settings, Clock, X,
   ArrowUp, Bookmark, Store, MessageSquare, Plus,
@@ -126,6 +127,9 @@ function OwnerListingRow({
               }`}>
                 {listing.title}
               </h3>
+              {listing.isReportHeld && (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 uppercase tracking-wide">Under Review</span>
+              )}
             </div>
 
             <div className="flex items-center gap-1.5 mt-1">
@@ -251,6 +255,8 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Listing | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [showHoldModal, setShowHoldModal] = useState(false);
+  const [holdModalAction, setHoldModalAction] = useState<"delete" | "edit">("delete");
   const [deleteError, setDeleteError] = useState("");
   const [successToast, setSuccessToast] = useState("");
   const [expiryReminders, setExpiryReminders] = useState<Listing[]>([]);
@@ -368,7 +374,15 @@ export default function ProfilePage() {
       setSuccessToast("Your post has been deleted successfully.");
     } catch (err: any) {
       const code: string = err?.code ?? "";
-      if (code === "permission-denied" || code === "storage/unauthorized") {
+      if (code === "report-hold") {
+        setHoldModalAction("delete");
+        setShowHoldModal(true);
+        // Still remove from visible list since it's now archived/hidden
+        const updated = listingsCache.current.filter((l) => l.id !== listing.id);
+        listingsCache.current = updated;
+        setListings(updated);
+        setDeleteTarget(null);
+      } else if (code === "permission-denied" || code === "storage/unauthorized") {
         setDeleteError("Permission denied. Make sure you are signed in with your XMUM email.");
       } else if (code === "not-found" || code === "storage/object-not-found") {
         const updated = listingsCache.current.filter((l) => l.id !== listing.id);
@@ -668,7 +682,14 @@ export default function ProfilePage() {
                   t={t}
                   onDelete={() => setDeleteTarget(l)}
                   onMarkSold={() => handleMarkAsSold(l)}
-                  onEdit={() => navigate(`/edit/${l.id}`)}
+                  onEdit={() => {
+                    if (l.isReportHeld === true) {
+                      setHoldModalAction("edit");
+                      setShowHoldModal(true);
+                      return;
+                    }
+                    navigate(`/edit/${l.id}`);
+                  }}
                   onBump={() => handleBump(l)}
                 />
               ))}
@@ -811,6 +832,9 @@ export default function ProfilePage() {
             </div>
           </div>
         </div>
+      )}
+      {showHoldModal && (
+        <ReportHoldModal action={holdModalAction} onClose={() => setShowHoldModal(false)} />
       )}
     </>
   );

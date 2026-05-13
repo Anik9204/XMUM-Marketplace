@@ -3,6 +3,7 @@ import { useLocation, useParams } from "wouter";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { uploadPhoto, updateListing, getListing } from "@/lib/listings";
+import ReportHoldModal from "@/components/ReportHoldModal";
 import { checkContent } from "@/lib/contentFilter";
 import { auth } from "@/lib/firebase";
 import { ListingType, Condition } from "@/lib/types";
@@ -124,6 +125,7 @@ export default function EditListingPage() {
 
   const [fetchLoading, setFetchLoading] = useState(true);
   const [fetchError, setFetchError] = useState("");
+  const [isHeld, setIsHeld] = useState(false);
 
   const [type, setType] = useState<ListingType>("buy-sell");
   const [title, setTitle] = useState("");
@@ -204,6 +206,11 @@ export default function EditListingPage() {
       .then((listing) => {
         if (!listing) { setFetchError("Listing not found."); return; }
         if (listing.userId !== user?.uid) { setFetchError("You don't have permission to edit this listing."); return; }
+        if (listing.isReportHeld === true) {
+          setIsHeld(true);
+          setFetchLoading(false);
+          return;
+        }
         setType(listing.type);
         setTitle(listing.title);
         setDescription(listing.description);
@@ -247,6 +254,14 @@ export default function EditListingPage() {
       <div className="flex items-center justify-center min-h-[60vh]">
         <Loader2 size={32} className="animate-spin text-[#003366] dark:text-blue-400" />
       </div>
+    );
+  }
+
+  if (isHeld) {
+    return (
+      <>
+        <ReportHoldModal action="edit" onClose={() => navigate("/profile")} />
+      </>
     );
   }
 

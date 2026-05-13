@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { getDoc, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { getShopById, incrementShopListingView, createInquiry, deleteShopListing } from "@/lib/shops";
+import ReportHoldModal from "@/components/ReportHoldModal";
 import { Shop, ShopListing } from "@/lib/types";
 import AuthModal from "@/components/AuthModal";
 import ReportModal from "@/components/ReportModal";
@@ -48,6 +49,8 @@ export default function ShopListingDetailPage() {
   const [deletingListing, setDeletingListing] = useState(false);
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
   const [showReport, setShowReport] = useState(false);
+  const [showHoldModal, setShowHoldModal] = useState(false);
+  const [holdModalAction, setHoldModalAction] = useState<"delete" | "edit">("delete");
   const overflowRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -321,7 +324,12 @@ export default function ShopListingDetailPage() {
                     await deleteShopListing(listing.id, listing.shopId);
                     navigate(`/shop/${shop.slug}`);
                   } catch (err: any) {
-                    console.error("[ShopListingDetailPage] delete error:", err);
+                    if (err?.code === "report-hold") {
+                      setHoldModalAction("delete");
+                      setShowHoldModal(true);
+                    } else {
+                      console.error("[ShopListingDetailPage] delete error:", err);
+                    }
                   } finally {
                     setDeletingListing(false);
                   }
@@ -441,6 +449,9 @@ export default function ShopListingDetailPage() {
           } as Listing}
           onClose={() => setShowReport(false)}
         />
+      )}
+      {showHoldModal && (
+        <ReportHoldModal action={holdModalAction} onClose={() => setShowHoldModal(false)} />
       )}
     </div>
   );

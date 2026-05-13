@@ -80,11 +80,12 @@ service cloud.firestore {
                 && request.resource.data.price <= 1000000));
       allow update: if isXmuEmail()
         && resource.data.userId == request.auth.uid
+        && resource.data.isReportHeld != true
         && (!request.resource.data.keys().hasAny(["price"])
             || (request.resource.data.price >= 0
                 && request.resource.data.price <= 1000000));
-      allow delete: if (isXmuEmail() && resource.data.userId == request.auth.uid)
-        || isEditorRole();
+      allow delete: if ((isXmuEmail() && resource.data.userId == request.auth.uid && resource.data.isReportHeld != true)
+        || isEditorRole());
     }
 
     // ── Campus Market Shops ────────────────────────────────────────────────────

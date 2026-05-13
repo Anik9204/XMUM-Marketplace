@@ -17,6 +17,7 @@ import {
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { db, storage, auth } from "./firebase";
 import { UserProfile } from "./types";
+import { userHasHeldListings } from "./reportHold";
 
 // Extract the Firebase Storage path from a full https:// download URL.
 // ref(storage, fullUrl) only accepts gs:// or storage paths — passing a
@@ -91,6 +92,17 @@ export async function deleteAccount(password: string): Promise<void> {
 
     const uid = user.uid;
 
+    // ── Step 1b: Check for listings under active report holds ───────────────────
+    console.log("[deleteAccount] Step 1b: Checking for report-held listings...");
+    const hasHeld = await userHasHeldListings(uid);
+    if (hasHeld) {
+      throw Object.assign(
+        new Error("You have listings that are currently under admin review due to reports. Please resolve these before deleting your account. Contact admin at cys2209204@xmu.edu.my"),
+        { code: "report-hold-account" }
+      );
+    }
+    console.log("[deleteAccount] Step 1b Complete — no held listings");
+
     // ── Step 2: Fetch profile now so we have avatarUrl before we delete the doc ─
     console.log("[deleteAccount] Step 2: Fetching profile...");
     let profile: UserProfile | null = null;
@@ -112,6 +124,9 @@ export async function deleteAccount(password: string): Promise<void> {
     console.log("[deleteAccount] Step 4: Deleting listing photos and docs...");
     await Promise.all(
       listingsSnap.docs.map(async (listingDoc) => {
+        // Skip listings under a report hold — evidence must be preserved
+        if (listingDoc.data().isReportHeld === true) return;
+
         const photos: string[] = listingDoc.data().photos ?? [];
         if (photos.length > 0) {
           await Promise.all(

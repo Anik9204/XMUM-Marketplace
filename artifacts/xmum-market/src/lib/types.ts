@@ -52,6 +52,8 @@ export interface ShopListing {
   createdAt: number;
   viewCount: number;
   inquiryCount: number;
+  isReportHeld?: boolean;
+  reportHeldAt?: number;
 }
 
 export type InquiryStatus = "pending" | "replied";
@@ -136,6 +138,8 @@ export interface Listing {
   tcAcceptedAt?: number;
   tcAcceptedVersion?: string;
   viewCount?: number;
+  isReportHeld?: boolean;
+  reportHeldAt?: number;
 }
 
 export interface RentalListing extends Listing {

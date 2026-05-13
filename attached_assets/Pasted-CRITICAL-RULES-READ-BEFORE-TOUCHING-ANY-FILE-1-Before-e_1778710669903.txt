@@ -1,0 +1,1157 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless I have explicitly told you to remove it.
+
+4. After every change, mentally verify: "Does this break anything
+   that was working before?" If yes, do not proceed — find a
+   different approach.
+
+5. If fixing Issue X requires changing a shared component used by
+   other pages, STOP and tell me what the impact will be before
+   making the change. Ask for permission first.
+
+6. Never change any CSS class, layout structure, z-index, or
+   responsive breakpoint unless it is directly part of the fix.
+
+7. Confirm the app builds with zero errors before finishing:
+   pnpm --filter @workspace/xmum-market run build
+
+
+# XMUM Market — Moderation-Based Delete & Edit Protection System
+
+## Context & Purpose
+
+You are implementing a **report-hold protection system** for XMUM Market. The goal
+is to prevent users from destroying evidence by deleting or editing reported content
+before an admin can review it.
+
+The rules are:
+- If a listing has **no active reports** → owner can delete and edit it normally
+  (hard delete: remove Firestore doc + Storage files).
+- If a listing has **one or more pending/reviewed reports** → owner **cannot**
+  delete or edit it. The listing is soft-deleted (hidden from public) if the owner
+  attempts to delete, but all data and files are preserved. A blocked-action modal
+  is shown explaining why with admin contact options.
+- When an admin **dismisses** a report → the listing returns to fully normal state
+  (visible, editable, deletable again).
+- When an admin **takes action** (deletes listing) → admin performs the permanent
+  delete. Report is marked actioned.
+- **Account deletion** is also blocked if the user has any listings with active
+  (pending or reviewed) reports.
+
+Admin contact details (hardcoded):
+- Email: `cys2209204@xmu.edu.my`
+- WhatsApp: `+60142246554` (wa.me link: `https://wa.me/60142246554`)
+
+---
+
+## CRITICAL RULES
+
+1. **Read every file before touching it.** List every file that imports or uses it.
+2. **Surgical edits only.** Do not rewrite any file from scratch.
+3. **Zero functional regressions.** No working feature may break.
+4. **Never change** Firebase query logic, auth logic, routing, or context providers
+   unless explicitly instructed below.
+5. **Dark mode must work** on every new UI element — always pair `dark:` classes.
+6. **All touch targets** must be `min-h-[44px]`.
+7. Build must pass at the end:
+   `pnpm --filter @workspace/xmum-market run build`
+
+---
+
+## OVERVIEW OF ALL CHANGES
+
+**Files to create (new):**
+- `src/lib/reportHold.ts` — helper functions for checking report hold status
+- `src/components/ReportHoldModal.tsx` — bottom-sheet modal shown when action is blocked
+
+**Files to modify (student app `artifacts/xmum-market`):**
+- `src/lib/types.ts` — add `isReportHeld` and `reportHeldAt` fields to `Listing` and `ShopListing`
+- `src/lib/listings.ts` — update `deleteListing` and add `softDeleteListing`
+- `src/lib/shops.ts` — update `deleteShopListing`
+- `src/lib/userProfile.ts` — update `deleteAccount` to check for held listings
+- `src/components/ReportModal.tsx` — after report submitted, mark listing as `isReportHeld: true`
+- `src/pages/ListingDetailPage.tsx` — guard delete and edit buttons
+- `src/pages/EditListingPage.tsx` — guard the entire page from loading if listing is held
+- `src/pages/ProfilePage.tsx` — guard delete button; hide edit button for held listings
+- `src/pages/ShopListingDetailPage.tsx` — guard delete button
+- `src/components/ShopManagementPanel.tsx` — guard delete and edit buttons for shop listings
+- `src/pages/SettingsPage.tsx` — guard account deletion
+
+**Files to modify (admin app `artifacts/xmum-admin`):**
+- `src/pages/ReportsPage.tsx` — on dismiss, lift hold; on action+delete, hard delete
+
+**Files to modify (Firestore rules `firestore.rules`):**
+- Update listings and shopListings rules to block updates/deletes when `isReportHeld` is true,
+  except for admins/editors
+
+---
+
+## PHASE 1 — Types (`src/lib/types.ts`)
+
+### 1a — `Listing` interface
+Add two optional fields:
+```ts
+isReportHeld?: boolean;   // true when listing has active pending/reviewed reports
+reportHeldAt?: number;    // timestamp when hold was applied
+```
+
+### 1b — `ShopListing` interface
+Add the same two optional fields:
+```ts
+isReportHeld?: boolean;
+reportHeldAt?: number;
+```
+
+### 1c — No other changes to types.ts
+
+---
+
+## PHASE 2 — New file: `src/lib/reportHold.ts`
+
+Create this file from scratch:
+
+```typescript
+import {
+  collection, query, where, getDocs, updateDoc, doc, limit,
+} from "firebase/firestore";
+import { db } from "./firebase";
+
+/**
+ * Check if a regular listing has any active (pending or reviewed) reports.
+ * Returns true if the listing should be held.
+ */
+export async function listingHasActiveReport(listingId: string): Promise<boolean> {
+  const q = query(
+    collection(db, "reports"),
+    where("listingId", "==", listingId),
+    where("status", "in", ["pending", "reviewed"]),
+    limit(1)
+  );
+  const snap = await getDocs(q);
+  return !snap.empty;
+}
+
+/**
+ * Check if a shop listing has any active (pending or reviewed) reports.
+ * ReportModal stores shopListingId in the same listingId field for shop listings.
+ */
+export async function shopListingHasActiveReport(listingId: string): Promise<boolean> {
+  const q = query(
+    collection(db, "reports"),
+    where("listingId", "==", listingId),
+    where("status", "in", ["pending", "reviewed"]),
+    limit(1)
+  );
+  const snap = await getDocs(q);
+  return !snap.empty;
+}
+
+/**
+ * Check if a user has any listings (regular) currently under a report hold.
+ * Used to block account deletion.
+ */
+export async function userHasHeldListings(userId: string): Promise<boolean> {
+  const q = query(
+    collection(db, "listings"),
+    where("userId", "==", userId),
+    where("isReportHeld", "==", true),
+    limit(1)
+  );
+  const snap = await getDocs(q);
+  return !snap.empty;
+}
+
+/**
+ * Mark a listing as report-held (soft protection — hides from public feed).
+ * Called from ReportModal after a report is successfully submitted.
+ */
+export async function applyReportHold(listingId: string): Promise<void> {
+  await updateDoc(doc(db, "listings", listingId), {
+    isReportHeld: true,
+    reportHeldAt: Date.now(),
+  });
+}
+
+/**
+ * Mark a shop listing as report-held.
+ */
+export async function applyShopListingReportHold(listingId: string): Promise<void> {
+  await updateDoc(doc(db, "shopListings", listingId), {
+    isReportHeld: true,
+    reportHeldAt: Date.now(),
+  });
+}
+
+/**
+ * Lift the report hold on a regular listing (called by admin on dismiss).
+ */
+export async function liftReportHold(listingId: string): Promise<void> {
+  await updateDoc(doc(db, "listings", listingId), {
+    isReportHeld: false,
+    reportHeldAt: null,
+  });
+}
+
+/**
+ * Lift the report hold on a shop listing (called by admin on dismiss).
+ */
+export async function liftShopListingReportHold(listingId: string): Promise<void> {
+  await updateDoc(doc(db, "shopListings", listingId), {
+    isReportHeld: false,
+    reportHeldAt: null,
+  });
+}
+```
+
+---
+
+## PHASE 3 — New file: `src/components/ReportHoldModal.tsx`
+
+Create this new component. It is a bottom-sheet modal (same pattern as
+`AuthModal` and `ReportModal`) that explains why the action was blocked.
+
+```tsx
+import { X, Lock, Mail, MessageCircle } from "lucide-react";
+
+interface Props {
+  action: "delete" | "edit";
+  onClose: () => void;
+}
+
+const ADMIN_EMAIL = "cys2209204@xmu.edu.my";
+const ADMIN_WHATSAPP = "https://wa.me/60142246554";
+
+export default function ReportHoldModal({ action, onClose }: Props) {
+  return (
+    <div
+      className="fixed inset-0 z-[80] flex flex-col justify-end sm:justify-center sm:items-center sm:p-4 bg-black/50 backdrop-blur-sm"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-white dark:bg-slate-900 w-full rounded-t-3xl sm:rounded-3xl sm:max-w-md shadow-2xl p-6 relative animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 duration-300">
+
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-600 transition"
+          aria-label="Close"
+        >
+          <X size={16} />
+        </button>
+
+        {/* Icon */}
+        <div className="w-14 h-14 rounded-2xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mb-4">
+          <Lock size={26} className="text-amber-600 dark:text-amber-400" />
+        </div>
+
+        {/* Title */}
+        <h2 className="font-display font-black text-xl text-gray-900 dark:text-slate-100 mb-2">
+          This listing is under review
+        </h2>
+
+        {/* Body */}
+        <p className="text-sm text-gray-600 dark:text-slate-300 leading-relaxed mb-2">
+          {action === "delete"
+            ? "You cannot delete this listing right now because it has been reported and is currently under admin review."
+            : "You cannot edit this listing right now because it has been reported and is currently under admin review."
+          }
+        </p>
+        <p className="text-sm text-gray-600 dark:text-slate-300 leading-relaxed mb-5">
+          The listing has been hidden from public view. Once the report is resolved by an admin, you will be able to {action === "delete" ? "delete" : "edit"} it again.
+        </p>
+
+        {/* Contact admin section */}
+        <div className="bg-gray-50 dark:bg-slate-800 rounded-2xl p-4 mb-5">
+          <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-3">
+            Contact Admin for Review
+          </p>
+          <div className="flex flex-col gap-2">
+            <a
+              href={ADMIN_WHATSAPP}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 bg-[#25D366] text-white font-semibold text-sm rounded-xl px-4 py-3 min-h-[48px] hover:brightness-110 transition"
+            >
+              <MessageCircle size={18} />
+              WhatsApp Admin
+            </a>
+            <a
+              href={`mailto:${ADMIN_EMAIL}`}
+              className="flex items-center gap-3 bg-[#003366] dark:bg-blue-600 text-white font-semibold text-sm rounded-xl px-4 py-3 min-h-[48px] hover:brightness-110 transition"
+            >
+              <Mail size={18} />
+              Email Admin
+            </a>
+          </div>
+        </div>
+
+        {/* Dismiss */}
+        <button
+          onClick={onClose}
+          className="w-full min-h-[48px] rounded-xl border-2 border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300 font-semibold text-sm hover:bg-gray-50 dark:hover:bg-slate-800 transition"
+        >
+          Got it
+        </button>
+      </div>
+    </div>
+  );
+}
+```
+
+---
+
+## PHASE 4 — Update `src/lib/listings.ts`
+
+### 4a — Add `softDeleteListing` function
+Add this new exported function after the existing `deleteListing` function.
+Do NOT modify `deleteListing` yet — add this as a new function:
+
+```typescript
+/**
+ * Soft-delete a listing that is under a report hold.
+ * Hides it from public view but preserves all data and Storage files.
+ * Called when an owner tries to delete a reported listing.
+ */
+export async function softDeleteListing(listingId: string, userId: string): Promise<void> {
+  await updateDoc(doc(db, "listings", listingId), {
+    isArchived: true,
+    status: "sold", // excludes it from public feeds
+  });
+  // Decrement active listing count
+  updateDoc(doc(db, "users", userId), {
+    activeListingCount: increment(-1),
+  }).catch(() => {});
+}
+```
+
+### 4b — Update `deleteListing` function
+The existing `deleteListing` function deletes immediately without checking for
+reports. Update it to check for an active report hold first.
+
+Import `listingHasActiveReport` and `softDeleteListing` from `./reportHold` at
+the top of the file (add to existing imports, do not duplicate other imports).
+
+Replace the body of `deleteListing` with:
+
+```typescript
+export async function deleteListing(listing: Listing): Promise<void> {
+  // Check if this listing has an active report hold
+  const held = await listingHasActiveReport(listing.id);
+  if (held) {
+    // Apply soft delete — hide from public but preserve evidence
+    await updateDoc(doc(db, "listings", listing.id), {
+      isArchived: true,
+      status: "sold",
+    });
+    if (listing.userId && listing.status !== "sold" && !listing.isArchived) {
+      updateDoc(doc(db, "users", listing.userId), {
+        activeListingCount: increment(-1),
+      }).catch(() => {});
+    }
+    // Throw a specific error so the caller knows it was blocked
+    throw Object.assign(new Error("report-hold"), { code: "report-hold" });
+  }
+
+  // No active report — proceed with hard delete (photos + Firestore doc)
+  if (listing.photos.length > 0) {
+    await Promise.allSettled(
+      listing.photos.map((url) => {
+        const path = storagePathFromUrl(url);
+        if (!path) return Promise.resolve();
+        return deleteObject(ref(storage, path)).catch((err) => {
+          if (err?.code !== "storage/object-not-found") throw err;
+        });
+      })
+    );
+  }
+
+  await Promise.race([
+    deleteDoc(doc(db, "listings", listing.id)),
+    new Promise<void>((resolve) => setTimeout(resolve, 6_000)),
+  ]);
+
+  if (listing.userId && listing.status !== "sold" && !listing.isArchived) {
+    updateDoc(doc(db, "users", listing.userId), {
+      activeListingCount: increment(-1),
+    }).catch(() => {});
+  }
+}
+```
+
+### 4c — Update `getListingsPage` and `getListings` queries
+In `getListingsPage` and `getListings`, add a `where("isReportHeld", "!=", true)`
+filter — **NO, do not do this**. Instead, the `isArchived: true` soft-delete
+already excludes held-then-soft-deleted listings from the feed because both
+functions already filter `where("isArchived", "==", false)`. No feed query
+changes needed.
+
+However, for listings that are `isReportHeld: true` but NOT yet soft-deleted
+(i.e. the owner hasn't tried to delete yet), they should still be hidden from
+the public feed once a report is filed. The `applyReportHold` in `reportHold.ts`
+sets `isReportHeld: true` but doesn't archive. To hide them from feeds, update
+`applyReportHold` in `reportHold.ts` to also set `isArchived: true`:
+
+```typescript
+export async function applyReportHold(listingId: string): Promise<void> {
+  await updateDoc(doc(db, "listings", listingId), {
+    isReportHeld: true,
+    reportHeldAt: Date.now(),
+    isArchived: true,   // hide from public feed immediately
+  });
+}
+
+export async function applyShopListingReportHold(listingId: string): Promise<void> {
+  await updateDoc(doc(db, "shopListings", listingId), {
+    isReportHeld: true,
+    reportHeldAt: Date.now(),
+    isActive: false,    // hide from shop's public listing grid
+  });
+}
+```
+
+And `liftReportHold` should restore visibility:
+```typescript
+export async function liftReportHold(listingId: string): Promise<void> {
+  await updateDoc(doc(db, "listings", listingId), {
+    isReportHeld: false,
+    reportHeldAt: null,
+    isArchived: false,  // restore visibility
+  });
+}
+
+export async function liftShopListingReportHold(listingId: string): Promise<void> {
+  await updateDoc(doc(db, "shopListings", listingId), {
+    isReportHeld: false,
+    reportHeldAt: null,
+    isActive: true,     // restore visibility
+  });
+}
+```
+
+---
+
+## PHASE 5 — Update `src/lib/shops.ts`
+
+### 5a — Update `deleteShopListing`
+Currently `deleteShopListing` just sets `isActive: false`. Update it to check
+for an active report hold.
+
+Add import at the top:
+```typescript
+import { shopListingHasActiveReport } from "./reportHold";
+```
+
+Replace the body of `deleteShopListing`:
+```typescript
+export async function deleteShopListing(listingId: string, shopId: string): Promise<void> {
+  const held = await shopListingHasActiveReport(listingId);
+  if (held) {
+    // Soft hide — already isActive: false from applyShopListingReportHold, ensure it's set
+    await updateDoc(doc(db, "shopListings", listingId), { isActive: false });
+    throw Object.assign(new Error("report-hold"), { code: "report-hold" });
+  }
+  // No active report — proceed with normal deactivation
+  // Note: full Storage file deletion for shop listings is handled by deleteShopCompletely.
+  // Individual listing deletion just deactivates it (existing behaviour preserved).
+  await updateDoc(doc(db, "shopListings", listingId), { isActive: false });
+  await updateDoc(doc(db, "shops", shopId), { totalListings: increment(-1) });
+}
+```
+
+---
+
+## PHASE 6 — Update `src/lib/userProfile.ts`
+
+### 6a — Add import
+At the top of `userProfile.ts`, add:
+```typescript
+import { userHasHeldListings } from "./reportHold";
+```
+
+### 6b — Update `deleteAccount`
+In `deleteAccount`, between Step 1 (re-authenticate) and Step 2 (fetch profile),
+add a new step that checks for held listings:
+
+```typescript
+// ── Step 1b: Check for listings under active report holds ───────────────────
+console.log("[deleteAccount] Step 1b: Checking for report-held listings...");
+const hasHeld = await userHasHeldListings(uid);
+if (hasHeld) {
+  throw Object.assign(
+    new Error("You have listings that are currently under admin review due to reports. Please resolve these before deleting your account. Contact admin at cys2209204@xmu.edu.my"),
+    { code: "report-hold-account" }
+  );
+}
+console.log("[deleteAccount] Step 1b Complete — no held listings");
+```
+
+Insert this block after the `const uid = user.uid;` line and before Step 2
+(fetching profile).
+
+Also update Step 4 (deleting listing photos and docs) to skip listings that are
+`isReportHeld: true` — those must be preserved:
+
+In the `Promise.all(listingsSnap.docs.map(...))` block in Step 4, wrap each
+deletion with a check:
+
+```typescript
+await Promise.all(
+  listingsSnap.docs.map(async (listingDoc) => {
+    // Skip listings under a report hold — evidence must be preserved
+    if (listingDoc.data().isReportHeld === true) return;
+
+    const photos: string[] = listingDoc.data().photos ?? [];
+    if (photos.length > 0) {
+      await Promise.all(
+        photos.map((url) => {
+          const path = storagePathFromUrl(url);
+          if (!path) return Promise.resolve();
+          return deleteObject(ref(storage, path)).catch(() => {});
+        })
+      );
+    }
+    await deleteDocWithTimeout(listingDoc.ref);
+  })
+);
+```
+
+---
+
+## PHASE 7 — Update `src/components/ReportModal.tsx`
+
+After a report is successfully submitted (inside the `try` block, after the
+`addDoc` call succeeds and `setSubmitted(true)` is called), apply the report
+hold to the listing:
+
+Add import at the top:
+```typescript
+import { applyReportHold } from "../lib/reportHold";
+```
+
+After `setSubmitted(true);`, add:
+```typescript
+// Apply report hold — hides listing from public and locks edit/delete
+applyReportHold(listing.id).catch((err) => {
+  console.warn("[ReportModal] Could not apply report hold:", err);
+});
+```
+
+Note: This is fire-and-forget (`.catch` swallows the error) so a permissions
+error from Firestore rules doesn't block the report submission UX. The admin
+can always apply holds manually.
+
+---
+
+## PHASE 8 — Update `src/pages/ListingDetailPage.tsx`
+
+### 8a — Import
+Add at the top:
+```typescript
+import ReportHoldModal from "@/components/ReportHoldModal";
+```
+
+### 8b — State
+Add two state variables:
+```typescript
+const [showHoldModal, setShowHoldModal] = useState(false);
+const [holdModalAction, setHoldModalAction] = useState<"delete" | "edit">("delete");
+```
+
+### 8c — Guard `handleDeleteListing`
+Find `handleDeleteListing`. It currently calls `deleteListing(listing)` and
+navigates away. Update it to catch `report-hold` errors:
+
+```typescript
+const handleDeleteListing = async () => {
+  if (!listing) return;
+  setDeletingListing(true);
+  try {
+    await deleteListing(listing);
+    navigate("/");
+  } catch (err: any) {
+    if (err?.code === "report-hold") {
+      setHoldModalAction("delete");
+      setShowHoldModal(true);
+    } else {
+      toast({ title: "Failed to delete listing. Please try again.", variant: "destructive" });
+    }
+  } finally {
+    setDeletingListing(false);
+  }
+};
+```
+
+### 8d — Guard the Edit button
+Find the Edit button (it navigates to `/edit/${listing.id}`). Replace its
+`onClick` with:
+```typescript
+onClick={() => {
+  if (listing.isReportHeld) {
+    setHoldModalAction("edit");
+    setShowHoldModal(true);
+    return;
+  }
+  navigate(`/edit/${listing.id}`);
+}}
+```
+
+### 8e — Add `ReportHoldModal` to JSX
+At the bottom of the component's return, before the closing tag, add:
+```jsx
+{showHoldModal && (
+  <ReportHoldModal
+    action={holdModalAction}
+    onClose={() => setShowHoldModal(false)}
+  />
+)}
+```
+
+---
+
+## PHASE 9 — Update `src/pages/EditListingPage.tsx`
+
+### 9a — Import
+Add:
+```typescript
+import ReportHoldModal from "@/components/ReportHoldModal";
+```
+
+### 9b — Guard page load
+After the listing is fetched (in the `useEffect` that loads the listing), add a
+check. Find the `useEffect` that calls `getListing(id)` and, after the listing
+is set, add:
+
+```typescript
+if (fetchedListing.isReportHeld) {
+  // Don't navigate away — render the hold modal instead
+  setIsHeld(true);
+}
+```
+
+Add state variable:
+```typescript
+const [isHeld, setIsHeld] = useState(false);
+```
+
+### 9c — Render hold modal if held
+In the component's return, at the very top of the render (before any form JSX),
+add:
+```jsx
+if (isHeld) {
+  return (
+    <div className="min-h-screen bg-[#F8FAFC] dark:bg-[#0F172A] flex flex-col items-center justify-center px-4">
+      <ReportHoldModal
+        action="edit"
+        onClose={() => navigate(-1)}
+      />
+    </div>
+  );
+}
+```
+
+This prevents the edit form from even rendering if the listing is under a hold.
+
+---
+
+## PHASE 10 — Update `src/pages/ProfilePage.tsx`
+
+### 10a — Import
+Add:
+```typescript
+import ReportHoldModal from "@/components/ReportHoldModal";
+```
+
+### 10b — State
+Add:
+```typescript
+const [showHoldModal, setShowHoldModal] = useState(false);
+const [holdModalAction, setHoldModalAction] = useState<"delete" | "edit">("delete");
+```
+
+### 10c — Update `handleDelete`
+Find `handleDelete` (around line 359). It calls `deleteListing(listing)`.
+Update the catch block to handle `report-hold`:
+
+```typescript
+const handleDelete = async (listing: Listing) => {
+  try {
+    setDeleteTarget(null);
+    await deleteListing(listing);
+    setMyListings((prev) => prev.filter((l) => l.id !== listing.id));
+  } catch (err: any) {
+    if (err?.code === "report-hold") {
+      setHoldModalAction("delete");
+      setShowHoldModal(true);
+      // Still remove from visible list since it's now archived/hidden
+      setMyListings((prev) => prev.filter((l) => l.id !== listing.id));
+    } else {
+      // existing error handling — keep as is
+    }
+  }
+};
+```
+
+### 10d — Guard the Edit button in `OwnerListingRow`
+`OwnerListingRow` has an `onEdit` prop that navigates to `/edit/${l.id}`.
+In the ProfilePage where `onEdit` is wired (around line 675):
+```typescript
+onEdit={() => {
+  if (l.isReportHeld) {
+    setHoldModalAction("edit");
+    setShowHoldModal(true);
+    return;
+  }
+  navigate(`/edit/${l.id}`);
+}}
+```
+
+### 10e — Add visual indicator on held listings
+In `OwnerListingRow`, if the listing is held, show a small amber badge next to
+the title. Find where `listing.title` is rendered and add:
+```jsx
+{listing.isReportHeld && (
+  <span className="ml-1.5 inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 shrink-0">
+    🔒 Under Review
+  </span>
+)}
+```
+
+### 10f — Add `ReportHoldModal` to JSX
+At the bottom of the ProfilePage return:
+```jsx
+{showHoldModal && (
+  <ReportHoldModal
+    action={holdModalAction}
+    onClose={() => setShowHoldModal(false)}
+  />
+)}
+```
+
+---
+
+## PHASE 11 — Update `src/pages/ShopListingDetailPage.tsx`
+
+### 11a — Import
+Add:
+```typescript
+import ReportHoldModal from "@/components/ReportHoldModal";
+```
+
+### 11b — State
+Add:
+```typescript
+const [showHoldModal, setShowHoldModal] = useState(false);
+const [holdModalAction, setHoldModalAction] = useState<"delete" | "edit">("delete");
+```
+
+### 11c — Guard delete
+Find the delete handler (around line 321, calls `deleteShopListing`):
+```typescript
+try {
+  await deleteShopListing(listing.id, listing.shopId);
+  navigate(`/shop/${listing.shopSlug}`);
+} catch (err: any) {
+  if (err?.code === "report-hold") {
+    setHoldModalAction("delete");
+    setShowHoldModal(true);
+  } else {
+    // existing error handling
+  }
+}
+```
+
+### 11d — Add `ReportHoldModal` to JSX
+```jsx
+{showHoldModal && (
+  <ReportHoldModal
+    action={holdModalAction}
+    onClose={() => setShowHoldModal(false)}
+  />
+)}
+```
+
+---
+
+## PHASE 12 — Update `src/components/ShopManagementPanel.tsx`
+
+### 12a — Import
+Add:
+```typescript
+import ReportHoldModal from "@/components/ReportHoldModal";
+import { shopListingHasActiveReport } from "@/lib/reportHold";
+```
+
+### 12b — `ListingRow` component — guard delete and edit
+`ListingRow` (around line 66) has a delete button calling `deleteShopListing`
+and an edit button.
+
+Add state inside `ListingRow`:
+```typescript
+const [showHoldModal, setShowHoldModal] = useState(false);
+const [holdModalAction, setHoldModalAction] = useState<"delete" | "edit">("delete");
+```
+
+Update `handleDelete` inside `ListingRow`:
+```typescript
+const handleDelete = async () => {
+  setDeleting(true);
+  try {
+    await deleteShopListing(listing.id, shopId);
+    onRefresh();
+  } catch (err: any) {
+    if (err?.code === "report-hold") {
+      setHoldModalAction("delete");
+      setShowHoldModal(true);
+    }
+  } finally {
+    setDeleting(false);
+  }
+};
+```
+
+Update the edit button's `onClick`:
+```typescript
+onClick={() => {
+  if (listing.isReportHeld) {
+    setHoldModalAction("edit");
+    setShowHoldModal(true);
+    return;
+  }
+  onEdit();
+}}
+```
+
+Add `ReportHoldModal` inside `ListingRow`'s return:
+```jsx
+{showHoldModal && (
+  <ReportHoldModal
+    action={holdModalAction}
+    onClose={() => setShowHoldModal(false)}
+  />
+)}
+```
+
+Add a visual indicator badge on held shop listings inside `ListingRow`.
+Find where `listing.title` is shown and add next to it:
+```jsx
+{listing.isReportHeld && (
+  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">
+    🔒 Under Review
+  </span>
+)}
+```
+
+---
+
+## PHASE 13 — Update `src/pages/SettingsPage.tsx`
+
+### 13a — Import
+Add:
+```typescript
+import ReportHoldModal from "@/components/ReportHoldModal";
+```
+
+### 13b — State
+Add:
+```typescript
+const [showHoldModal, setShowHoldModal] = useState(false);
+```
+
+### 13c — Update `handleDeleteAccount`
+Find `handleDeleteAccount` (around line 262). Update the catch block:
+
+```typescript
+} catch (err: any) {
+  const code = err?.code ?? "";
+  if (code === "report-hold-account") {
+    setShowHoldModal(true);
+    setDeletingAccount(false);
+    return;
+  }
+  if (code.includes("wrong-password") || code.includes("invalid-credential"))
+    setDeleteError("Incorrect password. Please try again.");
+  else if (code === "auth/requires-recent-login")
+    setDeleteError("Session expired. Please sign out, sign back in, and try again.");
+  else
+    setDeleteError(err?.message ?? "Failed to delete account. Please try again.");
+}
+```
+
+### 13d — Add `ReportHoldModal` to JSX
+At the bottom of SettingsPage return:
+```jsx
+{showHoldModal && (
+  <ReportHoldModal
+    action="delete"
+    onClose={() => setShowHoldModal(false)}
+  />
+)}
+```
+
+Note: For account deletion, the modal wording says "delete" but the body text
+will say "You cannot delete this listing..." — to fix this, add a third optional
+prop `context?: "listing" | "account"` to `ReportHoldModal`. If `context` is
+`"account"`, show:
+
+> "You cannot delete your account right now because you have one or more listings
+> currently under admin review. Please wait for the reports to be resolved first."
+
+Update `ReportHoldModal.tsx` to accept:
+```typescript
+interface Props {
+  action: "delete" | "edit";
+  context?: "listing" | "account";
+  onClose: () => void;
+}
+```
+
+And in the body text, use `context === "account"` to render the account-specific
+message.
+
+Pass `context="account"` from SettingsPage:
+```jsx
+<ReportHoldModal action="delete" context="account" onClose={() => setShowHoldModal(false)} />
+```
+
+---
+
+## PHASE 14 — Update Admin Panel `artifacts/xmum-admin/src/pages/ReportsPage.tsx`
+
+### 14a — Import
+Add at the top:
+```typescript
+import { doc, updateDoc } from "firebase/firestore";
+```
+(These may already be imported — check and only add what's missing.)
+
+Also add:
+```typescript
+// reportHold helpers — inline since admin has its own firebase instance
+async function liftHoldOnListing(listingId: string) {
+  try {
+    await updateDoc(doc(db, "listings", listingId), {
+      isReportHeld: false,
+      reportHeldAt: null,
+      isArchived: false,
+    });
+  } catch (e) {
+    console.warn("[ReportsPage] Could not lift hold on listing:", e);
+  }
+}
+
+async function liftHoldOnShopListing(listingId: string) {
+  try {
+    await updateDoc(doc(db, "shopListings", listingId), {
+      isReportHeld: false,
+      reportHeldAt: null,
+      isActive: true,
+    });
+  } catch (e) {
+    console.warn("[ReportsPage] Could not lift hold on shop listing:", e);
+  }
+}
+```
+
+Add these helper functions inside the component file but outside the component
+function.
+
+### 14b — Update `updateStatus` to lift hold on dismiss
+Find the `updateStatus` function. After the `updateDoc` call succeeds and
+status is `"dismissed"`, lift the hold:
+
+```typescript
+async function updateStatus(id: string, status: ReportStatus) {
+  try {
+    await Promise.race([
+      updateDoc(doc(db, "reports", id), {
+        status,
+        reviewedBy: adminUser?.uid,
+        reviewedAt: Date.now(),
+      }),
+      new Promise<never>((_, r) => setTimeout(() => r(new Error("timeout")), 6000)),
+    ]);
+
+    // If dismissed, lift the report hold so the listing returns to normal
+    if (status === "dismissed") {
+      const report = reports.find((r) => r.id === id);
+      if (report?.listingId) {
+        // Try both collections — one will succeed, the other will fail silently
+        await liftHoldOnListing(report.listingId);
+        await liftHoldOnShopListing(report.listingId);
+      }
+    }
+
+    if (selectedReport?.id === id) {
+      setSelectedReport(prev => prev ? { ...prev, status } : null);
+    }
+  } catch (e) {
+    console.error("[ReportsPage] updateStatus failed:", e);
+    alert("Failed to update status. Check the console.");
+  }
+}
+```
+
+### 14c — Update `handleActionAndDelete` to hard-delete Storage files
+Currently `handleActionAndDelete` calls `deleteDoc(doc(db, "listings", ...))` 
+but does NOT delete Storage photos. Update it to also delete photos:
+
+```typescript
+async function handleActionAndDelete(report: ListingReport) {
+  if (!isAdmin) return;
+  const confirmed = window.confirm(
+    `This will permanently delete the listing "${report.listingTitle}" and all its files. Continue?`
+  );
+  if (!confirmed) return;
+  try {
+    // Fetch the listing to get photo URLs before deleting
+    const { getDoc } = await import("firebase/firestore");
+    const { ref: storageRef, deleteObject } = await import("firebase/storage");
+    const { storage } = await import("../lib/firebase");
+
+    const listingSnap = await getDoc(doc(db, "listings", report.listingId));
+    if (listingSnap.exists()) {
+      const photos: string[] = listingSnap.data().photos ?? [];
+      await Promise.allSettled(
+        photos.map((url) => {
+          const match = url.match(/\/o\/(.+?)(\?|$)/);
+          if (!match) return Promise.resolve();
+          const path = decodeURIComponent(match[1]);
+          return deleteObject(storageRef(storage, path)).catch(() => {});
+        })
+      );
+    }
+
+    await deleteDoc(doc(db, "listings", report.listingId));
+    await deleteDoc(doc(db, "reports", report.id));
+    await addDoc(collection(db, `users/${report.listingUserId}/notifications`), {
+      type: "listing_removed",
+      title: "Listing removed",
+      body: `Your listing "${report.listingTitle}" was removed by an admin due to a policy violation.`,
+      createdAt: Date.now(),
+      read: false,
+    });
+    if (selectedReport?.id === report.id) setSelectedReport(null);
+  } catch (e) {
+    console.error("[ReportsPage] delete failed:", e);
+    alert("Failed to delete listing/report. Check Firestore permissions.");
+  }
+}
+```
+
+---
+
+## PHASE 15 — Update Firestore Security Rules (`firestore.rules`)
+
+Make the following surgical changes to the rules file.
+
+### 15a — Listings collection
+Current `update` rule:
+```
+allow update: if isXmuEmail()
+  && resource.data.userId == request.auth.uid
+  && ...price check...;
+```
+
+Replace with:
+```
+allow update: if (
+  isXmuEmail()
+  && resource.data.userId == request.auth.uid
+  && resource.data.isReportHeld != true  // block edits on held listings
+  && (!request.resource.data.keys().hasAny(["price"])
+      || (request.resource.data.price >= 0
+          && request.resource.data.price <= 1000000))
+) || isEditorRole();  // admins/editors can always update
+```
+
+Current `delete` rule:
+```
+allow delete: if (isXmuEmail() && resource.data.userId == request.auth.uid)
+  || isEditorRole();
+```
+
+Replace with:
+```
+allow delete: if (
+  isXmuEmail()
+  && resource.data.userId == request.auth.uid
+  && resource.data.isReportHeld != true  // block hard deletes on held listings
+) || isEditorRole();  // admins/editors can always delete
+```
+
+### 15b — shopListings collection
+Current `update` rule allows shop members to update. Add a hold check:
+```
+allow update: if isXmuEmail() && (
+  (isShopMember(resource.data.shopId) && resource.data.isReportHeld != true)
+  || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['inquiryCount'])
+  || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount'])
+) || isAdmin();
+```
+
+Current `delete` rule:
+```
+allow delete: if isXmuEmail() && isShopMember(resource.data.shopId);
+```
+
+Replace with:
+```
+allow delete: if (
+  isXmuEmail()
+  && isShopMember(resource.data.shopId)
+  && resource.data.isReportHeld != true
+) || isAdmin();
+```
+
+### 15c — Reports collection
+The current `allow create` rule is fine. However, after a report is created,
+`ReportModal` calls `applyReportHold` which updates the `listings` document.
+The listings `update` rule currently blocks updates when `isReportHeld == true`
+for non-admins. But the `applyReportHold` call is writing `isReportHeld: true`
+(turning hold ON), which is allowed since the listing is not yet held at that
+moment. This is fine — no rules change needed for this flow.
+
+---
+
+## PHASE 16 — Final Build Check
+
+```
+pnpm --filter @workspace/xmum-market run build
+```
+
+### Things to verify:
+- `ReportHoldModal` renders correctly — check imports of `Lock`, `Mail`,
+  `MessageCircle` from `lucide-react` are valid.
+- `reportHold.ts` — no circular imports. It only imports from `firebase/firestore`
+  and `./firebase`.
+- `listings.ts` — `listingHasActiveReport` imported correctly from `./reportHold`.
+- `shops.ts` — `shopListingHasActiveReport` imported correctly from `./reportHold`.
+- `userProfile.ts` — `userHasHeldListings` imported correctly from `./reportHold`.
+- All pages importing `ReportHoldModal` use the correct path `@/components/ReportHoldModal`.
+- TypeScript: `listing.isReportHeld` is `boolean | undefined` — all usages are
+  guarded with `=== true` or `!== true` (not just truthy check) to avoid type errors.
+- Admin panel: dynamic imports (`import("firebase/storage")`) are valid in the
+  Vite build — if not, move those imports to the top of the file.
+
+---
+
+## Summary of System Behaviour After This Change
+
+| Scenario | Result |
+|---|---|
+| Owner deletes unreported listing | Hard delete — Firestore doc + Storage files removed ✅ |
+| Owner deletes reported listing | Soft delete — hidden from feed, data preserved, ReportHoldModal shown 🔒 |
+| Owner edits reported listing | Blocked — ReportHoldModal shown 🔒 |
+| Owner tries to navigate to `/edit/:id` directly | ReportHoldModal shown instead of form 🔒 |
+| Admin dismisses report | Hold lifted — listing becomes visible and editable again ✅ |
+| Admin takes action (deletes) | Hard delete with Storage cleanup + owner notified ✅ |
+| User deletes account with held listings | Blocked — ReportHoldModal shown with account context 🔒 |
+| User deletes account with no held listings | Normal account deletion (held listings skipped in cleanup) ✅ |
+| New report submitted | Listing hidden from feed immediately + hold applied 🔒 |
