@@ -27,29 +27,6 @@ function memberSince(createdAt: number): string {
   });
 }
 
-function StarRating({ rating }: { rating: number }) {
-  const rounded = Math.round(Math.min(5, Math.max(0, rating ?? 0)));
-  return (
-    <div className="flex items-center gap-0.5">
-      {[1, 2, 3, 4, 5].map((i) => (
-        <span
-          key={i}
-          className={`text-lg leading-none ${
-            i <= rounded
-              ? "text-yellow-400"
-              : "text-gray-200 dark:text-slate-600"
-          }`}
-        >
-          ★
-        </span>
-      ))}
-      <span className="ml-1.5 text-xs text-slate-500 dark:text-slate-400">
-        {rating > 0 ? `${rating.toFixed(1)} / 5` : "No rating yet"}
-      </span>
-    </div>
-  );
-}
-
 const SkeletonGrid = () => (
   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
     {[...Array(4)].map((_, i) => (
@@ -278,10 +255,6 @@ export default function SellerProfilePage() {
           <p className="text-xs text-gray-400 dark:text-slate-500 mb-3">
             Seller since {memberSince(profile.createdAt)}
           </p>
-
-          <div className="mb-4">
-            <StarRating rating={profile.rating ?? 0} />
-          </div>
 
           <div className="flex items-center gap-6 pt-3 border-t border-gray-100 dark:border-slate-700">
             <div>

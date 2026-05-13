@@ -5,20 +5,20 @@ import {
   getShopListings, createShopListing, updateShopListing, deleteShopListing,
   uploadShopListingPhoto, getInquiriesForShop, updateInquiryStatus, deleteInquiry,
   addShopEditor, removeShopEditor, updateShop, uploadShopBanner, uploadShopLogo,
-  getOrdersForShop, updateOrderStatus, saveAutoReply, saveOrderQuestions,
+  saveAutoReply,
   deleteShopCompletely, getShopVisitorCount30Days, getListingViews30Days,
 } from "@/lib/shops";
 import { getOrCreateConversation } from "@/lib/messaging";
 import { collection, query, where, getDocs, limit, getDoc, doc } from "firebase/firestore";
 import { ref, deleteObject } from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
-import { notifyEditorAdded, notifyEditorRemoved, notifyOrderConfirmed, notifyOrderCancelled } from "@/lib/notifications";
+import { notifyEditorAdded, notifyEditorRemoved } from "@/lib/notifications";
 import {
-  Shop, ShopListing, ShopInquiry, ShopCategory, InquiryStatus, ShopOrder, ShopOrderQuestion,
+  Shop, ShopListing, ShopInquiry, ShopCategory, InquiryStatus,
 } from "@/lib/types";
 import {
   Loader2, Plus, Trash2, Edit2, CheckCircle2, Package, MessageSquare, Users,
-  Settings, ImagePlus, X, Store, UserMinus, UserPlus, Camera, ShoppingCart, Send,
+  Settings, ImagePlus, X, Store, UserMinus, UserPlus, Camera, Send,
   BarChart2,
 } from "lucide-react";
 import { SiWhatsapp } from "react-icons/si";
@@ -38,7 +38,7 @@ const SHOP_CATEGORIES: ShopCategory[] = [
 const inputCls = "w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition min-h-[44px]";
 const labelCls = "block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-1";
 
-type Tab = "listings" | "inquiries" | "orders" | "analytics" | "settings";
+type Tab = "listings" | "inquiries" | "analytics" | "settings";
 
 function relativeTime(ms: number): string {
   const diff = Date.now() - ms;
@@ -54,96 +54,11 @@ function relativeTime(ms: number): string {
 
 function StatusBadge({ status }: { status: InquiryStatus }) {
   const map: Record<InquiryStatus, { label: string; cls: string }> = {
-    pending:   { label: "Pending",   cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
-    replied:   { label: "Replied",   cls: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
-    confirmed: { label: "Confirmed", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
-    completed: { label: "Completed", cls: "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400" },
-    cancelled: { label: "Cancelled", cls: "bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-slate-400" },
+    pending: { label: "Pending", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
+    replied: { label: "Replied", cls: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
   };
   const { label, cls } = map[status] ?? map.pending;
   return <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${cls}`}>{label}</span>;
-}
-
-// ── OrderQuestionsEditor ───────────────────────────────────────────────────────
-
-function OrderQuestionsEditor({ questions, onChange }: {
-  questions: ShopOrderQuestion[];
-  onChange: (qs: ShopOrderQuestion[]) => void;
-}) {
-  return (
-    <div>
-      <label className={labelCls}>Per-Listing Order Questions</label>
-      <p className="text-xs text-gray-400 dark:text-slate-500 mb-2">
-        These override shop-level questions for this listing only.
-      </p>
-      {questions.map((q, idx) => (
-        <div key={q.id} className="border border-gray-200 dark:border-slate-700 rounded-xl p-3 mb-2 space-y-2">
-          <div className="flex items-center gap-2">
-            <input
-              className="flex-1 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-slate-100"
-              placeholder={`Question ${idx + 1}`}
-              value={q.label}
-              onChange={(e) => onChange(questions.map((x, i) => i === idx ? { ...x, label: e.target.value } : x))}
-            />
-            <select
-              value={q.type}
-              onChange={(e) => {
-                const newType = e.target.value as ShopOrderQuestion["type"];
-                onChange(questions.map((x, i) => i === idx ? { ...x, type: newType, options: newType === "select" ? (x.options?.length ? x.options : [""]) : [] } : x));
-              }}
-              className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-xl px-2 py-2 text-xs text-gray-900 dark:text-slate-100 focus:outline-none"
-            >
-              <option value="text">Text</option>
-              <option value="textarea">Long text</option>
-              <option value="number">Number</option>
-              <option value="date">Date</option>
-              <option value="select">Multiple choice</option>
-            </select>
-            <label className="flex items-center gap-1 text-xs text-gray-600 dark:text-slate-400 whitespace-nowrap cursor-pointer">
-              <input
-                type="checkbox"
-                checked={q.required}
-                onChange={(e) => onChange(questions.map((x, i) => i === idx ? { ...x, required: e.target.checked } : x))}
-              />
-              Req.
-            </label>
-            <button type="button" onClick={() => onChange(questions.filter((_, i) => i !== idx))} className="text-red-400 hover:text-red-600 p-1">
-              <X size={14} />
-            </button>
-          </div>
-          {q.type === "select" && (
-            <div className="pl-1 space-y-1.5">
-              <p className="text-xs text-gray-500 dark:text-slate-400 font-medium">Options:</p>
-              {(q.options ?? [""]).map((opt, oi) => (
-                <div key={oi} className="flex items-center gap-2">
-                  <input
-                    className="flex-1 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-900 dark:text-slate-100"
-                    placeholder={`Option ${oi + 1}`}
-                    value={opt}
-                    onChange={(e) => {
-                      const newOpts = [...(q.options ?? [""])];
-                      newOpts[oi] = e.target.value;
-                      onChange(questions.map((x, i) => i === idx ? { ...x, options: newOpts } : x));
-                    }}
-                  />
-                  <button type="button" onClick={() => {
-                    const newOpts = (q.options ?? [""]).filter((_, j) => j !== oi);
-                    onChange(questions.map((x, i) => i === idx ? { ...x, options: newOpts.length ? newOpts : [""] } : x));
-                  }} className="text-red-400 hover:text-red-600 p-0.5"><X size={11} /></button>
-                </div>
-              ))}
-              {(q.options ?? []).length < 10 && (
-                <button type="button" onClick={() => onChange(questions.map((x, i) => i === idx ? { ...x, options: [...(x.options ?? []), ""] } : x))} className="text-xs text-[#003366] dark:text-blue-400 hover:underline">+ Add option</button>
-              )}
-            </div>
-          )}
-        </div>
-      ))}
-      {questions.length < 8 && (
-        <button type="button" onClick={() => onChange([...questions, { id: `q${Date.now()}`, label: "", type: "text", required: false }])} className="text-xs text-[#003366] dark:text-blue-400 font-semibold hover:underline mt-1">+ Add question</button>
-      )}
-    </div>
-  );
 }
 
 // ── ListingRow ─────────────────────────────────────────────────────────────────
@@ -189,7 +104,6 @@ function AddListingForm({ shopId, shop, onClose, onCreated }: { shopId: string; 
   const [category, setCategory] = useState<ShopCategory>(shop.category);
   const [photos, setPhotos] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
-  const [orderQuestions, setOrderQuestions] = useState<ShopOrderQuestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -228,7 +142,6 @@ function AddListingForm({ shopId, shop, onClose, onCreated }: { shopId: string; 
         category,
         photos: photoUrls,
         isActive: true,
-        orderQuestions: orderQuestions.length > 0 ? orderQuestions : undefined,
       });
       onCreated();
     } catch (err: any) {
@@ -281,7 +194,6 @@ function AddListingForm({ shopId, shop, onClose, onCreated }: { shopId: string; 
             <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => handlePhotos(e.target.files)} />
           </div>
         </div>
-        <OrderQuestionsEditor questions={orderQuestions} onChange={setOrderQuestions} />
         <button type="submit" disabled={loading} className="w-full min-h-[44px] bg-[#003366] dark:bg-blue-600 text-white font-semibold text-sm rounded-xl hover:bg-[#002244] disabled:opacity-50 transition flex items-center justify-center gap-2">
           {loading ? <><Loader2 size={15} className="animate-spin" /> Uploading…</> : "Add Listing"}
         </button>
@@ -303,7 +215,6 @@ function EditShopListingForm({ listing, shopId, shop, onCancel, onSaved }: { lis
   const [newPhotoFiles, setNewPhotoFiles] = useState<File[]>([]);
   const [newPhotoPreviews, setNewPhotoPreviews] = useState<string[]>([]);
   const [removedPhotoUrls, setRemovedPhotoUrls] = useState<string[]>([]);
-  const [orderQuestions, setOrderQuestions] = useState<ShopOrderQuestion[]>(listing.orderQuestions ?? []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -324,7 +235,7 @@ function EditShopListingForm({ listing, shopId, shop, onCancel, onSaved }: { lis
         const url = await uploadShopListingPhoto(shopId, newPhotoFiles[i], existingPhotos.length + i);
         newUrls.push(url);
       }
-      await updateShopListing(listing.id, { title: title.trim(), description: description.trim(), price: price ? parseFloat(price) : undefined, pricingModel, category, isActive, photos: [...existingPhotos, ...newUrls], orderQuestions: orderQuestions.length > 0 ? orderQuestions : undefined });
+      await updateShopListing(listing.id, { title: title.trim(), description: description.trim(), price: price ? parseFloat(price) : undefined, pricingModel, category, isActive, photos: [...existingPhotos, ...newUrls] });
       onSaved();
     } catch (err: any) { setError(err.message ?? "Failed to save."); } finally { setLoading(false); }
   };
@@ -387,7 +298,6 @@ function EditShopListingForm({ listing, shopId, shop, onCancel, onSaved }: { lis
             }} />
           </div>
         </div>
-        <OrderQuestionsEditor questions={orderQuestions} onChange={setOrderQuestions} />
         <div className="flex gap-2">
           <button type="submit" disabled={loading} className="flex-1 min-h-[44px] bg-[#003366] dark:bg-blue-600 text-white font-semibold text-sm rounded-xl hover:bg-[#002244] disabled:opacity-50 transition flex items-center justify-center gap-2">
             {loading ? <><Loader2 size={15} className="animate-spin" /> Saving…</> : "Save Changes"}
@@ -503,130 +413,6 @@ function InquiriesTab({ inquiries, loading, onMarkReplied, onDelete, onChat }: {
   );
 }
 
-// ── OrdersTab ──────────────────────────────────────────────────────────────────
-
-function OrdersTab({ orders, loading, shopId, shop, onOrderUpdated }: {
-  orders: ShopOrder[]; loading: boolean; shopId: string; shop: Shop;
-  onOrderUpdated: (orderId: string, newStatus: "confirmed" | "cancelled", reason?: string) => void;
-}) {
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [cancellationReason, setCancellationReason] = useState("");
-  const [cancellingId, setCancellingId] = useState<string | null>(null);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const cw = (t: string) => t.trim() === "" ? 0 : t.trim().split(/\s+/).length;
-
-  const handleConfirm = async (order: ShopOrder) => {
-    setActionLoading(order.id);
-    try {
-      await updateOrderStatus(order.id, "confirmed");
-      await notifyOrderConfirmed(order.buyerId, shop.name, order.id, shopId).catch(() => {});
-      onOrderUpdated(order.id, "confirmed");
-    } finally { setActionLoading(null); }
-  };
-
-  const handleCancel = async (order: ShopOrder) => {
-    const words = cw(cancellationReason);
-    if (words === 0 || words > 100) return;
-    setActionLoading(order.id);
-    try {
-      await updateOrderStatus(order.id, "cancelled", cancellationReason);
-      await notifyOrderCancelled(order.buyerId, shop.name, cancellationReason, order.id, shopId).catch(() => {});
-      onOrderUpdated(order.id, "cancelled", cancellationReason);
-      setCancellingId(null); setCancellationReason("");
-    } finally { setActionLoading(null); }
-  };
-
-  if (loading) return <div className="flex items-center justify-center py-12"><Loader2 size={22} className="animate-spin text-gray-400" /></div>;
-  if (orders.length === 0) return <div className="text-center py-16 bg-white dark:bg-slate-800/50 rounded-2xl"><ShoppingCart size={32} className="mx-auto mb-2 text-gray-300 dark:text-slate-600" /><p className="text-sm text-gray-400 dark:text-slate-500">No orders yet.</p></div>;
-
-  return (
-    <div className="space-y-3">
-      {orders.map((order) => (
-        <div key={order.id} className="bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-2xl p-4 shadow-sm">
-          {/* Header row */}
-          <div className="flex items-start justify-between gap-2 mb-2">
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-gray-900 dark:text-slate-100 truncate">{order.listingTitle}</p>
-              <p className="text-xs text-gray-500 dark:text-slate-400">{order.buyerName} · {new Date(order.createdAt).toLocaleDateString("en-MY")}</p>
-            </div>
-            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${order.status === "confirmed" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : order.status === "cancelled" ? "bg-gray-100 text-gray-400 dark:bg-slate-700 dark:text-slate-500" : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"}`}>{order.status.charAt(0).toUpperCase() + order.status.slice(1)}</span>
-          </div>
-          {/* Action buttons — always visible on card for pending orders */}
-          {order.status === "pending" && (
-            <div className="mb-3 space-y-2">
-              {cancellingId === order.id ? (
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold text-gray-700 dark:text-slate-300">Reason for cancellation (required, max 100 words):</p>
-                  <textarea rows={3} value={cancellationReason} onChange={(e) => { const w = cw(e.target.value); if (w <= 100) setCancellationReason(e.target.value); }} placeholder="Explain why you are cancelling..." className="w-full bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-xl px-3 py-2 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-red-400" />
-                  <p className="text-xs text-gray-400">{cw(cancellationReason)}/100 words</p>
-                  <div className="flex gap-2">
-                    <button onClick={() => { setCancellingId(null); setCancellationReason(""); }} className="flex-1 text-xs bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-300 font-semibold py-2 rounded-xl hover:bg-gray-200 transition">Back</button>
-                    <button onClick={() => handleCancel(order)} disabled={cw(cancellationReason) === 0 || !!actionLoading} className="flex-1 text-xs bg-red-500 text-white font-semibold py-2 rounded-xl hover:bg-red-600 transition disabled:opacity-50">{actionLoading === order.id ? "Cancelling..." : "Confirm Cancel"}</button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex gap-2">
-                  <button onClick={() => handleConfirm(order)} disabled={!!actionLoading} className="flex-1 text-xs bg-[#003366] dark:bg-blue-600 text-white font-semibold py-2 rounded-xl hover:bg-[#002244] transition disabled:opacity-50">{actionLoading === order.id ? "..." : "✓ Confirm Order"}</button>
-                  <button onClick={() => setCancellingId(order.id)} className="flex-1 text-xs border border-red-300 dark:border-red-700 text-red-500 font-semibold py-2 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition">✗ Cancel Order</button>
-                </div>
-              )}
-            </div>
-          )}
-          {/* View details toggle */}
-          <button onClick={() => setExpandedId(expandedId === order.id ? null : order.id)} className="text-xs text-[#003366] dark:text-blue-400 font-semibold hover:underline">{expandedId === order.id ? "Hide details ▲" : "View details ▼"}</button>
-          {/* Expanded order detail panel */}
-          {expandedId === order.id && (
-            <div className="mt-3 space-y-3">
-              {/* Section 1: Customer Information */}
-              <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-3 text-xs space-y-1">
-                <p className="font-semibold text-gray-700 dark:text-slate-300 mb-1">Customer Information</p>
-                <p className="text-gray-600 dark:text-slate-400">Name: <span className="font-medium">{order.buyerName}</span></p>
-                <p className="text-gray-600 dark:text-slate-400">Email: <a href={`mailto:${order.buyerEmail}`} className="font-medium text-[#003366] dark:text-blue-400 hover:underline">{order.buyerEmail}</a></p>
-                {order.buyerWhatsapp && <a href={`https://wa.me/${order.buyerWhatsapp.replace(/[^0-9]/g, "")}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-green-600 dark:text-green-400 font-semibold"><SiWhatsapp size={12} /> WhatsApp: {order.buyerWhatsapp}</a>}
-                {order.buyerWechat && <p className="text-gray-600 dark:text-slate-400">WeChat: <span className="font-medium">{order.buyerWechat}</span></p>}
-              </div>
-              {/* Section 2: Order Details */}
-              <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-3 text-xs space-y-1">
-                <p className="font-semibold text-gray-700 dark:text-slate-300 mb-1">Order Details</p>
-                <p className="text-gray-600 dark:text-slate-400">Listing: <a href={`/shop-listing/${order.shopListingId}`} className="font-medium text-[#003366] dark:text-blue-400 hover:underline">{order.listingTitle}</a></p>
-                <p className="text-gray-600 dark:text-slate-400">Order placed: <span className="font-medium">{new Date(order.createdAt).toLocaleString("en-MY")}</span></p>
-                <p className="text-gray-600 dark:text-slate-400">Quantity: <span className="font-medium">{order.quantity}</span></p>
-                {order.offeredPrice !== undefined && order.offeredPrice !== null && <p className="text-gray-600 dark:text-slate-400">Offered price: <span className="font-medium text-[#003366] dark:text-blue-400">RM {order.offeredPrice.toFixed(2)}</span></p>}
-                <p className="text-gray-400 dark:text-slate-500 font-mono text-[10px] pt-1">ID: {order.id}</p>
-              </div>
-              {/* Section 3: Order Answers */}
-              <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-3 text-xs space-y-1">
-                <p className="font-semibold text-gray-700 dark:text-slate-300 mb-1">Order Answers</p>
-                {Object.keys(order.answers ?? {}).length === 0 ? (
-                  <p className="text-gray-400 dark:text-slate-500 italic">No additional answers provided.</p>
-                ) : (
-                  Object.entries(order.answers ?? {}).map(([qId, answer]) => {
-                    const q = shop.orderQuestions?.find((x) => x.id === qId);
-                    return <p key={qId} className="text-gray-600 dark:text-slate-400">{q ? q.label : qId}: <span className="font-medium">{answer}</span></p>;
-                  })
-                )}
-              </div>
-              {/* Section 4: Customer Note */}
-              {(order as any).note && (
-                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-xl px-3 py-2 text-xs">
-                  <p className="font-semibold text-blue-700 dark:text-blue-400 mb-0.5">Customer note</p>
-                  <p className="text-blue-600 dark:text-blue-300">{(order as any).note}</p>
-                </div>
-              )}
-              {/* Section 5: Cancellation Reason */}
-              {order.status === "cancelled" && order.cancellationReason && (
-                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-xl px-3 py-2 text-xs text-red-600 dark:text-red-400">
-                  <p className="font-semibold mb-0.5">Cancellation reason:</p><p>{order.cancellationReason}</p>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 // ── AnalyticsTab ───────────────────────────────────────────────────────────────
 
 function AnalyticsTab({ shopId, listings }: { shopId: string; listings: ShopListing[] }) {
@@ -673,7 +459,7 @@ function AnalyticsTab({ shopId, listings }: { shopId: string; listings: ShopList
       <div className="grid grid-cols-2 gap-3">
         {statCard("Unique visits (30d)", visitorCount ?? 0, "listing page views")}
         {statCard("All-time views", totalViews, "across all listings")}
-        {statCard("Total inquiries", totalOrders, "orders + inquiries")}
+        {statCard("Total inquiries", totalOrders, "across all listings")}
         {statCard("Active listings", listings.filter((l) => l.isActive).length)}
       </div>
 
@@ -803,20 +589,8 @@ function SettingsTab({
   const [bannerUploading, setBannerUploading] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
-  const [autoReplyEnabled, setAutoReplyEnabled] = useState(false);
-  const [autoReplyMessage, setAutoReplyMessage] = useState("");
-  const [orderQuestions, setOrderQuestions] = useState<ShopOrderQuestion[]>([]);
-
-  useEffect(() => {
-    setAutoReplyEnabled(shop.autoReplyEnabled ?? false);
-    setAutoReplyMessage(shop.autoReplyMessage ?? "");
-    setOrderQuestions(shop.orderQuestions ?? []);
-  }, [shop.id]);
-
   const handleSave = async () => {
     await onSave();
-    await saveAutoReply(shop.id, autoReplyEnabled ? autoReplyMessage : "");
-    await saveOrderQuestions(shop.id, orderQuestions);
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   };
@@ -872,39 +646,12 @@ function SettingsTab({
       <button onClick={handleSave} disabled={loading} className="w-full min-h-[48px] bg-[#003366] dark:bg-blue-600 text-white font-semibold text-sm rounded-xl hover:bg-[#002244] disabled:opacity-50 transition flex items-center justify-center gap-2">
         {loading ? <><Loader2 size={15} className="animate-spin" /> Saving…</> : saved ? <><CheckCircle2 size={15} /> Saved!</> : "Save Changes"}
       </button>
-      <div className="bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-2xl p-4 mt-4">
-        <h3 className="text-sm font-bold text-gray-900 dark:text-slate-100 mb-3">Auto-Reply for Inquiries</h3>
-        <p className="text-xs text-gray-500 dark:text-slate-400 mb-3">Automatically shown to users right after they send an inquiry.</p>
-        <div className="flex items-center gap-2 mb-3">
-          <input type="checkbox" id="autoReplyEnabled" checked={autoReplyEnabled} onChange={(e) => setAutoReplyEnabled(e.target.checked)} className="w-4 h-4 accent-[#003366]" />
-          <label htmlFor="autoReplyEnabled" className="text-sm font-medium text-gray-700 dark:text-slate-300">Enable auto-reply</label>
-        </div>
-        {autoReplyEnabled && <textarea rows={4} value={autoReplyMessage} onChange={(e) => setAutoReplyMessage(e.target.value)} placeholder="e.g. Thanks! We usually reply within 2 hours." maxLength={500} className="w-full bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 transition" />}
-      </div>
       {editorContent && (
         <div className="bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-2xl p-4 mt-4">
           <h3 className="text-sm font-bold text-gray-900 dark:text-slate-100 mb-3 flex items-center gap-2"><Users size={14} /> Editors</h3>
           {editorContent}
         </div>
       )}
-      <div className="bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-2xl p-4 mt-4">
-        <h3 className="text-sm font-bold text-gray-900 dark:text-slate-100 mb-1">Order Form Questions</h3>
-        <p className="text-xs text-gray-500 dark:text-slate-400 mb-3">Customers answer these when placing an order. Quantity is always included.</p>
-        {orderQuestions.map((q, idx) => (
-          <div key={q.id} className="flex items-center gap-2 mb-2">
-            <input className="flex-1 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder={`Question ${idx + 1} label`} value={q.label} onChange={(e) => setOrderQuestions((prev) => prev.map((x, i) => i === idx ? { ...x, label: e.target.value } : x))} />
-            <select value={q.type} onChange={(e) => setOrderQuestions((prev) => prev.map((x, i) => i === idx ? { ...x, type: e.target.value as any } : x))} className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-xl px-2 py-2 text-xs focus:outline-none">
-              <option value="text">Text</option>
-              <option value="textarea">Long text</option>
-              <option value="number">Number</option>
-              <option value="date">Date</option>
-            </select>
-            <label className="flex items-center gap-1 text-xs text-gray-600 dark:text-slate-400 whitespace-nowrap"><input type="checkbox" checked={q.required} onChange={(e) => setOrderQuestions((prev) => prev.map((x, i) => i === idx ? { ...x, required: e.target.checked } : x))} /> Req.</label>
-            <button onClick={() => setOrderQuestions((prev) => prev.filter((_, i) => i !== idx))} className="text-red-400 hover:text-red-600 p-1"><X size={14} /></button>
-          </div>
-        ))}
-        {orderQuestions.length < 8 && <button onClick={() => setOrderQuestions((prev) => [...prev, { id: `q${Date.now()}`, label: "", type: "text", required: false }])} className="text-xs text-[#003366] dark:text-blue-400 font-semibold hover:underline mt-1">+ Add question</button>}
-      </div>
       {isOwner && (
         <div className="border-t border-red-100 dark:border-red-900/30 pt-4">
           {!showDeleteConfirm ? (
@@ -912,7 +659,7 @@ function SettingsTab({
           ) : (
             <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4">
               <p className="text-sm font-semibold text-red-700 dark:text-red-400 mb-1">Are you sure?</p>
-              <p className="text-xs text-red-600 dark:text-red-400 mb-3">This permanently deletes your shop, all listings, orders, inquiries, and reviews. Cannot be undone.</p>
+              <p className="text-xs text-red-600 dark:text-red-400 mb-3">This permanently deletes your shop, all listings, and inquiries. Cannot be undone.</p>
               <div className="flex gap-2">
                 <button onClick={onDelete} className="flex-1 bg-red-600 text-white text-sm font-semibold rounded-xl py-2 hover:bg-red-700 transition">Yes, Delete</button>
                 <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-300 text-sm font-semibold rounded-xl py-2 hover:bg-gray-200 transition">Cancel</button>
@@ -953,10 +700,6 @@ export default function ShopManagementPanel({
   const [loadingInquiries, setLoadingInquiries] = useState(false);
   const [pendingInquiryCount, setPendingInquiryCount] = useState(0);
 
-  const [orders, setOrders] = useState<ShopOrder[]>([]);
-  const [loadingOrders, setLoadingOrders] = useState(false);
-  const [pendingOrderCount, setPendingOrderCount] = useState(0);
-
   const [editorEmail, setEditorEmail] = useState("");
   const [editorLoading, setEditorLoading] = useState(false);
   const [editorError, setEditorError] = useState("");
@@ -983,9 +726,8 @@ export default function ShopManagementPanel({
   useEffect(() => {
     (async () => {
       try {
-        const [inqs, ords] = await Promise.all([getInquiriesForShop(shopId), getOrdersForShop(shopId)]);
+        const inqs = await getInquiriesForShop(shopId);
         setPendingInquiryCount(inqs.filter((i) => i.status === "pending").length);
-        setPendingOrderCount(ords.filter((o) => o.status === "pending").length);
       } catch {}
     })();
   }, [shopId]);
@@ -998,10 +740,6 @@ export default function ShopManagementPanel({
     if (tab === "inquiries") {
       setLoadingInquiries(true);
       getInquiriesForShop(shopId).then(setInquiries).finally(() => setLoadingInquiries(false));
-    }
-    if (tab === "orders") {
-      setLoadingOrders(true);
-      getOrdersForShop(shopId).then(setOrders).finally(() => setLoadingOrders(false));
     }
   }, [tab, shopId]);
 
@@ -1016,7 +754,6 @@ export default function ShopManagementPanel({
   const TABS: { key: Tab; label: string; icon: React.ReactNode; badge?: number }[] = [
     { key: "listings",  label: "Listings",  icon: <Package size={15} /> },
     { key: "inquiries", label: "Inquiries", icon: <MessageSquare size={15} />, badge: pendingInquiryCount },
-    { key: "orders",    label: "Orders",    icon: <ShoppingCart size={15} />, badge: pendingOrderCount },
     { key: "analytics", label: "Analytics", icon: <BarChart2 size={15} /> },
     { key: "settings",  label: "Settings",  icon: <Settings size={15} /> },
   ];
@@ -1074,19 +811,6 @@ export default function ShopManagementPanel({
             );
             const greeting = `Hi ${inq.buyerName}, thank you for your inquiry about "${inq.listingTitle}"! `;
             navigate(`/messages?conv=${convId}&draft=${encodeURIComponent(greeting)}`);
-          }}
-        />
-      )}
-
-      {tab === "orders" && (
-        <OrdersTab
-          orders={orders}
-          loading={loadingOrders}
-          shopId={shopId}
-          shop={shop}
-          onOrderUpdated={(orderId, newStatus, reason) => {
-            setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status: newStatus, cancellationReason: reason } : o));
-            setPendingOrderCount((n) => Math.max(0, n - 1));
           }}
         />
       )}

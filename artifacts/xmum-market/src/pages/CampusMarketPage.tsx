@@ -3,10 +3,10 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   getAllShops, getAllShopListings, getShopListingsByCategory, getApprovedShopAds,
-  getShopsByOwner, getShopsWhereEditor, getInquiriesForShop, getOrdersForShop,
+  getShopsByOwner, getShopsWhereEditor, getInquiriesForShop,
 } from "@/lib/shops";
 import { Shop, ShopListing, ShopAd, ShopCategory } from "@/lib/types";
-import { Store, ChevronRight, Package, Star, Plus, Settings2 } from "lucide-react";
+import { Store, ChevronRight, Package, Plus, Settings2 } from "lucide-react";
 
 const SHOP_CATEGORIES: ShopCategory[] = [
   "Food & Beverage", "Tutoring & Education", "Fashion & Apparel", "Electronics",
@@ -15,20 +15,6 @@ const SHOP_CATEGORIES: ShopCategory[] = [
 ];
 
 const PAGE_SIZE = 12;
-
-function StarRow({ rating, size = 12 }: { rating: number; size?: number }) {
-  return (
-    <div className="flex items-center gap-0.5">
-      {[1, 2, 3, 4, 5].map((n) => (
-        <Star
-          key={n}
-          size={size}
-          className={n <= Math.round(rating) ? "text-amber-400 fill-amber-400" : "text-gray-200 dark:text-slate-600"}
-        />
-      ))}
-    </div>
-  );
-}
 
 function PriceTag({ listing }: { listing: ShopListing }) {
   if (listing.pricingModel === "negotiable")
@@ -125,12 +111,6 @@ function ShopCard({ shop }: { shop: Shop }) {
         </div>
         <p className="text-xs font-semibold text-gray-800 dark:text-slate-200 text-center line-clamp-1 w-full">{shop.name}</p>
         <p className="text-[10px] text-gray-400 dark:text-slate-500 text-center truncate w-full">{shop.category}</p>
-        {shop.reviewCount > 0 && (
-          <div className="flex items-center gap-0.5 mt-0.5">
-            <StarRow rating={shop.rating} size={10} />
-            <span className="text-[9px] text-gray-400 dark:text-slate-500">{shop.rating.toFixed(1)}</span>
-          </div>
-        )}
       </div>
     </Link>
   );
@@ -245,12 +225,8 @@ export default function CampusMarketPage() {
         Promise.all(
           combined.map(async (s) => {
             try {
-              const [inqs, ords] = await Promise.all([
-                getInquiriesForShop(s.id),
-                getOrdersForShop(s.id),
-              ]);
-              const pending = inqs.filter((i) => i.status === "pending").length
-                + ords.filter((o) => o.status === "pending").length;
+              const inqs = await getInquiriesForShop(s.id);
+              const pending = inqs.filter((i) => i.status === "pending").length;
               return [s.id, pending] as const;
             } catch {
               return [s.id, 0] as const;

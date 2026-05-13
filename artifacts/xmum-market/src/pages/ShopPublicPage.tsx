@@ -2,11 +2,11 @@ import { useState, useEffect } from "react";
 import { useRoute, useLocation, Link } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import {
-  getShopBySlug, getShopListings, getShopReviews,
+  getShopBySlug, getShopListings,
 } from "@/lib/shops";
-import { Shop, ShopListing, ShopReview } from "@/lib/types";
+import { Shop, ShopListing } from "@/lib/types";
 import {
-  ArrowLeft, Star, Store, Loader2, Package, Settings2,
+  ArrowLeft, Store, Loader2, Package, Settings2,
 } from "lucide-react";
 import { SiWhatsapp, SiWechat } from "react-icons/si";
 import ShopManagementPanel from "@/components/ShopManagementPanel";
@@ -19,20 +19,6 @@ function relativeTime(ms: number): string {
   if (mins < 60) return mins <= 1 ? "just now" : `${mins}m ago`;
   if (hours < 24) return `${hours}h ago`;
   return `${days}d ago`;
-}
-
-function StarRow({ rating, size = 14 }: { rating: number; size?: number }) {
-  return (
-    <div className="flex items-center gap-0.5">
-      {[1, 2, 3, 4, 5].map((n) => (
-        <Star
-          key={n}
-          size={size}
-          className={n <= Math.round(rating) ? "text-amber-400 fill-amber-400" : "text-gray-300 dark:text-slate-600"}
-        />
-      ))}
-    </div>
-  );
 }
 
 function PriceLabel({ listing }: { listing: ShopListing }) {
@@ -75,7 +61,6 @@ export default function ShopPublicPage() {
 
   const [shop, setShop] = useState<Shop | null>(null);
   const [listings, setListings] = useState<ShopListing[]>([]);
-  const [reviews, setReviews] = useState<ShopReview[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -88,7 +73,6 @@ export default function ShopPublicPage() {
     setLoading(true);
     setShop(null);
     setListings([]);
-    setReviews([]);
 
     (async () => {
       try {
@@ -97,13 +81,9 @@ export default function ShopPublicPage() {
         if (!s) { setLoading(false); return; }
         setShop(s);
 
-        const [lArr, rArr] = await Promise.allSettled([
-          getShopListings(s.id),
-          getShopReviews(s.id),
-        ]);
+        const lArr = await getShopListings(s.id).catch(() => []);
         if (cancelled) return;
-        if (lArr.status === "fulfilled") setListings(lArr.value);
-        if (rArr.status === "fulfilled") setReviews(rArr.value);
+        setListings(lArr);
       } catch (err) {
         console.error("[ShopPublicPage] load error:", err);
       } finally {
@@ -186,14 +166,6 @@ export default function ShopPublicPage() {
                   {shop.category}
                 </span>
               </div>
-              {shop.reviewCount > 0 && (
-                <div className="flex items-center gap-1.5 mt-1.5">
-                  <StarRow rating={shop.rating} size={13} />
-                  <span className="text-xs text-gray-500 dark:text-slate-400">
-                    {shop.rating.toFixed(1)} ({shop.reviewCount} review{shop.reviewCount !== 1 ? "s" : ""})
-                  </span>
-                </div>
-              )}
             </div>
           </div>
 
@@ -204,12 +176,6 @@ export default function ShopPublicPage() {
               <strong className="text-gray-800 dark:text-slate-200 text-sm">{shop.totalListings}</strong>
               {" "}listing{shop.totalListings !== 1 ? "s" : ""}
             </span>
-            {shop.reviewCount > 0 && (
-              <span>
-                <strong className="text-gray-800 dark:text-slate-200 text-sm">{shop.reviewCount}</strong>
-                {" "}review{shop.reviewCount !== 1 ? "s" : ""}
-              </span>
-            )}
           </div>
 
           {(shop.whatsapp || shop.wechat) && (
@@ -262,12 +228,6 @@ export default function ShopPublicPage() {
                 )}
                 <div className="p-3">
                   <p className="text-xs font-semibold text-gray-900 dark:text-slate-100 line-clamp-2 mb-1">{l.title}</p>
-                  {l.reviewCount > 0 && (
-                    <div className="flex items-center gap-1 mb-0.5">
-                      <StarRow rating={l.rating} size={10} />
-                      <span className="text-[10px] text-gray-400 dark:text-slate-500">({l.reviewCount})</span>
-                    </div>
-                  )}
                   <PriceLabel listing={l} />
                   <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5 truncate">{shop.name}</p>
                 </div>
@@ -276,40 +236,6 @@ export default function ShopPublicPage() {
           </div>
         )}
       </div>
-
-      {/* Reviews */}
-      {reviews.length > 0 && (
-        <div className="px-4 mt-6">
-          <h2 className="text-base font-bold text-gray-900 dark:text-slate-100 mb-3">
-            Reviews
-            <span className="ml-2 text-xs font-normal text-gray-400 dark:text-slate-500">({reviews.length})</span>
-          </h2>
-          <div className="space-y-3">
-            {reviews.map((r) => (
-              <div key={r.id} className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700 rounded-2xl p-4 shadow-sm">
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div className="flex items-center gap-2">
-                    {r.reviewerAvatar ? (
-                      <img src={r.reviewerAvatar} alt="" className="w-8 h-8 rounded-full object-cover" />
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-[#003366]/10 dark:bg-blue-900/30 flex items-center justify-center">
-                        <span className="text-xs font-bold text-[#003366] dark:text-blue-400">{r.reviewerName[0]?.toUpperCase()}</span>
-                      </div>
-                    )}
-                    <div>
-                      <p className="text-xs font-semibold text-gray-900 dark:text-slate-100">{r.reviewerName}</p>
-                      <StarRow rating={r.rating} size={11} />
-                    </div>
-                  </div>
-                  <span className="text-xs text-gray-400 dark:text-slate-500 shrink-0">{relativeTime(r.createdAt)}</span>
-                </div>
-                <p className="text-xs text-gray-500 dark:text-slate-400 mb-1 italic">re: {r.listingTitle}</p>
-                {r.comment && <p className="text-sm text-gray-700 dark:text-slate-300">{r.comment}</p>}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Management Section — owners and editors only */}
       {canManage && (

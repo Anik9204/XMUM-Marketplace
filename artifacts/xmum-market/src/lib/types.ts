@@ -32,9 +32,6 @@ export interface Shop {
   editorIds: string[]; // max 3 editor UIDs
   totalListings: number;
   totalInquiries: number;
-  rating: number;
-  reviewCount: number;
-  orderQuestions?: ShopOrderQuestion[];
   autoReplyEnabled?: boolean;
   autoReplyMessage?: string;
 }
@@ -55,12 +52,9 @@ export interface ShopListing {
   createdAt: number;
   viewCount: number;
   inquiryCount: number;
-  rating: number;
-  reviewCount: number;
-  orderQuestions?: ShopOrderQuestion[];
 }
 
-export type InquiryStatus = "pending" | "replied" | "confirmed" | "completed" | "cancelled";
+export type InquiryStatus = "pending" | "replied";
 
 export interface ShopInquiry {
   id: string;
@@ -76,21 +70,6 @@ export interface ShopInquiry {
   status: InquiryStatus;
   createdAt: number;
   updatedAt: number;
-  reviewLeft?: boolean;
-}
-
-export interface ShopReview {
-  id: string;
-  shopId: string;
-  shopListingId: string;
-  inquiryId: string;
-  reviewerId: string;
-  reviewerName: string;
-  reviewerAvatar?: string;
-  listingTitle: string;
-  rating: number;
-  comment: string;
-  createdAt: number;
 }
 
 export type ShopAdStatus = "pending" | "approved" | "rejected";
@@ -189,19 +168,6 @@ export interface RentalTcAuditLog {
   userAgent: string;
 }
 
-export interface Review {
-  id: string;
-  reviewerId: string;
-  reviewerName: string;
-  reviewerAvatar?: string;
-  sellerId: string;
-  listingId: string;
-  listingTitle: string;
-  rating: number;
-  comment: string;
-  createdAt: number;
-}
-
 export interface AppNotification {
   id: string;
   type:
@@ -212,7 +178,6 @@ export interface AppNotification {
     | "new_message_digest"
     | "new_message"
     | "bump_available"
-    | "review_received"
     | "listing_expiring"
     | "shop_inquiry_received"
     | "shop_inquiry_confirmed"
@@ -220,10 +185,7 @@ export interface AppNotification {
     | "shop_ad_approved"
     | "shop_ad_rejected"
     | "shop_editor_added"
-    | "shop_editor_removed"
-    | "shop_order_received"
-    | "shop_order_confirmed"
-    | "shop_order_cancelled";
+    | "shop_editor_removed";
   title: string;
   body: string;
   createdAt: number;
@@ -232,37 +194,6 @@ export interface AppNotification {
   shopId?: string;
   inquiryId?: string;
 }
-
-export interface ShopOrderQuestion {
-  id: string;
-  label: string;
-  type: "text" | "number" | "date" | "textarea" | "select";
-  required: boolean;
-  options?: string[]; // only for type "select"
-}
-
-export interface ShopOrder {
-  id: string;
-  shopId: string;
-  shopName: string;
-  shopListingId: string;
-  listingTitle: string;
-  buyerId: string;
-  buyerName: string;
-  buyerEmail: string;
-  buyerWhatsapp?: string;
-  buyerWechat?: string;
-  quantity: number;
-  offeredPrice?: number;
-  answers: Record<string, string>;
-  status: "pending" | "confirmed" | "cancelled";
-  cancellationReason?: string;
-  createdAt: number;
-  updatedAt: number;
-  reviewLeft?: boolean;
-}
-
-export type OrderStatus = ShopOrder["status"];
 
 export interface SponsoredAd {
   id: string;

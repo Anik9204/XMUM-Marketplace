@@ -1,0 +1,487 @@
+# XMUM Market — Remove Order System & Review System
+
+## Context & Purpose
+
+XMUM Market is being repositioned from a transaction platform (like Shopee) to a
+**listings directory and contact connector** (like Mudah.my). Buyers browse listings,
+find contact info, and reach out to sellers directly. The app does NOT process
+transactions. Therefore:
+
+- The **Order System** must be removed entirely.
+- The **Review System** must be removed entirely.
+- The **Inquiry System** must be KEPT — it is the primary "contact seller" mechanism.
+- In-app **Messaging** must be KEPT — it is a core feature.
+- All other features remain untouched.
+
+---
+
+## CRITICAL RULES — FOLLOW EXACTLY
+
+1. **Before editing any file**, list every other file that imports or uses it and
+   check those files first.
+2. **Do NOT rewrite any file from scratch.** Make surgical edits only — change the
+   minimum number of lines needed.
+3. **Do NOT remove any function, prop, import, or JSX element** that is NOT listed
+   in this prompt as something to remove.
+4. After every change, verify mentally: "Does this break anything that was working
+   before?" If yes, find a different approach first.
+5. If a shared component is affected, stop and evaluate all pages that use it before
+   proceeding.
+6. **Never change any CSS class, layout structure, z-index, or responsive breakpoint**
+   unless it is directly required by this task.
+7. **UI/UX impact rule**: If removing something leaves a visual gap, an empty section,
+   broken layout, or an awkward button arrangement — you MUST fix it cleanly. See the
+   UI/UX guidance for each file below.
+8. **Confirm a clean build** at the end:
+   `pnpm --filter @workspace/xmum-market run build`
+
+---
+
+## PHASE 1 — Delete Files That Are No Longer Needed
+
+Delete the following files entirely. Check that no other file imports them before
+deleting — if something does import them, remove that import as part of the same step.
+
+- `src/pages/OrderFormPage.tsx`
+- `src/components/ReviewModal.tsx`
+- `src/lib/reviews.ts`
+
+---
+
+## PHASE 2 — `src/App.tsx`
+
+**Change**: Remove the `OrderFormPage` lazy import and its route.
+
+Specifically:
+- Remove: `const OrderFormPage = lazy(() => import("@/pages/OrderFormPage"));`
+- Remove: `<Route path="/order/:listingId" component={OrderFormPage} />`
+
+Do not touch any other route or import.
+
+---
+
+## PHASE 3 — `src/lib/types.ts`
+
+**Remove** the following type definitions entirely:
+
+- `ShopOrder` interface
+- `ShopOrderQuestion` interface
+- `OrderStatus` type alias
+- `ShopReview` interface
+- `Review` interface
+
+**Modify** the following:
+
+- `InquiryStatus` type: Change from
+  `"pending" | "replied" | "confirmed" | "completed" | "cancelled"`
+  to just `"pending" | "replied"`.
+  (The values "confirmed", "completed", and "cancelled" were part of the order
+  lifecycle and are no longer relevant.)
+
+- `Shop` interface: Remove the fields `orderQuestions` and `autoReplyEnabled` and
+  `autoReplyMessage`. Keep all other fields.
+
+- `ShopListing` interface: Remove the fields `rating`, `reviewCount`, and
+  `orderQuestions`. Keep all other fields.
+
+- `Shop` interface: Remove the fields `rating` and `reviewCount`. Keep all other
+  fields.
+
+- `AppNotification` `type` union: Remove these values:
+  `"review_received"`, `"shop_order_received"`, `"shop_order_confirmed"`,
+  `"shop_order_cancelled"`.
+  Keep all remaining notification types.
+
+---
+
+## PHASE 4 — `src/lib/shops.ts`
+
+**Remove** the following exported functions entirely (their function bodies and
+signatures):
+
+- `createOrder`
+- `getOrdersForShop`
+- `getOrdersForBuyer`
+- `updateOrderStatus`
+- `saveOrderQuestions`
+- `leaveShopReview`
+- `getListingReviews`
+- `getShopReviews`
+
+**Modify**:
+
+- `createShopListing`: Remove the `rating`, `reviewCount`, and `orderQuestions`
+  fields from the object written to Firestore. Keep everything else.
+
+- `updateShopListing`: If `orderQuestions` is in the allowed partial update fields,
+  remove it.
+
+- `getPendingActivityCount`: This function likely counts pending inquiries AND pending
+  orders. Remove the order count logic. Keep only the inquiry count logic.
+
+- Remove any imports at the top of the file that were only used by the deleted
+  functions (e.g., Firestore collection references for `orders` or `reviews`).
+  Do not remove imports that are still used elsewhere in the file.
+
+---
+
+## PHASE 5 — `src/lib/notifications.ts`
+
+**Remove** the following exported notification functions entirely:
+
+- `notifyOrderReceived` (or equivalent — the function that sends
+  `"shop_order_received"`)
+- `notifyOrderConfirmed` (or equivalent — sends `"shop_order_confirmed"`)
+- `notifyOrderCancelled` (or equivalent — sends `"shop_order_cancelled"`)
+
+Keep all other notification functions untouched.
+
+---
+
+## PHASE 6 — `src/components/ShopManagementPanel.tsx`
+
+This is the largest and most complex change. Work through it section by section.
+
+### 6a — Imports
+Remove from the import line:
+- `getOrdersForShop`, `updateOrderStatus`, `saveOrderQuestions`
+- `ShopOrder`, `ShopOrderQuestion` (from types)
+- Any notification imports that were only used for orders
+
+Keep all other imports.
+
+### 6b — `OrderQuestionsEditor` component
+This entire sub-component (the function `OrderQuestionsEditor`) exists only to
+configure order intake questions. **Delete it entirely.**
+
+### 6c — `Tab` type
+Change:
+```
+type Tab = "listings" | "inquiries" | "orders" | "analytics" | "settings";
+```
+to:
+```
+type Tab = "listings" | "inquiries" | "analytics" | "settings";
+```
+
+### 6d — State variables
+Remove these state variables from the main `ShopManagementPanel` component:
+- `const [orders, setOrders] = useState<ShopOrder[]>([])`
+- `const [ordersLoading, setOrdersLoading] = useState(false)`
+- `const [pendingOrderCount, setPendingOrderCount] = useState(0)`
+- Any state variables related to order cancellation reason or confirmation dialog
+
+Keep `pendingInquiryCount` and all inquiry-related state.
+
+### 6e — `useEffect` / data-fetching
+Remove the `useEffect` block (or the part of it) that calls `getOrdersForShop`.
+Keep the `useEffect` that fetches inquiries.
+
+### 6f — TABS array
+Remove the entry:
+```
+{ key: "orders", label: "Orders", icon: <ShoppingCart size={15} />, badge: pendingOrderCount }
+```
+
+**UI/UX note**: After removing the Orders tab, there will be 4 tabs: Listings,
+Inquiries, Analytics, Settings. This is a clean layout — do not add padding or
+spacers. The remaining tabs should fill the tab bar evenly as they did before.
+Do not change any tab styling classes.
+
+### 6g — Tab content render block
+Remove the `{tab === "orders" && ( ... )}` JSX block entirely (this renders the
+`OrdersTab` component).
+
+### 6h — `OrdersTab` function component
+Delete the entire `OrdersTab` function component from this file.
+
+### 6i — `CreateListingForm` and `EditListingForm` components (inside this file)
+Both forms currently include `<OrderQuestionsEditor ... />` near the bottom.
+Remove those two `<OrderQuestionsEditor>` usages and their associated
+`orderQuestions` state and logic from both form components.
+
+**UI/UX note**: Removing the OrderQuestionsEditor will leave the form ending at
+the photos section (or whichever field was just above it). This is fine — forms
+ending cleanly at their last field look intentional. Do not add any placeholder
+or empty `<div>`.
+
+### 6j — Settings tab — `saveOrderQuestions` call
+In the Settings tab content, there is a section to configure order intake
+questions (a list with "+ Add question") and a save button that calls
+`saveOrderQuestions`. Remove this entire section from the Settings tab JSX.
+Keep the auto-reply section, shop details section, and editor management section.
+
+**UI/UX note**: The Settings tab will now have fewer sections. This is fine and
+intentional. Do not change the layout or spacing of the remaining settings sections.
+
+### 6k — `ShoppingCart` icon import
+If `ShoppingCart` from `lucide-react` is no longer used anywhere in this file
+after the above removals, remove it from the import statement.
+
+---
+
+## PHASE 7 — `src/pages/ShopListingDetailPage.tsx`
+
+### 7a — Imports
+Remove:
+- `ReviewModal` import (the component file is being deleted)
+- `getListingReviews` from `@/lib/shops`
+- `getOrdersForBuyer` from `@/lib/shops`
+- `ShopReview`, `ShopOrder` from `@/lib/types`
+
+### 7b — State variables
+Remove:
+- `const [reviews, setReviews] = useState<ShopReview[]>([])`
+- `const [userConfirmedOrder, setUserConfirmedOrder] = useState<ShopOrder | null>(null)`
+- `const [showReviewModal, setShowReviewModal] = useState(false)`
+
+### 7c — useEffect
+Remove from the `useEffect` (the one that fires when the listing loads):
+- The `getListingReviews(listingId).then(setReviews)` call
+- The `getOrdersForBuyer(user.uid)` block that sets `userConfirmedOrder`
+
+Keep all other logic in that `useEffect` (view count increment, shop fetching, etc.).
+
+### 7d — Sticky action bar (IMPORTANT UI CHANGE)
+
+Currently the sticky bottom action bar has **two buttons side by side**:
+- "Order This Item" (navigates to `/order/:id`)
+- "Send Inquiry" (opens inline inquiry form)
+
+**Remove** the "Order This Item" button entirely.
+
+**Keep** the "Send Inquiry" button, but since it is now the only action, make it
+full-width:
+- Change its className from `flex-1` to `w-full` (it already uses `flex-1`; the
+  flex container still has only one child so this achieves the same result, but
+  explicitly set `w-full` to be clear).
+- Do not change any other class on this button (color, height, font, border-radius).
+- The sticky bar's outer `div` can remain as is (the flex container); with one
+  child it naturally goes full-width.
+
+**UI/UX note**: A single full-width "Send Inquiry" button is cleaner and more
+intentional than two buttons where one is now meaningless. This change improves
+the UX, not harms it.
+
+### 7e — "Leave a Review" button
+Remove the entire JSX block:
+```jsx
+{/* Leave a Review button (shown to confirmed buyers only) */}
+{!canManage && userConfirmedOrder && !showReviewModal && (
+  ...
+)}
+```
+
+### 7f — `ReviewModal` usage
+Remove the `<ReviewModal ... />` JSX block at the bottom of the component's return.
+
+### 7g — Listing reviews section
+Find and remove the JSX block that renders `reviews` (the section titled
+"Listing reviews" or similar, which maps over the `reviews` array to show star
+ratings and comments).
+
+### 7h — Star rating display on listing header
+The listing detail page currently shows a star rating and review count on the
+listing (e.g. "★ 4.5 (12 reviews)") if `listing.reviewCount > 0`. Remove this
+conditional display block. Do not remove the listing title, price, or any other
+header element.
+
+**UI/UX note**: The listing header will now go straight from title/price to
+description. This is clean. Do not add spacing or placeholders.
+
+### 7i — Shop card star rating
+In the "Shop" info card section (the card that shows the shop's logo, name, and
+links to the shop public page), there is a line showing the shop's star rating
+(`shop.rating.toFixed(1)`, `shop.reviewCount`). Remove only that rating display
+line. Keep the shop name, logo, category, and "Visit Shop" button.
+
+---
+
+## PHASE 8 — `src/pages/ShopPublicPage.tsx`
+
+### 8a — Imports
+Remove:
+- `getShopReviews` from `@/lib/shops`
+- `ShopReview` from `@/lib/types`
+
+### 8b — State
+Remove: `const [reviews, setReviews] = useState<ShopReview[]>([])`
+
+### 8c — Data fetching
+Remove the `getShopReviews(s.id)` call and the `if (rArr.status === "fulfilled")
+setReviews(rArr.value)` line from the `useEffect`.
+
+### 8d — Reviews section
+Remove the entire JSX block that renders the reviews list
+(the section titled "Reviews" that maps over `reviews`).
+
+### 8e — Rating display in shop header
+The shop header shows a star rating and review count line
+(e.g. `shop.rating.toFixed(1)` and `shop.reviewCount`). Remove this line.
+Keep the shop name, bio, category badge, banner, logo, and contact buttons.
+
+### 8f — Per-listing rating display
+In the grid of shop listings, each listing card shows a small star rating
+(`l.reviewCount > 0 && ...`). Remove this conditional rating display from
+each listing card. Keep the listing title, price, and pricing model badge.
+
+**UI/UX note**: Shop listing cards without ratings will look slightly cleaner.
+The title and price are the important elements — no replacement needed.
+
+---
+
+## PHASE 9 — `src/pages/CampusMarketPage.tsx`
+
+Search for any place where `shop.rating`, `shop.reviewCount`, `listing.rating`,
+or `listing.reviewCount` is displayed (star icons, review count text, etc.).
+Remove those display elements only. Keep all other shop/listing card content.
+
+Do the same for `src/components/ListingCard.tsx` if it references
+`rating` or `reviewCount` on shop listings.
+
+---
+
+## PHASE 10 — `src/pages/ProfilePage.tsx`
+
+### 10a — Imports
+Remove:
+- `LeaveReviewModal` (it's defined in the same file but uses `ReviewModal` internally
+  — if it's a local sub-component in ProfilePage, delete the whole sub-component)
+- `ShopOrder`, `OrderStatus` from `@/lib/types`
+- `getOrdersForBuyer` from `@/lib/shops`
+- `leaveShopReview` from `@/lib/shops`
+- `Star` icon from lucide-react if it's only used for the review button
+- `ShoppingCart` icon from lucide-react if it's only used for "My Orders"
+
+### 10b — State
+Remove:
+- `const [myOrders, setMyOrders] = useState<ShopOrder[]>([])`
+- `const [ordersLoading, setOrdersLoading] = useState(false)`
+- `const [reviewTarget, setReviewTarget] = useState<ShopInquiry | null>(null)`
+- `const [expandedCancelReason, setExpandedCancelReason] = useState<string | null>(null)`
+  (used only by orders)
+
+### 10c — useEffect
+Remove the `getOrdersForBuyer(user.uid)` call and its surrounding block.
+
+### 10d — `LeaveReviewModal` sub-component
+If `LeaveReviewModal` is defined as a local function component inside
+`ProfilePage.tsx`, delete the entire function component.
+
+### 10e — "My Inquiries" section — simplify statuses
+
+The inquiry status map currently has 5 entries: pending, replied, confirmed,
+completed, cancelled. Since `InquiryStatus` is now only `"pending" | "replied"`,
+simplify the `statusMap` to:
+```ts
+const statusMap = {
+  pending: { label: "Pending", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
+  replied: { label: "Replied", cls: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
+};
+```
+
+Remove the `canReview` variable and the "Leave Review" button inside the inquiry
+card.
+
+**UI/UX note**: The inquiry card now shows only the listing title, shop name,
+date, and a status badge. This is clean and sufficient. No placeholder needed.
+
+### 10f — "My Orders" section
+Remove the entire `{/* ── MY ORDERS ──... */}` `<div>` block from the JSX.
+This removes the section heading, loading skeleton, empty state, and order cards.
+
+**UI/UX note**: The Profile page "My Shop" area will now end after the
+"My Inquiries" section. This is intentional. Do not add a divider or placeholder.
+Ensure the bottom padding/margin of the last section still gives comfortable
+breathing room above the sticky nav bar (the existing `mb-4` on the last div
+should be sufficient, or add `pb-6` if the content looks cramped).
+
+### 10g — `LeaveReviewModal` usage
+Remove the `{reviewTarget && ( <LeaveReviewModal ... /> )}` block at the bottom
+of the component's return.
+
+---
+
+## PHASE 11 — `src/pages/SellerProfilePage.tsx`
+
+Check if this page shows a `rating` or `reviewCount` for the seller.
+If it does, remove those display elements. Keep all listing cards and seller info.
+
+---
+
+## PHASE 12 — Admin Panel (`artifacts/xmum-admin`)
+
+### 12a — Remove ReviewsPage from navigation
+In `src/components/Layout.tsx` (admin panel), find the nav item for "Reviews"
+and remove it from the sidebar navigation array/JSX.
+
+### 12b — Remove ReviewsPage route
+In `src/App.tsx` (admin panel), remove the route that renders `ReviewsPage` and
+its lazy import.
+
+### 12c — Do NOT delete ReviewsPage.tsx from disk yet
+Leave the file on disk. Simply disconnect it from the router and nav. This
+avoids any risk of breaking the build if something else references it.
+
+---
+
+## PHASE 13 — Final Cleanup
+
+1. Search the entire `src/` directory for any remaining references to:
+   - `ShopOrder`, `ShopReview`, `Review` (the type), `OrderFormPage`,
+     `ReviewModal`, `leaveShopReview`, `getOrdersForBuyer`, `getOrdersForShop`,
+     `createOrder`, `updateOrderStatus`, `saveOrderQuestions`,
+     `getListingReviews`, `getShopReviews`
+   
+   If found in any file not already addressed above, remove the reference
+   (import, usage, or type annotation) with a surgical edit.
+
+2. Search for any TypeScript errors caused by `reviewLeft` being referenced on
+   `ShopInquiry`. Since `reviewLeft` was only checked in the context of orders
+   and reviews, remove `reviewLeft?: boolean` from the `ShopInquiry` interface
+   in `types.ts` and remove any remaining `.reviewLeft` references.
+
+3. **Build check**:
+   ```
+   pnpm --filter @workspace/xmum-market run build
+   ```
+   Fix any TypeScript or import errors until the build passes with zero errors.
+   Do not suppress errors with `// @ts-ignore` — fix them properly.
+
+---
+
+## Summary of What MUST NOT Be Touched
+
+- `src/pages/MessagesPage.tsx` — do not touch
+- `src/lib/messaging.ts` — do not touch
+- `src/components/Layout.tsx` (student app) — do not touch
+- `src/lib/notifications.ts` — only remove order notification functions (Phase 5)
+- `src/pages/ListingDetailPage.tsx` — do not touch (this is the non-shop listing page)
+- `src/pages/PostPage.tsx` — do not touch
+- `src/pages/HomePage.tsx` — do not touch
+- `src/pages/SearchPage.tsx` — do not touch
+- `src/lib/listings.ts` — do not touch
+- `src/lib/auth.ts` — do not touch
+- All `src/components/ui/` files — do not touch
+- `firestore.rules` — do not touch
+- `firestore.indexes.json` — do not touch
+- All Rental-related logic — do not touch
+- The Inquiry system (`createInquiry`, `getInquiriesForShop`, `getInquiriesForBuyer`,
+  `updateInquiryStatus`, `deleteInquiry`) — do not touch these functions
+
+---
+
+## UI/UX Checklist (verify before finishing)
+
+After all changes, visually verify these points:
+
+- [ ] `ShopListingDetailPage`: The sticky bottom action bar has one full-width
+      "Send Inquiry" button. It is not a half-width orphan.
+- [ ] `ShopPublicPage`: The shop header looks complete without star ratings.
+      Shop name, bio, category, and contact buttons are all present.
+- [ ] `ShopManagementPanel`: The tab bar has 4 tabs (Listings, Inquiries,
+      Analytics, Settings). They are evenly spaced with no gap where Orders was.
+- [ ] `ProfilePage`: "My Inquiries" shows only Pending/Replied badges.
+      No "Leave Review" button. No "My Orders" section below it.
+- [ ] No empty `<div>` blocks, no "undefined" text, no broken icon imports.
+- [ ] Dark mode still works correctly on all modified pages.

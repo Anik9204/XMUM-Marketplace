@@ -4,15 +4,15 @@ import { useAuth } from "@/contexts/AuthContext";
 import { getUserListings, deleteListing, markAsSold, bumpListing, getListing, LISTING_EXPIRY_MS, LISTING_REMINDER_MS, BUMP_COOLDOWN_MS } from "@/lib/listings";
 import { getUserConversations } from "@/lib/messaging";
 import { sendDailyDigestIfDue } from "@/lib/notifications";
-import { Listing, Shop, ShopInquiry, ShopOrder, InquiryStatus } from "@/lib/types";
+import { Listing, Shop, ShopInquiry, InquiryStatus } from "@/lib/types";
 import { getSavedListings } from "@/lib/savedListings";
-import { getShopsByOwner, getShopsWhereEditor, getInquiriesForBuyer, getOrdersForBuyer, leaveShopReview } from "@/lib/shops";
+import { getShopsByOwner, getShopsWhereEditor, getInquiriesForBuyer } from "@/lib/shops";
 import ListingCard from "@/components/ListingCard";
 import AuthModal from "@/components/AuthModal";
 import {
   User, CheckCircle, AlertCircle, CheckCircle2, Settings, Clock, X,
-  ArrowUp, Bookmark, Store, Star, MessageSquare, Plus, ShoppingCart,
-  Pencil, Trash2, Eye, Package, TrendingUp, BarChart2, ChevronRight,
+  ArrowUp, Bookmark, Store, MessageSquare, Plus,
+  Pencil, Trash2, Eye, Package, BarChart2, ChevronRight,
   Tag, BadgeCheck,
 } from "lucide-react";
 import { logOut } from "@/lib/auth";
@@ -241,80 +241,6 @@ function OwnerListingRow({
   );
 }
 
-function LeaveReviewModal({
-  inquiry, userId, userName, userAvatar, onClose, onSubmitted,
-}: {
-  inquiry: ShopInquiry; userId: string; userName: string; userAvatar?: string;
-  onClose: () => void; onSubmitted: () => void;
-}) {
-  const [rating, setRating] = useState(5);
-  const [comment, setComment] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setSubmitting(true);
-    try {
-      await leaveShopReview({
-        shopId: inquiry.shopId, inquiryId: inquiry.id,
-        reviewerId: userId, reviewerName: userName, reviewerAvatar: userAvatar,
-        listingTitle: inquiry.listingTitle, rating, comment: comment.trim(),
-      });
-      onSubmitted();
-    } catch (err: any) {
-      setError(err.message ?? "Failed to submit review.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-[60] flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 w-full max-w-sm shadow-2xl">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base font-bold text-gray-900 dark:text-slate-100">Leave a Review</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 w-8 h-8 flex items-center justify-center">
-            <X size={18} />
-          </button>
-        </div>
-        <p className="text-xs text-gray-500 dark:text-slate-400 mb-4">
-          Reviewing: <span className="font-semibold text-gray-700 dark:text-slate-300">{inquiry.shopName}</span> — {inquiry.listingTitle}
-        </p>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <p className="text-xs font-semibold text-gray-700 dark:text-slate-300 mb-2">Rating</p>
-            <div className="flex gap-2">
-              {[1, 2, 3, 4, 5].map((n) => (
-                <button key={n} type="button" onClick={() => setRating(n)} className="transition-transform hover:scale-110">
-                  <Star size={28} className={n <= rating ? "text-amber-400 fill-amber-400" : "text-gray-200 dark:text-slate-600"} />
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <p className="text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1">Comment (optional)</p>
-            <textarea
-              rows={3} maxLength={300} value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              placeholder="Share your experience..."
-              className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-200 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none"
-            />
-          </div>
-          {error && <p className="text-xs text-red-500">{error}</p>}
-          <div className="flex gap-2">
-            <button type="button" onClick={onClose} className="flex-1 min-h-[44px] border border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300 rounded-xl text-sm font-medium hover:bg-gray-50 dark:hover:bg-slate-700 transition">Cancel</button>
-            <button type="submit" disabled={submitting} className="flex-1 min-h-[44px] bg-[#003366] dark:bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-[#002244] disabled:opacity-50 transition flex items-center justify-center gap-1.5">
-              {submitting ? "Submitting…" : <><Star size={13} /> Submit</>}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
 export default function ProfilePage() {
   const { t, lang } = useLang();
   const { user, userProfile, avatarOverride } = useAuth();
@@ -339,10 +265,6 @@ export default function ProfilePage() {
   const [shopsLoading, setShopsLoading] = useState(false);
   const [myInquiries, setMyInquiries] = useState<ShopInquiry[]>([]);
   const [inquiriesLoading, setInquiriesLoading] = useState(false);
-  const [reviewTarget, setReviewTarget] = useState<ShopInquiry | null>(null);
-  const [myOrders, setMyOrders] = useState<ShopOrder[]>([]);
-  const [ordersLoading, setOrdersLoading] = useState(false);
-  const [expandedCancelReason, setExpandedCancelReason] = useState<string | null>(null);
 
   const listingsCache = useRef<Listing[]>([]);
   const now = Date.now();
@@ -419,8 +341,6 @@ export default function ProfilePage() {
     }).catch(() => {}).finally(() => setShopsLoading(false));
     setInquiriesLoading(true);
     getInquiriesForBuyer(user.uid).then(setMyInquiries).catch(() => {}).finally(() => setInquiriesLoading(false));
-    setOrdersLoading(true);
-    getOrdersForBuyer(user.uid).then(setMyOrders).catch(() => {}).finally(() => setOrdersLoading(false));
   }, [user?.uid]);
 
   if (!user) {
@@ -794,11 +714,6 @@ export default function ProfilePage() {
                       <p className="text-sm font-bold text-gray-900 dark:text-slate-100 truncate">{shop.name}</p>
                       <div className="flex items-center gap-2 text-[10px] text-gray-400 dark:text-slate-500">
                         <span>{shop.totalListings} listing{shop.totalListings !== 1 ? "s" : ""}</span>
-                        {shop.reviewCount > 0 && (
-                          <span className="flex items-center gap-0.5">
-                            <Star size={9} className="text-amber-400 fill-amber-400" /> {shop.rating?.toFixed(1)}
-                          </span>
-                        )}
                       </div>
                     </div>
                     <div className="flex gap-1.5 shrink-0">
@@ -838,14 +753,10 @@ export default function ProfilePage() {
               <div className="space-y-2">
                 {myInquiries.map((inq) => {
                   const statusMap: Record<InquiryStatus, { label: string; cls: string }> = {
-                    pending:   { label: "Pending",   cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
-                    replied:   { label: "Replied",   cls: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
-                    confirmed: { label: "Confirmed", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
-                    completed: { label: "Completed", cls: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
-                    cancelled: { label: "Cancelled", cls: "bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-slate-400" },
+                    pending: { label: "Pending", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
+                    replied: { label: "Replied", cls: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
                   };
                   const { label, cls } = statusMap[inq.status] ?? statusMap.pending;
-                  const canReview = inq.status === "completed" && !inq.reviewLeft;
                   return (
                     <div key={inq.id} className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-3">
                       <div className="flex items-start justify-between gap-2">
@@ -857,71 +768,6 @@ export default function ProfilePage() {
                         </div>
                         <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${cls}`}>{label}</span>
                       </div>
-                      {canReview && (
-                        <button
-                          onClick={() => setReviewTarget(inq)}
-                          className="mt-2 flex items-center gap-1 text-xs font-semibold text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-700 px-3 py-1.5 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-900/20 transition"
-                        >
-                          <Star size={11} /> Leave Review
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* ── MY ORDERS ────────────────────────────────────────── */}
-          <div className="mt-8 mb-4">
-            <h2 className="text-sm font-bold text-gray-900 dark:text-slate-100 flex items-center gap-2 mb-3">
-              <ShoppingCart size={15} className="text-[#003366] dark:text-blue-400" /> My Orders
-            </h2>
-            {ordersLoading ? (
-              <div className="space-y-2">
-                {[1, 2].map(i => <div key={i} className="h-16 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 animate-pulse" />)}
-              </div>
-            ) : myOrders.length === 0 ? (
-              <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-5 text-center">
-                <ShoppingCart size={24} className="mx-auto text-gray-200 dark:text-slate-600 mb-2" />
-                <p className="text-xs text-gray-500 dark:text-slate-400">No orders yet. Place one from a Campus Market shop!</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {myOrders.map((order) => {
-                  const orderStatusMap: Record<string, { label: string; cls: string }> = {
-                    pending:   { label: "Pending",   cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
-                    confirmed: { label: "Confirmed", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
-                    completed: { label: "Completed", cls: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
-                    cancelled: { label: "Cancelled", cls: "bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-slate-400" },
-                  };
-                  const { label, cls } = orderStatusMap[order.status] ?? orderStatusMap.pending;
-                  const isExpanded = expandedCancelReason === order.id;
-                  return (
-                    <div key={order.id} className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-gray-900 dark:text-slate-100 truncate">{order.listingTitle}</p>
-                          <p className="text-xs text-gray-400 dark:text-slate-500">
-                            {order.shopName} · Qty {order.quantity}
-                            {order.offeredPrice != null && ` · RM ${order.offeredPrice.toFixed(2)}`}
-                            {" · "}{new Date(order.createdAt).toLocaleDateString("en-MY", { month: "short", day: "numeric" })}
-                          </p>
-                        </div>
-                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${cls}`}>{label}</span>
-                      </div>
-                      {order.status === "cancelled" && order.cancellationReason && (
-                        <div className="mt-2">
-                          <button onClick={() => setExpandedCancelReason(isExpanded ? null : order.id)} className="text-xs text-gray-400 dark:text-slate-500 underline underline-offset-2">
-                            {isExpanded ? "Hide reason" : "Show reason"}
-                          </button>
-                          {isExpanded && (
-                            <p className="mt-1 text-xs text-gray-600 dark:text-slate-300 bg-gray-50 dark:bg-slate-700/50 rounded-lg px-3 py-2">
-                              {order.cancellationReason}
-                            </p>
-                          )}
-                        </div>
-                      )}
                     </div>
                   );
                 })}
@@ -933,21 +779,6 @@ export default function ProfilePage() {
       </div>
 
       {/* Modals */}
-      {reviewTarget && (
-        <LeaveReviewModal
-          inquiry={reviewTarget}
-          userId={user.uid}
-          userName={userProfile?.fullName || user.email?.split("@")[0] || ""}
-          userAvatar={userProfile?.avatarUrl}
-          onClose={() => setReviewTarget(null)}
-          onSubmitted={() => {
-            setMyInquiries(prev => prev.map(i => i.id === reviewTarget.id ? { ...i, reviewLeft: true } : i));
-            setReviewTarget(null);
-            setSuccessToast("Review submitted! Thank you.");
-          }}
-        />
-      )}
-
       {deleteTarget && (
         <div className="fixed inset-0 z-[60] flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 w-full max-w-sm shadow-2xl">
