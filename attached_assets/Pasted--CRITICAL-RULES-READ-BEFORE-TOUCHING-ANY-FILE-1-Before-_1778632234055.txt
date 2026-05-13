@@ -1,0 +1,195 @@
+
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless you tell me in most simple way why it's needaed and I have explicitly told you to remove it.
+
+4. After every change, mentally verify: "Does this break anything
+   that was working before?" If yes, do not proceed — find a
+   different approach.
+
+5. If fixing Issue X requires changing a shared component used by
+   other pages, STOP and tell me in the most simple way what the impact will be before
+   making the change. Ask for permission first.
+
+6. Never change any CSS class, layout structure, z-index, or
+   responsive breakpoint unless it is directly part of the fix.
+
+7. Confirm the app builds with zero errors before finishing:
+   pnpm --filter @workspace/xmum-market run build
+
+
+# XMUM Marketplace — Orders Tab Fix, Order Detail Modal & Shop Listing Report
+
+You are a senior full-stack developer working on the XMUM Marketplace project (React + Vite + TypeScript + Firebase + Tailwind CSS 4).
+
+Before writing a single line of code, read these files completely:
+- `artifacts/xmum-market/src/components/ShopManagementPanel.tsx`
+- `artifacts/xmum-market/src/pages/ShopListingDetailPage.tsx`
+- `artifacts/xmum-market/src/components/ReportModal.tsx`
+- `artifacts/xmum-market/src/lib/types.ts`
+
+Fix all three issues below in exact order. Make surgical edits only — do not rewrite any file from scratch. Do not break any existing functionality. Build must pass: `pnpm --filter @workspace/xmum-market run build`.
+
+---
+
+## Issue 1 — Orders Tab: Confirm and Cancel Buttons Are Hidden, Not Visible Upfront
+
+### What is happening
+
+In `ShopManagementPanel.tsx`, the `OrdersTab` component renders each order as a card showing the listing title, buyer name, date, and status badge. The **Confirm Order** and **Cancel Order** buttons only appear after the owner clicks "View details ▼" to expand the card. This means a shop owner who receives a new pending order cannot see any action buttons at all without first discovering and clicking "View details". This is not market standard — action buttons must be immediately visible on pending orders without requiring any extra click.
+
+### What needs to change
+
+**1A — Show Confirm and Cancel buttons directly on the order card for pending orders**
+
+For every order with `status === "pending"`, the **✓ Confirm Order** and **✗ Cancel Order** buttons must appear directly on the order card, below the listing title / buyer name row, without requiring the user to click "View details" first.
+
+The existing buttons inside the expanded `expandedId === order.id` section are correct in their logic and styling — move them out to always be visible on the card surface when `order.status === "pending"`. They should sit between the header row and the "View details ▼" toggle button.
+
+The layout for a pending order card should be:
+```
+[ Listing Title                    ] [ Pending badge ]
+[ Buyer name · Date                ]
+[ ✓ Confirm Order ] [ ✗ Cancel Order ]   ← always visible for pending
+[ View details ▼ ]
+```
+
+For confirmed or cancelled orders, no action buttons are shown on the card surface — only the "View details ▼" toggle remains.
+
+**1B — The cancellation reason textarea flow stays inside "View details"**
+
+When the owner clicks "✗ Cancel Order", the cancellation reason textarea and "Confirm Cancel" button should appear inline below the action buttons (expanding in place), not inside the "View details" section. The `cancellingId` state already handles this — just ensure it renders correctly when the card is not yet expanded.
+
+---
+
+## Issue 2 — "View Details" Opens the Post Page Instead of a Detail Modal
+
+### What is happening
+
+Currently in `OrdersTab`, the "View details ▼" button toggles an `expandedId` state that shows an inline expanded section on the card with customer info and order answers. However, you reported that clicking "View details" is redirecting to the post page — this means somewhere in the component a `navigate()` or `<Link>` is being triggered instead of toggling `expandedId`. Find and fix this.
+
+Additionally, the existing expanded section (even when it works correctly) is minimal and not market-standard. It needs to be upgraded to show a **complete order detail view** inline, covering everything the shop owner needs to process the order.
+
+### What needs to change
+
+**2A — Fix any navigate/redirect bug on "View details" click**
+
+Search the entire `OrdersTab` component and the order card JSX for any `<Link href=...>` or `navigate(...)` call that could be triggered when the order card or the "View details" button is clicked. If found, remove or isolate it so clicking "View details ▼" only toggles `expandedId` state and never navigates away.
+
+**2B — Upgrade the expanded order detail section**
+
+When `expandedId === order.id`, show a comprehensive order detail panel with clearly labelled sections. The panel must include all of the following:
+
+**Section 1 — Customer Information**
+- Full name: `order.buyerName`
+- Email: `order.buyerEmail` (shown as a clickable `mailto:` link)
+- WhatsApp: `order.buyerWhatsapp` (if present, shown as a clickable `https://wa.me/` link with the WhatsApp green colour and icon)
+- WeChat: `order.buyerWechat` (if present, shown as plain text with WeChat icon)
+
+**Section 2 — Order Details**
+- Listing: `order.listingTitle` (shown as a link to `/shop-listing/{order.shopListingId}`)
+- Order placed: formatted date and time from `order.createdAt` (use `new Date(order.createdAt).toLocaleString("en-MY")`)
+- Quantity: `order.quantity`
+- Offered price (only if `order.offeredPrice` is defined and not null): `RM {order.offeredPrice.toFixed(2)}`
+- Order ID: `order.id` in small monospace text (useful for reference)
+
+**Section 3 — Answers to Order Questions**
+Display each answer from `order.answers` (which is `Record<string, string>`). To find the question label for each answer key, look up the question in this priority order:
+1. `listing.orderQuestions` — but since we don't have the listing object here, use `shop.orderQuestions` as a fallback
+2. If no matching question is found for a key, display the raw key as the label
+
+Show each question-answer pair as:
+```
+Question label: Answer value
+```
+
+If `order.answers` is empty or undefined, show "No additional answers provided."
+
+**Section 4 — Notes**
+If `order.note` exists and is non-empty, show it in a speech-bubble style box labelled "Customer note".
+
+**Section 5 — Cancellation Reason** (only if `order.status === "cancelled"` and `order.cancellationReason` exists)
+Show in a red-tinted box labelled "Cancellation reason".
+
+The entire expanded panel should use the existing `bg-gray-50 dark:bg-slate-700/50 rounded-xl p-3 text-xs` styling pattern already used in the component for consistency.
+
+---
+
+## Issue 3 — No Report Option on Shop Listing Detail Page
+
+### What is happening
+
+In `ShopListingDetailPage.tsx`, there is no way for a user to report a suspicious or inappropriate shop listing. The regular `ListingDetailPage.tsx` has a "Report" option inside an overflow menu (three-dot `...` button in the top-right corner). `ShopListingDetailPage.tsx` has no overflow menu and no report button at all.
+
+### What needs to change
+
+**3A — Add a three-dot overflow menu button to the shop listing detail page header**
+
+In `ShopListingDetailPage.tsx`, in the photo gallery area where the back button (`ArrowLeft`) already exists at `absolute top-4 left-4`, add a corresponding three-dot menu button at `absolute top-4 right-4` using the same styling:
+```jsx
+className="absolute top-4 right-4 bg-black/40 backdrop-blur-sm text-white p-2.5 rounded-full hover:bg-black/60 transition shadow-lg"
+```
+Use the `MoreHorizontal` icon from lucide-react (add it to the existing import).
+
+**3B — The overflow menu shows a "Report this listing" option**
+
+Clicking the three-dot button toggles a small dropdown menu below it (identical in pattern to `ListingDetailPage.tsx`'s overflow menu). The menu contains one item: **"Report this listing"** with a `Flag` icon (add `Flag` to the lucide-react import).
+
+The menu must:
+- Only be visible to logged-in users (`user !== null`)
+- Not be visible to the shop owner or editors (`canManage === true`) — they manage the listing, not report it
+- Close when the user clicks anywhere outside it (add a `useRef` and a `useEffect` click-outside handler, same pattern as `ListingDetailPage.tsx`)
+
+**3C — Clicking "Report this listing" opens the existing `ReportModal`**
+
+`ReportModal` is already imported and used in `ListingDetailPage.tsx`. Import it into `ShopListingDetailPage.tsx`:
+```tsx
+import ReportModal from "@/components/ReportModal";
+```
+
+Add state:
+```tsx
+const [showReport, setShowReport] = useState(false);
+```
+
+When the user clicks "Report this listing", set `setShowReport(true)`. Render the modal at the bottom of the JSX:
+```tsx
+{showReport && listing && (
+  <ReportModal
+    listingId={listing.id}
+    listingTitle={listing.title}
+    onClose={() => setShowReport(false)}
+  />
+)}
+```
+
+Check `ReportModal`'s prop interface in `ReportModal.tsx` and use the exact prop names it expects — do not guess.
+
+**3D — Do not show the report menu to unauthenticated users**
+
+If `user === null`, the three-dot button must still render (so the layout is consistent), but clicking it should open the `AuthModal` instead of the overflow menu, prompting the user to sign in first. Use the existing `setShowAuth(true)` pattern already present in the page.
+
+---
+
+## Final Checklist
+
+- [ ] Confirm Order and Cancel Order buttons are visible on pending order cards without clicking "View details"
+- [ ] The cancellation reason textarea appears inline below the Cancel button when clicked, not requiring "View details" to be open first
+- [ ] "View details ▼" toggles an inline expanded panel and never navigates to the post page
+- [ ] The expanded order detail panel shows: customer name, email (mailto link), WhatsApp (wa.me link), WeChat, listing title (link), order date/time, quantity, offered price, order question answers, customer note, cancellation reason
+- [ ] Order question answers look up the question label from `shop.orderQuestions` with a graceful fallback
+- [ ] `ShopListingDetailPage.tsx` has a three-dot overflow button at top-right of the photo gallery
+- [ ] The overflow menu shows "Report this listing" only to logged-in non-owner users
+- [ ] Clicking "Report this listing" opens `ReportModal` with the correct listing ID and title props
+- [ ] Unauthenticated users clicking the three-dot button see the AuthModal
+- [ ] `canManage === true` (owner/editor) users do not see the report option
+- [ ] All existing functionality in both files is untouched
+- [ ] Dark mode is unaffected
+- [ ] App builds with zero TypeScript errors: `pnpm --filter @workspace/xmum-market run build`

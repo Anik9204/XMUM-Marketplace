@@ -542,6 +542,7 @@ function OrdersTab({ orders, loading, shopId, shop, onOrderUpdated }: {
     <div className="space-y-3">
       {orders.map((order) => (
         <div key={order.id} className="bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-2xl p-4 shadow-sm">
+          {/* Header row */}
           <div className="flex items-start justify-between gap-2 mb-2">
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-gray-900 dark:text-slate-100 truncate">{order.listingTitle}</p>
@@ -549,44 +550,69 @@ function OrdersTab({ orders, loading, shopId, shop, onOrderUpdated }: {
             </div>
             <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${order.status === "confirmed" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : order.status === "cancelled" ? "bg-gray-100 text-gray-400 dark:bg-slate-700 dark:text-slate-500" : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"}`}>{order.status.charAt(0).toUpperCase() + order.status.slice(1)}</span>
           </div>
+          {/* Action buttons — always visible on card for pending orders */}
+          {order.status === "pending" && (
+            <div className="mb-3 space-y-2">
+              {cancellingId === order.id ? (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-gray-700 dark:text-slate-300">Reason for cancellation (required, max 100 words):</p>
+                  <textarea rows={3} value={cancellationReason} onChange={(e) => { const w = cw(e.target.value); if (w <= 100) setCancellationReason(e.target.value); }} placeholder="Explain why you are cancelling..." className="w-full bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-xl px-3 py-2 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-red-400" />
+                  <p className="text-xs text-gray-400">{cw(cancellationReason)}/100 words</p>
+                  <div className="flex gap-2">
+                    <button onClick={() => { setCancellingId(null); setCancellationReason(""); }} className="flex-1 text-xs bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-300 font-semibold py-2 rounded-xl hover:bg-gray-200 transition">Back</button>
+                    <button onClick={() => handleCancel(order)} disabled={cw(cancellationReason) === 0 || !!actionLoading} className="flex-1 text-xs bg-red-500 text-white font-semibold py-2 rounded-xl hover:bg-red-600 transition disabled:opacity-50">{actionLoading === order.id ? "Cancelling..." : "Confirm Cancel"}</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <button onClick={() => handleConfirm(order)} disabled={!!actionLoading} className="flex-1 text-xs bg-[#003366] dark:bg-blue-600 text-white font-semibold py-2 rounded-xl hover:bg-[#002244] transition disabled:opacity-50">{actionLoading === order.id ? "..." : "✓ Confirm Order"}</button>
+                  <button onClick={() => setCancellingId(order.id)} className="flex-1 text-xs border border-red-300 dark:border-red-700 text-red-500 font-semibold py-2 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition">✗ Cancel Order</button>
+                </div>
+              )}
+            </div>
+          )}
+          {/* View details toggle */}
           <button onClick={() => setExpandedId(expandedId === order.id ? null : order.id)} className="text-xs text-[#003366] dark:text-blue-400 font-semibold hover:underline">{expandedId === order.id ? "Hide details ▲" : "View details ▼"}</button>
+          {/* Expanded order detail panel */}
           {expandedId === order.id && (
             <div className="mt-3 space-y-3">
+              {/* Section 1: Customer Information */}
               <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-3 text-xs space-y-1">
-                <p className="font-semibold text-gray-700 dark:text-slate-300 mb-1">Customer Info</p>
-                <p className="text-gray-600 dark:text-slate-400">Email: <span className="font-medium">{order.buyerEmail}</span></p>
+                <p className="font-semibold text-gray-700 dark:text-slate-300 mb-1">Customer Information</p>
+                <p className="text-gray-600 dark:text-slate-400">Name: <span className="font-medium">{order.buyerName}</span></p>
+                <p className="text-gray-600 dark:text-slate-400">Email: <a href={`mailto:${order.buyerEmail}`} className="font-medium text-[#003366] dark:text-blue-400 hover:underline">{order.buyerEmail}</a></p>
                 {order.buyerWhatsapp && <a href={`https://wa.me/${order.buyerWhatsapp.replace(/[^0-9]/g, "")}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-green-600 dark:text-green-400 font-semibold"><SiWhatsapp size={12} /> WhatsApp: {order.buyerWhatsapp}</a>}
                 {order.buyerWechat && <p className="text-gray-600 dark:text-slate-400">WeChat: <span className="font-medium">{order.buyerWechat}</span></p>}
               </div>
+              {/* Section 2: Order Details */}
               <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-3 text-xs space-y-1">
                 <p className="font-semibold text-gray-700 dark:text-slate-300 mb-1">Order Details</p>
+                <p className="text-gray-600 dark:text-slate-400">Listing: <a href={`/shop-listing/${order.shopListingId}`} className="font-medium text-[#003366] dark:text-blue-400 hover:underline">{order.listingTitle}</a></p>
+                <p className="text-gray-600 dark:text-slate-400">Order placed: <span className="font-medium">{new Date(order.createdAt).toLocaleString("en-MY")}</span></p>
                 <p className="text-gray-600 dark:text-slate-400">Quantity: <span className="font-medium">{order.quantity}</span></p>
-                {order.offeredPrice !== undefined && <p className="text-gray-600 dark:text-slate-400">Offered Price: <span className="font-medium text-[#003366] dark:text-blue-400">RM {order.offeredPrice.toFixed(2)}</span></p>}
-                {Object.entries(order.answers).map(([qId, answer]) => {
-                  const q = shop.orderQuestions?.find((x) => x.id === qId);
-                  return q ? <p key={qId} className="text-gray-600 dark:text-slate-400">{q.label}: <span className="font-medium">{answer}</span></p> : null;
-                })}
+                {order.offeredPrice !== undefined && order.offeredPrice !== null && <p className="text-gray-600 dark:text-slate-400">Offered price: <span className="font-medium text-[#003366] dark:text-blue-400">RM {order.offeredPrice.toFixed(2)}</span></p>}
+                <p className="text-gray-400 dark:text-slate-500 font-mono text-[10px] pt-1">ID: {order.id}</p>
               </div>
-              {order.status === "pending" && (
-                <div className="space-y-2">
-                  {cancellingId === order.id ? (
-                    <div className="space-y-2">
-                      <p className="text-xs font-semibold text-gray-700 dark:text-slate-300">Reason for cancellation (required, max 100 words):</p>
-                      <textarea rows={3} value={cancellationReason} onChange={(e) => { const w = cw(e.target.value); if (w <= 100) setCancellationReason(e.target.value); }} placeholder="Explain why you are cancelling..." className="w-full bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-xl px-3 py-2 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-red-400" />
-                      <p className="text-xs text-gray-400">{cw(cancellationReason)}/100 words</p>
-                      <div className="flex gap-2">
-                        <button onClick={() => { setCancellingId(null); setCancellationReason(""); }} className="flex-1 text-xs bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-300 font-semibold py-2 rounded-xl hover:bg-gray-200 transition">Back</button>
-                        <button onClick={() => handleCancel(order)} disabled={cw(cancellationReason) === 0 || !!actionLoading} className="flex-1 text-xs bg-red-500 text-white font-semibold py-2 rounded-xl hover:bg-red-600 transition disabled:opacity-50">{actionLoading === order.id ? "Cancelling..." : "Confirm Cancel"}</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex gap-2">
-                      <button onClick={() => handleConfirm(order)} disabled={!!actionLoading} className="flex-1 text-xs bg-[#003366] dark:bg-blue-600 text-white font-semibold py-2 rounded-xl hover:bg-[#002244] transition disabled:opacity-50">{actionLoading === order.id ? "..." : "✓ Confirm Order"}</button>
-                      <button onClick={() => setCancellingId(order.id)} className="flex-1 text-xs border border-red-300 dark:border-red-700 text-red-500 font-semibold py-2 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition">✗ Cancel Order</button>
-                    </div>
-                  )}
+              {/* Section 3: Order Answers */}
+              <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-3 text-xs space-y-1">
+                <p className="font-semibold text-gray-700 dark:text-slate-300 mb-1">Order Answers</p>
+                {Object.keys(order.answers ?? {}).length === 0 ? (
+                  <p className="text-gray-400 dark:text-slate-500 italic">No additional answers provided.</p>
+                ) : (
+                  Object.entries(order.answers ?? {}).map(([qId, answer]) => {
+                    const q = shop.orderQuestions?.find((x) => x.id === qId);
+                    return <p key={qId} className="text-gray-600 dark:text-slate-400">{q ? q.label : qId}: <span className="font-medium">{answer}</span></p>;
+                  })
+                )}
+              </div>
+              {/* Section 4: Customer Note */}
+              {(order as any).note && (
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-xl px-3 py-2 text-xs">
+                  <p className="font-semibold text-blue-700 dark:text-blue-400 mb-0.5">Customer note</p>
+                  <p className="text-blue-600 dark:text-blue-300">{(order as any).note}</p>
                 </div>
               )}
+              {/* Section 5: Cancellation Reason */}
               {order.status === "cancelled" && order.cancellationReason && (
                 <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-xl px-3 py-2 text-xs text-red-600 dark:text-red-400">
                   <p className="font-semibold mb-0.5">Cancellation reason:</p><p>{order.cancellationReason}</p>

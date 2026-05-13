@@ -1,14 +1,15 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRoute, useLocation, Link } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { getDoc, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { getShopById, incrementShopListingView, createInquiry, deleteShopListing } from "@/lib/shops";
-import { Shop, ShopListing } from "@/lib/types";
+import { Shop, ShopListing, Listing } from "@/lib/types";
 import AuthModal from "@/components/AuthModal";
+import ReportModal from "@/components/ReportModal";
 import {
   ArrowLeft, ChevronLeft, ChevronRight, Package, Star,
-  Loader2, Store, Send, Edit2, Trash2,
+  Loader2, Store, Send, Edit2, Trash2, MoreHorizontal, Flag,
 } from "lucide-react";
 import { SiWhatsapp, SiWechat } from "react-icons/si";
 
@@ -63,6 +64,20 @@ export default function ShopListingDetailPage() {
   const [sent, setSent] = useState(false);
   const [inquiryError, setInquiryError] = useState("");
   const [deletingListing, setDeletingListing] = useState(false);
+  const [showOverflowMenu, setShowOverflowMenu] = useState(false);
+  const [showReport, setShowReport] = useState(false);
+  const overflowRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showOverflowMenu) return;
+    function handleClick(e: MouseEvent) {
+      if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) {
+        setShowOverflowMenu(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showOverflowMenu]);
 
   useEffect(() => {
     if (!listingId) return;
@@ -165,6 +180,31 @@ export default function ShopListingDetailPage() {
         >
           <ArrowLeft size={18} />
         </button>
+
+        {/* Overflow menu — three-dot button at top-right */}
+        <div className="absolute top-4 right-4" ref={overflowRef}>
+          <button
+            onClick={() => {
+              if (!user) { setShowAuth(true); return; }
+              setShowOverflowMenu((v) => !v);
+            }}
+            className="bg-black/40 backdrop-blur-sm text-white p-2.5 rounded-full hover:bg-black/60 transition shadow-lg"
+            aria-label="More options"
+          >
+            <MoreHorizontal size={18} />
+          </button>
+          {showOverflowMenu && !canManage && (
+            <div className="absolute right-0 top-full mt-1 min-w-[180px] bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-gray-100 dark:border-slate-700 z-50 overflow-hidden">
+              <button
+                onClick={() => { setShowOverflowMenu(false); setShowReport(true); }}
+                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-left min-h-[44px]"
+              >
+                <Flag size={15} />
+                Report this listing
+              </button>
+            </div>
+          )}
+        </div>
 
         {photos.length > 1 && (
           <>
@@ -421,6 +461,25 @@ export default function ShopListingDetailPage() {
       )}
 
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
+      {showReport && listing && (
+        <ReportModal
+          listing={{
+            id: listing.id,
+            title: listing.title,
+            userId: listing.shopOwnerId,
+            userEmail: shop?.ownerEmail ?? "",
+            type: "shop-listing",
+            description: listing.description,
+            category: listing.category,
+            condition: "new",
+            photos: listing.photos,
+            userName: listing.shopName,
+            createdAt: listing.createdAt,
+            isArchived: false,
+          } as Listing}
+          onClose={() => setShowReport(false)}
+        />
+      )}
     </div>
   );
 }
