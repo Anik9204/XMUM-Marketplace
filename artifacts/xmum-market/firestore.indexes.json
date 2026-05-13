@@ -79,6 +79,31 @@
       ]
     },
     {
+      "collectionGroup": "shopReviews",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "shopListingId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "shopVisits",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "shopId", "order": "ASCENDING" },
+        { "fieldPath": "visitedAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "shopVisits",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "shopId", "order": "ASCENDING" },
+        { "fieldPath": "listingId", "order": "ASCENDING" },
+        { "fieldPath": "visitedAt", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "shops",
       "queryScope": "COLLECTION",
       "fields": [

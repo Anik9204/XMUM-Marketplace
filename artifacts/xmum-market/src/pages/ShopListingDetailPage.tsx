@@ -3,8 +3,9 @@ import { useRoute, useLocation, Link } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { getDoc, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { getShopById, incrementShopListingView, createInquiry, deleteShopListing } from "@/lib/shops";
-import { Shop, ShopListing, Listing } from "@/lib/types";
+import { getShopById, incrementShopListingView, createInquiry, deleteShopListing, getListingReviews, getOrdersForBuyer } from "@/lib/shops";
+import { Shop, ShopListing, ShopReview, ShopOrder, Listing } from "@/lib/types";
+import ReviewModal from "@/components/ReviewModal";
 import AuthModal from "@/components/AuthModal";
 import ReportModal from "@/components/ReportModal";
 import {
@@ -68,6 +69,10 @@ export default function ShopListingDetailPage() {
   const [showReport, setShowReport] = useState(false);
   const overflowRef = useRef<HTMLDivElement>(null);
 
+  const [reviews, setReviews] = useState<ShopReview[]>([]);
+  const [userConfirmedOrder, setUserConfirmedOrder] = useState<ShopOrder | null>(null);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+
   useEffect(() => {
     if (!showOverflowMenu) return;
     function handleClick(e: MouseEvent) {
@@ -93,7 +98,18 @@ export default function ShopListingDetailPage() {
         setListing(l);
         const s = await getShopById(l.shopId);
         setShop(s);
-        incrementShopListingView(listingId).catch(() => {});
+        incrementShopListingView(listingId, l.shopId).catch(() => {});
+        // Fetch listing-level reviews
+        getListingReviews(listingId).then(setReviews).catch(() => {});
+        // Check if current user has a confirmed unreviewed order for this listing
+        if (user) {
+          getOrdersForBuyer(user.uid).then((orders) => {
+            const confirmed = orders.find(
+              (o) => o.shopListingId === listingId && o.status === "confirmed" && !o.reviewLeft
+            );
+            setUserConfirmedOrder(confirmed ?? null);
+          }).catch(() => {});
+        }
       } catch (err) {
         console.error("[ShopListingDetailPage] load error:", err);
       } finally {
@@ -249,6 +265,17 @@ export default function ShopListingDetailPage() {
               {listing.category}
             </span>
           </div>
+          {(listing.reviewCount ?? 0) > 0 && (
+            <div className="flex items-center gap-1.5 mt-1.5">
+              <StarRow rating={listing.rating ?? 0} />
+              <span className="text-xs font-medium text-gray-500 dark:text-slate-400">
+                {(listing.rating ?? 0).toFixed(1)}
+              </span>
+              <span className="text-xs text-gray-400 dark:text-slate-500">
+                ({listing.reviewCount} review{listing.reviewCount !== 1 ? "s" : ""})
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Description */}
@@ -295,6 +322,41 @@ export default function ShopListingDetailPage() {
             >
               View Shop →
             </Link>
+          </div>
+        )}
+
+        {/* Listing reviews */}
+        {reviews.length > 0 && (
+          <div>
+            <h3 className="text-sm font-semibold text-gray-800 dark:text-slate-100 mb-3">
+              Customer Reviews
+              <span className="ml-2 text-xs font-normal text-gray-400 dark:text-slate-500">({reviews.length})</span>
+            </h3>
+            <div className="space-y-3">
+              {reviews.map((r) => (
+                <div key={r.id} className="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 p-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    {r.reviewerAvatar ? (
+                      <img src={r.reviewerAvatar} alt="" className="w-7 h-7 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-7 h-7 rounded-full bg-[#003366] flex items-center justify-center text-white text-[10px] font-bold">
+                        {r.reviewerName[0]?.toUpperCase()}
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-xs font-semibold text-gray-900 dark:text-slate-100">{r.reviewerName}</p>
+                      <StarRow rating={r.rating} />
+                    </div>
+                    <span className="ml-auto text-[10px] text-gray-400 dark:text-slate-500">
+                      {new Date(r.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                  {r.comment && (
+                    <p className="text-xs text-gray-600 dark:text-slate-300 mt-1 leading-relaxed">{r.comment}</p>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -458,6 +520,30 @@ export default function ShopListingDetailPage() {
             Send Inquiry
           </button>
         </div>
+      )}
+
+      {/* Leave a Review button (shown to confirmed buyers only) */}
+      {!canManage && userConfirmedOrder && !showReviewModal && (
+        <div className="px-4 mb-4">
+          <button
+            onClick={() => setShowReviewModal(true)}
+            className="w-full min-h-[44px] border-2 border-amber-400 text-amber-600 dark:text-amber-400 font-semibold text-sm rounded-xl hover:bg-amber-50 dark:hover:bg-amber-900/20 transition flex items-center justify-center gap-1.5"
+          >
+            ⭐ Leave a Review
+          </button>
+        </div>
+      )}
+
+      {showReviewModal && userConfirmedOrder && (
+        <ReviewModal
+          order={userConfirmedOrder}
+          onClose={() => setShowReviewModal(false)}
+          onSubmitted={() => {
+            setShowReviewModal(false);
+            setUserConfirmedOrder(null);
+            getListingReviews(listingId).then(setReviews).catch(() => {});
+          }}
+        />
       )}
 
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}

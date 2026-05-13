@@ -1,0 +1,632 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless I have explicitly told you to remove it.
+
+4. After every change, mentally verify: "Does this break anything
+   that was working before?" If yes, do not proceed — find a
+   different approach.
+
+5. If fixing Issue X requires changing a shared component used by
+   other pages, STOP and tell me what the impact will be before
+   making the change. Ask for permission first.
+
+6. Never change any CSS class, layout structure, z-index, or
+   responsive breakpoint unless it is directly part of the fix.
+
+7. Confirm the app builds with zero errors before finishing:
+   pnpm --filter @workspace/xmum-market run build
+
+
+# Replit Prompt: XMUM Market — Reviews, Analytics & Shop Badge
+
+This is a React + TypeScript + Firebase (Firestore) web app at `artifacts/xmum-market/`. The prompt covers **five interconnected features**. Read the entire document before writing a single line of code. Do not break any existing functionality.
+
+---
+
+## Background: What already exists
+
+- `ShopReview` interface exists in `types.ts` but does **not** have a `shopListingId` field — only `shopId`, `inquiryId`, `reviewerId`, `reviewerName`, `reviewerAvatar`, `listingTitle`, `rating`, `comment`, `createdAt`.
+- `ShopListing` in `types.ts` has `viewCount` and `inquiryCount` but **no** `rating` or `reviewCount` fields.
+- `leaveShopReview()` in `shops.ts` updates the **shop-level** `rating` and `reviewCount` in Firestore, but does NOT update any per-listing fields.
+- `ShopReview` is gated: a review can only be left after a shop **confirms** the order (`status === "confirmed"`).
+- `ShopOrder` has `reviewLeft: boolean` field.
+- `ShopManagementPanel.tsx` already tracks `pendingInquiryCount` and `pendingOrderCount` and shows badges inside the panel's own tabs (Inquiries, Orders). But there is **no badge on the navbar "Market" link** or on the shop name tab in the public shop page.
+- `Layout.tsx` already has `unreadMessages` badge logic on the Messages nav item — use the same pattern for the shop badge.
+
+---
+
+## Feature 1: Per-Listing Rating & Review Count
+
+### 1a. Update `types.ts` — Add fields to `ShopListing` and `ShopReview`
+
+```ts
+// In ShopListing interface, add after inquiryCount:
+rating: number;       // average rating across all reviews for this listing
+reviewCount: number;  // total number of reviews for this listing
+
+// In ShopReview interface, add after shopId:
+shopListingId: string; // which listing this review is for
+```
+
+### 1b. Update `shops.ts` — `createShopListing`
+
+In the `createShopListing` function, add `rating: 0` and `reviewCount: 0` to the payload alongside the existing `viewCount: 0` and `inquiryCount: 0`.
+
+### 1c. Update `shops.ts` — `leaveShopReview`
+
+The existing function writes the review to `shopReviews` and updates the shop-level `rating`/`reviewCount`. Extend it to also:
+
+1. Accept `shopListingId: string` in the `data` parameter.
+2. Save `shopListingId` into the Firestore document written to `shopReviews`.
+3. After updating the shop-level rating, also recalculate and update the **listing-level** rating:
+
+```ts
+// Add shopListingId to the data parameter type
+shopListingId: string;
+
+// After the shop-level update, add:
+const listingReviewsSnap = await getDocs(
+  query(collection(db, "shopReviews"), where("shopListingId", "==", data.shopListingId))
+);
+const listingReviews = listingReviewsSnap.docs.map((d) => d.data() as ShopReview);
+const listingAvg = listingReviews.reduce((sum, r) => sum + r.rating, 0) / listingReviews.length;
+await updateDoc(doc(db, "shopListings", data.shopListingId), {
+  rating: Math.round(listingAvg * 10) / 10,
+  reviewCount: listingReviews.length,
+});
+```
+
+### 1d. Add new function `getListingReviews` to `shops.ts`
+
+```ts
+export async function getListingReviews(shopListingId: string): Promise<ShopReview[]> {
+  try {
+    const q = query(
+      collection(db, "shopReviews"),
+      where("shopListingId", "==", shopListingId),
+      orderBy("createdAt", "desc")
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ShopReview));
+  } catch (err: any) {
+    if (err?.code === "failed-precondition" || err?.message?.includes("index")) {
+      const q2 = query(collection(db, "shopReviews"), where("shopListingId", "==", shopListingId));
+      const snap2 = await getDocs(q2);
+      return snap2.docs
+        .map((d) => ({ id: d.id, ...d.data() } as ShopReview))
+        .sort((a, b) => b.createdAt - a.createdAt);
+    }
+    throw err;
+  }
+}
+```
+
+---
+
+## Feature 2: Review Modal — Customer Leaves a Review After Order Confirmed
+
+### 2a. Create `components/ReviewModal.tsx`
+
+This modal appears when a customer's order has been confirmed (`status === "confirmed"`) and `reviewLeft === false`. It lets them rate the listing and write a comment.
+
+```tsx
+// Full component spec:
+
+interface ReviewModalProps {
+  order: ShopOrder;       // the confirmed order
+  onClose: () => void;
+  onSubmitted: () => void; // called after successful submission
+}
+
+export default function ReviewModal({ order, onClose, onSubmitted }: ReviewModalProps)
+```
+
+**UI inside the modal:**
+- Heading: "Rate your experience"
+- Subheading: Show the listing title in muted text: `"for: {order.listingTitle}"`
+- **Star selector:** 5 clickable stars (use Lucide `Star` icon, filled amber when selected). State: `rating: number` (0 = none selected). Require at least 1 star before submitting.
+- **Comment textarea:** placeholder `"Share your experience… (optional)"`, maxLength 400, 3 rows.
+- **Submit button:** `"Submit Review"` — disabled when `rating === 0` or `submitting === true`. Show `<Loader2 className="animate-spin" />` while submitting.
+- **Cancel button:** closes modal without submitting.
+- On submit, call:
+  ```ts
+  await leaveShopReview({
+    shopId: order.shopId,
+    shopListingId: order.shopListingId,
+    inquiryId: order.id,  // use order id as the inquiry/order reference
+    reviewerId: user.uid,
+    reviewerName: user.displayName ?? "Student",
+    reviewerAvatar: user.photoURL ?? undefined,
+    listingTitle: order.listingTitle,
+    rating,
+    comment: comment.trim(),
+  });
+  ```
+- After success, call `onSubmitted()` and close.
+- On error, show a red inline error message.
+
+**Gate:** Do NOT call `leaveShopReview` if `order.reviewLeft === true` — show "You've already reviewed this order" and only show the Close button.
+
+---
+
+## Feature 3: Show Reviews & Ratings on the Shop Listing Detail Page
+
+In `ShopListingDetailPage.tsx`:
+
+### 3a. Fetch listing-level reviews on mount
+
+After the existing `getDoc(doc(db, "shopListings", listingId))` call, also call:
+```ts
+import { getListingReviews } from "@/lib/shops";
+const listingReviews = await getListingReviews(listingId);
+setReviews(listingReviews);
+```
+State: `const [reviews, setReviews] = useState<ShopReview[]>([]);`
+
+### 3b. Show the listing's own rating & review count
+
+In the listing info section (below the title and price), add:
+```tsx
+{listing.reviewCount > 0 && (
+  <div className="flex items-center gap-1.5 mt-1">
+    <StarRow rating={listing.rating} />  {/* reuse existing StarRow component in this file */}
+    <span className="text-xs text-gray-500 dark:text-slate-400 font-medium">
+      {listing.rating.toFixed(1)}
+    </span>
+    <span className="text-xs text-gray-400 dark:text-slate-500">
+      ({listing.reviewCount} review{listing.reviewCount !== 1 ? "s" : ""})
+    </span>
+  </div>
+)}
+```
+
+### 3c. Show listing reviews section below the shop info card
+
+After the existing shop info card and before the bottom sticky order button, add a reviews section:
+
+```tsx
+{reviews.length > 0 && (
+  <div className="mt-4">
+    <h3 className="text-sm font-semibold text-gray-800 dark:text-slate-100 mb-3">
+      Customer Reviews
+      <span className="ml-2 text-xs font-normal text-gray-400 dark:text-slate-500">
+        ({reviews.length})
+      </span>
+    </h3>
+    <div className="space-y-3">
+      {reviews.map((r) => (
+        <div key={r.id} className="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 p-4">
+          <div className="flex items-center gap-2 mb-1">
+            {r.reviewerAvatar ? (
+              <img src={r.reviewerAvatar} alt="" className="w-7 h-7 rounded-full object-cover" />
+            ) : (
+              <div className="w-7 h-7 rounded-full bg-[#003366] flex items-center justify-center text-white text-[10px] font-bold">
+                {r.reviewerName[0]?.toUpperCase()}
+              </div>
+            )}
+            <div>
+              <p className="text-xs font-semibold text-gray-900 dark:text-slate-100">{r.reviewerName}</p>
+              <StarRow rating={r.rating} />
+            </div>
+            <span className="ml-auto text-[10px] text-gray-400 dark:text-slate-500">
+              {new Date(r.createdAt).toLocaleDateString()}
+            </span>
+          </div>
+          {r.comment && (
+            <p className="text-xs text-gray-600 dark:text-slate-300 mt-1 leading-relaxed">{r.comment}</p>
+          )}
+        </div>
+      ))}
+    </div>
+  </div>
+)}
+```
+
+### 3d. Show "Leave a Review" button for confirmed buyers
+
+In the buyer's view section (where the Order This Item and Inquire buttons are), check if the current user has a confirmed order for this listing that hasn't been reviewed yet:
+
+```tsx
+// Near the existing order/inquiry state:
+const [userConfirmedOrder, setUserConfirmedOrder] = useState<ShopOrder | null>(null);
+const [showReviewModal, setShowReviewModal] = useState(false);
+
+// In useEffect after fetching listing:
+if (user) {
+  const buyerOrders = await getOrdersForBuyer(user.uid);
+  const confirmed = buyerOrders.find(
+    (o) => o.shopListingId === listingId && o.status === "confirmed" && !o.reviewLeft
+  );
+  setUserConfirmedOrder(confirmed ?? null);
+}
+```
+
+Then in the UI (below the inquiry/order button area):
+```tsx
+{userConfirmedOrder && (
+  <button
+    onClick={() => setShowReviewModal(true)}
+    className="w-full mt-2 min-h-[44px] border-2 border-amber-400 text-amber-600 dark:text-amber-400 font-semibold text-sm rounded-xl hover:bg-amber-50 dark:hover:bg-amber-900/20 transition flex items-center justify-center gap-1.5"
+  >
+    ⭐ Leave a Review
+  </button>
+)}
+
+{showReviewModal && userConfirmedOrder && (
+  <ReviewModal
+    order={userConfirmedOrder}
+    onClose={() => setShowReviewModal(false)}
+    onSubmitted={() => {
+      setShowReviewModal(false);
+      setUserConfirmedOrder(null);
+      // Refetch reviews
+      getListingReviews(listingId).then(setReviews);
+    }}
+  />
+)}
+```
+
+Also show reviews on the `ShopPublicPage.tsx` listing cards — add a small star rating beneath each listing card's title if `listing.reviewCount > 0`:
+```tsx
+{listing.reviewCount > 0 && (
+  <div className="flex items-center gap-1 mt-0.5">
+    <StarRow rating={listing.rating} size={10} />
+    <span className="text-[10px] text-gray-400">({listing.reviewCount})</span>
+  </div>
+)}
+```
+
+---
+
+## Feature 4: Shop Analytics Dashboard (30-Day Views & Visitor Count)
+
+### 4a. Add `shopVisits` Firestore collection tracking
+
+In `shops.ts`, update `incrementShopListingView` (which already exists) to also log a **shop-level visit event**:
+
+```ts
+export async function incrementShopListingView(listingId: string, shopId: string): Promise<void> {
+  // Existing: increment listing viewCount
+  await updateDoc(doc(db, "shopListings", listingId), { viewCount: increment(1) });
+  // New: log a shop visit event for 30-day analytics
+  await addDoc(collection(db, "shopVisits"), {
+    shopId,
+    listingId,
+    visitedAt: Date.now(),
+  });
+}
+```
+
+> **Note:** `incrementShopListingView` is currently called in `ShopListingDetailPage.tsx`. Update that call to pass `shopId` as the second argument — `incrementShopListingView(listingId, listing.shopId)`.
+
+### 4b. Add analytics query functions to `shops.ts`
+
+```ts
+// Get unique visitor count in last 30 days for a shop
+export async function getShopVisitorCount30Days(shopId: string): Promise<number> {
+  const since = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  try {
+    const q = query(
+      collection(db, "shopVisits"),
+      where("shopId", "==", shopId),
+      where("visitedAt", ">=", since)
+    );
+    const snap = await getDocs(q);
+    return snap.size; // total visit events (not deduplicated — note to user)
+  } catch {
+    return 0;
+  }
+}
+
+// Get per-listing view counts from shopListings (already stored as viewCount)
+// and also get 30-day view events per listing
+export async function getListingViews30Days(shopId: string): Promise<Record<string, number>> {
+  const since = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  try {
+    const q = query(
+      collection(db, "shopVisits"),
+      where("shopId", "==", shopId),
+      where("visitedAt", ">=", since)
+    );
+    const snap = await getDocs(q);
+    const counts: Record<string, number> = {};
+    snap.docs.forEach((d) => {
+      const lid = d.data().listingId as string;
+      counts[lid] = (counts[lid] ?? 0) + 1;
+    });
+    return counts;
+  } catch {
+    return {};
+  }
+}
+```
+
+### 4c. Add Analytics section to `ShopManagementPanel.tsx`
+
+The panel currently has tabs: `listings | inquiries | orders | settings`. Add a new tab:
+
+```ts
+// Update Tab type:
+type Tab = "listings" | "inquiries" | "orders" | "analytics" | "settings";
+
+// Add to TABS array:
+{ key: "analytics", label: "Analytics", icon: <BarChart2 size={15} /> }
+```
+
+Import `BarChart2` from `lucide-react`.
+
+**Create `AnalyticsTab` component inside `ShopManagementPanel.tsx`:**
+
+```tsx
+function AnalyticsTab({ shopId, listings }: { shopId: string; listings: ShopListing[] }) {
+  const [visitorCount, setVisitorCount] = useState<number | null>(null);
+  const [listingViews, setListingViews] = useState<Record<string, number>>({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      getShopVisitorCount30Days(shopId),
+      getListingViews30Days(shopId),
+    ]).then(([visitors, views]) => {
+      setVisitorCount(visitors);
+      setListingViews(views);
+    }).finally(() => setLoading(false));
+  }, [shopId]);
+
+  if (loading) return <div className="flex justify-center py-10"><Loader2 size={22} className="animate-spin text-[#003366] dark:text-blue-400" /></div>;
+
+  // Sort listings by 30-day views descending
+  const sortedListings = [...listings].sort(
+    (a, b) => (listingViews[b.id] ?? 0) - (listingViews[a.id] ?? 0)
+  );
+
+  return (
+    <div className="space-y-5">
+      {/* Shop visitor count */}
+      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-2xl px-5 py-4 flex items-center gap-4">
+        <span className="text-3xl">👥</span>
+        <div>
+          <p className="text-2xl font-bold text-[#003366] dark:text-blue-300">{visitorCount ?? 0}</p>
+          <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Shop page visits in the last 30 days</p>
+          <p className="text-[10px] text-blue-400 dark:text-blue-500 mt-0.5">Counts every page load, not unique visitors</p>
+        </div>
+      </div>
+
+      {/* Per-listing 30-day views */}
+      <div>
+        <h3 className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide mb-3">Listing Views (Last 30 Days)</h3>
+        {sortedListings.length === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-6">No listings yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {sortedListings.map((listing) => {
+              const views30 = listingViews[listing.id] ?? 0;
+              const maxViews = Math.max(...sortedListings.map((l) => listingViews[l.id] ?? 0), 1);
+              const barWidth = Math.round((views30 / maxViews) * 100);
+              return (
+                <div key={listing.id} className="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 px-4 py-3">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <p className="text-xs font-semibold text-gray-800 dark:text-slate-100 truncate max-w-[70%]">{listing.title}</p>
+                    <div className="text-right">
+                      <span className="text-sm font-bold text-[#003366] dark:text-blue-400">{views30}</span>
+                      <span className="text-[10px] text-gray-400 ml-1">views</span>
+                    </div>
+                  </div>
+                  {/* Progress bar */}
+                  <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-1.5">
+                    <div
+                      className="bg-[#003366] dark:bg-blue-500 h-1.5 rounded-full transition-all duration-500"
+                      style={{ width: `${barWidth}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between mt-1">
+                    <span className="text-[10px] text-gray-400">{listing.viewCount} total views all-time</span>
+                    {listing.reviewCount > 0 && (
+                      <span className="text-[10px] text-amber-500">⭐ {listing.rating.toFixed(1)} ({listing.reviewCount})</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+```
+
+**Wire up `AnalyticsTab` in the main `ShopManagementPanel` render:**
+
+In the tab content section (where the other tabs are rendered), add:
+```tsx
+{activeTab === "analytics" && (
+  <AnalyticsTab shopId={shopId} listings={listings} />
+)}
+```
+
+Make sure `listings` state is accessible here — it already is since it's fetched at the panel level.
+
+---
+
+## Feature 5: Red Badge on Navbar "Market" Tab for Pending Orders/Inquiries
+
+The shop owner should see a red `1` (or count) badge on the "Market" nav item in the bottom navbar when they have any **pending orders** OR **pending inquiries** for their shop.
+
+### 5a. Add a subscription/polling function to `shops.ts`
+
+```ts
+// Get count of pending orders + pending inquiries for a shop owner
+export async function getPendingActivityCount(shopId: string): Promise<number> {
+  try {
+    const [ordersSnap, inquiriesSnap] = await Promise.all([
+      getDocs(query(collection(db, "shopOrders"), where("shopId", "==", shopId), where("status", "==", "pending"))),
+      getDocs(query(collection(db, "shopInquiries"), where("shopId", "==", shopId), where("status", "==", "pending"))),
+    ]);
+    return ordersSnap.size + inquiriesSnap.size;
+  } catch {
+    return 0;
+  }
+}
+```
+
+### 5b. Update `Layout.tsx`
+
+Import `getPendingActivityCount` from `@/lib/shops`.
+
+Add state:
+```ts
+const [shopPendingCount, setShopPendingCount] = useState(0);
+```
+
+Add `useEffect` that runs whenever `user` changes. If the user has a shop (`user` profile has `myShopIds`), fetch the count:
+
+```ts
+useEffect(() => {
+  if (!user) { setShopPendingCount(0); return; }
+  // Get user profile to find their shopId
+  import { getUserProfile } from "@/lib/userProfile";
+  getUserProfile(user.uid).then((profile) => {
+    const shopId = profile?.myShopIds?.[0];
+    if (!shopId) return;
+    getPendingActivityCount(shopId).then(setShopPendingCount);
+    // Poll every 60 seconds
+    const interval = setInterval(() => {
+      getPendingActivityCount(shopId).then(setShopPendingCount);
+    }, 60000);
+    return () => clearInterval(interval);
+  });
+}, [user?.uid]);
+```
+
+> **Note:** The cleanup function from the inner `.then()` won't work directly. Structure it correctly:
+> ```ts
+> useEffect(() => {
+>   if (!user) { setShopPendingCount(0); return; }
+>   let interval: ReturnType<typeof setInterval>;
+>   getUserProfile(user.uid).then((profile) => {
+>     const shopId = profile?.myShopIds?.[0];
+>     if (!shopId) return;
+>     getPendingActivityCount(shopId).then(setShopPendingCount);
+>     interval = setInterval(() => {
+>       getPendingActivityCount(shopId).then(setShopPendingCount);
+>     }, 60000);
+>   });
+>   return () => clearInterval(interval);
+> }, [user?.uid]);
+> ```
+
+### 5c. Apply the badge to the Market nav item
+
+In the `navItems` array, the Market item currently is:
+```ts
+{ href: "/campus-market", icon: Store, label: "Market" }
+```
+
+The badge needs to render in the **bottom mobile nav** (the `nav` element that maps over `navItems`). Find the section that renders the bottom nav icons and add the badge:
+
+```tsx
+// In the bottom nav item render, where href === "/campus-market":
+<Link key={item.href} href={item.href} className={...}>
+  <div className="relative">
+    <item.icon size={22} />
+    {item.href === "/campus-market" && shopPendingCount > 0 && (
+      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center leading-none">
+        {shopPendingCount > 9 ? "9+" : shopPendingCount}
+      </span>
+    )}
+    {item.href === "/messages" && unreadMessages > 0 && (
+      // existing messages badge — keep unchanged
+    )}
+  </div>
+  <span className="text-[10px] mt-0.5">{item.label}</span>
+</Link>
+```
+
+Also add the badge to the **desktop top navbar** Market link:
+```tsx
+// Find: <Link href="/campus-market" className={...}>Market</Link>
+// Replace with:
+<Link href="/campus-market" className={`relative px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${location === "/campus-market" ? "text-white bg-white/20" : "text-white/70 hover:text-white hover:bg-white/10"}`}>
+  Market
+  {shopPendingCount > 0 && (
+    <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center leading-none">
+      {shopPendingCount > 9 ? "9+" : shopPendingCount}
+    </span>
+  )}
+</Link>
+```
+
+---
+
+## Firestore Index Notes
+
+The following composite indexes may need to be added to `firestore.indexes.json`:
+
+```json
+{
+  "indexes": [
+    {
+      "collectionGroup": "shopReviews",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "shopListingId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "shopVisits",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "shopId", "order": "ASCENDING" },
+        { "fieldPath": "visitedAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "shopVisits",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "shopId", "order": "ASCENDING" },
+        { "fieldPath": "listingId", "order": "ASCENDING" },
+        { "fieldPath": "visitedAt", "order": "ASCENDING" }
+      ]
+    }
+  ]
+}
+```
+
+Add these to the existing `indexes` array in `firestore.indexes.json`.
+
+---
+
+## Final Checklist
+
+- [ ] `ShopListing` type has `rating: number` and `reviewCount: number`
+- [ ] `ShopReview` type has `shopListingId: string`
+- [ ] `createShopListing` initialises `rating: 0` and `reviewCount: 0`
+- [ ] `leaveShopReview` accepts and saves `shopListingId`, and updates per-listing `rating`/`reviewCount` in Firestore
+- [ ] `getListingReviews(shopListingId)` function exists in `shops.ts`
+- [ ] `ReviewModal` component created — shows 5-star selector, comment box, submit/cancel
+- [ ] `ReviewModal` is gated: only shown when `order.status === "confirmed"` and `order.reviewLeft === false`
+- [ ] `ShopListingDetailPage` shows listing-level star rating + review count near the title
+- [ ] `ShopListingDetailPage` shows all reviews for that listing below the shop info card
+- [ ] `ShopListingDetailPage` shows "Leave a Review" button for confirmed buyers
+- [ ] After review submitted, `reviewLeft` on the order is `true` and button disappears
+- [ ] `ShopPublicPage` listing cards show mini star rating if `reviewCount > 0`
+- [ ] `shopVisits` collection is written on every `incrementShopListingView` call
+- [ ] `getShopVisitorCount30Days` and `getListingViews30Days` functions exist in `shops.ts`
+- [ ] ShopManagementPanel has a new "Analytics" tab
+- [ ] Analytics tab shows total shop visits (last 30 days) + per-listing view bars + per-listing review ratings
+- [ ] `getPendingActivityCount` function exists in `shops.ts`
+- [ ] `Layout.tsx` polls `getPendingActivityCount` every 60 seconds for shop owner users
+- [ ] Red badge appears on "Market" nav item (both mobile bottom nav and desktop top nav) when `shopPendingCount > 0`
+- [ ] Badge shows exact count or "9+" if over 9
+- [ ] All existing features (orders, inquiries, listings, messages, auth, search) continue to work
+- [ ] TypeScript compiles without errors (`tsc --noEmit`)

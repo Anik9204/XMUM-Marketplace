@@ -55,6 +55,8 @@ export interface ShopListing {
   createdAt: number;
   viewCount: number;
   inquiryCount: number;
+  rating: number;
+  reviewCount: number;
   orderQuestions?: ShopOrderQuestion[];
 }
 
@@ -80,6 +82,7 @@ export interface ShopInquiry {
 export interface ShopReview {
   id: string;
   shopId: string;
+  shopListingId: string;
   inquiryId: string;
   reviewerId: string;
   reviewerName: string;

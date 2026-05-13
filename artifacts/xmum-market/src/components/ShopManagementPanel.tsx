@@ -6,7 +6,7 @@ import {
   uploadShopListingPhoto, getInquiriesForShop, updateInquiryStatus, deleteInquiry,
   addShopEditor, removeShopEditor, updateShop, uploadShopBanner, uploadShopLogo,
   getOrdersForShop, updateOrderStatus, saveAutoReply, saveOrderQuestions,
-  deleteShopCompletely,
+  deleteShopCompletely, getShopVisitorCount30Days, getListingViews30Days,
 } from "@/lib/shops";
 import { getOrCreateConversation } from "@/lib/messaging";
 import { collection, query, where, getDocs, limit, getDoc, doc } from "firebase/firestore";
@@ -19,6 +19,7 @@ import {
 import {
   Loader2, Plus, Trash2, Edit2, CheckCircle2, Package, MessageSquare, Users,
   Settings, ImagePlus, X, Store, UserMinus, UserPlus, Camera, ShoppingCart, Send,
+  BarChart2,
 } from "lucide-react";
 import { SiWhatsapp } from "react-icons/si";
 
@@ -37,7 +38,7 @@ const SHOP_CATEGORIES: ShopCategory[] = [
 const inputCls = "w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition min-h-[44px]";
 const labelCls = "block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-1";
 
-type Tab = "listings" | "inquiries" | "orders" | "settings";
+type Tab = "listings" | "inquiries" | "orders" | "analytics" | "settings";
 
 function relativeTime(ms: number): string {
   const diff = Date.now() - ms;
@@ -626,6 +627,105 @@ function OrdersTab({ orders, loading, shopId, shop, onOrderUpdated }: {
   );
 }
 
+// ── AnalyticsTab ───────────────────────────────────────────────────────────────
+
+function AnalyticsTab({ shopId, listings }: { shopId: string; listings: ShopListing[] }) {
+  const [visitorCount, setVisitorCount] = useState<number | null>(null);
+  const [listingViews, setListingViews] = useState<Record<string, number>>({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([
+      getShopVisitorCount30Days(shopId),
+      getListingViews30Days(shopId),
+    ]).then(([visitors, views]) => {
+      setVisitorCount(visitors);
+      setListingViews(views);
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, [shopId]);
+
+  const totalViews = listings.reduce((sum, l) => sum + (l.viewCount ?? 0), 0);
+  const totalOrders = listings.reduce((sum, l) => sum + (l.inquiryCount ?? 0), 0);
+  const topListings = [...listings]
+    .filter((l) => (l.viewCount ?? 0) > 0)
+    .sort((a, b) => (b.viewCount ?? 0) - (a.viewCount ?? 0))
+    .slice(0, 5);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 size={24} className="animate-spin text-[#003366] dark:text-blue-400" />
+      </div>
+    );
+  }
+
+  const statCard = (label: string, value: string | number, sub?: string) => (
+    <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-4 shadow-sm">
+      <p className="text-xs text-gray-400 dark:text-slate-500 font-medium mb-1">{label}</p>
+      <p className="text-2xl font-bold text-gray-900 dark:text-slate-100">{value}</p>
+      {sub && <p className="text-[10px] text-gray-300 dark:text-slate-600 mt-0.5">{sub}</p>}
+    </div>
+  );
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 gap-3">
+        {statCard("Unique visits (30d)", visitorCount ?? 0, "listing page views")}
+        {statCard("All-time views", totalViews, "across all listings")}
+        {statCard("Total inquiries", totalOrders, "orders + inquiries")}
+        {statCard("Active listings", listings.filter((l) => l.isActive).length)}
+      </div>
+
+      {topListings.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-slate-300 mb-3 flex items-center gap-1.5">
+            <BarChart2 size={14} className="text-[#003366] dark:text-blue-400" />
+            Top listings by views
+          </h3>
+          <div className="space-y-2">
+            {topListings.map((l, i) => {
+              const pct = Math.round(((l.viewCount ?? 0) / (topListings[0].viewCount || 1)) * 100);
+              return (
+                <div key={l.id} className="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 px-4 py-3">
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <p className="text-xs font-semibold text-gray-800 dark:text-slate-200 truncate">
+                      <span className="text-gray-400 dark:text-slate-500 font-normal mr-1">#{i + 1}</span>
+                      {l.title}
+                    </p>
+                    <span className="text-xs font-bold text-[#003366] dark:text-blue-400 shrink-0">
+                      {l.viewCount ?? 0} views
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
+                    <div
+                      className="bg-gradient-to-r from-[#003366] to-blue-400 h-full rounded-full transition-all"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  {(listingViews[l.id] ?? 0) > 0 && (
+                    <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-1">
+                      {listingViews[l.id]} visits in last 30 days
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {topListings.length === 0 && (
+        <div className="text-center py-10 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700">
+          <BarChart2 size={32} className="mx-auto mb-2 text-gray-300 dark:text-slate-600" />
+          <p className="text-sm text-gray-400 dark:text-slate-500">No view data yet.</p>
+          <p className="text-xs text-gray-300 dark:text-slate-600 mt-0.5">Analytics appear once your listings get visits.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── EditorsTab ─────────────────────────────────────────────────────────────────
 
 function EditorsTab({ shop, editorEmail, setEditorEmail, editorLoading, editorError, onAdd, onRemove }: {
@@ -917,6 +1017,7 @@ export default function ShopManagementPanel({
     { key: "listings",  label: "Listings",  icon: <Package size={15} /> },
     { key: "inquiries", label: "Inquiries", icon: <MessageSquare size={15} />, badge: pendingInquiryCount },
     { key: "orders",    label: "Orders",    icon: <ShoppingCart size={15} />, badge: pendingOrderCount },
+    { key: "analytics", label: "Analytics", icon: <BarChart2 size={15} /> },
     { key: "settings",  label: "Settings",  icon: <Settings size={15} /> },
   ];
 
@@ -987,6 +1088,13 @@ export default function ShopManagementPanel({
             setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status: newStatus, cancellationReason: reason } : o));
             setPendingOrderCount((n) => Math.max(0, n - 1));
           }}
+        />
+      )}
+
+      {tab === "analytics" && (
+        <AnalyticsTab
+          shopId={shopId}
+          listings={listings}
         />
       )}
 

@@ -135,12 +135,14 @@ export async function removeShopEditor(shopId: string, editorUid: string, curren
 }
 
 // ── Shop Listings ─────────────────────────────────────────────────────────────
-export async function createShopListing(data: Omit<ShopListing, "id" | "viewCount" | "inquiryCount" | "createdAt">): Promise<string> {
+export async function createShopListing(data: Omit<ShopListing, "id" | "viewCount" | "inquiryCount" | "rating" | "reviewCount" | "createdAt">): Promise<string> {
   const payload = stripUndefined({
     ...data,
     createdAt: Date.now(),
     viewCount: 0,
     inquiryCount: 0,
+    rating: 0,
+    reviewCount: 0,
     isActive: true,
   });
   if (payload.orderQuestions) payload.orderQuestions = cleanQuestions(payload.orderQuestions);
@@ -239,8 +241,15 @@ export async function deleteShopListing(listingId: string, shopId: string): Prom
   await updateDoc(doc(db, "shops", shopId), { totalListings: increment(-1) });
 }
 
-export async function incrementShopListingView(listingId: string): Promise<void> {
+export async function incrementShopListingView(listingId: string, shopId?: string): Promise<void> {
   await updateDoc(doc(db, "shopListings", listingId), { viewCount: increment(1) });
+  if (shopId) {
+    addDoc(collection(db, "shopVisits"), {
+      shopId,
+      listingId,
+      visitedAt: Date.now(),
+    }).catch(() => {});
+  }
 }
 
 export async function uploadShopListingPhoto(shopId: string, file: File, index: number): Promise<string> {
@@ -358,6 +367,7 @@ export async function updateInquiryStatus(inquiryId: string, status: InquiryStat
 // ── Reviews ───────────────────────────────────────────────────────────────────
 export async function leaveShopReview(data: {
   shopId: string;
+  shopListingId: string;
   inquiryId: string;
   reviewerId: string;
   reviewerName: string;
@@ -377,14 +387,101 @@ export async function leaveShopReview(data: {
     throw new Error("You can only review a shop after the shop has confirmed your order.");
   }
   await addDoc(collection(db, "shopReviews"), { ...data, createdAt: Date.now() });
-  await updateDoc(doc(db, "shopInquiries", data.inquiryId), { reviewLeft: true });
-  const reviewsSnap = await getDocs(query(collection(db, "shopReviews"), where("shopId", "==", data.shopId)));
-  const reviews = reviewsSnap.docs.map((d) => d.data() as ShopReview);
-  const avg = reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length;
-  await updateDoc(doc(db, "shops", data.shopId), {
-    rating: Math.round(avg * 10) / 10,
-    reviewCount: reviews.length,
+  // Mark the order as reviewed (use inquiryId as orderId for orders path)
+  await updateDoc(doc(db, "shopOrders", data.inquiryId), { reviewLeft: true }).catch(() => {
+    // Fall back to shopInquiries for backward-compat
+    return updateDoc(doc(db, "shopInquiries", data.inquiryId), { reviewLeft: true }).catch(() => {});
   });
+  // Update shop-level rating
+  const shopReviewsSnap = await getDocs(query(collection(db, "shopReviews"), where("shopId", "==", data.shopId)));
+  const shopReviews = shopReviewsSnap.docs.map((d) => d.data() as ShopReview);
+  const shopAvg = shopReviews.reduce((sum, r) => sum + r.rating, 0) / shopReviews.length;
+  await updateDoc(doc(db, "shops", data.shopId), {
+    rating: Math.round(shopAvg * 10) / 10,
+    reviewCount: shopReviews.length,
+  });
+  // Update per-listing rating
+  try {
+    const listingReviewsSnap = await getDocs(
+      query(collection(db, "shopReviews"), where("shopListingId", "==", data.shopListingId))
+    );
+    const listingReviews = listingReviewsSnap.docs.map((d) => d.data() as ShopReview);
+    const listingAvg = listingReviews.reduce((sum, r) => sum + r.rating, 0) / listingReviews.length;
+    await updateDoc(doc(db, "shopListings", data.shopListingId), {
+      rating: Math.round(listingAvg * 10) / 10,
+      reviewCount: listingReviews.length,
+    });
+  } catch {
+    // Non-critical — silently ignore per-listing update failures
+  }
+}
+
+export async function getListingReviews(shopListingId: string): Promise<ShopReview[]> {
+  try {
+    const q = query(
+      collection(db, "shopReviews"),
+      where("shopListingId", "==", shopListingId),
+      orderBy("createdAt", "desc")
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ShopReview));
+  } catch (err: any) {
+    if (err?.code === "failed-precondition" || err?.message?.includes("index")) {
+      const q2 = query(collection(db, "shopReviews"), where("shopListingId", "==", shopListingId));
+      const snap2 = await getDocs(q2);
+      return snap2.docs
+        .map((d) => ({ id: d.id, ...d.data() } as ShopReview))
+        .sort((a, b) => b.createdAt - a.createdAt);
+    }
+    throw err;
+  }
+}
+
+export async function getShopVisitorCount30Days(shopId: string): Promise<number> {
+  const since = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  try {
+    const q = query(
+      collection(db, "shopVisits"),
+      where("shopId", "==", shopId),
+      where("visitedAt", ">=", since)
+    );
+    const snap = await getDocs(q);
+    return snap.size;
+  } catch {
+    return 0;
+  }
+}
+
+export async function getListingViews30Days(shopId: string): Promise<Record<string, number>> {
+  const since = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  try {
+    const q = query(
+      collection(db, "shopVisits"),
+      where("shopId", "==", shopId),
+      where("visitedAt", ">=", since)
+    );
+    const snap = await getDocs(q);
+    const counts: Record<string, number> = {};
+    snap.docs.forEach((d) => {
+      const lid = d.data().listingId as string;
+      counts[lid] = (counts[lid] ?? 0) + 1;
+    });
+    return counts;
+  } catch {
+    return {};
+  }
+}
+
+export async function getPendingActivityCount(shopId: string): Promise<number> {
+  try {
+    const [ordersSnap, inquiriesSnap] = await Promise.all([
+      getDocs(query(collection(db, "shopOrders"), where("shopId", "==", shopId), where("status", "==", "pending"))),
+      getDocs(query(collection(db, "shopInquiries"), where("shopId", "==", shopId), where("status", "==", "pending"))),
+    ]);
+    return ordersSnap.size + inquiriesSnap.size;
+  } catch {
+    return 0;
+  }
 }
 
 export async function getShopReviews(shopId: string): Promise<ShopReview[]> {

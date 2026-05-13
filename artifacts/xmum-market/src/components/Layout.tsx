@@ -8,6 +8,8 @@ import { Home, Search, User, Globe, MessageCircle, Plus, Store } from "lucide-re
 import { useState, useEffect } from "react";
 import NotificationBell from "@/components/NotificationBell";
 import { subscribeToUnreadCount } from "@/lib/messaging";
+import { getPendingActivityCount } from "@/lib/shops";
+import { getProfile } from "@/lib/userProfile";
 
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -17,6 +19,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
+  const [shopPendingCount, setShopPendingCount] = useState(0);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [showBackOnline, setShowBackOnline] = useState(false);
 
@@ -43,6 +46,20 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     if (!user) { setUnreadMessages(0); return; }
     const unsub = subscribeToUnreadCount(user.uid, setUnreadMessages);
     return unsub;
+  }, [user?.uid]);
+
+  useEffect(() => {
+    if (!user) { setShopPendingCount(0); return; }
+    let interval: ReturnType<typeof setInterval>;
+    getProfile(user.uid).then((profile) => {
+      const shopId = profile?.myShopIds?.[0];
+      if (!shopId) return;
+      getPendingActivityCount(shopId).then(setShopPendingCount).catch(() => {});
+      interval = setInterval(() => {
+        getPendingActivityCount(shopId).then(setShopPendingCount).catch(() => {});
+      }, 60000);
+    }).catch(() => {});
+    return () => clearInterval(interval);
   }, [user?.uid]);
 
   const navItems = [
@@ -102,7 +119,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   </span>
                 )}
               </Link>
-              <Link href="/campus-market" className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${location === "/campus-market" ? "text-white bg-white/20" : "text-white/70 hover:text-white hover:bg-white/10"}`}>Market</Link>
+              <Link href="/campus-market" className={`relative px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${location === "/campus-market" ? "text-white bg-white/20" : "text-white/70 hover:text-white hover:bg-white/10"}`}>
+                Market
+                {shopPendingCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center leading-none">
+                    {shopPendingCount > 9 ? "9+" : shopPendingCount}
+                  </span>
+                )}
+              </Link>
               <Link href="/post" className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${location === "/post" ? "text-white bg-white/20" : "text-white/70 hover:text-white hover:bg-white/10"}`}>{t.post}</Link>
               {user ? (
                 <div className="relative">
@@ -183,6 +207,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   {href === "/messages" && unreadMessages > 0 && (
                     <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-0.5 leading-none">
                       {unreadMessages > 9 ? "9+" : unreadMessages}
+                    </span>
+                  )}
+                  {href === "/campus-market" && shopPendingCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center leading-none">
+                      {shopPendingCount > 9 ? "9+" : shopPendingCount}
                     </span>
                   )}
                 </div>

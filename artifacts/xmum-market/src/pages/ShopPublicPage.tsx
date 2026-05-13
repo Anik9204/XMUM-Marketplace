@@ -262,6 +262,12 @@ export default function ShopPublicPage() {
                 )}
                 <div className="p-3">
                   <p className="text-xs font-semibold text-gray-900 dark:text-slate-100 line-clamp-2 mb-1">{l.title}</p>
+                  {l.reviewCount > 0 && (
+                    <div className="flex items-center gap-1 mb-0.5">
+                      <StarRow rating={l.rating} size={10} />
+                      <span className="text-[10px] text-gray-400 dark:text-slate-500">({l.reviewCount})</span>
+                    </div>
+                  )}
                   <PriceLabel listing={l} />
                   <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5 truncate">{shop.name}</p>
                 </div>
