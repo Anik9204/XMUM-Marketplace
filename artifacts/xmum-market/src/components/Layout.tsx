@@ -73,8 +73,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <img
               src="/xmum-market-logo.png"
               alt="XMUM Market"
-              className="h-9 sm:h-11 w-auto object-contain"
-              style={{ maxWidth: 180 }}
+              className="h-10 sm:h-12 w-auto object-contain"
             />
           </Link>
 
