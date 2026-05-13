@@ -10,15 +10,20 @@ import { validateWhatsApp, suggestMalaysianFormat } from "@/lib/validation";
 import AuthModal from "@/components/AuthModal";
 import VerificationBanner from "@/components/VerificationBanner";
 import AvatarCropModal from "@/components/AvatarCropModal";
-import { User, Camera, CheckCircle2, Trash2, Settings, AlertCircle, Eye } from "lucide-react";
+import {
+  User, Camera, CheckCircle2, Trash2, Settings, AlertCircle,
+  Eye, EyeOff, Moon, Sun, Lock, Shield, LogOut,
+  CheckCircle, MessageCircle,
+} from "lucide-react";
 import { useLocation } from "wouter";
 import { auth } from "@/lib/firebase";
 import { useDarkMode } from "@/hooks/use-dark-mode";
+import { logOut } from "@/lib/auth";
 
 const inputCls =
-  "w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 transition min-h-[44px]";
+  "w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-200 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700/60 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-[#003366]/40 dark:focus:ring-blue-500/40 focus:border-[#003366] dark:focus:border-blue-500 transition min-h-[44px]";
 
-const labelCls = "block text-xs font-medium text-gray-600 dark:text-slate-300 mb-1";
+const labelCls = "block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5";
 
 function SuccessToast({ message, onDone }: { message: string; onDone: () => void }) {
   const [visible, setVisible] = useState(true);
@@ -29,44 +34,47 @@ function SuccessToast({ message, onDone }: { message: string; onDone: () => void
   }, [onDone]);
   return (
     <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 bg-[#003366] dark:bg-blue-700 text-white text-sm font-medium px-5 py-3 rounded-2xl shadow-xl transition-all duration-400 ${visible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-3"}`}>
-      <CheckCircle2 size={18} className="text-green-300 shrink-0" />
+      <CheckCircle2 size={16} className="text-green-300 shrink-0" />
       {message}
     </div>
   );
 }
 
-function SectionCard({ label, children }: { label: string; children: React.ReactNode }) {
+function SectionHeader({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-card mb-4 overflow-hidden">
-      <div className="px-4 py-3 border-b border-gray-100 dark:border-slate-700">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">{label}</h3>
-      </div>
-      <div className="p-5">{children}</div>
+    <div className="flex items-center gap-2 px-4 pt-4 pb-2">
+      <span className="text-[#003366] dark:text-blue-400">{icon}</span>
+      <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">{label}</h3>
     </div>
   );
 }
 
-function PrivacyRow({ label, sub, value, onChange }: { label: string; sub: string; value: boolean; onChange: (v: boolean) => void }) {
+function Divider() {
+  return <div className="h-px bg-gray-100 dark:bg-slate-700 mx-4" />;
+}
+
+function InlineToggle({ value, onChange, label }: { value: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
-    <div className="flex items-center justify-between py-3">
-      <div>
-        <p className="text-sm font-medium text-gray-800 dark:text-slate-200">{label}</p>
-        <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">{sub}</p>
-      </div>
-      <button
-        onClick={() => onChange(!value)}
-        className={`relative w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none shrink-0 ml-4 ${value ? "bg-[#003366] dark:bg-blue-600" : "bg-gray-200 dark:bg-slate-600"}`}
-      >
-        <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all duration-200 ${value ? "left-6" : "left-1"}`} />
-      </button>
-    </div>
+    <button
+      type="button"
+      onClick={() => onChange(!value)}
+      title={value ? `Hide ${label}` : `Show ${label}`}
+      className={`flex items-center gap-1 text-[11px] font-medium px-2.5 py-1.5 rounded-lg border transition-all shrink-0 ${
+        value
+          ? "bg-[#003366]/8 dark:bg-blue-500/15 border-[#003366]/20 dark:border-blue-500/30 text-[#003366] dark:text-blue-400"
+          : "bg-gray-100 dark:bg-slate-600/40 border-gray-200 dark:border-slate-600 text-gray-400 dark:text-slate-500"
+      }`}
+    >
+      {value ? <Eye size={11} /> : <EyeOff size={11} />}
+      {value ? "Visible" : "Hidden"}
+    </button>
   );
 }
 
 function SkeletonCard({ rows = 3 }: { rows?: number }) {
   return (
     <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-5 animate-pulse">
-      <div className="h-3.5 bg-gray-200 dark:bg-slate-700 rounded w-1/3 mb-5" />
+      <div className="h-3 bg-gray-200 dark:bg-slate-700 rounded w-1/4 mb-5" />
       <div className="space-y-3">
         {Array.from({ length: rows }).map((_, i) => (
           <div key={i} className="h-10 bg-gray-100 dark:bg-slate-700 rounded-xl" />
@@ -103,6 +111,8 @@ export default function SettingsPage() {
   const [currentPass, setCurrentPass] = useState("");
   const [newPass, setNewPass] = useState("");
   const [confirmNewPass, setConfirmNewPass] = useState("");
+  const [showCurrentPass, setShowCurrentPass] = useState(false);
+  const [showNewPass, setShowNewPass] = useState(false);
   const [changingPass, setChangingPass] = useState(false);
   const [passError, setPassError] = useState("");
   const [passSaved, setPassSaved] = useState(false);
@@ -145,12 +155,11 @@ export default function SettingsPage() {
 
   if (authLoading) {
     return (
-      <div className="max-w-5xl mx-auto px-4 py-5">
-        <div className="h-5 bg-gray-200 dark:bg-slate-700 rounded w-40 mb-5 animate-pulse" />
-        <div className="space-y-4 max-w-lg">
+      <div className="max-w-lg mx-auto px-4 py-5">
+        <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded w-32 mb-5 animate-pulse" />
+        <div className="space-y-4">
           <SkeletonCard rows={3} />
-          <SkeletonCard rows={3} />
-          <SkeletonCard rows={3} />
+          <SkeletonCard rows={2} />
         </div>
       </div>
     );
@@ -191,7 +200,13 @@ export default function SettingsPage() {
     setSavingProfile(true);
     try {
       await Promise.race([
-        updateProfile(user.uid, { fullName: fullName.trim(), whatsapp: settingsWhatsapp.trim(), wechat: settingsWechat.trim() }),
+        updateProfile(user.uid, {
+          fullName: fullName.trim(),
+          whatsapp: settingsWhatsapp.trim(),
+          wechat: settingsWechat.trim(),
+          showWhatsApp,
+          showWeChat,
+        }),
         new Promise<void>((_, reject) => setTimeout(() => reject(new Error("timeout")), 8_000)),
       ]);
       await refetchProfile();
@@ -266,17 +281,23 @@ export default function SettingsPage() {
 
   const AvatarDisplay = () =>
     avatarSrc ? (
-      <img src={avatarSrc} alt="avatar" className="w-20 h-20 rounded-full object-cover border-2 border-white dark:border-slate-700 shadow" />
+      <img src={avatarSrc} alt="avatar" className="w-16 h-16 rounded-full object-cover ring-2 ring-white dark:ring-slate-700 shadow-md" />
     ) : (
-      <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#003366] to-[#0055aa] flex items-center justify-center text-white font-bold text-2xl shadow">
+      <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#003366] to-[#0055aa] flex items-center justify-center text-white font-bold text-xl shadow-md">
         {(user.email ?? "?")[0].toUpperCase()}
       </div>
     );
 
-  const formatDate = (ts?: number) => {
-    if (!ts) return "—";
-    return new Date(ts).toLocaleDateString("en-MY", { day: "numeric", month: "long", year: "numeric" });
-  };
+  const passwordStrength = (() => {
+    if (!newPass) return null;
+    const hasLetter = /[a-zA-Z]/.test(newPass);
+    const hasNumber = /[0-9]/.test(newPass);
+    const hasSpecial = /[^a-zA-Z0-9]/.test(newPass);
+    const score = (newPass.length >= 8 ? 1 : 0) + (hasLetter ? 1 : 0) + (hasNumber ? 1 : 0) + (hasSpecial ? 1 : 0);
+    if (score <= 2) return { label: t.passwordStrengthWeak, color: "bg-red-400", width: "w-1/3" };
+    if (score === 3) return { label: t.passwordStrengthFair, color: "bg-amber-400", width: "w-2/3" };
+    return { label: t.passwordStrengthStrong, color: "bg-green-500", width: "w-full" };
+  })();
 
   return (
     <>
@@ -292,8 +313,9 @@ export default function SettingsPage() {
         />
       )}
 
-      <div className="max-w-5xl mx-auto px-4 py-5 pb-24 sm:pb-8 animate-in fade-in duration-200">
-        {/* Tab bar */}
+      <div className="max-w-lg mx-auto px-4 py-5 pb-28 sm:pb-8 animate-in fade-in duration-200">
+
+        {/* Page tab bar */}
         <div className="flex border-b border-gray-200 dark:border-slate-700 mb-5">
           <button
             onClick={() => navigate("/profile")}
@@ -301,164 +323,344 @@ export default function SettingsPage() {
           >
             My Listings
           </button>
-          <button
-            className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold border-b-2 border-[#003366] dark:border-blue-400 text-[#003366] dark:text-blue-400 -mb-px"
-          >
-            <Settings size={14} />
+          <button className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold border-b-2 border-[#003366] dark:border-blue-400 text-[#003366] dark:text-blue-400 -mb-px">
+            <Settings size={13} />
             {t.accountSettings}
           </button>
         </div>
 
-        <div className="space-y-0 max-w-lg">
-          {/* Profile section */}
-          <SectionCard label="Profile">
-            <div className="flex items-center gap-4 mb-4">
-              <div className="relative shrink-0">
-                <AvatarDisplay />
-              </div>
-              <div>
-                {/* Preview public profile button */}
+        {/* ── PROFILE CARD ─────────────────────────────────── */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 mb-3 overflow-hidden">
+          <SectionHeader icon={<User size={13} />} label="Profile" />
+          <Divider />
+
+          {/* Avatar row */}
+          <div className="px-4 py-4 flex items-center gap-4">
+            <div className="relative shrink-0">
+              <AvatarDisplay />
+              <button
+                onClick={() => avatarInputRef.current?.click()}
+                className="absolute -bottom-0.5 -right-0.5 w-6 h-6 bg-[#003366] dark:bg-blue-600 rounded-full flex items-center justify-center shadow-md hover:bg-[#002244] transition-colors"
+                title="Change photo"
+              >
+                <Camera size={11} className="text-white" />
+              </button>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-gray-900 dark:text-slate-100 truncate">
+                {userProfile?.fullName || user.email?.split("@")[0] || "—"}
+              </p>
+              <p className="text-xs text-gray-400 dark:text-slate-500 truncate">{user.email}</p>
+              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                {user.emailVerified ? (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-medium text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded-full">
+                    <CheckCircle size={9} /> XMUM Verified
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 rounded-full">
+                    <AlertCircle size={9} /> Unverified
+                  </span>
+                )}
                 <a
                   href={`/seller/${user.uid}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-400 hover:text-[#003366] dark:hover:text-blue-400 mb-2 transition-colors"
+                  className="inline-flex items-center gap-1 text-[10px] text-gray-400 dark:text-slate-500 hover:text-[#003366] dark:hover:text-blue-400 transition-colors"
                 >
-                  <Eye size={12} /> Preview my public profile
+                  <Eye size={9} /> View public profile
                 </a>
-                <button
-                  onClick={() => { avatarInputRef.current?.click(); }}
-                  className="flex items-center gap-1.5 text-sm text-[#003366] dark:text-blue-400 border border-[#003366]/30 dark:border-blue-500/30 px-3 min-h-[44px] py-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-                >
-                  <Camera size={14} />
-                  Change Photo
-                </button>
-                <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-1.5">JPG, PNG or WebP · Max 5 MB</p>
               </div>
             </div>
-            <div className="space-y-3">
-              <div>
-                <label className={labelCls}>Full Name <span className="text-red-500">*</span></label>
-                <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Your full name" className={inputCls} />
+            <button
+              onClick={() => avatarInputRef.current?.click()}
+              className="shrink-0 text-xs text-gray-500 dark:text-slate-400 border border-gray-200 dark:border-slate-600 px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors hidden sm:block"
+            >
+              Change photo
+            </button>
+          </div>
+          <p className="text-[10px] text-gray-400 dark:text-slate-500 px-4 pb-3 -mt-1">JPG, PNG or WebP · Max 5 MB</p>
+
+          <Divider />
+
+          {/* Form fields */}
+          <div className="px-4 py-4 space-y-4">
+            <div>
+              <label className={labelCls}>Full Name <span className="text-red-400">*</span></label>
+              <input
+                type="text"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="Your full name"
+                className={inputCls}
+              />
+            </div>
+
+            {/* WhatsApp with inline visibility toggle */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-medium text-gray-500 dark:text-slate-400">
+                  WhatsApp <span className="text-gray-400 dark:text-slate-500 font-normal">(optional)</span>
+                </label>
+                <InlineToggle value={showWhatsApp} onChange={(v) => handlePrivacyToggle("showWhatsApp", v)} label="WhatsApp" />
               </div>
-              <div>
-                <label className={labelCls}>WhatsApp Number <span className="text-gray-400 dark:text-slate-500">(optional)</span></label>
+              <input
+                type="text"
+                value={settingsWhatsapp}
+                onChange={(e) => { setSettingsWhatsapp(e.target.value); setSettingsWhatsappError(""); }}
+                onBlur={() => {
+                  const result = validateWhatsApp(settingsWhatsapp);
+                  if (!result.valid && settingsWhatsapp.trim()) {
+                    const suggested = suggestMalaysianFormat(settingsWhatsapp);
+                    setSettingsWhatsappError(suggested !== settingsWhatsapp ? result.error + ` Did you mean ${suggested}?` : result.error);
+                  }
+                }}
+                placeholder="+60123456789"
+                className={inputCls}
+              />
+              {settingsWhatsappError ? (
+                <p className="text-xs text-red-500 mt-1.5 flex items-center gap-1">
+                  <AlertCircle size={11} /> {settingsWhatsappError}
+                </p>
+              ) : (
+                <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-1">Include country code, e.g. +60 for Malaysia</p>
+              )}
+            </div>
+
+            {/* WeChat with inline visibility toggle */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-medium text-gray-500 dark:text-slate-400">
+                  WeChat ID <span className="text-gray-400 dark:text-slate-500 font-normal">(optional)</span>
+                </label>
+                <InlineToggle value={showWeChat} onChange={(v) => handlePrivacyToggle("showWeChat", v)} label="WeChat" />
+              </div>
+              <input
+                type="text"
+                value={settingsWechat}
+                onChange={(e) => setSettingsWechat(e.target.value)}
+                placeholder="WeChat ID"
+                className={inputCls}
+              />
+            </div>
+
+            {profileError && (
+              <div className="flex items-start gap-2 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 rounded-xl px-3 py-2.5">
+                <AlertCircle size={13} className="shrink-0 mt-0.5" />
+                {profileError}
+              </div>
+            )}
+
+            <button
+              onClick={handleSaveProfile}
+              disabled={savingProfile}
+              className={`w-full min-h-[44px] py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 ${
+                profileSaved
+                  ? "bg-green-500 text-white"
+                  : "bg-[#003366] dark:bg-blue-600 text-white hover:bg-[#002244] dark:hover:bg-blue-700 active:scale-[0.98]"
+              }`}
+            >
+              {savingProfile ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  Saving…
+                </span>
+              ) : profileSaved ? (
+                <span className="flex items-center justify-center gap-1.5"><CheckCircle2 size={15} /> Saved!</span>
+              ) : (
+                "Save Changes"
+              )}
+            </button>
+          </div>
+          <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarFileSelect} />
+        </div>
+
+        {/* ── SECURITY CARD ────────────────────────────────── */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 mb-3 overflow-hidden">
+          <SectionHeader icon={<Lock size={13} />} label="Security" />
+          <Divider />
+          <div className="px-4 py-4 space-y-3">
+            <div>
+              <label className={labelCls}>Current Password</label>
+              <div className="relative">
                 <input
-                  type="text"
-                  value={settingsWhatsapp}
-                  onChange={(e) => { setSettingsWhatsapp(e.target.value); setSettingsWhatsappError(""); }}
-                  onBlur={() => {
-                    const result = validateWhatsApp(settingsWhatsapp);
-                    if (!result.valid) {
-                      const suggested = suggestMalaysianFormat(settingsWhatsapp);
-                      setSettingsWhatsappError(suggested !== settingsWhatsapp ? result.error + ` Did you mean ${suggested}?` : result.error);
-                    }
-                  }}
-                  placeholder="+60123456789"
-                  className={inputCls}
+                  type={showCurrentPass ? "text" : "password"}
+                  value={currentPass}
+                  onChange={(e) => setCurrentPass(e.target.value)}
+                  placeholder="Enter current password"
+                  className={`${inputCls} pr-10`}
                 />
-                {settingsWhatsappError ? (
-                  <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                    <AlertCircle size={12} /> {settingsWhatsappError}
-                  </p>
-                ) : (
-                  <p className="text-xs text-slate-400 mt-1">Include country code, e.g. +60 for Malaysia</p>
-                )}
+                <button
+                  type="button"
+                  onClick={() => setShowCurrentPass(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 transition-colors"
+                >
+                  {showCurrentPass ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
               </div>
-              <div>
-                <label className={labelCls}>WeChat ID <span className="text-gray-400 dark:text-slate-500">(optional)</span></label>
-                <input type="text" value={settingsWechat} onChange={(e) => setSettingsWechat(e.target.value)} placeholder="WeChat ID" className={inputCls} />
+            </div>
+
+            <div>
+              <label className={labelCls}>New Password</label>
+              <div className="relative">
+                <input
+                  type={showNewPass ? "text" : "password"}
+                  value={newPass}
+                  onChange={(e) => setNewPass(e.target.value)}
+                  placeholder="Min 8 chars, include a number"
+                  maxLength={32}
+                  className={`${inputCls} pr-10`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPass(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 transition-colors"
+                >
+                  {showNewPass ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
               </div>
-              {profileError && <p className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 rounded-xl px-3 py-2">{profileError}</p>}
-              <button
-                onClick={handleSaveProfile}
-                disabled={savingProfile}
-                className={`w-full min-h-[44px] py-2.5 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 ${profileSaved ? "bg-green-500 text-white" : "bg-[#003366] dark:bg-blue-600 text-white hover:bg-[#002244] dark:hover:bg-blue-700"}`}
-              >
-                {savingProfile ? "Saving…" : profileSaved ? "Saved!" : "Save Changes"}
-              </button>
+              {/* Password strength bar */}
+              {passwordStrength && (
+                <div className="mt-1.5 flex items-center gap-2">
+                  <div className="flex-1 h-1.5 bg-gray-100 dark:bg-slate-600 rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full transition-all duration-300 ${passwordStrength.color} ${passwordStrength.width}`} />
+                  </div>
+                  <span className="text-[10px] text-gray-400 dark:text-slate-500 shrink-0">{passwordStrength.label}</span>
+                </div>
+              )}
             </div>
-            <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarFileSelect} />
-          </SectionCard>
 
-          {/* Privacy section */}
-          <SectionCard label="Privacy">
-            <p className="text-xs text-gray-400 dark:text-slate-500 mb-2">Control what contact info is visible to other users on your listings.</p>
-            <div className="divide-y divide-gray-100 dark:divide-slate-700">
-              <PrivacyRow label="Show WhatsApp" sub="Display WhatsApp contact button on your listings" value={showWhatsApp} onChange={(v) => handlePrivacyToggle("showWhatsApp", v)} />
-              <PrivacyRow label="Show WeChat" sub="Display WeChat contact button on your listings" value={showWeChat} onChange={(v) => handlePrivacyToggle("showWeChat", v)} />
+            <div>
+              <label className={labelCls}>Confirm New Password</label>
+              <input
+                type="password"
+                value={confirmNewPass}
+                onChange={(e) => setConfirmNewPass(e.target.value)}
+                placeholder="Re-enter new password"
+                className={inputCls}
+              />
+              {confirmNewPass && newPass !== confirmNewPass && (
+                <p className="text-[11px] text-red-500 mt-1 flex items-center gap-1">
+                  <AlertCircle size={11} /> Passwords do not match
+                </p>
+              )}
             </div>
-          </SectionCard>
 
-          {/* Appearance section */}
-          <SectionCard label="Appearance">
-            <div className="flex items-center justify-between py-1">
-              <div>
-                <p className="text-sm font-medium text-gray-700 dark:text-slate-200">{t.darkMode}</p>
-                <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">{t.darkModeDesc}</p>
+            {passError && (
+              <div className="flex items-start gap-2 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 rounded-xl px-3 py-2.5">
+                <AlertCircle size={13} className="shrink-0 mt-0.5" />
+                {passError}
+              </div>
+            )}
+
+            <button
+              onClick={handleChangePassword}
+              disabled={changingPass || !currentPass || !newPass || !confirmNewPass}
+              className={`w-full min-h-[44px] py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-40 ${
+                passSaved
+                  ? "bg-green-500 text-white"
+                  : "bg-[#003366] dark:bg-blue-600 text-white hover:bg-[#002244] dark:hover:bg-blue-700 active:scale-[0.98]"
+              }`}
+            >
+              {changingPass ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  Updating…
+                </span>
+              ) : passSaved ? (
+                <span className="flex items-center justify-center gap-1.5"><CheckCircle2 size={15} /> Password Updated!</span>
+              ) : (
+                "Update Password"
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* ── PREFERENCES CARD ─────────────────────────────── */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 mb-3 overflow-hidden">
+          <SectionHeader icon={<Shield size={13} />} label="Preferences" />
+          <Divider />
+          <div className="px-4 py-3">
+            <div className="flex items-center justify-between py-2">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0">
+                  {dark ? <Moon size={15} className="text-blue-500" /> : <Sun size={15} className="text-amber-500" />}
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-800 dark:text-slate-200">{t.darkMode}</p>
+                  <p className="text-[11px] text-gray-400 dark:text-slate-500">{t.darkModeDesc}</p>
+                </div>
               </div>
               <button
                 onClick={toggleDark}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${dark ? "bg-[#003366] dark:bg-blue-600" : "bg-gray-200 dark:bg-slate-600"}`}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0 ${dark ? "bg-[#003366] dark:bg-blue-600" : "bg-gray-200 dark:bg-slate-600"}`}
               >
-                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${dark ? "translate-x-6" : "translate-x-1"}`} />
-              </button>
-            </div>
-          </SectionCard>
-
-          {/* Account section */}
-          <SectionCard label="Account">
-            <h4 className="text-sm font-semibold text-gray-800 dark:text-slate-200 mb-3">Change Password</h4>
-            <div className="space-y-3">
-              <input type="password" value={currentPass} onChange={(e) => setCurrentPass(e.target.value)} placeholder="Current password" className={inputCls} />
-              <input type="password" value={newPass} onChange={(e) => setNewPass(e.target.value)} placeholder="New password (min 8 characters)" maxLength={32} className={inputCls} />
-              <input type="password" value={confirmNewPass} onChange={(e) => setConfirmNewPass(e.target.value)} placeholder="Confirm new password" className={inputCls} />
-              {passError && <p className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 rounded-xl px-3 py-2">{passError}</p>}
-              <button
-                onClick={handleChangePassword}
-                disabled={changingPass || !currentPass || !newPass || !confirmNewPass}
-                className={`w-full min-h-[44px] py-2.5 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 ${passSaved ? "bg-green-500 text-white" : "bg-[#003366] dark:bg-blue-600 text-white hover:bg-[#002244] dark:hover:bg-blue-700"}`}
-              >
-                {changingPass ? "Updating…" : passSaved ? "Password Updated!" : "Update Password"}
-              </button>
-            </div>
-          </SectionCard>
-
-          {/* Danger Zone */}
-          <div className="border border-red-200 dark:border-red-900 rounded-2xl mb-4 overflow-hidden">
-            <div className="px-4 py-3 border-b border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900/20">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-red-500">Danger Zone</h3>
-            </div>
-            <div className="p-2">
-              <button
-                onClick={() => { setDeleteError(""); setDeletePassword(""); setShowDeleteModal(true); }}
-                className="w-full text-left px-4 py-3 text-red-600 dark:text-red-400 font-medium text-sm min-h-[44px] hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl flex items-center gap-2"
-              >
-                <Trash2 size={15} />
-                Delete Account
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${dark ? "translate-x-6" : "translate-x-1"}`} />
               </button>
             </div>
           </div>
         </div>
+
+        {/* ── ACCOUNT CARD ─────────────────────────────────── */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 mb-3 overflow-hidden">
+          <SectionHeader icon={<User size={13} />} label="Account" />
+          <Divider />
+          <div className="px-2 py-2">
+            <button
+              onClick={async () => { await logOut(); navigate("/"); }}
+              className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors group"
+            >
+              <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-slate-700 flex items-center justify-center shrink-0">
+                <MessageCircle size={15} className="text-gray-400 dark:text-slate-500" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-gray-700 dark:text-slate-300 group-hover:text-gray-900 dark:group-hover:text-slate-100">Sign Out</p>
+                <p className="text-[11px] text-gray-400 dark:text-slate-500">Sign out of your XMUM Market account</p>
+              </div>
+            </button>
+
+            <Divider />
+
+            <button
+              onClick={() => { setDeleteError(""); setDeletePassword(""); setShowDeleteModal(true); }}
+              className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors group mt-1"
+            >
+              <div className="w-8 h-8 rounded-lg bg-red-50 dark:bg-red-900/20 flex items-center justify-center shrink-0">
+                <Trash2 size={15} className="text-red-500 dark:text-red-400" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-red-600 dark:text-red-400">Delete Account</p>
+                <p className="text-[11px] text-gray-400 dark:text-slate-500">Permanently remove your account and all data</p>
+              </div>
+            </button>
+          </div>
+        </div>
+
       </div>
 
       {/* Account deletion modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-[60] flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 w-full max-w-sm">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-8 h-8 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center shrink-0">
-                <Trash2 size={15} className="text-red-600 dark:text-red-400" />
+          <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 w-full max-w-sm shadow-2xl">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-xl flex items-center justify-center shrink-0">
+                <Trash2 size={18} className="text-red-600 dark:text-red-400" />
               </div>
-              <p className="font-bold text-gray-900 dark:text-slate-100">Delete Account Permanently</p>
+              <div>
+                <p className="font-bold text-gray-900 dark:text-slate-100 text-base">Delete Account</p>
+                <p className="text-xs text-gray-400 dark:text-slate-500">This action cannot be undone</p>
+              </div>
             </div>
-            <p className="text-xs text-gray-500 dark:text-slate-400 mb-1">This will immediately and permanently delete:</p>
-            <ul className="text-xs text-gray-500 dark:text-slate-400 list-disc list-inside mb-4 space-y-0.5">
-              <li>Your account and profile</li>
-              <li>All your listings and photos</li>
-              <li>Your messages and conversations</li>
-            </ul>
-            <label className="block text-xs font-medium text-gray-600 dark:text-slate-300 mb-1">Enter your password to confirm</label>
+
+            <div className="bg-red-50 dark:bg-red-900/20 rounded-xl px-3 py-2.5 mb-4">
+              <p className="text-xs text-red-700 dark:text-red-300 font-medium mb-1">This will permanently delete:</p>
+              <ul className="text-xs text-red-600 dark:text-red-400 space-y-0.5">
+                <li>• Your account and profile</li>
+                <li>• All your listings and photos</li>
+                <li>• Your messages and conversations</li>
+              </ul>
+            </div>
+
+            <label className={labelCls}>Enter your password to confirm</label>
             <input
               type="password"
               value={deletePassword}
@@ -467,23 +669,31 @@ export default function SettingsPage() {
               className={`${inputCls} mb-3`}
             />
             {deleteError && (
-              <p className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl px-3 py-2 mb-3">
+              <div className="flex items-start gap-2 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl px-3 py-2 mb-3">
+                <AlertCircle size={12} className="shrink-0 mt-0.5" />
                 {deleteError}
-              </p>
+              </div>
             )}
             <div className="flex gap-2">
               <button
                 onClick={() => { setShowDeleteModal(false); setDeletePassword(""); setDeleteError(""); }}
-                className="flex-1 min-h-[44px] border border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300 py-2.5 rounded-xl text-sm font-medium"
+                className="flex-1 min-h-[44px] border border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDeleteAccount}
                 disabled={deletingAccount || !deletePassword}
-                className="flex-1 min-h-[44px] bg-red-500 text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50"
+                className="flex-1 min-h-[44px] bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition-colors"
               >
-                {deletingAccount ? "Deleting…" : "Delete Account"}
+                {deletingAccount ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                    Deleting…
+                  </span>
+                ) : (
+                  "Delete Account"
+                )}
               </button>
             </div>
           </div>
