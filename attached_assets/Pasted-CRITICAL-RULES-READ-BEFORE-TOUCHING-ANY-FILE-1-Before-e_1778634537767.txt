@@ -1,0 +1,428 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless I have explicitly told you to remove it.
+
+4. After every change, mentally verify: "Does this break anything
+   that was working before?" If yes, do not proceed — find a
+   different approach.
+
+5. If fixing Issue X requires changing a shared component used by
+   other pages, STOP and tell me what the impact will be before
+   making the change. Ask for permission first.
+
+6. Never change any CSS class, layout structure, z-index, or
+   responsive breakpoint unless it is directly part of the fix.
+
+7. Confirm the app builds with zero errors before finishing:
+   pnpm --filter @workspace/xmum-market run build
+
+
+# Replit Prompt: XMUM Market Logo — Background Removal, Navigation & Loading Animation
+
+---
+
+## Context & Project Overview
+
+This is the **XMUM Market** app — a student-only buy/sell/find marketplace exclusively for XMUM (Xiamen University Malaysia) students. The app is built with **React Native + Expo** using **Expo Router** for navigation. The tech stack includes TypeScript and Tailwind/NativeWind for styling.
+
+The app has the following main sections accessible via the top navbar:
+- **Home** (default landing page)
+- Search
+- Messages
+- Market
+- Post
+- Profile
+
+There is also a language toggle (中文), a notifications bell, and a user greeting on the homepage hero banner.
+
+---
+
+## Task 1: Remove Black Background from the Logo Image
+
+The file `XMUM__6_.png` contains the XMUM Market logo on a **solid black background**. You need to strip away the black background so that only the logo artwork remains on a **transparent background**.
+
+### Steps:
+1. Use the `sharp` npm package (or Python's `Pillow` if the project is set up for it) to process the image.
+2. Replace all pixels that are black or near-black (RGB values where R < 30, G < 30, B < 30) with full transparency (alpha = 0).
+3. Save the result as `xmum-market-logo.png` inside `assets/images/` (or the equivalent assets folder in your project).
+4. Verify the output visually — the logo text ("XMUM MARKET"), the orange shop icon, and the blue WiFi signal arcs should all be fully intact with no black fringing.
+
+> **Note:** If `sharp` is unavailable, use a canvas-based approach in Node.js with the `canvas` package, or use Python with `Pillow`:
+> ```python
+> from PIL import Image
+> import numpy as np
+> img = Image.open("XMUM__6_.png").convert("RGBA")
+> data = np.array(img)
+> # Make near-black pixels transparent
+> mask = (data[:,:,0] < 30) & (data[:,:,1] < 30) & (data[:,:,2] < 30)
+> data[mask] = [0, 0, 0, 0]
+> Image.fromarray(data).save("assets/images/xmum-market-logo.png")
+> ```
+
+---
+
+## Task 2: Place the Logo in the Navbar (Top-Left, Clickable → Homepage)
+
+### Location in the UI
+As shown in the screenshot, the top navbar has:
+- **Left side:** The "XMUM Market" logo/wordmark (inside the red-outlined area)
+- **Right side:** Language toggle, notifications bell, and nav links (Home, Search, Messages, Market, Post, Profile)
+
+### Implementation
+
+In your **root layout file** (typically `app/_layout.tsx` or `components/Navbar.tsx`), replace the existing text-based "XMUM Market" logo with the image logo.
+
+#### For React Native / Expo (mobile):
+```tsx
+import { Image, TouchableOpacity } from 'react-native';
+import { useRouter } from 'expo-router';
+
+const router = useRouter();
+
+<TouchableOpacity
+  onPress={() => router.push('/')}
+  activeOpacity={0.8}
+  accessibilityLabel="XMUM Market - Go to Home"
+  accessibilityRole="button"
+>
+  <Image
+    source={require('../assets/images/xmum-market-logo.png')}
+    style={{ width: 160, height: 48 }}
+    resizeMode="contain"
+  />
+</TouchableOpacity>
+```
+
+#### For Web (if using React/Next.js):
+```tsx
+import Image from 'next/image';
+import Link from 'next/link';
+
+<Link href="/" aria-label="XMUM Market Home">
+  <Image
+    src="/images/xmum-market-logo.png"
+    alt="XMUM Market"
+    width={160}
+    height={48}
+    priority
+    style={{ cursor: 'pointer' }}
+  />
+</Link>
+```
+
+### Sizing & Positioning
+- The logo should sit in the **top-left** of the navbar, vertically centered.
+- Maximum height: **48px** on desktop, **40px** on mobile.
+- Add `paddingLeft: 16` (or equivalent) so it does not touch the screen edge.
+- Do **not** add a background color or border behind the logo — the transparent PNG will sit cleanly on the dark navy navbar.
+
+---
+
+## Task 3: Creative Loading Animation Using the Logo
+
+Create a full-screen **splash/loading screen** that displays whenever:
+1. The app first launches or the page is refreshed
+2. There is a route transition that takes more than 300ms (lazy-loaded screens, data fetching, etc.)
+
+### Animation Concept: "Market Opening"
+
+The animation should feel like a market stall opening for the day — energetic, friendly, and on-brand.
+
+#### Sequence (total duration ≈ 2.2 seconds):
+
+| Step | Element | Animation | Duration |
+|------|---------|-----------|----------|
+| 1 | Background | Fade in from white → deep navy (`#0D2B6B`) | 0–300ms |
+| 2 | Shop icon (the orange stall in the logo) | Bounce in from below, slight overshoot (spring easing) | 300–600ms |
+| 3 | "XMUM" text | Slide in from the left, fade in | 500–750ms |
+| 4 | "MARKET" text | Slide in from the right, fade in | 600–850ms |
+| 5 | WiFi/signal arcs | Draw on one by one (staggered), each arc appears with a pulse | 750–1100ms |
+| 6 | Entire logo | Subtle pulse/glow effect (scale 1.0 → 1.04 → 1.0) | 1100–1400ms |
+| 7 | Loading dots | Three dots beneath the logo bounce in sequence (···) | 1100–2000ms |
+| 8 | Whole screen | Fade out, reveal main app | 2000–2200ms |
+
+#### Implementation — React Native with `Animated` API:
+
+```tsx
+// components/LoadingScreen.tsx
+import React, { useEffect, useRef } from 'react';
+import {
+  View, Image, Animated, StyleSheet, Dimensions, Text
+} from 'react-native';
+
+const { width, height } = Dimensions.get('window');
+
+export default function LoadingScreen({ onFinish }: { onFinish: () => void }) {
+  const bgOpacity     = useRef(new Animated.Value(0)).current;
+  const shopScale     = useRef(new Animated.Value(0)).current;
+  const shopTranslateY= useRef(new Animated.Value(60)).current;
+  const xmumOpacity   = useRef(new Animated.Value(0)).current;
+  const xmumTranslateX= useRef(new Animated.Value(-40)).current;
+  const marketOpacity = useRef(new Animated.Value(0)).current;
+  const marketTranslateX = useRef(new Animated.Value(40)).current;
+  const logoGlow      = useRef(new Animated.Value(1)).current;
+  const screenOpacity = useRef(new Animated.Value(1)).current;
+
+  // Dot bounce animations
+  const dot1 = useRef(new Animated.Value(0)).current;
+  const dot2 = useRef(new Animated.Value(0)).current;
+  const dot3 = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.sequence([
+      // Step 1: background fade in
+      Animated.timing(bgOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
+
+      // Steps 2-5: logo elements appear
+      Animated.parallel([
+        Animated.spring(shopScale, { toValue: 1, friction: 5, tension: 80, useNativeDriver: true }),
+        Animated.spring(shopTranslateY, { toValue: 0, friction: 5, tension: 80, useNativeDriver: true }),
+        Animated.sequence([
+          Animated.delay(200),
+          Animated.parallel([
+            Animated.timing(xmumOpacity,    { toValue: 1, duration: 250, useNativeDriver: true }),
+            Animated.timing(xmumTranslateX, { toValue: 0, duration: 250, useNativeDriver: true }),
+          ]),
+        ]),
+        Animated.sequence([
+          Animated.delay(300),
+          Animated.parallel([
+            Animated.timing(marketOpacity,    { toValue: 1, duration: 250, useNativeDriver: true }),
+            Animated.timing(marketTranslateX, { toValue: 0, duration: 250, useNativeDriver: true }),
+          ]),
+        ]),
+      ]),
+
+      // Step 6: logo pulse/glow
+      Animated.sequence([
+        Animated.timing(logoGlow, { toValue: 1.05, duration: 150, useNativeDriver: true }),
+        Animated.timing(logoGlow, { toValue: 1,    duration: 150, useNativeDriver: true }),
+      ]),
+    ]).start();
+
+    // Step 7: loading dots loop (independent)
+    const bounceDot = (dot: Animated.Value, delay: number) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(dot, { toValue: -8, duration: 220, useNativeDriver: true }),
+          Animated.timing(dot, { toValue:  0, duration: 220, useNativeDriver: true }),
+          Animated.delay(660 - delay),
+        ])
+      );
+
+    const dotAnim = Animated.parallel([
+      bounceDot(dot1, 0),
+      bounceDot(dot2, 220),
+      bounceDot(dot3, 440),
+    ]);
+
+    setTimeout(() => {
+      dotAnim.start();
+      // Step 8: fade out entire screen after 2s
+      setTimeout(() => {
+        dotAnim.stop();
+        Animated.timing(screenOpacity, {
+          toValue: 0, duration: 300, useNativeDriver: true
+        }).start(() => onFinish());
+      }, 1000);
+    }, 1100);
+  }, []);
+
+  return (
+    <Animated.View style={[styles.container, { opacity: screenOpacity }]}>
+      <Animated.View style={[styles.bg, { opacity: bgOpacity }]} />
+
+      {/* Logo area */}
+      <Animated.View style={{ transform: [{ scale: logoGlow }], alignItems: 'center' }}>
+        {/* Shop Icon bounces in */}
+        <Animated.View style={{
+          transform: [{ scale: shopScale }, { translateY: shopTranslateY }],
+          marginBottom: 8,
+        }}>
+          {/* Render just the shop emoji or an icon — replace with your actual icon asset */}
+          <Text style={{ fontSize: 52 }}>🏪</Text>
+        </Animated.View>
+
+        {/* XMUM slides from left */}
+        <Animated.Text style={[styles.xmumText, {
+          opacity: xmumOpacity,
+          transform: [{ translateX: xmumTranslateX }]
+        }]}>
+          XMUM
+        </Animated.Text>
+
+        {/* MARKET slides from right */}
+        <Animated.Text style={[styles.marketText, {
+          opacity: marketOpacity,
+          transform: [{ translateX: marketTranslateX }]
+        }]}>
+          MARKET
+        </Animated.Text>
+      </Animated.View>
+
+      {/* Loading dots */}
+      <View style={styles.dotsRow}>
+        {[dot1, dot2, dot3].map((dot, i) => (
+          <Animated.View
+            key={i}
+            style={[styles.dot, { transform: [{ translateY: dot }] }]}
+          />
+        ))}
+      </View>
+    </Animated.View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 999,
+  },
+  bg: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#0D2B6B',
+  },
+  xmumText: {
+    color: '#FFFFFF',
+    fontSize: 28,
+    fontWeight: '700',
+    letterSpacing: 4,
+  },
+  marketText: {
+    color: '#FFFFFF',
+    fontSize: 52,
+    fontWeight: '900',
+    letterSpacing: 2,
+    marginTop: -8,
+  },
+  dotsRow: {
+    flexDirection: 'row',
+    marginTop: 40,
+    gap: 10,
+  },
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#F5A623', // orange to match the shop icon
+  },
+});
+```
+
+#### Integrate LoadingScreen into Root Layout:
+
+In `app/_layout.tsx`:
+```tsx
+import { useState } from 'react';
+import LoadingScreen from '../components/LoadingScreen';
+
+export default function RootLayout() {
+  const [loading, setLoading] = useState(true);
+
+  return (
+    <>
+      {/* Your normal Stack/Tabs navigator here */}
+      <Stack />
+
+      {/* Overlay loading screen */}
+      {loading && <LoadingScreen onFinish={() => setLoading(false)} />}
+    </>
+  );
+}
+```
+
+#### For Page Transition Loading (route-level):
+In each screen that loads data asynchronously, show a **mini loading overlay** using the same bouncing-dot component (without the full splash background) while `isLoading === true`.
+
+---
+
+## Task 4: Web Version (if applicable)
+
+If the project also has a web build, implement the loading animation using **CSS keyframes** instead:
+
+```css
+/* styles/loading.css */
+@keyframes shopBounceIn {
+  0%   { transform: translateY(60px) scale(0); opacity: 0; }
+  60%  { transform: translateY(-8px) scale(1.1); opacity: 1; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+@keyframes slideFromLeft {
+  from { transform: translateX(-40px); opacity: 0; }
+  to   { transform: translateX(0);     opacity: 1; }
+}
+
+@keyframes slideFromRight {
+  from { transform: translateX(40px); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+@keyframes dotBounce {
+  0%, 80%, 100% { transform: translateY(0); }
+  40%           { transform: translateY(-10px); }
+}
+
+@keyframes fadeOut {
+  to { opacity: 0; pointer-events: none; }
+}
+
+.loading-overlay {
+  position: fixed; inset: 0;
+  background: #0D2B6B;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  z-index: 9999;
+  animation: fadeOut 0.3s ease 2s forwards;
+}
+
+.shop-icon {
+  font-size: 52px;
+  animation: shopBounceIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) 0.3s both;
+}
+
+.xmum-text {
+  color: white; font-size: 28px; font-weight: 700; letter-spacing: 4px;
+  animation: slideFromLeft 0.25s ease 0.5s both;
+}
+
+.market-text {
+  color: white; font-size: 52px; font-weight: 900; letter-spacing: 2px;
+  animation: slideFromRight 0.25s ease 0.6s both;
+}
+
+.dots { display: flex; gap: 10px; margin-top: 40px; }
+
+.dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: #F5A623;
+  animation: dotBounce 0.9s ease-in-out infinite;
+}
+
+.dot:nth-child(2) { animation-delay: 0.22s; }
+.dot:nth-child(3) { animation-delay: 0.44s; }
+```
+
+---
+
+## Summary Checklist for Replit
+
+- [ ] **Background removal:** Process `XMUM__6_.png` → save as `assets/images/xmum-market-logo.png` with transparent background
+- [ ] **Navbar logo:** Replace text "XMUM Market" in navbar with `<Image>` (React Native) or `<img>` (web) using the transparent PNG
+- [ ] **Logo is clickable:** Tapping/clicking navigates to `/` (homepage) via `router.push('/')` or `<Link href="/">`
+- [ ] **Logo sizing:** ~160×48px, `resizeMode="contain"`, vertically centered in navbar
+- [ ] **LoadingScreen component:** Created at `components/LoadingScreen.tsx` with the full animation sequence
+- [ ] **Root layout integration:** `LoadingScreen` overlays on first load and fades out after ~2.2s
+- [ ] **Page transition loading:** Mini dot-bounce indicator shown during async data fetches on each screen
+- [ ] **Accessibility:** Logo button has `accessibilityLabel="XMUM Market - Go to Home"` and `accessibilityRole="button"`
+- [ ] **No regression:** Existing navbar links (Home, Search, Messages, Market, Post, Profile), language toggle, and notification bell remain functional

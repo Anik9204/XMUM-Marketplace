@@ -69,11 +69,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <header data-sticky className="sticky top-0 z-50 bg-[#003366] dark:bg-slate-900 shadow-md border-b border-slate-200 dark:border-slate-700/80">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2 shrink-0">
-            <span className="flex items-center gap-2">
-              <span className="w-7 h-7 bg-white/20 rounded-lg flex items-center justify-center text-white font-black text-sm select-none">X</span>
-              <span className="text-white font-bold text-lg tracking-tight">{t.appName}</span>
-            </span>
+          <Link href="/" className="flex items-center shrink-0" aria-label="XMUM Market Home">
+            <img
+              src="/xmum-market-logo.png"
+              alt="XMUM Market"
+              className="h-9 sm:h-11 w-auto object-contain"
+              style={{ maxWidth: 180 }}
+            />
           </Link>
 
           <div className="flex items-center gap-1 sm:gap-2">
