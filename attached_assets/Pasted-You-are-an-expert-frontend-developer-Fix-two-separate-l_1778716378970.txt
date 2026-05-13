@@ -1,0 +1,119 @@
+You are an expert frontend developer. Fix two separate layout bugs in the XMUM Market web app (React + Tailwind). Read every instruction carefully before changing any code.
+
+BUG 1 — Chat Header Overlaps Messages in MessagesPage.tsx
+Root Cause (already identified)
+In src/pages/MessagesPage.tsx, the outer wrapper div on line ~796 uses hard-coded calc() values to set its height:
+tsx// CURRENT (buggy)
+<div className={`flex overflow-hidden overscroll-none ${
+  !!user && !user.emailVerified
+    ? "h-[calc(100dvh-184px)] sm:h-[calc(100dvh-192px)] md:h-[calc(100dvh-112px)]"
+    : "h-[calc(100dvh-136px)] sm:h-[calc(100dvh-144px)] md:h-[calc(100dvh-64px)]"
+}`}>
+These magic numbers are wrong. The actual heights to subtract are:
+ElementMobile (default)Mobile sm:Desktop md:Top header (<header>)56px (h-14)56px56pxMobile bottom nav60px + env(safe-area-inset-bottom)60px0px (hidden)Verification banner (when shown)~40px~40px~40px
+The current numbers leave extra or missing pixels, causing the chat header (the bar showing the other user's name/avatar inside the conversation pane) to visually overlap scrolled messages.
+Fix Instructions
+Replace the hard-coded height div with CSS custom properties so it automatically tracks the real header height. Apply all three of these changes:
+Step 1 — Add a CSS custom property to src/index.css:
+css/* At the top of :root */
+:root {
+  --header-h: 56px;       /* matches h-14 on the <header> element */
+  --bottom-nav-h: 60px;   /* matches min-h-[60px] on the mobile bottom nav */
+  --verif-banner-h: 0px;  /* updated via JS when banner is visible */
+}
+Step 2 — In src/components/Layout.tsx, inject the banner height dynamically:
+In the Layout component, find the verification banner render:
+tsx{user && !user.emailVerified && <VerificationBanner />}
+Wrap it so it sets the CSS variable when mounted:
+tsx{user && !user.emailVerified && (
+  <div ref={(el) => {
+    document.documentElement.style.setProperty(
+      '--verif-banner-h',
+      el ? `${el.offsetHeight}px` : '0px'
+    );
+  }}>
+    <VerificationBanner />
+  </div>
+)}
+Also add a useEffect cleanup so the variable resets to 0px when the banner unmounts (i.e. when email gets verified).
+Step 3 — Replace the buggy height div in MessagesPage.tsx:
+tsx// REPLACE THIS:
+<div className={`flex overflow-hidden overscroll-none ${
+  !!user && !user.emailVerified
+    ? "h-[calc(100dvh-184px)] sm:h-[calc(100dvh-192px)] md:h-[calc(100dvh-112px)]"
+    : "h-[calc(100dvh-136px)] sm:h-[calc(100dvh-144px)] md:h-[calc(100dvh-64px)]"
+}`}>
+
+// WITH THIS:
+<div
+  className="flex overflow-hidden overscroll-none"
+  style={{
+    height: 'calc(100dvh - var(--header-h) - var(--verif-banner-h) - var(--bottom-nav-h))',
+  }}
+>
+Then add a Tailwind override for desktop (md and above) where there is no bottom nav:
+tsx<div
+  className="flex overflow-hidden overscroll-none md:[height:calc(100dvh_-_var(--header-h)_-_var(--verif-banner-h))]"
+  style={{
+    height: 'calc(100dvh - var(--header-h) - var(--verif-banner-h) - var(--bottom-nav-h))',
+  }}
+>
+This ensures:
+
+Mobile: Total height = viewport minus header (56px) minus bottom nav (60px) minus optional verification banner.
+Desktop: Total height = viewport minus header (56px) minus optional verification banner. No bottom nav deduction needed since md:hidden hides the nav.
+Keyboard on mobile: Because we use 100dvh (dynamic viewport height), the layout automatically shrinks when the software keyboard appears, so the input box is never buried.
+No more overlap: The chat header inside the conversation panel is part of a flex-col where the messages area has flex-1 overflow-y-auto min-h-0. Since the outer container now has the exact correct height, the messages scroll area fills the remaining space precisely, and the chat header (user name bar) stays pinned at the top of the pane without overlapping any messages.
+
+
+BUG 2 — Transparent Gap Between Top Nav and Secondary Search Bar
+Root Cause (already identified)
+The main <header> in src/components/Layout.tsx is sticky top-0 z-50 and its inner div has h-14 (56px). However, on sm: screens (≥640px) there is no responsive height increase — h-14 stays 56px at all breakpoints.
+The secondary sticky bars in two pages are positioned at:
+
+HomePage.tsx line ~330: sticky top-14 sm:top-16 z-30
+SearchPage.tsx line ~166: sticky top-14 sm:top-16 z-30
+
+The problem: sm:top-16 = 64px, but the header is only 56px tall at sm: breakpoints. The 8px gap (16px × 4 - 14px × 4 = 64 - 56 = 8px) is transparent — page content bleeds through it when scrolling.
+Fix Instructions — Choose ONE of the two approaches below:
+Approach A (Recommended — Fix the offset to match the real header height):
+In src/pages/HomePage.tsx, change the sub-header sticky offset:
+tsx// BEFORE:
+<div data-sticky-subheader className="sticky top-14 sm:top-16 z-30 bg-white dark:bg-[#1E293B] shadow-sm">
+
+// AFTER:
+<div data-sticky-subheader className="sticky top-14 z-30 bg-white dark:bg-[#1E293B] shadow-sm">
+In src/pages/SearchPage.tsx, make the same change:
+tsx// BEFORE:
+<div data-sticky-subheader className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 px-4 py-3 sticky top-14 sm:top-16 z-30">
+
+// AFTER:
+<div data-sticky-subheader className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 px-4 py-3 sticky top-14 z-30">
+This removes the incorrect sm:top-16 override. Since the header is h-14 (56px) at all breakpoints, top-14 is always correct.
+Approach B (Alternative — if you ever want the header taller on sm: screens):
+If you want the header to become h-16 (64px) on sm: breakpoints, update src/components/Layout.tsx:
+tsx// BEFORE:
+<div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
+
+// AFTER:
+<div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between">
+And also update MessagesPage.tsx CSS variable in index.css:
+css:root {
+  --header-h: 56px;
+}
+@media (min-width: 640px) {
+  :root { --header-h: 64px; }
+}
+Go with Approach A unless you specifically want a taller header on tablet/desktop, because it's a one-line change with zero risk of regression.
+Solid Background Requirement
+Both sub-headers already have bg-white dark:bg-[#1E293B] and bg-white dark:bg-slate-900 respectively, so backgrounds are solid. No change needed here. Just verify after applying the fix that there is no gap by scrolling product cards on the home page — they should slide behind a seamlessly joined pair of bars.
+
+Summary Checklist
+After making all changes above, verify:
+
+ On mobile (375px wide), scroll the home page: no content bleeds between the top nav and the search/filter bar.
+ On desktop (1280px), scroll the home page: same — zero gap.
+ Open a conversation in Messages on mobile: the other user's name header is visible and does NOT overlap any chat bubbles when you scroll up through message history.
+ On mobile, tap the message input — the keyboard appears and the layout shrinks cleanly; the input stays visible and messages are not hidden.
+ If email is unverified, the verification banner appears and the messages pane still has the correct height.
+ No TypeScript errors after the changes.

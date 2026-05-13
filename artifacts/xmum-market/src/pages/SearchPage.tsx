@@ -163,7 +163,7 @@ export default function SearchPage() {
   return (
     <div className="max-w-6xl mx-auto animate-in fade-in duration-200">
       {/* Search header */}
-      <div data-sticky-subheader className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 px-4 py-3 sticky top-14 sm:top-16 z-30">
+      <div data-sticky-subheader className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 px-4 py-3 sticky top-14 z-30">
         {/* Search input row */}
         <div className="flex gap-2 items-center">
           <div className="relative flex-1">

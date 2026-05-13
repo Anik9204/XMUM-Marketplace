@@ -327,7 +327,7 @@ export default function HomePage() {
       </div>
 
       {/* ── Sticky group: search + tabs + chips ── */}
-      <div data-sticky-subheader className="sticky top-14 sm:top-16 z-30 bg-white dark:bg-[#1E293B] shadow-sm">
+      <div data-sticky-subheader className="sticky top-14 z-30 bg-white dark:bg-[#1E293B] shadow-sm">
 
         {/* Search bar */}
         <div className="border-b border-[#E2E8F0] dark:border-slate-700 px-4 py-2.5">

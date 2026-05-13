@@ -793,7 +793,12 @@ export default function MessagesPage() {
         }
       `}</style>
 
-      <div className={`flex overflow-hidden overscroll-none ${!!user && !user.emailVerified ? "h-[calc(100dvh-184px)] sm:h-[calc(100dvh-192px)] md:h-[calc(100dvh-112px)]" : "h-[calc(100dvh-136px)] sm:h-[calc(100dvh-144px)] md:h-[calc(100dvh-64px)]"}`}>
+      <div
+        className="flex overflow-hidden overscroll-none md:[height:calc(100dvh_-_var(--header-h)_-_var(--verif-banner-h))]"
+        style={{
+          height: 'calc(100dvh - var(--header-h) - var(--verif-banner-h) - var(--bottom-nav-h))',
+        }}
+      >
 
         {/* Left panel: conversation list */}
         <div className={`flex flex-col border-r border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden w-full md:w-80 md:shrink-0 ${activeConv ? "hidden md:flex" : "flex"}`}>

@@ -171,7 +171,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* Verification banner */}
-      {user && !user.emailVerified && <VerificationBanner />}
+      {user && !user.emailVerified ? (
+        <div ref={(el) => {
+          document.documentElement.style.setProperty(
+            '--verif-banner-h',
+            el ? `${el.offsetHeight}px` : '0px'
+          );
+        }}>
+          <VerificationBanner />
+        </div>
+      ) : null}
 
       {/* Main content */}
       <main className="flex-1 pb-20 md:pb-0">

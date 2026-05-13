@@ -1,6 +1,12 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Nunito:wght@600;700;800;900&display=swap');
 @import "tailwindcss";
 
+:root {
+  --header-h: 56px;
+  --bottom-nav-h: 60px;
+  --verif-banner-h: 0px;
+}
+
 html {
   overflow-y: scroll;
   scrollbar-gutter: stable;
