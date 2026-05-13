@@ -8,13 +8,13 @@ export default function NotFound() {
       <div className="w-24 h-24 rounded-3xl bg-[#003366]/5 dark:bg-blue-900/20 flex items-center justify-center mb-6">
         <span className="text-4xl">🔍</span>
       </div>
-      <h1 className="text-3xl font-bold text-gray-900 dark:text-slate-100 mb-2">Page not found</h1>
+      <h1 className="text-3xl font-display font-bold text-gray-900 dark:text-slate-100 mb-2">Page not found</h1>
       <p className="text-gray-500 dark:text-slate-400 text-sm max-w-xs mb-8">
         This page doesn&apos;t exist — it may have been removed or the link is incorrect.
       </p>
       <button
         onClick={() => navigate("/")}
-        className="bg-[#003366] dark:bg-blue-600 text-white px-6 py-3 rounded-xl text-sm font-semibold hover:bg-[#002244] dark:hover:bg-blue-700 transition-colors"
+        className="btn-primary px-8"
       >
         Back to Marketplace
       </button>

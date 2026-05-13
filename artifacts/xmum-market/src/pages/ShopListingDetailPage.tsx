@@ -222,7 +222,7 @@ export default function ShopListingDetailPage() {
       <div className="px-4 py-5 space-y-5">
         {/* Title + price + category */}
         <div>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100 leading-tight mb-2">
+          <h1 className="text-xl font-display font-bold text-gray-900 dark:text-slate-100 leading-tight mb-2">
             {listing.title}
           </h1>
           <div className="flex items-center gap-3 flex-wrap">

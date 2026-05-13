@@ -1,0 +1,930 @@
+# XMUM Market — Complete UI/UX Overhaul Prompt
+
+## Who You Are & What You're Doing
+
+You are a senior UI/UX frontend engineer working on XMUM Market, a community
+marketplace PWA for Xiamen University Malaysia students. The app is built in
+React 19 + Vite + TypeScript + Tailwind CSS 4, using Wouter for routing and
+Firebase as the backend.
+
+You are performing a **complete visual and interaction overhaul** of the student
+app (`artifacts/xmum-market`). The goal is to make it feel like a polished,
+modern mobile-native app — on par with Carousell and Mudah.my — that specifically
+resonates with university students aged 18–25.
+
+**Zero functional logic will be changed.** All data fetching, Firebase calls,
+state management, routing, auth, and business rules stay exactly as they are.
+You are only changing visual presentation, layout, spacing, typography, colours,
+component styling, and micro-interactions.
+
+---
+
+## CRITICAL RULES — FOLLOW EXACTLY
+
+1. **Read every file before touching it.** List every other file that imports
+   or uses it. Check those files first.
+2. **Surgical edits only.** Do not rewrite files from scratch. Change the minimum
+   lines needed.
+3. **Zero functional regressions.** After every edit, verify mentally: "Does
+   any working feature break?" If yes, do not proceed — find another way.
+4. **Never change** function signatures, prop interfaces, hook logic, event
+   handlers, Firebase calls, routing, context providers, or type definitions.
+5. **If a shared component change affects multiple pages**, stop and evaluate
+   the impact on every consumer before proceeding.
+6. **All interactive elements** must have `min-h-[44px]` and `min-w-[44px]`
+   (44 px touch targets). This is a mobile-first app.
+7. **Dark mode must work correctly** on every changed element. Always pair
+   light-mode classes with their `dark:` counterparts.
+8. **Confirm a clean build** after all changes:
+   `pnpm --filter @workspace/xmum-market run build`
+   Fix all TypeScript and import errors before finishing.
+
+---
+
+## Design Direction & Principles
+
+### Target Audience
+University students aged 18–25, primarily on Android and iOS mobile browsers.
+Many are international students (Malaysian, Chinese). They are comfortable with
+apps like Shopee, Carousell, Xiaohongshu, and WhatsApp. They expect:
+- Clean, modern visuals that feel current and trustworthy
+- Fast, thumb-friendly navigation
+- Clear hierarchy — they should never wonder "what does this button do?"
+- Friendly, not corporate — energy and personality over formality
+
+### Design Reference
+- **Carousell** (mobile listing cards, bottom nav, clean product pages)
+- **Mudah.my** (local feel, practical layout, contact-focused)
+- **Shopee** (for Campus Market only — vibrant, category chips, card grids)
+
+### Aesthetic Direction: Refined Student Energy
+- **Colour palette**: Keep the existing XMUM brand navy `#003366` as the primary
+  accent. Pair it with a bright, friendly secondary accent `#0EA5E9` (sky blue)
+  for highlights, active states, and badges. Use warm white `#F8FAFC` for
+  backgrounds (already in place). Use `#1E293B` for primary text (not pure black).
+  Keep existing dark mode slate palette.
+- **Typography**: The app currently uses Inter. **Add Nunito as the display/heading
+  font** for section headers, card titles, tab labels, and the app name — it reads
+  as friendly and modern without being childish. Keep Inter for body copy, inputs,
+  and small UI labels. Import Nunito via Google Fonts in `index.css`.
+- **Corner radius**: Use `rounded-2xl` (16px) as the standard card radius. Use
+  `rounded-xl` (12px) for buttons, inputs, and chips. Use `rounded-full` for
+  badges, pills, and avatars.
+- **Shadows**: Use a consistent soft shadow system — `shadow-sm` for cards at
+  rest, `shadow-md` for cards on hover, `shadow-xl` for modals and bottom sheets.
+  Avoid hard/dark shadows.
+- **Spacing**: Generous padding inside cards. `px-4 py-4` minimum for card
+  content. `gap-3` minimum between list items.
+- **Motion**: Add `transition-all duration-200` on interactive elements.
+  Cards get `hover:scale-[1.02] active:scale-[0.98]`. Buttons get
+  `hover:brightness-110 active:brightness-90` instead of colour shifts where
+  possible. Keep existing animations where they exist.
+
+---
+
+## PHASE 1 — Global Styles (`src/index.css`)
+
+### 1a — Fonts
+Add Nunito to the Google Fonts import. The updated import line should be:
+```css
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Nunito:wght@600;700;800;900&display=swap');
+```
+
+### 1b — CSS Custom Properties
+In the `:root` block (or wherever the theme variables are defined), add:
+```css
+--font-display: 'Nunito', 'Inter', sans-serif;
+--font-body: 'Inter', sans-serif;
+```
+
+### 1c — Utility Classes
+Add these custom classes at the bottom of `index.css` (inside a layer or as
+plain classes — whichever pattern is already used in the file):
+
+```css
+.font-display { font-family: var(--font-display); }
+
+/* Card elevation system */
+.card-base {
+  background: white;
+  border-radius: 1rem;
+  border: 1px solid #F1F5F9;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+  transition: box-shadow 0.2s, transform 0.2s;
+}
+.dark .card-base {
+  background: #1E293B;
+  border-color: #334155;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.3);
+}
+.card-base:hover {
+  box-shadow: 0 4px 12px 0 rgb(0 0 0 / 0.10), 0 2px 4px -1px rgb(0 0 0 / 0.06);
+}
+
+/* Section header style */
+.section-header {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 800;
+  color: #0F172A;
+  letter-spacing: -0.01em;
+}
+.dark .section-header {
+  color: #F1F5F9;
+}
+
+/* Chip / filter pill */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.375rem 0.875rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1.5px solid #E2E8F0;
+  background: white;
+  color: #475569;
+  transition: all 0.15s;
+  cursor: pointer;
+  white-space: nowrap;
+  min-height: 36px;
+}
+.dark .chip {
+  border-color: #334155;
+  background: #1E293B;
+  color: #94A3B8;
+}
+.chip-active {
+  background: #003366;
+  border-color: #003366;
+  color: white;
+}
+.dark .chip-active {
+  background: #2563EB;
+  border-color: #2563EB;
+  color: white;
+}
+.chip:active { transform: scale(0.96); }
+
+/* Primary CTA button */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0 1.25rem;
+  min-height: 48px;
+  border-radius: 0.75rem;
+  background: #003366;
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 700;
+  font-family: var(--font-display);
+  transition: all 0.15s;
+  cursor: pointer;
+  border: none;
+}
+.dark .btn-primary { background: #2563EB; }
+.btn-primary:hover { filter: brightness(1.15); transform: translateY(-1px); }
+.btn-primary:active { filter: brightness(0.9); transform: scale(0.98); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+/* Ghost / outline button */
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0 1.25rem;
+  min-height: 48px;
+  border-radius: 0.75rem;
+  background: transparent;
+  color: #003366;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border: 2px solid #003366;
+  transition: all 0.15s;
+  cursor: pointer;
+}
+.dark .btn-ghost { color: #60A5FA; border-color: #60A5FA; }
+.btn-ghost:hover { background: #003366; color: white; }
+.dark .btn-ghost:hover { background: #2563EB; color: white; }
+.btn-ghost:active { transform: scale(0.98); }
+```
+
+---
+
+## PHASE 2 — Layout (`src/components/Layout.tsx`)
+
+### 2a — Top Header
+The header currently uses `h-14 sm:h-16`. Make these changes:
+
+- Change the header height to `h-14` on all screens (drop the `sm:h-16`).
+- The logo `img` stays as is.
+- The header background stays `bg-[#003366]`.
+- Add a subtle bottom gradient line instead of `shadow-md`:
+  Replace `shadow-md` with `shadow-[0_2px_8px_rgb(0,51,102,0.35)]`.
+- **Language toggle button**: Add `font-family: var(--font-display)` via a
+  `font-display` class. Ensure it has `min-h-[44px] min-w-[44px]`.
+
+### 2b — Bottom Navigation Bar (mobile)
+This is the most visible element. Replace the current bottom nav styling:
+
+Current outer `<nav>` class:
+```
+"md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-700 z-40"
+```
+
+Replace with:
+```
+"md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-gray-100 dark:border-slate-700/80"
+```
+
+For each nav item `<Link>`, replace current classes:
+```
+"flex-1 flex flex-col items-center justify-center min-h-[56px] gap-0.5 transition-colors"
+```
+with:
+```
+"flex-1 flex flex-col items-center justify-center min-h-[60px] gap-1 transition-all duration-200"
+```
+
+For the active state, change from `text-[#003366] dark:text-blue-400` to show
+a small indicator pill above the icon:
+- Wrap the icon in a `<div>` that, when active, adds
+  `bg-[#003366]/10 dark:bg-blue-500/20 rounded-xl px-3 py-1`
+  and when inactive is just `px-3 py-1`.
+- Active text colour: `text-[#003366] dark:text-blue-400` (keep as is).
+- Inactive text colour: `text-slate-400 dark:text-slate-500` (keep as is).
+- Inactive icon: `strokeWidth={1.6}`. Active icon: `strokeWidth={2.5}`.
+- Label `<span>` class: change from `text-[9px] xs:text-[10px] font-medium`
+  to `text-[10px] font-semibold font-display`.
+
+### 2c — Floating Action Button (FAB)
+Update the FAB:
+```jsx
+// Change from:
+className="fixed bottom-20 right-4 z-[45] w-14 h-14 bg-[#003366] hover:bg-[#002244] text-white rounded-full shadow-modal ..."
+// Change to:
+className="fixed bottom-[76px] right-4 z-[45] w-14 h-14 bg-[#003366] dark:bg-blue-600 text-white rounded-2xl shadow-[0_4px_20px_rgb(0,51,102,0.4)] dark:shadow-[0_4px_20px_rgb(37,99,235,0.4)] flex items-center justify-center transition-all duration-200 hover:scale-110 hover:brightness-110 active:scale-95 md:hidden"
+```
+
+### 2d — Connectivity Banner
+Update the offline banner:
+- Offline: `bg-rose-500` → keep as is, but add `text-[13px]` and an emoji `📡`.
+- Online: `bg-emerald-500` → keep, add `text-[13px]`.
+
+### 2e — Desktop Footer
+Add `font-display` class to the PDPA title `<p>` element.
+
+---
+
+## PHASE 3 — Home Page (`src/pages/HomePage.tsx`)
+
+### 3a — Page-level tab bar (Buy & Sell / Lost & Found / Jobs / Assistance / Rental)
+The tab bar renders tabs from `ALL_TABS`. Replace the styling of each tab button:
+
+Current pattern (approximate):
+- Active: some blue text, a bottom border
+- Inactive: gray text
+
+New pattern — style each tab button as a pill chip:
+- The outer scrollable container:
+  `className="flex items-center gap-2 px-4 overflow-x-auto scrollbar-none pb-1"`
+- Each tab button:
+  - Active: `chip chip-active`
+  - Inactive: `chip`
+  - Add the `TAB_ICONS` emoji before the label text:
+    e.g. `{TAB_ICONS[tab.value]} {tab.label}` inside the button.
+
+### 3b — Category filter chips
+These are the sub-chips below the tab bar (Electronics, Books, etc.). Apply the
+same `chip` / `chip-active` classes. The container already has horizontal scroll
+— keep that. Reduce the gap from whatever it is to `gap-2`. Add `pt-1 pb-2`.
+
+### 3c — "Featured Shops" section header
+Change:
+```jsx
+// From:
+<h2 className="text-sm font-bold text-gray-900 dark:text-slate-100 ...">
+  Featured Shops
+</h2>
+// To:
+<h2 className="section-header px-4 mb-3">
+  🏪 Featured Shops
+</h2>
+```
+Do the same for the "Campus Market Picks" section header:
+```jsx
+<h2 className="section-header px-4 mb-3">
+  🛍️ Campus Market Picks
+</h2>
+```
+
+### 3d — `ShopPillCard` component
+Update the shop icon container in `ShopPillCard`:
+- Change `w-14 h-14 rounded-2xl` to `w-16 h-16 rounded-2xl`.
+- Add `shadow-sm group-hover:shadow-md` transition.
+- Shop name `<p>`: change to `text-[11px] font-bold font-display`.
+
+### 3e — `ShopListingMiniCard` component
+- Card container: add `transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]`.
+- Title `<p>`: change to `font-semibold font-display text-[11px]`.
+- Price `<p>`: ensure it's `font-bold` with `#003366 dark:text-blue-400`.
+
+### 3f — Feed section header (listing type label above the listing grid)
+If there is a "Latest [Tab Label]" or similar heading above the listing grid,
+apply `section-header` class to it.
+
+### 3g — "Load More" button
+Change current Load More button styling to use `btn-ghost w-full mt-4 mb-2`.
+
+### 3h — Empty state
+When a tab has no listings, the empty state should be:
+```jsx
+<div className="flex flex-col items-center justify-center py-16 px-8 text-center">
+  <div className="text-5xl mb-4">{TAB_ICONS[activeTab]}</div>
+  <p className="font-display font-bold text-gray-700 dark:text-slate-300 text-lg mb-1">
+    Nothing here yet
+  </p>
+  <p className="text-sm text-gray-400 dark:text-slate-500">
+    Be the first to post in this category!
+  </p>
+</div>
+```
+If an empty state div already exists, update it to match this pattern.
+If not, do not create a new code path — only update the existing render.
+
+---
+
+## PHASE 4 — Listing Card (`src/components/ListingCard.tsx`)
+
+This is rendered everywhere — on Home, Search, Profile, SellerProfile.
+Make surgical changes only.
+
+### 4a — Card container
+Replace the current outer `<div>` card classes. Current:
+```
+"bg-white dark:bg-slate-800 rounded-xl shadow-card border border-gray-100 dark:border-slate-700 overflow-hidden hover:shadow-hover hover:scale-[1.015] transition-all duration-200 border-l-4"
+```
+New:
+```
+"card-base overflow-hidden border-l-4 hover:scale-[1.015] transition-all duration-200"
+```
+Keep the `style={{ borderLeftColor: borderColor }}` exactly as is.
+
+### 4b — Card title `<h3>`
+Add `font-display` class to the title element. Keep all other classes.
+
+### 4c — Price `<p>` elements
+For buy-sell price: change `text-lg font-bold` to `text-base font-bold` (slightly
+smaller to improve card density on mobile). Keep colour classes.
+
+### 4d — "by @username" footer link
+Replace current classes with:
+```
+"block px-3 py-2 text-[11px] text-gray-400 dark:text-slate-500 hover:text-[#003366] dark:hover:text-blue-400 transition-colors border-t border-gray-50 dark:border-slate-700/50 font-medium"
+```
+
+### 4e — Owner action buttons (Edit / Mark Sold / Delete)
+These appear in the `(showDelete || showMarkSold || showEdit)` block.
+- All buttons: ensure `min-h-[44px]`.
+- Edit button: add `font-display font-semibold`.
+- Mark Sold button: add `font-display font-semibold`.
+- Delete button: keep current red styling, add `font-semibold`.
+
+### 4f — SOLD overlay
+Keep the current overlay but change the text styling:
+```
+"text-white text-lg font-black tracking-[0.15em] uppercase drop-shadow-lg px-4 py-2 border-2 border-white/60 rounded-xl"
+```
+(Change `rounded-lg` to `rounded-xl`.)
+
+---
+
+## PHASE 5 — Search Page (`src/pages/SearchPage.tsx`)
+
+### 5a — Search input bar
+The search input currently uses `inputCls`. Replace the search bar wrapper to
+make it look more prominent:
+```jsx
+// Wrap the input in:
+<div className="relative mx-4 mt-4 mb-3">
+  <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500 pointer-events-none" />
+  <input
+    // ...keep all existing props...
+    className="w-full bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 border border-gray-200 dark:border-slate-600 rounded-2xl pl-10 pr-4 py-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[#003366]/30 dark:focus:ring-blue-400/30 focus:border-[#003366] dark:focus:border-blue-400 transition min-h-[48px]"
+  />
+</div>
+```
+Keep the clear (X) button if it already exists inside the input wrapper — just
+re-position to `right-3`.
+
+### 5b — Type tabs
+Apply the same `chip` / `chip-active` pattern as the Home page tabs.
+Container: `className="flex gap-2 px-4 overflow-x-auto scrollbar-none pb-2"`.
+
+### 5c — Price range chips
+Apply `chip` / `chip-active` pattern.
+
+### 5d — Filter panel
+If there's a collapsible filter panel (with min/max price inputs, condition
+selector), ensure:
+- The panel uses `bg-white dark:bg-slate-800 rounded-2xl mx-4 p-4 shadow-sm
+  border border-gray-100 dark:border-slate-700 mb-3`.
+- Each input inside: `rounded-xl border border-gray-200 dark:border-slate-600
+  bg-white dark:bg-slate-700 px-3 py-2 text-sm min-h-[44px] focus:ring-2
+  focus:ring-[#003366]/30 focus:border-[#003366] focus:outline-none transition`.
+
+### 5e — Results count / heading
+If there's a "X results found" label, style it:
+`className="px-4 text-xs font-semibold text-gray-400 dark:text-slate-500 mb-2"`.
+
+---
+
+## PHASE 6 — Post Page (`src/pages/PostPage.tsx`)
+
+### 6a — Page header / title
+Find the main `<h1>` or page title. Apply `font-display font-bold text-xl` and
+keep current colour.
+
+### 6b — Type selector tabs
+The tab selector at the top (Buy & Sell / Lost & Found / Jobs / Assistance /
+Rental). Apply `chip` / `chip-active` classes.
+
+### 6c — Form section labels
+Every `<label>` using `labelCls`. Change `labelCls` const from its current value
+to:
+```ts
+const labelCls = "block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-1.5 font-display";
+```
+
+### 6d — Text inputs and selects
+Update `inputCls` and `selectCls` constants to:
+```ts
+const inputCls =
+  "w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-200 rounded-xl px-3 py-3 text-sm dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-[#003366]/30 dark:focus:ring-blue-400/30 focus:border-[#003366] dark:focus:border-blue-500 transition min-h-[48px]";
+
+const selectCls =
+  "w-full bg-white text-gray-900 border border-gray-200 rounded-xl px-3 py-3 text-sm dark:bg-slate-800 dark:text-slate-100 dark:border-slate-600 dark:[color-scheme:dark] focus:outline-none focus:ring-2 focus:ring-[#003366]/30 dark:focus:ring-blue-400/30 focus:border-[#003366] dark:focus:border-blue-500 transition min-h-[48px]";
+```
+
+### 6e — Photo upload area
+Find the photo upload `<div>` (the dashed-border upload box). Update to:
+```
+"border-2 border-dashed border-gray-200 dark:border-slate-600 rounded-2xl flex flex-col items-center justify-center gap-2 py-8 cursor-pointer hover:border-[#003366] dark:hover:border-blue-400 hover:bg-[#003366]/3 dark:hover:bg-blue-400/5 transition-all"
+```
+
+### 6f — Submit button
+The submit button at the bottom. Apply `btn-primary w-full`.
+
+### 6g — Preview card
+The live preview card below the form is already using `ListingCard`. Add a
+`<p>` label above it:
+```jsx
+<p className="text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wider mb-2 font-display">
+  Preview
+</p>
+```
+
+---
+
+## PHASE 7 — Listing Detail Page (`src/pages/ListingDetailPage.tsx`)
+
+### 7a — Back button
+Find the `<ArrowLeft>` back button. Style it as a floating pill:
+```
+"flex items-center gap-1.5 text-sm font-semibold text-gray-700 dark:text-slate-300 bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm px-3 py-2 rounded-full shadow-sm hover:bg-white dark:hover:bg-slate-800 transition min-h-[40px]"
+```
+
+### 7b — Listing title `<h1>`
+Apply `font-display font-bold` to the listing title. Keep size and colour.
+
+### 7c — Price display
+The price `<p>` or similar element: apply `font-display font-bold`.
+
+### 7d — Section dividers / headers ("Contact Seller", "About this listing", "More from this seller")
+Any `<h2>` or `<h3>` subheading on the detail page: apply `font-display
+font-bold text-base text-gray-900 dark:text-slate-100`.
+
+### 7e — Contact buttons (WhatsApp, WeChat, Teams, Chat)
+These are the primary CTAs. They already have proper styling but ensure:
+- Each is at least `min-h-[52px]`.
+- WhatsApp button: `bg-[#25D366]` → keep green.
+- Chat / Message button: apply `btn-primary flex-1`.
+- All contact buttons: add `font-display font-semibold text-sm`.
+
+### 7f — "More from seller" section
+If a grid of similar listings renders below, add a `section-header` label above
+it: `"More from this seller 👤"`.
+
+### 7g — Sold overlay (full-page)
+If the listing is sold, the "SOLD" banner text should use `font-display`.
+
+---
+
+## PHASE 8 — Campus Market Page (`src/pages/CampusMarketPage.tsx`)
+
+### 8a — Hero banner
+The default hero banner (when no ads are active):
+- Change the gradient to: `background: linear-gradient(135deg, #001F4D 0%, #003366 50%, #0066CC 100%)`
+- Heading text: apply `font-display font-black`.
+- Sub-text: keep as is.
+- "Open Your Shop →" button: apply `btn-primary text-[#003366] bg-white hover:bg-gray-50`.
+
+### 8b — Shop category chips
+Find the category filter chips (Food & Beverage, Tutoring & Education, etc.).
+Apply `chip` / `chip-active` classes. Container: `flex gap-2 px-4 overflow-x-auto
+scrollbar-none py-3`.
+
+### 8c — Section headers ("All Shops", "Browse Listings", "Your Shops")
+Apply `section-header` class + appropriate emoji:
+- "All Shops" → `🏪 Shops`
+- "Browse Listings" → `🛍️ Listings`
+- "Your Shops" / "My Shops" → `⚙️ My Shops`
+
+### 8d — Shop cards in the grid
+Each shop card should:
+- Container: add `card-base overflow-hidden transition-all duration-200
+  hover:scale-[1.02] active:scale-[0.98]`.
+- Shop name: add `font-display font-bold`.
+- Category badge: ensure `chip` styling or a small coloured pill
+  `text-[10px] font-semibold px-2 py-0.5 rounded-full`.
+
+### 8e — "Open Your Shop" CTA (if shown inline in the page below the hero)
+Apply `btn-primary` class.
+
+### 8f — Listing cards in the grid
+Each shop listing mini-card:
+- Container: `card-base overflow-hidden`.
+- Title: `font-display font-semibold text-[12px]`.
+- Price: `font-bold text-[#003366] dark:text-blue-400`.
+
+### 8g — Shop ad cards
+The `SponsoredAdCard` component renders inline. Do not change its component file.
+If the Campus Market page wraps it in a container, ensure that container has
+`mx-4 my-3` margin.
+
+---
+
+## PHASE 9 — Shop Listing Detail Page (`src/pages/ShopListingDetailPage.tsx`)
+
+### 9a — Title
+Apply `font-display font-bold text-xl` to the listing title `<h1>`.
+
+### 9b — Price label
+`PriceLabel` renders the price. Apply `font-display font-bold` inside it.
+
+### 9c — Shop info card
+The card showing the shop name and logo:
+- Container: `card-base p-4 mx-4 my-3`.
+- Shop name: `font-display font-bold`.
+
+### 9d — Sticky bottom action bar
+The sticky bar at the bottom with the "Send Inquiry" button. Keep all logic.
+Update styling:
+- Container: `fixed bottom-14 md:bottom-0 left-0 right-0 z-40 bg-white/95
+  dark:bg-slate-900/95 backdrop-blur-md border-t border-gray-100
+  dark:border-slate-700/80 px-4 py-3 flex gap-3 shadow-[0_-4px_16px_rgb(0,0,0,0.06)]`.
+- "Send Inquiry" button: `btn-primary flex-1`.
+
+### 9e — Inquiry form
+The inline inquiry form that appears when the user taps "Send Inquiry":
+- Wrapper: `bg-white dark:bg-slate-800 rounded-2xl border border-gray-100
+  dark:border-slate-700 p-4 mx-4 shadow-sm`.
+- Textarea: update to `rounded-xl border border-gray-200 dark:border-slate-600
+  bg-white dark:bg-slate-700 p-3 text-sm w-full resize-none focus:outline-none
+  focus:ring-2 focus:ring-[#003366]/30 focus:border-[#003366]
+  dark:focus:ring-blue-400/30 dark:focus:border-blue-400 transition`.
+- Submit button: `btn-primary w-full`.
+- Cancel button: `btn-ghost w-full`.
+
+---
+
+## PHASE 10 — Shop Public Page (`src/pages/ShopPublicPage.tsx`)
+
+### 10a — Shop header
+- Shop name `<h1>`: apply `font-display font-black text-2xl`.
+- Category badge: `chip chip-active` style or the existing badge — ensure it has
+  `rounded-full font-semibold`.
+- Bio text: `text-sm text-gray-600 dark:text-slate-300 leading-relaxed`.
+
+### 10b — Contact buttons (WhatsApp, WeChat)
+Ensure: `min-h-[48px] rounded-xl font-display font-semibold`.
+
+### 10c — Listings grid section header
+Apply `section-header` class: `"📦 Products & Services"`.
+
+### 10d — Listing cards within the shop page
+Each mini listing card:
+- `card-base overflow-hidden`.
+- Title: `font-display font-semibold`.
+
+### 10e — "No listings" empty state
+```jsx
+<div className="flex flex-col items-center py-12 text-center px-4">
+  <div className="text-4xl mb-3">📦</div>
+  <p className="font-display font-bold text-gray-600 dark:text-slate-400">
+    No listings yet
+  </p>
+  <p className="text-sm text-gray-400 dark:text-slate-500 mt-1">
+    This shop hasn't posted anything yet.
+  </p>
+</div>
+```
+
+---
+
+## PHASE 11 — Shop Management Panel (`src/components/ShopManagementPanel.tsx`)
+
+This is a large, complex component. Only change styling — no logic or structure.
+
+### 11a — Tab bar (Listings / Inquiries / Analytics / Settings)
+Current tab buttons render using a TABS array. Update each tab button:
+- Inactive: `flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold
+  text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700
+  transition-all min-h-[36px] whitespace-nowrap`
+- Active: same + `bg-[#003366] text-white dark:bg-blue-600`
+- Badge pills: keep as is (`bg-red-500 text-white text-[9px]`).
+
+### 11b — Section headings inside each tab
+Any `<h3>` or heading inside the panel: add `font-display font-bold`.
+
+### 11c — Form inputs inside the panel
+Any `className` containing `rounded-xl` inputs — ensure they all have
+`focus:ring-2 focus:ring-[#003366]/30 dark:focus:ring-blue-400/30
+focus:border-[#003366] dark:focus:border-blue-500 focus:outline-none`.
+Do not change the `rounded-xl` or height.
+
+### 11d — Primary action buttons ("Save Changes", "Create Listing", etc.)
+Apply `btn-primary` class or equivalent.
+
+### 11e — Inquiry cards
+Each inquiry card in the Inquiries tab:
+- Container: add `card-base p-4 mb-3`.
+- Customer name: `font-display font-semibold text-sm`.
+- Status badge: keep existing colour logic, ensure `rounded-full text-[10px]
+  font-bold px-2 py-0.5`.
+
+---
+
+## PHASE 12 — Profile Page (`src/pages/ProfilePage.tsx`)
+
+### 12a — User header (avatar, name, email)
+- Name: apply `font-display font-bold text-lg`.
+- Email: `text-xs text-gray-400 dark:text-slate-500`.
+
+### 12b — Stats row (listing count, etc.)
+Any stat numbers: `font-display font-bold text-xl text-[#003366] dark:text-blue-400`.
+Any stat labels: `text-[10px] font-semibold text-gray-400 dark:text-slate-500
+uppercase tracking-wider`.
+
+### 12c — Tab bar (Active / Sold / Archived / Saved)
+Apply `chip` / `chip-active` classes. Container: `flex gap-2 px-4 overflow-x-auto
+scrollbar-none py-3`.
+
+### 12d — "My Shop" card(s)
+Each shop card in the My Shop section:
+- `card-base p-4`.
+- Shop name: `font-display font-bold`.
+
+### 12e — "My Inquiries" section heading
+`section-header` class: `"💬 My Inquiries"`.
+
+### 12f — Inquiry cards
+- `card-base p-3 mb-2`.
+- Listing title: `font-display font-semibold text-sm`.
+- Status badge: `rounded-full text-[10px] font-bold px-2.5 py-0.5`.
+
+### 12g — Section headings throughout
+Any `<h2>` with "My Listings", "My Saved", "My Shop" labels:
+Apply `section-header` class.
+
+---
+
+## PHASE 13 — Settings Page (`src/pages/SettingsPage.tsx`)
+
+### 13a — Section headers
+Currently rendered via `<SectionHeader icon label>` component.
+Update the component's inner `<h3>` to include `font-display font-semibold` and
+change `uppercase tracking-widest` to `uppercase tracking-wider text-xs`.
+
+### 13b — Setting row items (contact fields, name, dark mode toggle)
+- Each row container: ensure `bg-white dark:bg-slate-800 rounded-2xl` card
+  groupings keep their existing structure.
+- Input fields: same `inputCls` update as Phase 6d.
+
+### 13c — Save button(s)
+Apply `btn-primary w-full` to each save/update button.
+
+### 13d — Danger zone (Delete Account)
+- Section wrapper: add `border-2 border-red-100 dark:border-red-900/30
+  rounded-2xl` container if not already there.
+- Delete account button: `min-h-[48px] w-full rounded-xl bg-red-50
+  dark:bg-red-900/20 text-red-600 dark:text-red-400 font-display font-bold
+  border-2 border-red-200 dark:border-red-800 hover:bg-red-100
+  dark:hover:bg-red-900/40 transition`.
+
+---
+
+## PHASE 14 — Messages Page (`src/pages/MessagesPage.tsx`)
+
+### 14a — Conversation list items
+Each conversation list item:
+- Container: `flex items-center gap-3 px-4 py-3.5 hover:bg-gray-50
+  dark:hover:bg-slate-800/80 transition-colors cursor-pointer border-b
+  border-gray-50 dark:border-slate-700/50 active:bg-gray-100
+  dark:active:bg-slate-800`.
+- Contact name: `font-display font-semibold text-sm`.
+- Last message preview: `text-xs text-gray-400 dark:text-slate-500 line-clamp-1`.
+- Time: `text-[10px] text-gray-400 dark:text-slate-500 shrink-0`.
+
+### 14b — Search bar
+Apply same search bar styling as Phase 5a (rounded-2xl, left icon, shadow-sm).
+
+### 14c — Message input bar (chat view bottom)
+- Container: `bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t
+  border-gray-100 dark:border-slate-700/80 px-4 py-3 flex items-end gap-2`.
+- Textarea: `rounded-2xl border border-gray-200 dark:border-slate-600
+  bg-gray-50 dark:bg-slate-800 px-4 py-2.5 text-sm resize-none flex-1
+  focus:outline-none focus:ring-2 focus:ring-[#003366]/20
+  focus:border-[#003366] dark:focus:ring-blue-400/20
+  dark:focus:border-blue-400 transition`.
+- Send button: `w-10 h-10 min-w-[40px] min-h-[40px] rounded-xl bg-[#003366]
+  dark:bg-blue-600 text-white flex items-center justify-center
+  hover:brightness-110 transition disabled:opacity-40`.
+
+### 14d — Message bubbles (sent by current user)
+- `bg-[#003366] dark:bg-blue-600 text-white rounded-2xl rounded-br-sm px-4 py-2.5
+  text-sm max-w-[80%] shadow-sm`.
+
+### 14e — Message bubbles (received from other user)
+- `bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 rounded-2xl
+  rounded-bl-sm px-4 py-2.5 text-sm max-w-[80%] shadow-sm border border-gray-100
+  dark:border-slate-600`.
+
+### 14f — Chat header (when a conversation is open)
+- Container: `bg-white dark:bg-slate-900 border-b border-gray-100
+  dark:border-slate-700 px-4 py-3 flex items-center gap-3 shadow-sm`.
+- Name: `font-display font-bold text-base`.
+
+---
+
+## PHASE 15 — Auth Modal (`src/components/AuthModal.tsx`)
+
+### 15a — Modal container
+The modal backdrop and card:
+- Backdrop: keep `fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm flex
+  items-end sm:items-center justify-center` (bottom sheet on mobile).
+- Card: `bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl w-full
+  sm:max-w-md shadow-2xl p-6 relative max-h-[90vh] overflow-y-auto`.
+
+### 15b — Modal title
+Current title (e.g. "Sign In", "Create Account"):
+Apply `font-display font-black text-2xl text-gray-900 dark:text-slate-100 mb-1`.
+
+### 15c — Subtitle / tagline below title
+If present: `text-sm text-gray-400 dark:text-slate-500 mb-5`.
+
+### 15d — Input fields
+Apply the updated `inputCls` pattern: `rounded-xl min-h-[48px] border
+border-gray-200 dark:border-slate-600` with `focus:ring-2 focus:ring-[#003366]/30`.
+
+### 15e — Primary submit button
+Apply `btn-primary w-full` (Sign In / Create Account / Send Reset Email).
+
+### 15f — Mode switch link ("Don't have an account? Sign up")
+`text-sm text-center text-gray-500 dark:text-slate-400 mt-3`.
+The clickable part: `text-[#003366] dark:text-blue-400 font-semibold
+hover:underline`.
+
+### 15g — Error message
+Keep red colour. Update styling:
+`className="text-sm text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20
+rounded-xl px-3 py-2.5 border border-red-100 dark:border-red-900/40"`.
+
+### 15h — Verification pending screen
+Title: `font-display font-bold text-xl`. Keep all icons and existing text.
+
+---
+
+## PHASE 16 — Notification Bell (`src/components/NotificationBell.tsx`)
+
+Do not change any notification logic. Only:
+- If the panel/dropdown has a heading "Notifications" — apply `font-display
+  font-bold`.
+- If individual notification items exist — ensure they have `py-3 px-4` padding
+  and a hover state `hover:bg-gray-50 dark:hover:bg-slate-700/50`.
+
+---
+
+## PHASE 17 — Loading Screen (`src/components/LoadingScreen.tsx`)
+
+Add `font-display font-bold` to any text (app name, loading label).
+If a spinner exists, ensure it uses `text-[#003366] dark:text-blue-400`.
+
+---
+
+## PHASE 18 — Not Found Page (`src/pages/not-found.tsx`)
+
+Update to:
+```jsx
+<div className="flex flex-col items-center justify-center min-h-[70vh] px-8 text-center">
+  <div className="text-7xl mb-6">🔍</div>
+  <h1 className="font-display font-black text-3xl text-gray-900 dark:text-slate-100 mb-2">
+    Page Not Found
+  </h1>
+  <p className="text-gray-500 dark:text-slate-400 mb-8 text-sm leading-relaxed">
+    The page you're looking for doesn't exist or has been moved.
+  </p>
+  <a href="/" className="btn-primary px-8">
+    Go Home
+  </a>
+</div>
+```
+Keep any existing router logic (the `useLocation` / `Link` usage) — just update
+the JSX rendered. Do not change the component function signature or imports.
+
+---
+
+## PHASE 19 — `src/components/SponsoredAdCard.tsx`
+
+Do not change any logic. Only:
+- Ensure the card container has `rounded-2xl overflow-hidden shadow-sm`.
+- If a "Sponsored" label exists: `text-[10px] font-semibold text-white/70
+  uppercase tracking-wider`.
+
+---
+
+## PHASE 20 — Seller Profile Page (`src/pages/SellerProfilePage.tsx`)
+
+- Page title / seller name: `font-display font-bold text-xl`.
+- "Listings by [name]" section heading: `section-header` class.
+- "Member since" / join date: `text-xs text-gray-400 dark:text-slate-500`.
+
+---
+
+## PHASE 21 — Final Build Check
+
+Run the build and fix all errors:
+```
+pnpm --filter @workspace/xmum-market run build
+```
+
+Common issues to watch for:
+- Any new CSS class not available in Tailwind (custom classes go in `index.css`,
+  not inline `className`).
+- `font-display` must be defined in `index.css` as shown in Phase 1.
+- `btn-primary`, `btn-ghost`, `chip`, `chip-active`, `card-base`,
+  `section-header` must all be defined in `index.css` before use.
+- No TypeScript errors from any UI change.
+- All dark mode classes present wherever light mode classes were changed.
+
+---
+
+## UI/UX Quality Checklist (verify before finishing)
+
+Visual:
+- [ ] Nunito font loads and shows on all headings, card titles, and nav labels.
+- [ ] Bottom nav pill indicator shows correctly on active tab.
+- [ ] Category chips scroll horizontally without clipping on 375px viewport.
+- [ ] All cards have consistent 16px border radius (`rounded-2xl`).
+- [ ] Shadows are subtle and consistent — no heavy drop shadows on flat elements.
+- [ ] Dark mode: all changed elements look correct in dark mode.
+
+Interaction:
+- [ ] All buttons have `min-h-[44px]` touch targets.
+- [ ] FAB is visible and positioned above the bottom nav bar.
+- [ ] Tapping a listing card gives a subtle scale feedback (`active:scale-[0.98]`).
+- [ ] Submit buttons show loading state (existing logic, just ensure it's visible).
+
+Typography:
+- [ ] Section headers use Nunito consistently.
+- [ ] Body copy and form labels use Inter.
+- [ ] No mixed font-sizes that feel random — consistent hierarchy.
+
+Performance:
+- [ ] Nunito font uses `display=swap` in the Google Fonts URL (it does — see Phase 1).
+- [ ] No new images or heavy assets added.
+- [ ] Build passes with zero errors or warnings.
+
+---
+
+## What Is Explicitly OUT OF SCOPE
+
+Do not touch any of the following:
+- `src/lib/` — any library file (Firebase, auth, listings, shops, messaging, etc.)
+- `src/contexts/` — any context provider
+- `src/hooks/` — any hook
+- `src/lib/types.ts` — type definitions
+- `firestore.rules`, `firestore.indexes.json`, `storage.rules`
+- `src/components/ui/` — shadcn/ui components (do not touch any of these)
+- `src/components/RentalTcModal.tsx` — do not touch
+- `src/components/ReportModal.tsx` — do not touch
+- `src/components/AvatarCropModal.tsx` — do not touch
+- `src/components/ErrorBoundary.tsx` — do not touch
+- `src/components/VerificationBanner.tsx` — do not touch (minor component)
+- All routing logic in `src/App.tsx` — do not touch routes
+- `artifacts/xmum-admin/` — the admin panel is out of scope entirely
+- Any Firebase Cloud Functions or Firestore data

@@ -37,12 +37,12 @@ const RENTAL_VEHICLE_TYPES = ["car", "motorcycle", "bicycle", "electric-bike"] a
 type VehicleType = typeof RENTAL_VEHICLE_TYPES[number];
 
 const inputCls =
-  "w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 transition min-h-[44px]";
+  "w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-200 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-[#003366]/30 dark:focus:ring-blue-400/30 focus:border-[#003366] dark:focus:border-blue-400 transition min-h-[44px] shadow-sm";
 
 const selectCls =
-  "w-full bg-white text-gray-900 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600 dark:[color-scheme:dark] focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 transition min-h-[44px]";
+  "w-full bg-white text-gray-900 border border-gray-200 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600 dark:[color-scheme:dark] focus:outline-none focus:ring-2 focus:ring-[#003366]/30 dark:focus:ring-blue-400/30 focus:border-[#003366] dark:focus:border-blue-400 transition min-h-[44px] shadow-sm";
 
-const labelCls = "block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-1";
+const labelCls = "block text-sm font-display font-semibold text-gray-700 dark:text-slate-300 mb-1";
 
 function relativeTime(ms: number): string {
   const diff = Date.now() - ms;
@@ -697,7 +697,7 @@ export default function PostPage() {
 
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100">{t.postItem}</h1>
+        <h1 className="text-xl font-display font-bold text-gray-900 dark:text-slate-100">{t.postItem}</h1>
         {/* FIX 2: Preview toggle */}
         <button
           type="button"
@@ -714,17 +714,13 @@ export default function PostPage() {
       </div>
 
       {/* Type selector */}
-      <div className="flex bg-gray-100 dark:bg-slate-800 rounded-xl p-1 mb-5 gap-1 overflow-x-auto scrollbar-hide">
+      <div className="flex gap-2 overflow-x-auto scrollbar-hide mb-5 pb-1">
         {ALL_TABS.map((tab) => (
           <button
             key={tab}
             type="button"
             onClick={() => handleTypeChange(tab)}
-            className={`flex-1 min-w-[72px] py-2 min-h-[44px] rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
-              type === tab
-                ? "bg-white dark:bg-slate-700 shadow text-[#003366] dark:text-slate-100"
-                : "text-gray-500 dark:text-slate-400"
-            }`}
+            className={`chip flex-shrink-0 ${type === tab ? "chip-active" : ""}`}
           >
             {tabLabel(tab)}
           </button>
@@ -1187,7 +1183,7 @@ export default function PostPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full min-h-[56px] bg-[#003366] dark:bg-blue-600 text-white font-semibold text-base rounded-xl hover:bg-[#002244] dark:hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.97] transition-all duration-150 flex items-center justify-center gap-2 shadow"
+            className="btn-primary w-full min-h-[56px] text-base disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.97] flex items-center justify-center gap-2"
           >
             {loading ? (
               <><Loader2 size={20} className="animate-spin" /> {t.submitting}</>

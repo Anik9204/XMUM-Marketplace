@@ -276,16 +276,12 @@ export default function CampusMarketPage() {
       </div>
 
       {/* Category chips */}
-      <div className="flex gap-2 overflow-x-auto scrollbar-hide px-4 mb-5 pb-1">
+      <div className="flex gap-2 overflow-x-auto scrollbar-hide px-4 mb-5 pb-1 pt-1">
         {["All", ...SHOP_CATEGORIES].map((cat) => (
           <button
             key={cat}
             onClick={() => setSelectedCategory(cat as ShopCategory | "All")}
-            className={`shrink-0 text-xs font-semibold px-3.5 py-1.5 rounded-full border transition-all whitespace-nowrap ${
-              selectedCategory === cat
-                ? "bg-[#003366] dark:bg-blue-600 text-white border-[#003366] dark:border-blue-600"
-                : "bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 border-gray-200 dark:border-slate-700 hover:border-[#003366] dark:hover:border-blue-500"
-            }`}
+            className={`chip shrink-0 ${selectedCategory === cat ? "chip-active" : ""}`}
           >
             {cat}
           </button>
@@ -296,10 +292,7 @@ export default function CampusMarketPage() {
       {user && myShops.length > 0 && (
         <div className="px-4 mb-5">
           <div className="flex items-center justify-between mb-2">
-            <h2 className="text-sm font-bold text-gray-900 dark:text-slate-100 flex items-center gap-1.5">
-              <Settings2 size={14} className="text-[#003366] dark:text-blue-400" />
-              My Shop
-            </h2>
+            <h2 className="section-header">⚙️ My Shop</h2>
           </div>
           <div className="space-y-2">
             {myShops.map((s) => (
@@ -312,7 +305,7 @@ export default function CampusMarketPage() {
       {/* Featured Shops */}
       <div className="mb-6">
         <div className="flex items-center justify-between px-4 mb-3">
-          <h2 className="text-sm font-bold text-gray-900 dark:text-slate-100">Featured Shops</h2>
+          <h2 className="section-header">🏪 Featured Shops</h2>
           <Link href="/campus-market" className="text-xs text-[#003366] dark:text-blue-400 font-semibold flex items-center gap-0.5">
             See all <ChevronRight size={12} />
           </Link>
@@ -341,8 +334,8 @@ export default function CampusMarketPage() {
       {/* Listings grid */}
       <div className="px-4">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-bold text-gray-900 dark:text-slate-100">
-            {selectedCategory === "All" ? "All Listings" : selectedCategory}
+          <h2 className="section-header">
+            🛍️ {selectedCategory === "All" ? "All Listings" : selectedCategory}
             {!loadingListings && (
               <span className="ml-1.5 text-xs font-normal text-gray-400 dark:text-slate-500">({listings.length})</span>
             )}
@@ -359,7 +352,7 @@ export default function CampusMarketPage() {
             <p className="text-sm font-semibold text-gray-500 dark:text-slate-400">No listings yet</p>
             <p className="text-xs text-gray-400 dark:text-slate-500 mt-1 mb-4">Be the first to open a shop!</p>
             <Link href="/create-shop">
-              <button className="bg-[#003366] dark:bg-blue-600 text-white text-xs font-bold px-5 py-2.5 rounded-xl hover:bg-[#002244] transition">
+              <button className="btn-primary px-5">
                 Open Your Shop
               </button>
             </Link>
@@ -374,7 +367,7 @@ export default function CampusMarketPage() {
                 <button
                   onClick={handleLoadMore}
                   disabled={loadingMore}
-                  className="px-8 py-2.5 border border-[#003366]/30 dark:border-blue-500/30 text-[#003366] dark:text-blue-400 text-sm font-semibold rounded-xl hover:bg-[#003366]/5 transition disabled:opacity-50"
+                  className="btn-ghost px-8 disabled:opacity-50"
                 >
                   {loadingMore ? "Loading…" : "Load More"}
                 </button>
@@ -387,7 +380,7 @@ export default function CampusMarketPage() {
       {/* Floating "Open Your Shop" CTA */}
       <div className="fixed bottom-20 right-4 z-40 md:hidden">
         <Link href="/create-shop">
-          <button className="flex items-center gap-2 bg-[#003366] dark:bg-blue-600 text-white text-xs font-bold px-4 py-3 rounded-2xl shadow-xl hover:bg-[#002244] dark:hover:bg-blue-700 transition active:scale-95">
+          <button className="btn-primary flex items-center gap-2 px-4 py-3 shadow-[0_4px_20px_rgb(0,51,102,0.4)] active:scale-95">
             <Store size={15} /> Open Your Shop
           </button>
         </Link>

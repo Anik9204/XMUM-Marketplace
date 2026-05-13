@@ -237,7 +237,7 @@ export default function SellerProfilePage() {
 
           {/* Name + verified badge */}
           <div className="flex items-center flex-wrap gap-2 mb-0.5">
-            <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100 leading-tight">
+            <h1 className="text-xl font-display font-bold text-gray-900 dark:text-slate-100 leading-tight">
               {displayName}
             </h1>
             {profile.isVerified && (
@@ -277,7 +277,7 @@ export default function SellerProfilePage() {
       </div>
 
       {/* ── Listings grid ──────────────────────────────────────────────────── */}
-      <h2 className="text-base font-bold text-gray-800 dark:text-slate-200 mb-3">
+      <h2 className="section-header mb-3">
         What {displayName} is selling
       </h2>
 
@@ -294,7 +294,7 @@ export default function SellerProfilePage() {
           </p>
           {isOwnProfile && (
             <Link href="/post">
-              <button className="mt-4 bg-[#003366] dark:bg-blue-600 text-white px-5 py-2.5 min-h-[44px] rounded-xl text-sm font-semibold hover:bg-[#002244] dark:hover:bg-blue-700 transition-colors">
+              <button className="btn-primary mt-4 px-5">
                 Post a listing
               </button>
             </Link>

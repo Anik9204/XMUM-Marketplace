@@ -161,7 +161,7 @@ export default function ShopPublicPage() {
 
             <div className="flex-1 min-w-0 pt-1">
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100 leading-tight">{shop.name}</h1>
+                <h1 className="text-xl font-display font-bold text-gray-900 dark:text-slate-100 leading-tight">{shop.name}</h1>
                 <span className="text-xs bg-[#003366]/10 dark:bg-blue-900/30 text-[#003366] dark:text-blue-400 font-semibold px-2.5 py-1 rounded-full shrink-0">
                   {shop.category}
                 </span>
@@ -202,8 +202,8 @@ export default function ShopPublicPage() {
 
       {/* Listings grid */}
       <div className="px-4 mt-6">
-        <h2 className="text-base font-bold text-gray-900 dark:text-slate-100 mb-3">
-          Listings
+        <h2 className="section-header mb-3">
+          🛍️ Listings
           <span className="ml-2 text-xs font-normal text-gray-400 dark:text-slate-500">({listings.length})</span>
         </h2>
         {listings.length === 0 ? (
@@ -217,7 +217,7 @@ export default function ShopPublicPage() {
               <Link
                 key={l.id}
                 href={`/shop-listing/${l.id}`}
-                className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700 rounded-2xl overflow-hidden text-left hover:shadow-md transition-shadow active:scale-[0.98] shadow-sm block"
+                className="card-base overflow-hidden text-left hover:scale-[1.02] transition-all duration-200 active:scale-[0.98] block"
               >
                 {l.photos[0] ? (
                   <img src={l.photos[0]} alt="" className="w-full aspect-square object-cover" />
@@ -243,8 +243,8 @@ export default function ShopPublicPage() {
           <div className="border-t-2 border-dashed border-gray-200 dark:border-slate-700 pt-6 mb-5">
             <div className="flex items-center gap-2 mb-1">
               <Settings2 size={16} className="text-[#003366] dark:text-blue-400" />
-              <h2 className="text-base font-bold text-gray-900 dark:text-slate-100">
-                Shop Management
+              <h2 className="section-header">
+                ⚙️ Shop Management
               </h2>
               <span className="text-xs text-gray-400 dark:text-slate-500 font-normal">
                 ({isOwner ? "Owner" : "Editor"})

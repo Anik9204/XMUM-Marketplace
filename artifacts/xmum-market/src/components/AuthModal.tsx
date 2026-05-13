@@ -27,7 +27,7 @@ interface Props {
 const RESEND_COOLDOWN = 60;
 
 const inputCls =
-  "w-full bg-white text-gray-900 placeholder-gray-400 border border-[#E2E8F0] rounded-xl px-3 py-3 text-sm min-h-[48px] dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:border-[#0055CC] focus:ring-2 focus:ring-[#0055CC]/10 dark:focus:border-blue-400 dark:focus:ring-blue-400/10 transition";
+  "w-full bg-white text-gray-900 placeholder-gray-400 border border-[#E2E8F0] rounded-xl px-3 py-3 text-sm min-h-[48px] dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:border-[#003366] focus:ring-2 focus:ring-[#003366]/30 dark:focus:border-blue-400 dark:focus:ring-blue-400/30 transition shadow-sm";
 
 export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
   const { t } = useLang();
@@ -163,7 +163,7 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
             <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
               <MailCheck size={32} className="text-[#003366] dark:text-blue-400" />
             </div>
-            <h2 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-1">Check your inbox</h2>
+            <h2 className="text-lg font-display font-bold text-gray-900 dark:text-slate-100 mb-1">Check your inbox</h2>
             <p className="text-sm text-gray-500 dark:text-slate-400 mb-1">A verification link was sent to:</p>
             <p className="text-sm font-semibold text-[#003366] dark:text-blue-400 mb-4 break-all">{pendingEmail}</p>
             <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 text-left mb-5">
@@ -183,7 +183,7 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
             </button>
             <button
               onClick={onClose}
-              className="w-full min-h-[44px] bg-[#003366] dark:bg-blue-600 text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-[#002244] dark:hover:bg-blue-700 transition-colors"
+              className="btn-primary w-full min-h-[44px]"
             >
               Continue Browsing →
             </button>
@@ -207,7 +207,7 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
 
         <div className="p-6">
           <div className="text-center mb-4">
-            <h2 className="text-xl font-bold text-[#003366] dark:text-slate-100">{t.appName}</h2>
+            <h2 className="text-xl font-display font-bold text-[#003366] dark:text-slate-100">{t.appName}</h2>
             <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
               {mode === "forgot" ? t.resetPassword : mode === "signup" ? t.createAccount : t.welcomeBack}
             </p>
@@ -352,7 +352,7 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
             <button
               type="submit"
               disabled={loading || (mode === "forgot" && forgotCooldown > 0)}
-              className="w-full min-h-[48px] bg-[#003366] dark:bg-blue-600 text-white rounded-xl py-3 text-sm font-semibold hover:bg-[#002244] dark:hover:bg-blue-700 disabled:opacity-75 disabled:cursor-not-allowed transition-colors mt-1"
+              className="btn-primary w-full min-h-[48px] disabled:opacity-75 disabled:cursor-not-allowed mt-1"
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">

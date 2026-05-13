@@ -6,7 +6,7 @@ import ListingCard from "@/components/ListingCard";
 import { Search, SlidersHorizontal, X } from "lucide-react";
 
 const inputCls =
-  "w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 transition";
+  "w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-200 rounded-2xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-[#003366]/30 dark:focus:ring-blue-400/30 focus:border-[#003366] dark:focus:border-blue-400 transition shadow-sm";
 
 const ALL_TABS: { value: ListingType; label: (t: any) => string }[] = [
   { value: "buy-sell", label: (t) => t.buySell },
@@ -174,7 +174,7 @@ export default function SearchPage() {
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
               placeholder={t.searchPlaceholder}
-              className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl pl-9 pr-9 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 transition"
+              className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-200 rounded-2xl pl-9 pr-9 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-[#003366]/30 dark:focus:ring-blue-400/30 focus:border-[#003366] dark:focus:border-blue-400 transition shadow-sm"
             />
             {keyword && (
               <button onClick={() => setKeyword("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-400">
@@ -196,19 +196,12 @@ export default function SearchPage() {
 
         {/* Price range quick filter — shown when price filter is relevant */}
         {showPriceFilter && (
-          <div className="flex gap-2 mt-2.5 overflow-x-auto scrollbar-hide">
+          <div className="flex gap-2 mt-2 overflow-x-auto scrollbar-hide pb-0.5">
             {PRICE_RANGE_PILLS.map(({ value, label }) => (
               <button
                 key={value}
                 onClick={() => applyPriceRange(value)}
-                className={`
-                  flex-shrink-0 px-3 py-1.5 min-h-[34px] rounded-full text-xs font-medium
-                  border transition-colors whitespace-nowrap
-                  ${priceRange === value
-                    ? "bg-[#003366] dark:bg-blue-600 text-white border-[#003366] dark:border-blue-600"
-                    : "bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 border-gray-200 dark:border-slate-600 hover:border-[#003366] dark:hover:border-blue-400"
-                  }
-                `}
+                className={`chip flex-shrink-0 ${priceRange === value ? "chip-active" : ""}`}
               >
                 {label}
               </button>
@@ -229,12 +222,12 @@ export default function SearchPage() {
         )}
 
         {/* Type tabs — Bug 3 fix: use handleTypeChange to reset filters */}
-        <div className="flex gap-1 mt-2.5 overflow-x-auto scrollbar-hide">
+        <div className="flex gap-2 mt-2 overflow-x-auto scrollbar-hide pb-0.5">
           {ALL_TABS.map(({ value, label }) => (
             <button
               key={value}
               onClick={() => handleTypeChange(value)}
-              className={`flex-shrink-0 px-3 py-1.5 min-h-[36px] rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${type === value ? "bg-[#003366] dark:bg-blue-600 text-white" : "bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400"}`}
+              className={`chip flex-shrink-0 ${type === value ? "chip-active" : ""}`}
             >
               {label(t)}
             </button>
@@ -271,13 +264,13 @@ export default function SearchPage() {
 
             {showConditionFilter && (
               <div>
-                <p className="text-xs font-medium text-gray-600 dark:text-slate-300 mb-1.5">{t.filterCondition}</p>
+                <p className="text-xs font-display font-medium text-gray-600 dark:text-slate-300 mb-1.5">{t.filterCondition}</p>
                 <div className="flex gap-2">
                   {["all", "new", "used"].map((c) => (
                     <button
                       key={c}
                       onClick={() => setCondition(c)}
-                      className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${condition === c ? "bg-[#003366] dark:bg-blue-600 text-white" : "bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 text-gray-600 dark:text-slate-300"}`}
+                      className={`chip flex-1 ${condition === c ? "chip-active" : ""}`}
                     >
                       {c === "all" ? t.allConditions : c === "new" ? t.conditionNew : t.conditionUsed}
                     </button>
@@ -303,9 +296,7 @@ export default function SearchPage() {
               </button>
               <button
                 onClick={() => { setShowFilters(false); doSearch(); }}
-                className="flex-1 min-h-[44px] text-sm bg-[#003366] dark:bg-blue-600
-                           text-white rounded-xl font-semibold hover:bg-[#002244]
-                           dark:hover:bg-blue-700 transition"
+                className="btn-primary flex-1 min-h-[44px]"
               >
                 {t.applyFilters}
               </button>

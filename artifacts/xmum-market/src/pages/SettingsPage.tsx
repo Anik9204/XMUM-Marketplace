@@ -23,7 +23,7 @@ import { logOut } from "@/lib/auth";
 const inputCls =
   "w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-200 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700/60 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-[#003366]/40 dark:focus:ring-blue-500/40 focus:border-[#003366] dark:focus:border-blue-500 transition min-h-[44px]";
 
-const labelCls = "block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5";
+const labelCls = "block text-xs font-display font-medium text-gray-500 dark:text-slate-400 mb-1.5";
 
 function SuccessToast({ message, onDone }: { message: string; onDone: () => void }) {
   const [visible, setVisible] = useState(true);
@@ -44,7 +44,7 @@ function SectionHeader({ icon, label }: { icon: React.ReactNode; label: string }
   return (
     <div className="flex items-center gap-2 px-4 pt-4 pb-2">
       <span className="text-[#003366] dark:text-blue-400">{icon}</span>
-      <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">{label}</h3>
+      <h3 className="text-xs font-display font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">{label}</h3>
     </div>
   );
 }

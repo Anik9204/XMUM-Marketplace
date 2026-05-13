@@ -146,7 +146,7 @@ export default function ListingCard({
       )}
 
       <div
-        className="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-gray-100 dark:border-slate-700 overflow-hidden hover:shadow-hover hover:scale-[1.015] transition-all duration-200 border-l-4"
+        className="card-base overflow-hidden border-l-4 hover:scale-[1.015] transition-all duration-200"
         style={{ borderLeftColor: borderColor }}
       >
         <Link href={`/listing/${listing.id}`}>
@@ -181,7 +181,7 @@ export default function ListingCard({
 
             {isSold && (
               <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                <span className="text-white text-xl font-black tracking-[0.2em] uppercase drop-shadow-lg px-4 py-2 border-2 border-white/60 rounded-lg">
+                <span className="text-white text-xl font-black tracking-[0.15em] uppercase drop-shadow-lg px-4 py-2 border-2 border-white/60 rounded-xl font-display">
                   {listing.type === "lost-found" ? t.resolvedBadge : t.soldBadge}
                 </span>
               </div>
@@ -271,7 +271,7 @@ export default function ListingCard({
                 ? `${VEHICLE_ICONS[listing.vehicleType] ?? ""} ${(t as any)[`rental${listing.vehicleType.charAt(0).toUpperCase() + listing.vehicleType.slice(1)}`] ?? listing.vehicleType}`
                 : catLabel}
             </span>
-            <h3 className={`font-semibold text-sm leading-snug line-clamp-1 ${isSold ? "text-[#64748B] dark:text-slate-500" : "text-[#0F172A] dark:text-slate-100"}`}>{listing.title}</h3>
+            <h3 className={`font-display font-semibold text-sm leading-snug line-clamp-1 ${isSold ? "text-[#64748B] dark:text-slate-500" : "text-[#0F172A] dark:text-slate-100"}`}>{listing.title}</h3>
 
             {typeof listing.viewCount === "number" && listing.viewCount > 0 && (
               <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
@@ -289,7 +289,7 @@ export default function ListingCard({
             )}
 
             {listing.type === "buy-sell" && (
-              <p className={`mt-2 text-lg font-bold ${isSold ? "text-gray-400 dark:text-slate-500 line-through" : "text-blue-600 dark:text-blue-400"}`}>
+              <p className={`mt-2 text-base font-bold ${isSold ? "text-gray-400 dark:text-slate-500 line-through" : "text-blue-600 dark:text-blue-400"}`}>
                 {listing.price === 0 ? t.free : `${t.rmPrefix} ${fmtRM(listing.price ?? 0)}`}
               </p>
             )}
@@ -335,7 +335,7 @@ export default function ListingCard({
         <Link
           href={`/seller/${listing.userId}`}
           onClick={(e: React.MouseEvent) => e.stopPropagation()}
-          className="block px-3 py-1.5 text-[11px] text-gray-400 dark:text-slate-500 hover:text-[#003366] dark:hover:text-blue-400 transition-colors border-t border-gray-50 dark:border-slate-700/50"
+          className="block px-3 py-2 text-[11px] text-gray-400 dark:text-slate-500 hover:text-[#003366] dark:hover:text-blue-400 transition-colors border-t border-gray-50 dark:border-slate-700/50 font-medium"
         >
           <span className="flex items-center gap-1">
             by @{listing.userName}
@@ -350,7 +350,7 @@ export default function ListingCard({
             {showEdit && onEdit && !isSold && (
               <button
                 onClick={(e) => { e.stopPropagation(); onEdit(); }}
-                className="flex-1 min-h-[44px] text-xs text-gray-600 dark:text-slate-300 border border-gray-300 dark:border-slate-600 rounded-lg py-1.5 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors font-medium flex items-center justify-center gap-1"
+                className="flex-1 min-h-[44px] text-xs text-gray-600 dark:text-slate-300 border border-gray-300 dark:border-slate-600 rounded-lg py-1.5 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors font-display font-semibold flex items-center justify-center gap-1"
               >
                 <Pencil size={12} />
                 {t.editListing}
@@ -359,7 +359,7 @@ export default function ListingCard({
             {showMarkSold && onMarkSold && !isSold && (
               <button
                 onClick={(e) => { e.stopPropagation(); onMarkSold(); }}
-                className="flex-1 min-h-[44px] text-xs text-[#003366] dark:text-blue-400 border border-[#003366]/30 dark:border-blue-500/30 rounded-lg py-1.5 hover:bg-[#003366]/5 dark:hover:bg-blue-500/10 transition-colors font-medium"
+                className="flex-1 min-h-[44px] text-xs text-[#003366] dark:text-blue-400 border border-[#003366]/30 dark:border-blue-500/30 rounded-lg py-1.5 hover:bg-[#003366]/5 dark:hover:bg-blue-500/10 transition-colors font-display font-semibold"
               >
                 {listing.type === "lost-found" ? t.markAsResolved : t.markAsSold}
               </button>
@@ -372,7 +372,7 @@ export default function ListingCard({
             {showDelete && onDelete && (
               <button
                 onClick={(e) => { e.stopPropagation(); onDelete(); }}
-                className="flex-1 min-h-[44px] text-xs text-red-500 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg py-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                className="flex-1 min-h-[44px] text-xs text-red-500 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg py-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors font-semibold"
               >
                 {t.delete}
               </button>

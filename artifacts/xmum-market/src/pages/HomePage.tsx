@@ -95,14 +95,14 @@ function ShopPillCard({ shop }: { shop: Shop }) {
   return (
     <Link href={`/shop/${shop.slug}`}>
       <div className="flex flex-col items-center w-[80px] shrink-0 cursor-pointer group">
-        <div className="w-14 h-14 rounded-2xl bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 overflow-hidden shadow-sm group-hover:shadow-md group-hover:border-[#003366] dark:group-hover:border-blue-500 transition-all flex items-center justify-center mb-1.5">
+        <div className="w-16 h-16 rounded-2xl bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 overflow-hidden shadow-sm group-hover:shadow-md group-hover:border-[#003366] dark:group-hover:border-blue-500 transition-all flex items-center justify-center mb-1.5">
           {shop.logoUrl ? (
             <img src={shop.logoUrl} alt={shop.name} className="w-full h-full object-cover" />
           ) : (
             <Store size={24} className="text-[#003366] dark:text-blue-400" />
           )}
         </div>
-        <p className="text-[11px] font-semibold text-gray-800 dark:text-slate-200 text-center line-clamp-1 w-full leading-tight">
+        <p className="text-[11px] font-bold font-display text-gray-800 dark:text-slate-200 text-center line-clamp-1 w-full leading-tight">
           {shop.name}
         </p>
         {shop.reviewCount > 0 ? (
@@ -125,7 +125,7 @@ function ShopListingMiniCard({ listing }: { listing: ShopListing }) {
   return (
     <div
       onClick={() => navigate(`/shop-listing/${listing.id}`)}
-      className="bg-white dark:bg-slate-800 rounded-xl overflow-hidden border border-gray-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow active:scale-[0.98] cursor-pointer"
+      className="card-base overflow-hidden transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
     >
       {listing.photos[0] ? (
         <img src={listing.photos[0]} alt={listing.title} className="w-full aspect-square object-cover" />
@@ -135,7 +135,7 @@ function ShopListingMiniCard({ listing }: { listing: ShopListing }) {
         </div>
       )}
       <div className="p-2">
-        <p className="text-[11px] font-semibold text-gray-900 dark:text-slate-100 line-clamp-2 leading-tight mb-0.5">
+        <p className="text-[11px] font-semibold font-display text-gray-900 dark:text-slate-100 line-clamp-2 leading-tight mb-0.5">
           {listing.title}
         </p>
         {listing.price != null ? (
@@ -359,7 +359,7 @@ export default function HomePage() {
 
         {/* Tab bar */}
         <div className="border-b border-[#E2E8F0] dark:border-slate-700">
-          <div className="max-w-5xl mx-auto px-4 flex overflow-x-auto scrollbar-hide">
+          <div className="max-w-5xl mx-auto flex items-center gap-2 px-4 overflow-x-auto scrollbar-hide pb-2 pt-2">
             {ALL_TABS.map((tab) => {
               const count = tabCounts[tab];
               const isActive = activeTab === tab;
@@ -367,28 +367,12 @@ export default function HomePage() {
                 <button
                   key={tab}
                   onClick={() => handleTabChange(tab)}
-                  className={`
-                    flex-shrink-0 md:flex-1 flex items-center gap-1.5 py-3 px-3 md:px-4
-                    text-xs sm:text-sm font-semibold border-b-2 whitespace-nowrap
-                    transition-all duration-200 justify-center
-                    ${isActive
-                      ? "border-[#003366] dark:border-blue-400 text-[#003366] dark:text-blue-400"
-                      : "border-transparent text-[#64748B] dark:text-slate-500 hover:text-[#0F172A] dark:hover:text-slate-300"
-                    }
-                  `}
+                  className={`chip flex-shrink-0 ${isActive ? "chip-active" : ""}`}
                 >
-                  <span className="text-base leading-none">{TAB_ICONS[tab]}</span>
+                  <span>{TAB_ICONS[tab]}</span>
                   <span>{tabLabel(tab)}</span>
                   {count != null && count > 0 && (
-                    <span
-                      className={`
-                        text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none
-                        ${isActive
-                          ? "bg-[#003366] dark:bg-blue-500 text-white"
-                          : "bg-[#F1F5F9] dark:bg-slate-700 text-[#64748B] dark:text-slate-400"
-                        }
-                      `}
-                    >
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none ${isActive ? "bg-white/25" : "bg-[#F1F5F9] dark:bg-slate-700 text-[#64748B] dark:text-slate-400"}`}>
                       {count > 99 ? "99+" : count}
                     </span>
                   )}
@@ -408,21 +392,13 @@ export default function HomePage() {
           )}
           <div
             ref={chipRowRef}
-            className="max-w-5xl mx-auto flex gap-2 overflow-x-auto scrollbar-hide px-4 py-2.5"
+            className="max-w-5xl mx-auto flex gap-2 overflow-x-auto scrollbar-hide px-4 pt-1 pb-2"
           >
             {["all", ...getCategoriesForTab(activeTab)].map((cat) => (
               <button
                 key={cat}
                 onClick={() => setCategoryFilter(cat)}
-                className={`
-                  flex-shrink-0 min-h-[36px] min-w-fit px-3.5 whitespace-nowrap
-                  flex items-center gap-1.5 rounded-full text-xs font-medium
-                  border transition-all duration-150
-                  ${categoryFilter === cat
-                    ? "bg-[#003366] text-white border-[#003366] shadow-sm dark:bg-blue-600 dark:border-blue-600"
-                    : "bg-white dark:bg-slate-800 text-[#64748B] dark:text-slate-300 border-[#E2E8F0] dark:border-slate-600 hover:border-[#003366] hover:text-[#003366] dark:hover:border-blue-400"
-                  }
-                `}
+                className={`chip flex-shrink-0 ${categoryFilter === cat ? "chip-active" : ""}`}
               >
                 <span>{CATEGORY_ICONS[cat] ?? "📦"}</span>
                 <span>{cat === "all" ? (lang === "en" ? "All" : "全部") : t.categories[cat as keyof typeof t.categories]}</span>
@@ -470,10 +446,7 @@ export default function HomePage() {
 
           {/* Section header */}
           <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <span className="text-base">🏪</span>
-              <h2 className="text-sm font-bold text-gray-900 dark:text-slate-100">Campus Shops</h2>
-            </div>
+            <h2 className="section-header">🏪 Campus Shops</h2>
             <Link
               href="/campus-market"
               className="flex items-center gap-0.5 text-xs font-semibold text-[#003366] dark:text-blue-400 hover:underline"
@@ -504,9 +477,7 @@ export default function HomePage() {
           {recentShopListings.length > 0 && (
             <div className="mt-4">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">
-                  New from Shops
-                </p>
+                <p className="section-header text-sm">🛍️ Campus Market Picks</p>
                 <Link
                   href="/campus-market"
                   className="text-[11px] font-semibold text-[#003366] dark:text-blue-400 hover:underline"
@@ -533,16 +504,20 @@ export default function HomePage() {
         {loading ? (
           <SkeletonGrid />
         ) : displayedListings.length === 0 ? (
-          <div className="col-span-full flex flex-col items-center py-16 text-center">
-            <span className="text-5xl mb-4">🛍️</span>
-            <p className="text-base font-semibold text-slate-700 dark:text-slate-300">No listings yet</p>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Be the first to post something!</p>
+          <div className="flex flex-col items-center justify-center py-16 px-8 text-center">
+            <div className="text-5xl mb-4">{TAB_ICONS[activeTab]}</div>
+            <p className="font-display font-bold text-gray-700 dark:text-slate-300 text-lg mb-1">
+              Nothing here yet
+            </p>
+            <p className="text-sm text-gray-400 dark:text-slate-500">
+              Be the first to post in this category!
+            </p>
             {categoryFilter !== "all" ? (
-              <button onClick={() => setCategoryFilter("all")} className="mt-4 inline-block text-[#003366] dark:text-blue-400 text-sm font-semibold underline">
+              <button onClick={() => setCategoryFilter("all")} className="mt-4 text-[#003366] dark:text-blue-400 text-sm font-semibold underline">
                 Show all categories
               </button>
             ) : (
-              <Link href="/post" className="mt-4 inline-block bg-[#003366] dark:bg-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-[#002244] dark:hover:bg-blue-700 transition-colors">
+              <Link href="/post" className="btn-primary mt-6 px-8">
                 {t.postItem}
               </Link>
             )}
@@ -575,7 +550,7 @@ export default function HomePage() {
                   <button
                     onClick={handleLoadMore}
                     disabled={loadingMore}
-                    className="flex items-center gap-2 px-6 py-2.5 min-h-[44px] bg-white dark:bg-[#1E293B] text-[#003366] dark:text-blue-400 border border-[#E2E8F0] dark:border-slate-700 rounded-full text-sm font-semibold hover:border-[#003366] dark:hover:border-blue-500 disabled:opacity-50 transition-all duration-200 shadow-card"
+                    className="btn-ghost flex items-center gap-2 px-8 min-h-[44px] disabled:opacity-50"
                   >
                     {loadingMore ? (
                       <><Loader2 size={15} className="animate-spin" /> {t.loading}</>

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Nunito:wght@600;700;800;900&display=swap');
 @import "tailwindcss";
 
 html {
@@ -80,6 +80,12 @@ header[data-sticky],
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* ── Display / body font tokens ─────────────────────────────────────────── */
+:root {
+  --font-display: 'Nunito', 'Inter', sans-serif;
+  --font-body: 'Inter', sans-serif;
 }
 
 /* ── XMUM Market Design System Tokens (from Stitch) ─────────────────────── */
@@ -414,3 +420,115 @@ header[data-sticky],
     inset: -1px;
   }
 }
+
+/* ── XMUM Market UI Kit ─────────────────────────────────────────────────── */
+
+.font-display { font-family: var(--font-display); }
+
+/* Card elevation system */
+.card-base {
+  background: white;
+  border-radius: 1rem;
+  border: 1px solid #F1F5F9;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+  transition: box-shadow 0.2s, transform 0.2s;
+}
+.dark .card-base {
+  background: #1E293B;
+  border-color: #334155;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.3);
+}
+.card-base:hover {
+  box-shadow: 0 4px 12px 0 rgb(0 0 0 / 0.10), 0 2px 4px -1px rgb(0 0 0 / 0.06);
+}
+
+/* Section header style */
+.section-header {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 800;
+  color: #0F172A;
+  letter-spacing: -0.01em;
+}
+.dark .section-header {
+  color: #F1F5F9;
+}
+
+/* Chip / filter pill */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.375rem 0.875rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1.5px solid #E2E8F0;
+  background: white;
+  color: #475569;
+  transition: all 0.15s;
+  cursor: pointer;
+  white-space: nowrap;
+  min-height: 36px;
+}
+.dark .chip {
+  border-color: #334155;
+  background: #1E293B;
+  color: #94A3B8;
+}
+.chip-active {
+  background: #003366;
+  border-color: #003366;
+  color: white;
+}
+.dark .chip-active {
+  background: #2563EB;
+  border-color: #2563EB;
+  color: white;
+}
+.chip:active { transform: scale(0.96); }
+
+/* Primary CTA button */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0 1.25rem;
+  min-height: 48px;
+  border-radius: 0.75rem;
+  background: #003366;
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 700;
+  font-family: var(--font-display);
+  transition: all 0.15s;
+  cursor: pointer;
+  border: none;
+}
+.dark .btn-primary { background: #2563EB; }
+.btn-primary:hover { filter: brightness(1.15); transform: translateY(-1px); }
+.btn-primary:active { filter: brightness(0.9); transform: scale(0.98); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+/* Ghost / outline button */
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0 1.25rem;
+  min-height: 48px;
+  border-radius: 0.75rem;
+  background: transparent;
+  color: #003366;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border: 2px solid #003366;
+  transition: all 0.15s;
+  cursor: pointer;
+}
+.dark .btn-ghost { color: #60A5FA; border-color: #60A5FA; }
+.btn-ghost:hover { background: #003366; color: white; }
+.dark .btn-ghost:hover { background: #2563EB; color: white; }
+.btn-ghost:active { transform: scale(0.98); }

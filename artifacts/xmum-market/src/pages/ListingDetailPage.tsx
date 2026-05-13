@@ -420,7 +420,7 @@ export default function ListingDetailPage() {
 
       <div className="max-w-2xl mx-auto pb-6 md:pb-8 animate-in fade-in duration-200">
         {/* Back button + overflow menu */}
-        <div data-sticky-subheader className="sticky top-14 sm:top-16 z-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm border-b border-gray-100 dark:border-slate-700">
+        <div data-sticky-subheader className="sticky top-14 z-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-gray-100 dark:border-slate-700">
           <div className="flex items-center justify-between px-4">
             <button
               onClick={() => window.history.back()}
@@ -548,7 +548,7 @@ export default function ListingDetailPage() {
 
           {/* Title & price */}
           <div>
-            <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100 leading-tight">{listing.title}</h1>
+            <h1 className="text-xl font-display font-bold text-gray-900 dark:text-slate-100 leading-tight">{listing.title}</h1>
             {listing.type === "buy-sell" && (
               <p className={`mt-1 text-3xl font-bold ${isSold ? "text-gray-400 dark:text-slate-500 line-through" : "text-blue-600 dark:text-blue-400"}`}>
                 {listing.price === 0 ? "Free / Return Item" : `RM ${fmtRM(listing.price ?? 0)}`}
@@ -703,7 +703,7 @@ export default function ListingDetailPage() {
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm text-slate-900 dark:text-slate-100 truncate">{listing.userName}</p>
                   {sellerProfile?.isVerified ? (
-                    <p className="text-[11px] text-teal-600 dark:text-teal-400 font-medium flex items-center gap-1">
+                    <p className="text-[11px] font-display font-medium text-teal-600 dark:text-teal-400 flex items-center gap-1">
                       <ShieldCheck size={11} /> Verified XMUM Student
                     </p>
                   ) : null}
@@ -725,7 +725,7 @@ export default function ListingDetailPage() {
                   <button
                     onClick={handleMessageSeller}
                     disabled={startingChat}
-                    className="flex-1 flex items-center justify-center gap-2 bg-[#003366] dark:bg-blue-600 text-white text-sm font-semibold rounded-xl py-2.5 min-h-[44px] hover:bg-[#002244] dark:hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                    className="btn-primary flex-1 flex items-center justify-center gap-2 min-h-[44px] disabled:opacity-50"
                   >
                     {startingChat ? <Loader2 size={15} className="animate-spin" /> : <MessageCircle size={15} />}
                     Message
@@ -867,9 +867,7 @@ export default function ListingDetailPage() {
           {(similarLoading || similarListings.length >= 2) && (
             <div className="pt-2">
               <div className="flex items-center justify-between mb-3">
-                <h2 className="text-base font-bold text-gray-900 dark:text-slate-100">
-                  More in {catLabel}
-                </h2>
+                <h2 className="section-header">More in {catLabel}</h2>
                 <Link
                   href={`/search?category=${listing.category}&type=${listing.type}`}
                   className="flex items-center gap-1 text-xs text-[#003366] dark:text-blue-400 font-medium hover:underline"
@@ -887,7 +885,7 @@ export default function ListingDetailPage() {
                       <Link
                         key={sl.id}
                         href={`/listing/${sl.id}`}
-                        className="flex-shrink-0 w-40 md:w-48 rounded-xl overflow-hidden border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-200"
+                        className="flex-shrink-0 w-40 md:w-48 card-base overflow-hidden hover:scale-[1.02] transition-all duration-200"
                       >
                         {sl.photos.length > 0 ? (
                           <img
@@ -902,7 +900,7 @@ export default function ListingDetailPage() {
                           </div>
                         )}
                         <div className="p-2">
-                          <p className="text-xs font-semibold text-gray-900 dark:text-slate-100 line-clamp-2 leading-snug">{sl.title}</p>
+                          <p className="text-xs font-display font-semibold text-gray-900 dark:text-slate-100 line-clamp-2 leading-snug">{sl.title}</p>
                           {sl.price != null && sl.type === "buy-sell" && (
                             <p className="text-xs font-bold text-blue-600 dark:text-blue-400 mt-1">
                               {sl.price === 0 ? "Free" : `RM ${fmtRM(sl.price)}`}

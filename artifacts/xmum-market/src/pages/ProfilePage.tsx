@@ -496,7 +496,7 @@ export default function ProfilePage() {
             </div>
 
             {/* Name + meta */}
-            <h2 className="text-lg font-bold text-gray-900 dark:text-slate-100 leading-tight">{displayName}</h2>
+            <h2 className="text-lg font-display font-bold text-gray-900 dark:text-slate-100 leading-tight">{displayName}</h2>
             <p className="text-xs text-gray-400 dark:text-slate-500 truncate">{user.email}</p>
             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
               {user.emailVerified ? (
@@ -536,13 +536,13 @@ export default function ProfilePage() {
 
         {/* ── MAIN TABS ──────────────────────────────────────────── */}
         <div className="px-4">
-          <div className="flex border-b border-gray-200 dark:border-slate-700 mb-4">
-            <button className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold border-b-2 border-[#003366] dark:border-blue-400 text-[#003366] dark:text-blue-400 -mb-px min-h-[44px]">
+          <div className="flex gap-2 mb-4 overflow-x-auto scrollbar-hide">
+            <button className={`chip chip-active`}>
               {t.myListings}
             </button>
             <button
               onClick={() => navigate("/settings")}
-              className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300 transition-colors -mb-px min-h-[44px]"
+              className="chip"
             >
               <Settings size={13} />
               {t.accountSettings}
@@ -555,17 +555,13 @@ export default function ProfilePage() {
               <button
                 key={key}
                 onClick={() => setTab(key)}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                  tab === key
-                    ? "bg-[#003366] dark:bg-blue-600 text-white shadow-sm"
-                    : "bg-gray-100 dark:bg-slate-700/50 text-gray-500 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-700"
-                }`}
+                className={`chip ${tab === key ? "chip-active" : ""}`}
               >
                 {key === "saved" && <Bookmark size={12} />}
                 {label}
                 {!loading && count > 0 && (
                   <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center ${
-                    tab === key ? "bg-white/20 text-white" : "bg-gray-200 dark:bg-slate-600 text-gray-600 dark:text-slate-300"
+                    tab === key ? "bg-white/25" : "bg-gray-200 dark:bg-slate-600 text-gray-600 dark:text-slate-300"
                   }`}>
                     {count}
                   </span>
@@ -621,7 +617,7 @@ export default function ProfilePage() {
                   Tap the bookmark on any listing to save it for later.
                 </p>
                 <Link href="/">
-                  <button className="mt-4 flex items-center gap-1.5 bg-[#003366] dark:bg-blue-600 text-white text-sm font-semibold px-4 py-2.5 rounded-xl hover:bg-[#002244] transition">
+                  <button className="btn-primary mt-4 flex items-center gap-1.5">
                     Browse Listings
                   </button>
                 </Link>
@@ -644,7 +640,7 @@ export default function ProfilePage() {
                   Post your first listing — it only takes a minute.
                 </p>
                 <Link href="/post">
-                  <button className="mt-4 flex items-center gap-1.5 bg-[#003366] dark:bg-blue-600 text-white text-sm font-semibold px-4 py-2.5 rounded-xl hover:bg-[#002244] transition">
+                  <button className="btn-primary mt-4 flex items-center gap-1.5">
                     <Plus size={14} /> Post a Listing
                   </button>
                 </Link>
@@ -682,9 +678,7 @@ export default function ProfilePage() {
           {/* ── MY SHOPS ─────────────────────────────────────────── */}
           <div className="mt-8">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-bold text-gray-900 dark:text-slate-100 flex items-center gap-2">
-                <Store size={15} className="text-[#003366] dark:text-blue-400" /> My Shops
-              </h2>
+              <h2 className="section-header">🏪 My Shops</h2>
               <Link href="/campus-market" className="text-xs text-[#003366] dark:text-blue-400 font-semibold flex items-center gap-0.5">
                 Browse <ChevronRight size={12} />
               </Link>

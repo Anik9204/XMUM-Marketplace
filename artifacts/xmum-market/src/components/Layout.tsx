@@ -83,8 +83,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       )}
       {/* ── Header ────────────────────────────────────────────────────────── */}
-      <header data-sticky className="sticky top-0 z-50 bg-[#003366] dark:bg-slate-900 shadow-md border-b border-slate-200 dark:border-slate-700/80">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between">
+      <header data-sticky className="sticky top-0 z-50 bg-[#003366] dark:bg-slate-900 shadow-[0_2px_8px_rgb(0,51,102,0.35)] border-b border-slate-200 dark:border-slate-700/80">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
           {/* Logo */}
           <Link href="/" className="flex items-center shrink-0" aria-label="XMUM Market Home">
             <img
@@ -98,7 +98,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             {/* Language Toggle */}
             <button
               onClick={toggleLang}
-              className="flex items-center gap-1 text-white/80 hover:text-white text-sm font-medium transition-colors p-2 min-h-[44px] min-w-[44px] justify-center rounded-lg hover:bg-white/10"
+              className="flex items-center gap-1 text-white/80 hover:text-white text-sm font-medium transition-colors p-2 min-h-[44px] min-w-[44px] justify-center rounded-lg hover:bg-white/10 font-display"
             >
               <Globe size={16} />
               <span className="hidden sm:inline">{lang === "en" ? "中文" : "EN"}</span>
@@ -183,7 +183,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <div className="max-w-5xl mx-auto">
           {location === "/" && (
             <>
-              <p className="font-semibold text-white/90 mb-1">{t.pdpaTitle}</p>
+              <p className="font-display font-semibold text-white/90 mb-1">{t.pdpaTitle}</p>
               <p className="mb-3">{t.pdpaText}</p>
             </>
           )}
@@ -192,7 +192,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </footer>
 
       {/* Mobile bottom nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-700 z-40">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-gray-100 dark:border-slate-700/80">
         <div className="flex pb-[env(safe-area-inset-bottom)]">
           {navItems.map(({ href, icon: Icon, label, activeFor }) => {
             const active = activeFor ? activeFor.includes(location) : location === href;
@@ -200,10 +200,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <Link
                 key={href}
                 href={href}
-                className={`flex-1 flex flex-col items-center justify-center min-h-[56px] gap-0.5 transition-colors ${active ? "text-[#003366] dark:text-blue-400" : "text-slate-400 dark:text-slate-500"}`}
+                className={`flex-1 flex flex-col items-center justify-center min-h-[60px] gap-1 transition-all duration-200 ${active ? "text-[#003366] dark:text-blue-400" : "text-slate-400 dark:text-slate-500"}`}
               >
-                <div className="relative">
-                  <Icon size={20} strokeWidth={active ? 2.5 : 1.8} />
+                <div className={`relative px-3 py-1 rounded-xl ${active ? "bg-[#003366]/10 dark:bg-blue-500/20" : ""}`}>
+                  <Icon size={20} strokeWidth={active ? 2.5 : 1.6} />
                   {href === "/messages" && unreadMessages > 0 && (
                     <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-0.5 leading-none">
                       {unreadMessages > 9 ? "9+" : unreadMessages}
@@ -215,7 +215,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     </span>
                   )}
                 </div>
-                <span className="text-[9px] xs:text-[10px] font-medium leading-none">{label}</span>
+                <span className="text-[10px] font-semibold font-display leading-none">{label}</span>
               </Link>
             );
           })}
@@ -225,7 +225,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* Floating Action Button — Home and Search only, authenticated, mobile only */}
       {user && (location === "/" || location === "/search") && (
         <Link href="/post">
-          <button className="fixed bottom-20 right-4 z-[45] w-14 h-14 bg-[#003366] hover:bg-[#002244] text-white rounded-full shadow-modal flex items-center justify-center transition-transform hover:scale-105 active:scale-95 md:hidden">
+          <button className="fixed bottom-[76px] right-4 z-[45] w-14 h-14 bg-[#003366] dark:bg-blue-600 text-white rounded-2xl shadow-[0_4px_20px_rgb(0,51,102,0.4)] dark:shadow-[0_4px_20px_rgb(37,99,235,0.4)] flex items-center justify-center transition-all duration-200 hover:scale-110 hover:brightness-110 active:scale-95 md:hidden">
             <Plus className="w-6 h-6" />
           </button>
         </Link>
