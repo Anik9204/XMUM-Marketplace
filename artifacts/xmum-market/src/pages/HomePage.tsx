@@ -23,7 +23,7 @@ const ASSISTANCE_CATEGORIES = [
   "dorm_moving", "grocery_run", "delivery", "cleaning",
   "event_setup", "tech_help", "other_assistance",
 ];
-const RENTAL_VEHICLE_TYPES = ["car", "bike", "motorcycle", "bicycle", "scooter"];
+const RENTAL_VEHICLE_TYPES = ["car", "motorcycle", "bicycle", "electric-bike"];
 
 const CATEGORY_ICONS: Record<string, string> = {
   all: "✨",
@@ -31,7 +31,7 @@ const CATEGORY_ICONS: Record<string, string> = {
   books: "📚",
   clothing: "👕",
   furniture: "🪑",
-  food: "🍜",
+  food: "🍳",
   services: "🛠️",
   others: "📦",
   lostItem: "🔍",
@@ -52,9 +52,8 @@ const CATEGORY_ICONS: Record<string, string> = {
   tech_help: "⚙️",
   other_assistance: "🤝",
   car: "🚗",
-  bike: "🏍️",
   motorcycle: "🏍️",
-  scooter: "🛵",
+  "electric-bike": "⚡",
   bicycle: "🚲",
 };
 
@@ -428,6 +427,131 @@ export default function HomePage() {
           </>
         )}
       </div>
+
+      {/* ===== ABOUT SECTION ===== */}
+      <section className="mt-16 mb-8 px-4">
+        {/* Divider */}
+        <div className="border-t border-slate-200 dark:border-slate-700 mb-10" />
+
+        {/* About card */}
+        <div className="max-w-2xl mx-auto bg-white dark:bg-[#1E293B] rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+
+          {/* Header band */}
+          <div className="bg-[#003366] dark:bg-[#0D2B6B] px-6 py-5">
+            <div className="flex items-center gap-3">
+              <span className="text-3xl">🏪</span>
+              <div>
+                <h2 className="text-white text-lg font-bold tracking-tight">About XMUM Market</h2>
+                <p className="text-blue-200 text-xs mt-0.5">Student Marketplace · XMUM</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="px-6 py-6 space-y-6">
+
+            {/* Product description */}
+            <div>
+              <h3 className="text-sm font-semibold text-[#003366] dark:text-blue-400 uppercase tracking-wide mb-2">What is XMUM Market?</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                XMUM Market is a safe, student-only digital marketplace built exclusively for the XMUM community.
+                It allows students to <strong className="text-slate-800 dark:text-white">buy and sell</strong> second-hand items,
+                post <strong className="text-slate-800 dark:text-white">Lost &amp; Found</strong> notices,
+                offer <strong className="text-slate-800 dark:text-white">jobs and freelance services</strong>,
+                request <strong className="text-slate-800 dark:text-white">peer assistance</strong>,
+                and list <strong className="text-slate-800 dark:text-white">vehicle rentals</strong> — all within a trusted campus network.
+              </p>
+              <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed mt-3">
+                Every account is verified with an XMUM student email, ensuring all users are genuine members of the campus community.
+                The platform supports bilingual browsing in English and Chinese (中文), real-time messaging between buyers and sellers,
+                and in-app notifications so you never miss a deal.
+              </p>
+            </div>
+
+            {/* Feature highlights */}
+            <div>
+              <h3 className="text-sm font-semibold text-[#003366] dark:text-blue-400 uppercase tracking-wide mb-3">Key Features</h3>
+              <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {[
+                  ["🛍️", "Buy & Sell", "Second-hand items across 7 categories"],
+                  ["🔍", "Lost & Found", "Report or claim lost items on campus"],
+                  ["💼", "Jobs & Services", "Tutoring, design, dev, and more"],
+                  ["🤝", "Peer Assistance", "Request help from fellow students"],
+                  ["🚗", "Rentals", "Rent cars, motorcycles & e-bikes"],
+                  ["🔒", "XMUM-Only Access", "Verified student email required"],
+                ].map(([icon, title, desc]) => (
+                  <li key={title} className="flex items-start gap-2.5 bg-slate-50 dark:bg-slate-800 rounded-xl px-3 py-2.5">
+                    <span className="text-lg mt-0.5">{icon}</span>
+                    <div>
+                      <p className="text-xs font-semibold text-slate-800 dark:text-slate-100">{title}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{desc}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Creator info */}
+            <div className="border-t border-slate-100 dark:border-slate-700 pt-5">
+              <h3 className="text-sm font-semibold text-[#003366] dark:text-blue-400 uppercase tracking-wide mb-3">Created By</h3>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-[#003366] dark:bg-blue-800 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                  SK
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">SK Tanvir Ahmed Anik</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Student ID: cys2209204 · XMUM</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Contact */}
+            <div className="border-t border-slate-100 dark:border-slate-700 pt-5">
+              <h3 className="text-sm font-semibold text-[#003366] dark:text-blue-400 uppercase tracking-wide mb-3">Contact Admin</h3>
+              <div className="space-y-2.5">
+
+                {/* Email */}
+                <a
+                  href="mailto:cys2209204@xmu.edu.my"
+                  className="flex items-center gap-3 group bg-slate-50 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-xl px-4 py-3 transition-colors"
+                >
+                  <span className="text-xl">📧</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Email</p>
+                    <p className="text-sm font-medium text-[#003366] dark:text-blue-400 group-hover:underline truncate">
+                      cys2209204@xmu.edu.my
+                    </p>
+                  </div>
+                  <span className="text-slate-400 text-xs">→</span>
+                </a>
+
+                {/* WhatsApp */}
+                <a
+                  href="https://wa.me/60142246554"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 group bg-slate-50 dark:bg-slate-800 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-xl px-4 py-3 transition-colors"
+                >
+                  <span className="text-xl">💬</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">WhatsApp</p>
+                    <p className="text-sm font-medium text-green-600 dark:text-green-400 group-hover:underline">
+                      +60 14-224 6554
+                    </p>
+                  </div>
+                  <span className="text-slate-400 text-xs">→</span>
+                </a>
+              </div>
+            </div>
+
+            {/* Footer note */}
+            <p className="text-center text-xs text-slate-400 dark:text-slate-500 pt-2">
+              XMUM Market is a student project. For official university matters, contact XMUM administration directly.
+            </p>
+
+          </div>
+        </div>
+      </section>
+      {/* ===== END ABOUT SECTION ===== */}
 
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
     </div>

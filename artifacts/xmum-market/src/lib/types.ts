@@ -138,7 +138,7 @@ export interface Listing {
   pricingModel?: "per_hour" | "per_day" | "per_month" | "fixed";
   isRemote?: boolean;
   availability?: string;
-  vehicleType?: "car" | "bike" | "motorcycle" | "bicycle" | "scooter";
+  vehicleType?: "car" | "motorcycle" | "bicycle" | "electric-bike";
   vehicleBrand?: string;
   vehicleModel?: string;
   vehicleYear?: number;
@@ -157,7 +157,7 @@ export interface Listing {
 }
 
 export interface RentalListing extends Listing {
-  vehicleType: "car" | "bike" | "motorcycle" | "bicycle" | "scooter";
+  vehicleType: "car" | "motorcycle" | "bicycle" | "electric-bike";
   brand: string;
   model: string;
   year: number;

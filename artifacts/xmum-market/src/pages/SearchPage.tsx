@@ -340,7 +340,7 @@ export default function SearchPage() {
                   onClick={() => setKeyword(t.categories[cat as keyof typeof t.categories] ?? cat)}
                   className="flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl text-xs font-medium text-gray-700 dark:text-slate-300 hover:border-[#003366] dark:hover:border-blue-400 transition-colors shadow-sm"
                 >
-                  {({"electronics":"💻","books":"📚","clothing":"👕","furniture":"🪑","food":"🍜"} as Record<string, string>)[cat]}
+                  {({"electronics":"💻","books":"📚","clothing":"👕","furniture":"🪑","food":"🍳"} as Record<string, string>)[cat]}
                   {" "}{t.categories[cat as keyof typeof t.categories]}
                 </button>
               ))}

@@ -1,0 +1,379 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless I have explicitly told you to remove it.
+
+4. After every change, mentally verify: "Does this break anything
+   that was working before?" If yes, do not proceed — find a
+   different approach.
+
+5. If fixing Issue X requires changing a shared component used by
+   other pages, STOP and tell me what the impact will be before
+   making the change. Ask for permission first.
+
+6. Never change any CSS class, layout structure, z-index, or
+   responsive breakpoint unless it is directly part of the fix.
+
+7. Confirm the app builds with zero errors before finishing:
+   pnpm --filter @workspace/xmum-market run build
+
+
+# Replit Prompt: XMUM Market — Category & About Section Updates
+
+This prompt covers **four targeted changes** to the XMUM Market app (a React + TypeScript + Firebase web app located at `artifacts/xmum-market/`). Read all four sections before starting. Make every change exactly as described — do not rename, restructure, or refactor anything beyond what is listed.
+
+---
+
+## Change 1 — Rename "Food & Drinks" → "Cooking Items" everywhere
+
+The category key in the codebase is `"food"`. Do NOT rename the key itself — only change the display labels and icons.
+
+### 1a. `src/lib/i18n.ts`
+
+**English block** (around line 90):
+```ts
+// BEFORE:
+food: "Food & Drinks",
+
+// AFTER:
+food: "Cooking Items",
+```
+
+**Chinese block** (around line 340):
+```ts
+// BEFORE:
+food: "食品饮料",
+
+// AFTER:
+food: "烹饪用品",
+```
+
+### 1b. `src/pages/HomePage.tsx`
+
+In the `CATEGORY_ICONS` object, update the food icon from noodles to a cooking pot:
+```ts
+// BEFORE:
+food: "🍜",
+
+// AFTER:
+food: "🍳",
+```
+
+### 1c. `src/pages/SearchPage.tsx`
+
+There is an inline icon map around line 343. Update:
+```ts
+// BEFORE:
+{"electronics":"💻","books":"📚","clothing":"👕","furniture":"🪑","food":"🍜"}
+
+// AFTER:
+{"electronics":"💻","books":"📚","clothing":"👕","furniture":"🪑","food":"🍳"}
+```
+
+### 1d. `src/pages/PostPage.tsx`
+
+No key changes needed. The `BUY_SELL_CATEGORIES` array uses the string `"food"` which remains the same. The display label already comes from `i18n.ts` via the `t.categories.food` lookup. Confirm that the category `<select>` renders category labels from `t.categories[cat]` — if it renders the raw key string instead, update the select options to show `t.categories[cat as keyof typeof t.categories]`.
+
+---
+
+## Change 2 — Remove "bike" from Rentals; rename "scooter" to "electric bike"
+
+### 2a. `src/lib/types.ts`
+
+**Line 141 and 160** — remove `"bike"` from the vehicleType union, and rename `"scooter"` to `"electric-bike"`:
+
+```ts
+// BEFORE (line 141):
+vehicleType?: "car" | "bike" | "motorcycle" | "bicycle" | "scooter";
+
+// AFTER:
+vehicleType?: "car" | "motorcycle" | "bicycle" | "electric-bike";
+
+// BEFORE (line 160):
+vehicleType: "car" | "bike" | "motorcycle" | "bicycle" | "scooter";
+
+// AFTER:
+vehicleType: "car" | "motorcycle" | "bicycle" | "electric-bike";
+```
+
+### 2b. `src/pages/PostPage.tsx`
+
+**Line 36** — update the `RENTAL_VEHICLE_TYPES` array:
+```ts
+// BEFORE:
+const RENTAL_VEHICLE_TYPES = ["car", "bike", "motorcycle", "bicycle", "scooter"] as const;
+
+// AFTER:
+const RENTAL_VEHICLE_TYPES = ["car", "motorcycle", "bicycle", "electric-bike"] as const;
+```
+
+**Around line 674–679** — update the `vehicleTypeLabel` function:
+```ts
+// BEFORE:
+const vehicleTypeLabel = (vt: VehicleType) => {
+  if (vt === "car") return `🚗 ${t.rentalCar}`;
+  if (vt === "bike") return `🏍️ ${t.rentalBike}`;
+  if (vt === "motorcycle") return `🏍️ ${t.rentalMotorcycle}`;
+  if (vt === "bicycle") return `🚲 ${t.rentalBicycle}`;
+  return `🛵 ${t.rentalScooter}`;
+};
+
+// AFTER:
+const vehicleTypeLabel = (vt: VehicleType) => {
+  if (vt === "car") return `🚗 ${t.rentalCar}`;
+  if (vt === "motorcycle") return `🏍️ ${t.rentalMotorcycle}`;
+  if (vt === "bicycle") return `🚲 ${t.rentalBicycle}`;
+  return `⚡ ${t.rentalElectricBike}`;
+};
+```
+
+**Around line 971** — update the inline icon rendering inside the vehicle type selector:
+```ts
+// BEFORE:
+<span className="text-lg">{vt === "car" ? "🚗" : vt === "bicycle" ? "🚲" : vt === "scooter" ? "🛵" : "🏍️"}</span>
+
+// AFTER:
+<span className="text-lg">{vt === "car" ? "🚗" : vt === "bicycle" ? "🚲" : vt === "electric-bike" ? "⚡" : "🏍️"}</span>
+```
+
+Also update the default state initializer if it references `"car"` — that's fine, leave it as-is.
+
+### 2c. `src/lib/i18n.ts`
+
+**English block** (around line 204–208):
+```ts
+// BEFORE:
+rentalCar: "Car",
+rentalBike: "Bike",
+rentalMotorcycle: "Motorcycle",
+rentalBicycle: "Bicycle",
+rentalScooter: "Scooter",
+
+// AFTER:
+rentalCar: "Car",
+rentalMotorcycle: "Motorcycle",
+rentalBicycle: "Bicycle",
+rentalElectricBike: "Electric Bike",
+```
+
+**Chinese block** (around line 454–458):
+```ts
+// BEFORE:
+rentalCar: "汽车",
+rentalBike: "摩托车",
+rentalMotorcycle: "摩托车",
+rentalBicycle: "自行车",
+rentalScooter: "电动摩托",
+
+// AFTER:
+rentalCar: "汽车",
+rentalMotorcycle: "摩托车",
+rentalBicycle: "自行车",
+rentalElectricBike: "电动自行车",
+```
+
+> **Important:** Also update the TypeScript interface for the translation object (if one exists in `i18n.ts`) to remove `rentalBike` and `rentalScooter`, and add `rentalElectricBike`.
+
+### 2d. `src/pages/HomePage.tsx`
+
+**Line 26** — update `RENTAL_VEHICLE_TYPES`:
+```ts
+// BEFORE:
+const RENTAL_VEHICLE_TYPES = ["car", "bike", "motorcycle", "bicycle", "scooter"];
+
+// AFTER:
+const RENTAL_VEHICLE_TYPES = ["car", "motorcycle", "bicycle", "electric-bike"];
+```
+
+**In `CATEGORY_ICONS`** (around line 54–58):
+```ts
+// BEFORE:
+car: "🚗",
+bike: "🏍️",
+motorcycle: "🏍️",
+scooter: "🛵",
+bicycle: "🚲",
+
+// AFTER:
+car: "🚗",
+motorcycle: "🏍️",
+"electric-bike": "⚡",
+bicycle: "🚲",
+```
+
+---
+
+## Change 3 — Add "About" section to the Home page
+
+In `src/pages/HomePage.tsx`, add an About section at the **very bottom of the page**, just before the closing `</div>` that wraps the `{showAuth && <AuthModal .../>}` line.
+
+Insert this complete JSX block:
+
+```tsx
+{/* ===== ABOUT SECTION ===== */}
+<section className="mt-16 mb-8 px-4">
+  {/* Divider */}
+  <div className="border-t border-slate-200 dark:border-slate-700 mb-10" />
+
+  {/* About card */}
+  <div className="max-w-2xl mx-auto bg-white dark:bg-[#1E293B] rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+
+    {/* Header band */}
+    <div className="bg-[#003366] dark:bg-[#0D2B6B] px-6 py-5">
+      <div className="flex items-center gap-3">
+        <span className="text-3xl">🏪</span>
+        <div>
+          <h2 className="text-white text-lg font-bold tracking-tight">About XMUM Market</h2>
+          <p className="text-blue-200 text-xs mt-0.5">Student Marketplace · XMUM</p>
+        </div>
+      </div>
+    </div>
+
+    <div className="px-6 py-6 space-y-6">
+
+      {/* Product description */}
+      <div>
+        <h3 className="text-sm font-semibold text-[#003366] dark:text-blue-400 uppercase tracking-wide mb-2">What is XMUM Market?</h3>
+        <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+          XMUM Market is a safe, student-only digital marketplace built exclusively for the XMUM community. 
+          It allows students to <strong className="text-slate-800 dark:text-white">buy and sell</strong> second-hand items, 
+          post <strong className="text-slate-800 dark:text-white">Lost &amp; Found</strong> notices, 
+          offer <strong className="text-slate-800 dark:text-white">jobs and freelance services</strong>, 
+          request <strong className="text-slate-800 dark:text-white">peer assistance</strong>, 
+          and list <strong className="text-slate-800 dark:text-white">vehicle rentals</strong> — all within a trusted campus network.
+        </p>
+        <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed mt-3">
+          Every account is verified with an XMUM student email, ensuring all users are genuine members of the campus community. 
+          The platform supports bilingual browsing in English and Chinese (中文), real-time messaging between buyers and sellers, 
+          and in-app notifications so you never miss a deal.
+        </p>
+      </div>
+
+      {/* Feature highlights */}
+      <div>
+        <h3 className="text-sm font-semibold text-[#003366] dark:text-blue-400 uppercase tracking-wide mb-3">Key Features</h3>
+        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {[
+            ["🛍️", "Buy & Sell", "Second-hand items across 7 categories"],
+            ["🔍", "Lost & Found", "Report or claim lost items on campus"],
+            ["💼", "Jobs & Services", "Tutoring, design, dev, and more"],
+            ["🤝", "Peer Assistance", "Request help from fellow students"],
+            ["🚗", "Rentals", "Rent cars, motorcycles & e-bikes"],
+            ["🔒", "XMUM-Only Access", "Verified student email required"],
+          ].map(([icon, title, desc]) => (
+            <li key={title} className="flex items-start gap-2.5 bg-slate-50 dark:bg-slate-800 rounded-xl px-3 py-2.5">
+              <span className="text-lg mt-0.5">{icon}</span>
+              <div>
+                <p className="text-xs font-semibold text-slate-800 dark:text-slate-100">{title}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{desc}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* Creator info */}
+      <div className="border-t border-slate-100 dark:border-slate-700 pt-5">
+        <h3 className="text-sm font-semibold text-[#003366] dark:text-blue-400 uppercase tracking-wide mb-3">Created By</h3>
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-[#003366] dark:bg-blue-800 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+            SK
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">SK Tanvir Ahmed Anik</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Student ID: cys2209204 · XMUM</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Contact */}
+      <div className="border-t border-slate-100 dark:border-slate-700 pt-5">
+        <h3 className="text-sm font-semibold text-[#003366] dark:text-blue-400 uppercase tracking-wide mb-3">Contact Admin</h3>
+        <div className="space-y-2.5">
+
+          {/* Email */}
+          <a
+            href="mailto:cys2209204@xmu.edu.my"
+            className="flex items-center gap-3 group bg-slate-50 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-xl px-4 py-3 transition-colors"
+          >
+            <span className="text-xl">📧</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Email</p>
+              <p className="text-sm font-medium text-[#003366] dark:text-blue-400 group-hover:underline truncate">
+                cys2209204@xmu.edu.my
+              </p>
+            </div>
+            <span className="text-slate-400 text-xs">→</span>
+          </a>
+
+          {/* WhatsApp */}
+          <a
+            href="https://wa.me/60142246554"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-3 group bg-slate-50 dark:bg-slate-800 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-xl px-4 py-3 transition-colors"
+          >
+            <span className="text-xl">💬</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">WhatsApp</p>
+              <p className="text-sm font-medium text-green-600 dark:text-green-400 group-hover:underline">
+                +60 14-224 6554
+              </p>
+            </div>
+            <span className="text-slate-400 text-xs">→</span>
+          </a>
+        </div>
+      </div>
+
+      {/* Footer note */}
+      <p className="text-center text-xs text-slate-400 dark:text-slate-500 pt-2">
+        XMUM Market is a student project. For official university matters, contact XMUM administration directly.
+      </p>
+
+    </div>
+  </div>
+</section>
+{/* ===== END ABOUT SECTION ===== */}
+```
+
+---
+
+## Change 4 — Firestore / Data Layer (if applicable)
+
+If the app stores `vehicleType` values in Firestore and queries/filters by them, add a one-time migration note:
+
+> Existing Firestore documents with `vehicleType: "bike"` will no longer match the new type union. Since this is a student project and not production-critical, it is acceptable to simply filter out `"bike"` listings at query time using:
+> ```ts
+> .where("vehicleType", "not-in", ["bike", "scooter"])
+> ```
+> Or, in `src/lib/listings.ts`, when fetching rental listings, add a client-side filter:
+> ```ts
+> .filter(l => l.vehicleType !== "bike" && l.vehicleType !== "scooter")
+> ```
+> This prevents old listings from breaking the UI without needing a full database migration.
+
+---
+
+## Summary Checklist
+
+Before marking this done, verify each item:
+
+- [ ] **"Food & Drinks"** label is now **"Cooking Items"** on the Home page category chips
+- [ ] **"Food & Drinks"** label is now **"Cooking Items"** in the Post form category dropdown
+- [ ] Food icon changed from 🍜 to 🍳 everywhere
+- [ ] **"Bike"** option is completely removed from the Rental vehicle type selector in the Post form
+- [ ] **"Scooter"** option is completely removed and replaced with **"Electric Bike"** (⚡) in the Rental vehicle type selector
+- [ ] Rental vehicle types in `HomePage.tsx` category filter chips match: Car, Motorcycle, Bicycle, Electric Bike — no Bike, no Scooter
+- [ ] TypeScript types compile without errors (run `tsc --noEmit` or check Replit's type checker)
+- [ ] About section appears at the bottom of the Home page, below all listings
+- [ ] About section email link opens `mailto:cys2209204@xmu.edu.my`
+- [ ] About section WhatsApp link opens `https://wa.me/60142246554` in a new tab
+- [ ] About section shows creator name "SK Tanvir Ahmed Anik" and student ID "cys2209204"
+- [ ] About section looks correct in both **light mode** and **dark mode**
+- [ ] No existing functionality (listing cards, tabs, search, post form) is broken

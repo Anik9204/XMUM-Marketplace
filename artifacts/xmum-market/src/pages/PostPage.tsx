@@ -33,7 +33,7 @@ const ASSISTANCE_CATEGORIES = [
   "dorm_moving", "grocery_run", "delivery", "cleaning",
   "event_setup", "tech_help", "other_assistance",
 ];
-const RENTAL_VEHICLE_TYPES = ["car", "bike", "motorcycle", "bicycle", "scooter"] as const;
+const RENTAL_VEHICLE_TYPES = ["car", "motorcycle", "bicycle", "electric-bike"] as const;
 type VehicleType = typeof RENTAL_VEHICLE_TYPES[number];
 
 const inputCls =
@@ -673,10 +673,9 @@ export default function PostPage() {
 
   const vehicleTypeLabel = (vt: VehicleType) => {
     if (vt === "car") return `🚗 ${t.rentalCar}`;
-    if (vt === "bike") return `🏍️ ${t.rentalBike}`;
     if (vt === "motorcycle") return `🏍️ ${t.rentalMotorcycle}`;
     if (vt === "bicycle") return `🚲 ${t.rentalBicycle}`;
-    return `🛵 ${t.rentalScooter}`;
+    return `⚡ ${t.rentalElectricBike}`;
   };
 
   const currentYear = new Date().getFullYear();
@@ -968,7 +967,7 @@ export default function PostPage() {
                         : "bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600"
                     }`}
                   >
-                    <span className="text-lg">{vt === "car" ? "🚗" : vt === "bicycle" ? "🚲" : vt === "scooter" ? "🛵" : "🏍️"}</span>
+                    <span className="text-lg">{vt === "car" ? "🚗" : vt === "bicycle" ? "🚲" : vt === "electric-bike" ? "⚡" : "🏍️"}</span>
                     <span className="text-[9px] capitalize">{vt}</span>
                   </button>
                 ))}
