@@ -164,6 +164,47 @@ export async function getShopListings(shopId: string): Promise<ShopListing[]> {
     .sort((a, b) => b.createdAt - a.createdAt);
 }
 
+export async function getFeaturedShops(limitCount = 8): Promise<Shop[]> {
+  try {
+    const q = query(
+      collection(db, "shops"),
+      orderBy("createdAt", "desc"),
+      limit(limitCount * 2)
+    );
+    const snap = await getDocs(q);
+    const active = snap.docs
+      .map((d) => ({ id: d.id, ...d.data() } as Shop))
+      .filter((s) => s.isActive !== false);
+
+    // Sort: shops with ratings first, then by createdAt
+    active.sort((a, b) => {
+      if (b.reviewCount !== a.reviewCount) return b.reviewCount - a.reviewCount;
+      return b.createdAt - a.createdAt;
+    });
+
+    return active.slice(0, limitCount);
+  } catch {
+    return [];
+  }
+}
+
+export async function getRecentShopListings(limitCount = 6): Promise<ShopListing[]> {
+  try {
+    const q = query(
+      collection(db, "shopListings"),
+      orderBy("createdAt", "desc"),
+      limit(limitCount * 2)
+    );
+    const snap = await getDocs(q);
+    return snap.docs
+      .map((d) => ({ id: d.id, ...d.data() } as ShopListing))
+      .filter((l) => l.isActive !== false)
+      .slice(0, limitCount);
+  } catch {
+    return [];
+  }
+}
+
 export async function getAllShopListings(limitCount = 40): Promise<ShopListing[]> {
   const q = query(
     collection(db, "shopListings"),

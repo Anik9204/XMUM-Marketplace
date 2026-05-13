@@ -4,12 +4,13 @@ import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { getListingsPage, getTabCounts } from "@/lib/listings";
 import { getActiveAds } from "@/lib/ads";
-import { Listing, ListingType, SponsoredAd } from "@/lib/types";
+import { getFeaturedShops, getRecentShopListings } from "@/lib/shops";
+import { Listing, ListingType, SponsoredAd, Shop, ShopListing } from "@/lib/types";
 import { QueryDocumentSnapshot } from "firebase/firestore";
 import ListingCard from "@/components/ListingCard";
 import SponsoredAdCard from "@/components/SponsoredAdCard";
 import AuthModal from "@/components/AuthModal";
-import { Search, Loader2 } from "lucide-react";
+import { Search, Loader2, Store, Star, ChevronRight } from "lucide-react";
 
 const BUY_SELL_CATEGORIES = [
   "electronics", "books", "clothing", "furniture", "food", "services", "others",
@@ -76,6 +77,91 @@ function getCategoriesForTab(tab: ListingType): string[] {
   return ASSISTANCE_CATEGORIES;
 }
 
+function StarRowSmall({ rating }: { rating: number }) {
+  return (
+    <div className="flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <Star
+          key={n}
+          size={9}
+          className={n <= Math.round(rating) ? "text-amber-400 fill-amber-400" : "text-gray-300 dark:text-slate-600"}
+        />
+      ))}
+    </div>
+  );
+}
+
+function ShopPillCard({ shop }: { shop: Shop }) {
+  return (
+    <Link href={`/shop/${shop.slug}`}>
+      <div className="flex flex-col items-center w-[80px] shrink-0 cursor-pointer group">
+        <div className="w-14 h-14 rounded-2xl bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 overflow-hidden shadow-sm group-hover:shadow-md group-hover:border-[#003366] dark:group-hover:border-blue-500 transition-all flex items-center justify-center mb-1.5">
+          {shop.logoUrl ? (
+            <img src={shop.logoUrl} alt={shop.name} className="w-full h-full object-cover" />
+          ) : (
+            <Store size={24} className="text-[#003366] dark:text-blue-400" />
+          )}
+        </div>
+        <p className="text-[11px] font-semibold text-gray-800 dark:text-slate-200 text-center line-clamp-1 w-full leading-tight">
+          {shop.name}
+        </p>
+        {shop.reviewCount > 0 ? (
+          <div className="flex items-center gap-0.5 mt-0.5">
+            <StarRowSmall rating={shop.rating} />
+            <span className="text-[9px] text-gray-400 dark:text-slate-500">{shop.rating.toFixed(1)}</span>
+          </div>
+        ) : (
+          <p className="text-[9px] text-gray-400 dark:text-slate-500 text-center truncate w-full mt-0.5">
+            {shop.category.split(" ")[0]}
+          </p>
+        )}
+      </div>
+    </Link>
+  );
+}
+
+function ShopListingMiniCard({ listing }: { listing: ShopListing }) {
+  const [, navigate] = useLocation();
+  return (
+    <div
+      onClick={() => navigate(`/shop-listing/${listing.id}`)}
+      className="bg-white dark:bg-slate-800 rounded-xl overflow-hidden border border-gray-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow active:scale-[0.98] cursor-pointer"
+    >
+      {listing.photos[0] ? (
+        <img src={listing.photos[0]} alt={listing.title} className="w-full aspect-square object-cover" />
+      ) : (
+        <div className="w-full aspect-square bg-gradient-to-br from-gray-100 to-gray-200 dark:from-slate-700 dark:to-slate-600 flex items-center justify-center">
+          <Store size={24} className="text-gray-300 dark:text-slate-500" />
+        </div>
+      )}
+      <div className="p-2">
+        <p className="text-[11px] font-semibold text-gray-900 dark:text-slate-100 line-clamp-2 leading-tight mb-0.5">
+          {listing.title}
+        </p>
+        {listing.price != null ? (
+          <p className="text-xs font-bold text-[#003366] dark:text-blue-400">
+            RM {listing.price.toFixed(2)}
+            {listing.pricingModel && listing.pricingModel !== "fixed" && (
+              <span className="font-normal text-[10px] text-gray-400">
+                /{listing.pricingModel.replace("per_", "")}
+              </span>
+            )}
+          </p>
+        ) : (
+          <p className="text-[11px] text-gray-400 dark:text-slate-500">Contact for price</p>
+        )}
+        {listing.reviewCount > 0 && (
+          <div className="flex items-center gap-0.5 mt-0.5">
+            <StarRowSmall rating={listing.rating} />
+            <span className="text-[9px] text-gray-400">({listing.reviewCount})</span>
+          </div>
+        )}
+        <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5 truncate">{listing.shopName}</p>
+      </div>
+    </div>
+  );
+}
+
 export default function HomePage() {
   const { t, lang } = useLang();
   const { user, userProfile } = useAuth();
@@ -91,6 +177,9 @@ export default function HomePage() {
   const [ads, setAds] = useState<SponsoredAd[]>([]);
   const [tabCounts, setTabCounts] = useState<Partial<Record<ListingType, number>>>({});
   const [searchQuery, setSearchQuery] = useState("");
+  const [featuredShops, setFeaturedShops] = useState<Shop[]>([]);
+  const [recentShopListings, setRecentShopListings] = useState<ShopListing[]>([]);
+  const [loadingShops, setLoadingShops] = useState(true);
   const chipRowRef = useRef<HTMLDivElement>(null);
   const [showLeftShadow, setShowLeftShadow] = useState(false);
   const [showRightShadow, setShowRightShadow] = useState(true);
@@ -133,6 +222,17 @@ export default function HomePage() {
 
   useEffect(() => {
     getTabCounts().then(setTabCounts).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    setLoadingShops(true);
+    Promise.all([
+      getFeaturedShops(8),
+      getRecentShopListings(6),
+    ]).then(([shops, listings]) => {
+      setFeaturedShops(shops);
+      setRecentShopListings(listings);
+    }).catch(() => {}).finally(() => setLoadingShops(false));
   }, []);
 
   const handleLoadMore = async () => {
@@ -363,6 +463,70 @@ export default function HomePage() {
           <SponsoredAdCard ad={ads[0]} />
         </div>
       )}
+
+      {/* ── Campus Market Discovery ─────────────────────────────────────────── */}
+      {(loadingShops || featuredShops.length > 0 || recentShopListings.length > 0) && (
+        <div className="max-w-5xl mx-auto px-4 mt-5">
+
+          {/* Section header */}
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <span className="text-base">🏪</span>
+              <h2 className="text-sm font-bold text-gray-900 dark:text-slate-100">Campus Shops</h2>
+            </div>
+            <Link
+              href="/campus-market"
+              className="flex items-center gap-0.5 text-xs font-semibold text-[#003366] dark:text-blue-400 hover:underline"
+            >
+              See all <ChevronRight size={13} />
+            </Link>
+          </div>
+
+          {/* Horizontally scrollable shop pills */}
+          {loadingShops ? (
+            <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="flex flex-col items-center w-[80px] shrink-0 animate-pulse">
+                  <div className="w-14 h-14 rounded-2xl bg-gray-200 dark:bg-slate-700 mb-1.5" />
+                  <div className="h-2.5 bg-gray-200 dark:bg-slate-700 rounded w-14" />
+                </div>
+              ))}
+            </div>
+          ) : featuredShops.length > 0 ? (
+            <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
+              {featuredShops.map((shop) => (
+                <ShopPillCard key={shop.id} shop={shop} />
+              ))}
+            </div>
+          ) : null}
+
+          {/* "New from Shops" listings grid */}
+          {recentShopListings.length > 0 && (
+            <div className="mt-4">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">
+                  New from Shops
+                </p>
+                <Link
+                  href="/campus-market"
+                  className="text-[11px] font-semibold text-[#003366] dark:text-blue-400 hover:underline"
+                >
+                  Browse all →
+                </Link>
+              </div>
+              <div className="grid grid-cols-3 gap-2.5">
+                {recentShopListings.map((listing) => (
+                  <ShopListingMiniCard key={listing.id} listing={listing} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Divider before main listings */}
+          <div className="border-t border-[#E2E8F0] dark:border-slate-700 mt-5" />
+        </div>
+      )}
+      {/* ── End Campus Market Discovery ─────────────────────────────────────── */}
 
       {/* Listings grid */}
       <div className="max-w-5xl mx-auto px-4 py-5">

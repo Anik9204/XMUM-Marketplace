@@ -1,0 +1,351 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless I have explicitly told you to remove it.
+
+4. After every change, mentally verify: "Does this break anything
+   that was working before?" If yes, do not proceed — find a
+   different approach.
+
+5. If fixing Issue X requires changing a shared component used by
+   other pages, STOP and tell me what the impact will be before
+   making the change. Ask for permission first.
+
+6. Never change any CSS class, layout structure, z-index, or
+   responsive breakpoint unless it is directly part of the fix.
+
+7. Confirm the app builds with zero errors before finishing:
+   pnpm --filter @workspace/xmum-market run build
+
+
+# Replit Prompt: XMUM Market — Embed Campus Market Discovery into Home Page
+
+This prompt must be applied **after** the previous prompt (Reviews, Analytics & Badge). The app is React + TypeScript + Firebase at `artifacts/xmum-market/`. Read this entire document before writing any code.
+
+---
+
+## Goal
+
+Make shop discovery happen passively on the Home page, so students don't need to consciously navigate to the Market tab to find campus shops and listings.
+
+The Market tab (`/campus-market`) stays completely intact — do NOT remove or modify it. We are only **adding** a new "Campus Shops" section to `HomePage.tsx` that surfaces shop content inline, between the sponsored ad and the listings grid.
+
+---
+
+## What to Add to `HomePage.tsx`
+
+### Step 1 — Add a new function to `src/lib/shops.ts`
+
+Add this function to fetch a small set of featured/active shops for the home page preview:
+
+```ts
+export async function getFeaturedShops(limitCount = 8): Promise<Shop[]> {
+  try {
+    const q = query(
+      collection(db, "shops"),
+      orderBy("createdAt", "desc"),
+      limit(limitCount * 2)
+    );
+    const snap = await getDocs(q);
+    const active = snap.docs
+      .map((d) => ({ id: d.id, ...d.data() } as Shop))
+      .filter((s) => s.isActive !== false);
+
+    // Sort: shops with ratings first, then by createdAt
+    active.sort((a, b) => {
+      if (b.reviewCount !== a.reviewCount) return b.reviewCount - a.reviewCount;
+      return b.createdAt - a.createdAt;
+    });
+
+    return active.slice(0, limitCount);
+  } catch {
+    return [];
+  }
+}
+```
+
+Also add this function to fetch a preview of recent shop listings for the home page:
+
+```ts
+export async function getRecentShopListings(limitCount = 6): Promise<ShopListing[]> {
+  try {
+    const q = query(
+      collection(db, "shopListings"),
+      orderBy("createdAt", "desc"),
+      limit(limitCount * 2)
+    );
+    const snap = await getDocs(q);
+    return snap.docs
+      .map((d) => ({ id: d.id, ...d.data() } as ShopListing))
+      .filter((l) => l.isActive !== false)
+      .slice(0, limitCount);
+  } catch {
+    return [];
+  }
+}
+```
+
+---
+
+### Step 2 — Update `HomePage.tsx`
+
+#### 2a. New imports at the top
+
+```ts
+import { getFeaturedShops, getRecentShopListings } from "@/lib/shops";
+import { Shop, ShopListing } from "@/lib/types"; // ShopListing may already be imported
+import { Store, Star, ChevronRight } from "lucide-react"; // add Store, Star, ChevronRight if not already imported
+```
+
+#### 2b. New state variables inside `HomePage()`
+
+Add after the existing state declarations:
+
+```ts
+const [featuredShops, setFeaturedShops] = useState<Shop[]>([]);
+const [recentShopListings, setRecentShopListings] = useState<ShopListing[]>([]);
+const [loadingShops, setLoadingShops] = useState(true);
+```
+
+#### 2c. New `useEffect` to fetch shops
+
+Add after the existing `useEffect` calls (ads, tabCounts):
+
+```ts
+useEffect(() => {
+  setLoadingShops(true);
+  Promise.all([
+    getFeaturedShops(8),
+    getRecentShopListings(6),
+  ]).then(([shops, listings]) => {
+    setFeaturedShops(shops);
+    setRecentShopListings(listings);
+  }).catch(() => {}).finally(() => setLoadingShops(false));
+}, []);
+```
+
+#### 2d. Add two helper sub-components inside `HomePage.tsx` (above the `export default` line)
+
+**StarRow helper** (only add if it doesn't already exist in this file):
+
+```tsx
+function StarRowSmall({ rating }: { rating: number }) {
+  return (
+    <div className="flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <Star
+          key={n}
+          size={9}
+          className={n <= Math.round(rating) ? "text-amber-400 fill-amber-400" : "text-gray-300 dark:text-slate-600"}
+        />
+      ))}
+    </div>
+  );
+}
+```
+
+**ShopPillCard** — the horizontally scrollable shop avatar pill:
+
+```tsx
+function ShopPillCard({ shop }: { shop: Shop }) {
+  return (
+    <Link href={`/shop/${shop.slug}`}>
+      <div className="flex flex-col items-center w-[80px] shrink-0 cursor-pointer group">
+        <div className="w-14 h-14 rounded-2xl bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 overflow-hidden shadow-sm group-hover:shadow-md group-hover:border-[#003366] dark:group-hover:border-blue-500 transition-all flex items-center justify-center mb-1.5">
+          {shop.logoUrl ? (
+            <img src={shop.logoUrl} alt={shop.name} className="w-full h-full object-cover" />
+          ) : (
+            <Store size={24} className="text-[#003366] dark:text-blue-400" />
+          )}
+        </div>
+        <p className="text-[11px] font-semibold text-gray-800 dark:text-slate-200 text-center line-clamp-1 w-full leading-tight">
+          {shop.name}
+        </p>
+        {shop.reviewCount > 0 ? (
+          <div className="flex items-center gap-0.5 mt-0.5">
+            <StarRowSmall rating={shop.rating} />
+            <span className="text-[9px] text-gray-400 dark:text-slate-500">{shop.rating.toFixed(1)}</span>
+          </div>
+        ) : (
+          <p className="text-[9px] text-gray-400 dark:text-slate-500 text-center truncate w-full mt-0.5">
+            {shop.category.split(" ")[0]}
+          </p>
+        )}
+      </div>
+    </Link>
+  );
+}
+```
+
+**ShopListingMiniCard** — compact listing card for the "New from Shops" grid:
+
+```tsx
+function ShopListingMiniCard({ listing }: { listing: ShopListing }) {
+  const [, navigate] = useLocation();
+  return (
+    <div
+      onClick={() => navigate(`/shop-listing/${listing.id}`)}
+      className="bg-white dark:bg-slate-800 rounded-xl overflow-hidden border border-gray-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow active:scale-[0.98] cursor-pointer"
+    >
+      {listing.photos[0] ? (
+        <img src={listing.photos[0]} alt={listing.title} className="w-full aspect-square object-cover" />
+      ) : (
+        <div className="w-full aspect-square bg-gradient-to-br from-gray-100 to-gray-200 dark:from-slate-700 dark:to-slate-600 flex items-center justify-center">
+          <Store size={24} className="text-gray-300 dark:text-slate-500" />
+        </div>
+      )}
+      <div className="p-2">
+        <p className="text-[11px] font-semibold text-gray-900 dark:text-slate-100 line-clamp-2 leading-tight mb-0.5">
+          {listing.title}
+        </p>
+        {listing.price != null ? (
+          <p className="text-xs font-bold text-[#003366] dark:text-blue-400">
+            RM {listing.price.toFixed(2)}
+            {listing.pricingModel && listing.pricingModel !== "fixed" && (
+              <span className="font-normal text-[10px] text-gray-400">
+                /{listing.pricingModel.replace("per_", "")}
+              </span>
+            )}
+          </p>
+        ) : (
+          <p className="text-[11px] text-gray-400 dark:text-slate-500">Contact for price</p>
+        )}
+        {/* Listing rating if available */}
+        {(listing as any).reviewCount > 0 && (
+          <div className="flex items-center gap-0.5 mt-0.5">
+            <StarRowSmall rating={(listing as any).rating} />
+            <span className="text-[9px] text-gray-400">({(listing as any).reviewCount})</span>
+          </div>
+        )}
+        <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5 truncate">{listing.shopName}</p>
+      </div>
+    </div>
+  );
+}
+```
+
+#### 2e. Add the Campus Market section into the JSX
+
+**Placement:** Insert this entire block **after** the sponsored ad section (`{ads.length > 0 && (...)}`) and **before** the listings grid (`{/* Listings grid */}`).
+
+```tsx
+{/* ── Campus Market Discovery ─────────────────────────────────────────── */}
+{(loadingShops || featuredShops.length > 0 || recentShopListings.length > 0) && (
+  <div className="max-w-5xl mx-auto px-4 mt-5">
+
+    {/* Section header */}
+    <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center gap-2">
+        <span className="text-base">🏪</span>
+        <h2 className="text-sm font-bold text-gray-900 dark:text-slate-100">Campus Shops</h2>
+      </div>
+      <Link
+        href="/campus-market"
+        className="flex items-center gap-0.5 text-xs font-semibold text-[#003366] dark:text-blue-400 hover:underline"
+      >
+        See all <ChevronRight size={13} />
+      </Link>
+    </div>
+
+    {/* Horizontally scrollable shop pills */}
+    {loadingShops ? (
+      // Skeleton
+      <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
+        {[...Array(6)].map((_, i) => (
+          <div key={i} className="flex flex-col items-center w-[80px] shrink-0 animate-pulse">
+            <div className="w-14 h-14 rounded-2xl bg-gray-200 dark:bg-slate-700 mb-1.5" />
+            <div className="h-2.5 bg-gray-200 dark:bg-slate-700 rounded w-14" />
+          </div>
+        ))}
+      </div>
+    ) : featuredShops.length > 0 ? (
+      <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
+        {featuredShops.map((shop) => (
+          <ShopPillCard key={shop.id} shop={shop} />
+        ))}
+      </div>
+    ) : null}
+
+    {/* "New from Shops" listings grid */}
+    {recentShopListings.length > 0 && (
+      <div className="mt-4">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">
+            New from Shops
+          </p>
+          <Link
+            href="/campus-market"
+            className="text-[11px] font-semibold text-[#003366] dark:text-blue-400 hover:underline"
+          >
+            Browse all →
+          </Link>
+        </div>
+        <div className="grid grid-cols-3 gap-2.5">
+          {recentShopListings.map((listing) => (
+            <ShopListingMiniCard key={listing.id} listing={listing} />
+          ))}
+        </div>
+      </div>
+    )}
+
+    {/* Divider before main listings */}
+    <div className="border-t border-[#E2E8F0] dark:border-slate-700 mt-5" />
+  </div>
+)}
+{/* ── End Campus Market Discovery ─────────────────────────────────────── */}
+```
+
+---
+
+## What NOT to Change
+
+- Do **not** modify `CampusMarketPage.tsx` in any way.
+- Do **not** remove the "Market" nav item from `Layout.tsx`.
+- Do **not** change any routing in `App.tsx`.
+- Do **not** alter the existing listings grid, tab bar, category chips, hero, or search bar in `HomePage.tsx`.
+- Do **not** change any Firestore security rules.
+- The About section at the bottom of `HomePage.tsx` must remain intact.
+
+---
+
+## Firestore Index Note
+
+The `getRecentShopListings` query uses `orderBy("createdAt", "desc")` on `shopListings`. If a composite index error appears, add this to `firestore.indexes.json`:
+
+```json
+{
+  "collectionGroup": "shopListings",
+  "queryScope": "COLLECTION",
+  "fields": [
+    { "fieldPath": "isActive", "order": "ASCENDING" },
+    { "fieldPath": "createdAt", "order": "DESCENDING" }
+  ]
+}
+```
+
+---
+
+## Final Checklist
+
+- [ ] `getFeaturedShops(8)` function added to `shops.ts` — fetches active shops sorted by reviewCount then createdAt
+- [ ] `getRecentShopListings(6)` function added to `shops.ts` — fetches 6 most recent active shop listings
+- [ ] `StarRowSmall` helper component added above `export default HomePage`
+- [ ] `ShopPillCard` component added above `export default HomePage`
+- [ ] `ShopListingMiniCard` component added above `export default HomePage`
+- [ ] `featuredShops`, `recentShopListings`, `loadingShops` state added to `HomePage`
+- [ ] `useEffect` fetches both shops and listings on mount
+- [ ] Campus Shops section renders between the sponsored ad and the listings grid
+- [ ] Shop pills are horizontally scrollable with `overflow-x-auto scrollbar-hide`
+- [ ] "New from Shops" grid shows 3 columns of compact listing cards
+- [ ] Both "See all" and "Browse all →" links navigate to `/campus-market`
+- [ ] Skeleton loading state shown while `loadingShops === true`
+- [ ] Section is hidden entirely when both `featuredShops` and `recentShopListings` are empty and not loading (no empty state clutter)
+- [ ] Works correctly in dark mode
+- [ ] `CampusMarketPage.tsx`, `Layout.tsx`, `App.tsx` are completely unchanged
+- [ ] TypeScript compiles without errors
