@@ -160,9 +160,7 @@ export default function ShopListingDetailPage() {
         )}
 
         <button
-          onClick={() =>
-            shop ? navigate(`/shop/${shop.slug}`) : window.history.back()
-          }
+          onClick={() => window.history.back()}
           className="absolute top-4 left-4 bg-black/40 backdrop-blur-sm text-white p-2.5 rounded-full hover:bg-black/60 transition shadow-lg"
         >
           <ArrowLeft size={18} />

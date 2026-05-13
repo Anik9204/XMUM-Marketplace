@@ -1,0 +1,145 @@
+
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless you tell me in most simple way why it's needaed and I have explicitly told you to remove it.
+
+4. After every change, mentally verify: "Does this break anything
+   that was working before?" If yes, do not proceed — find a
+   different approach.
+
+5. If fixing Issue X requires changing a shared component used by
+   other pages, STOP and tell me in the most simple way what the impact will be before
+   making the change. Ask for permission first.
+
+6. Never change any CSS class, layout structure, z-index, or
+   responsive breakpoint unless it is directly part of the fix.
+
+7. Confirm the app builds with zero errors before finishing:
+   pnpm --filter @workspace/xmum-market run build
+
+
+## Replit Prompt — Fix Sticky Bottom Bar & Back Button Loop
+
+---
+
+You are a senior full-stack developer working on the XMUM Marketplace project (React + Vite + TypeScript + Tailwind CSS 4). Read the following files completely before writing a single line of code:
+
+- `artifacts/xmum-market/src/pages/ListingDetailPage.tsx`
+- `artifacts/xmum-market/src/pages/ShopListingDetailPage.tsx`
+- `artifacts/xmum-market/src/pages/ShopPublicPage.tsx`
+
+Fix both issues below with **surgical edits only**. Do not rewrite any file from scratch. Do not touch any file not listed above. Do not change any existing working functionality, layout, or UI on desktop.
+
+---
+
+### Issue 1 — Remove the Sticky Bottom Contact Bar on Mobile in `ListingDetailPage.tsx`
+
+**What is happening:**
+
+At the bottom of `ListingDetailPage.tsx`, starting at around line 925, there is a `fixed bottom-0` sticky bar that renders only on mobile (`md:hidden`). It contains:
+- A "Usually replies within a day" label
+- A large "Message" / chat button
+- A circular WhatsApp icon button
+
+As seen in the attached screenshot, this bar is completely covered by the app's sticky bottom navigation bar (Home, Search, Market, Messages, Profile), making it invisible and inaccessible to the user. It is also redundant — the same Message button and WhatsApp button already exist inside the listing body further up the page in the seller contact card section.
+
+**What needs to change:**
+
+Remove the entire sticky bottom contact bar block from `ListingDetailPage.tsx`. The block to delete is:
+
+```jsx
+{/* ── Sticky Bottom Contact Bar — mobile only ───────────────────────── */}
+<div className="fixed bottom-0 left-0 right-0 z-40 md:hidden">
+  ...entire contents...
+</div>
+```
+
+Delete this entire `<div>` and everything inside it — the sold state branch, the "Usually replies within a day" text, the Message button, and the WhatsApp icon button.
+
+**What must NOT be changed:**
+
+- The Message button and WhatsApp/WeChat/Teams contact buttons that already exist inside the listing body (inside the seller card section around line 725) — these must remain completely untouched
+- The desktop layout is unaffected since this block is `md:hidden`
+- The `isSold` state, `startingChat` state, `handleMessageSeller` function, `canShowWhatsApp`, `whatsappUrl` — all must remain because they are still used by the contact buttons inside the listing body
+- The `pb-32` bottom padding on the main content container (`max-w-2xl mx-auto pb-32 md:pb-8`) — change `pb-32` to `pb-6` on mobile now that the sticky bar is gone, so there is no excessive blank space at the bottom on mobile. Keep `md:pb-8` for desktop unchanged.
+
+---
+
+### Issue 2 — Fix the Back Button Infinite Loop Between `ShopListingDetailPage` and `ShopPublicPage`
+
+**What is happening:**
+
+The navigation loop occurs because of how the back buttons work on these two pages:
+
+- In `ShopListingDetailPage.tsx` at line 163, the back button does:
+  ```javascript
+  shop ? navigate(`/shop/${shop.slug}`) : window.history.back()
+  ```
+  This pushes a **new history entry** for `/shop/{slug}` instead of going back. So the browser history now has: `[..., /market, /shop/slug, /shop-listing/id, /shop/slug]`
+
+- In `ShopPublicPage.tsx` at line 154, the back button does:
+  ```javascript
+  window.history.back()
+  ```
+  This goes back one step — which lands on `/shop-listing/id` again (the listing detail page), not on `/market`. So the user is trapped bouncing between the two pages forever.
+
+**Root cause:** `ShopListingDetailPage` uses `navigate()` (which pushes a new entry) instead of `window.history.back()`. This pollutes the browser history stack and causes the loop.
+
+**What needs to change:**
+
+**Fix 1 — `ShopListingDetailPage.tsx` line 163:**
+
+Change the back button `onClick` from:
+```javascript
+onClick={() => shop ? navigate(`/shop/${shop.slug}`) : window.history.back()}
+```
+To:
+```javascript
+onClick={() => window.history.back()}
+```
+
+This makes the back button always go back one step in actual browser history, regardless of whether the shop data has loaded. The user came from somewhere — let the browser go back there naturally.
+
+**Fix 2 — `ShopPublicPage.tsx` line 154:**
+
+The `window.history.back()` here is correct in principle, but it breaks if the user lands on `/shop/{slug}` directly (e.g. from a shared link) because there is no history to go back to. Add a safe fallback:
+
+Change:
+```javascript
+onClick={() => window.history.back()}
+```
+To:
+```javascript
+onClick={() => {
+  if (window.history.length > 1) {
+    window.history.back();
+  } else {
+    navigate("/market");
+  }
+}}
+```
+
+This means: if there is browser history to go back to, go back (which will correctly land on `/market` or wherever the user came from). If there is no history (direct link), navigate to `/market` as the fallback.
+
+---
+
+### Final Checklist
+
+- [ ] The sticky bottom contact bar (`fixed bottom-0 md:hidden`) is completely removed from `ListingDetailPage.tsx`
+- [ ] The Message button and WhatsApp/WeChat/Teams buttons inside the listing body are untouched and still work
+- [ ] The `pb-32` on the main content container is changed to `pb-6` on mobile only (`pb-6 md:pb-8`)
+- [ ] The back button in `ShopListingDetailPage.tsx` uses `window.history.back()` only
+- [ ] The back button in `ShopPublicPage.tsx` uses `window.history.back()` with a `/market` fallback
+- [ ] Navigating Market → Shop Listing → Back lands on the shop public page correctly
+- [ ] Navigating Market → Shop Public Page → Back lands on Market correctly
+- [ ] No infinite loop exists between any two pages
+- [ ] Desktop layout is completely unaffected
+- [ ] Dark mode is unaffected
+- [ ] The app builds with zero TypeScript errors: `pnpm --filter @workspace/xmum-market run build`

@@ -152,7 +152,13 @@ export default function ShopPublicPage() {
         <div className="absolute inset-0 bg-gradient-to-b from-black/20 to-black/40 pointer-events-none" />
 
         <button
-          onClick={() => window.history.back()}
+          onClick={() => {
+            if (window.history.length > 1) {
+              window.history.back();
+            } else {
+              navigate("/market");
+            }
+          }}
           className="absolute top-4 left-4 bg-black/40 backdrop-blur-sm text-white p-2.5 rounded-full hover:bg-black/60 transition shadow-lg"
         >
           <ArrowLeft size={18} />

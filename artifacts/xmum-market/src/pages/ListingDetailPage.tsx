@@ -418,7 +418,7 @@ export default function ListingDetailPage() {
         </div>
       )}
 
-      <div className="max-w-2xl mx-auto pb-32 md:pb-8 animate-in fade-in duration-200">
+      <div className="max-w-2xl mx-auto pb-6 md:pb-8 animate-in fade-in duration-200">
         {/* Back button + overflow menu */}
         <div data-sticky-subheader className="sticky top-14 sm:top-16 z-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm border-b border-gray-100 dark:border-slate-700">
           <div className="flex items-center justify-between px-4">
@@ -921,66 +921,6 @@ export default function ListingDetailPage() {
             </div>
           )}
         </div>
-      </div>
-
-      {/* ── Sticky Bottom Contact Bar — mobile only ───────────────────────── */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 md:hidden">
-        {isSold ? (
-          /* Sold state */
-          <div className="bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700 shadow-sheet px-4 py-3 flex items-center justify-between gap-3">
-            <p className="text-sm text-gray-500 dark:text-slate-400 font-medium flex-1">
-              This listing is no longer available
-            </p>
-            <Link
-              href={`/search?category=${listing.category}&type=${listing.type}`}
-              className="shrink-0 px-4 py-2 bg-[#003366] text-white text-sm font-semibold rounded-xl hover:bg-[#002244] transition-colors"
-            >
-              See Similar
-            </Link>
-          </div>
-        ) : isOwner ? null : (
-          /* Active listing — non-owner */
-          <div className="bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] px-4 pt-2 pb-4">
-            <p className="text-[11px] text-slate-400 dark:text-slate-500 text-center mb-2">
-              Usually replies within a day
-            </p>
-            <div className="flex items-center gap-2">
-              {/* Primary: Chat with Seller */}
-              <button
-                onClick={() => {
-                  if (!user) { setShowAuth(true); return; }
-                  if (!user.emailVerified) { setContactBlocked("verify"); return; }
-                  handleMessageSeller();
-                }}
-                disabled={startingChat}
-                className="flex-[3] flex items-center justify-center gap-2 bg-[#003366] dark:bg-blue-600 text-white font-semibold rounded-xl min-h-[52px] hover:bg-[#002244] dark:hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm"
-              >
-                {startingChat
-                  ? <Loader2 size={16} className="animate-spin" />
-                  : <span>💬</span>
-                }
-                Chat with Seller
-              </button>
-
-              {/* Secondary: WhatsApp icon (only if available) */}
-              {canShowWhatsApp && (
-                <a
-                  href={whatsappUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => {
-                    if (!user) { e.preventDefault(); setShowAuth(true); return; }
-                    if (!user.emailVerified) { e.preventDefault(); setContactBlocked("verify"); return; }
-                  }}
-                  className="flex-[1] flex items-center justify-center w-10 h-[52px] bg-[#25D366] hover:bg-[#1EB855] text-white rounded-full transition-colors"
-                  aria-label="WhatsApp"
-                >
-                  <SiWhatsapp size={22} />
-                </a>
-              )}
-            </div>
-          </div>
-        )}
       </div>
 
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
