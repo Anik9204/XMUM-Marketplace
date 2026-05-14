@@ -74,7 +74,7 @@ export default function ShopListingDetailPage() {
         setListing(l);
         const s = await getShopById(l.shopId);
         setShop(s);
-        incrementShopListingView(listingId, l.shopId).catch(() => {});
+        incrementShopListingView(listingId, l.shopId, user?.uid).catch(() => {});
       } catch (err) {
         console.error("[ShopListingDetailPage] load error:", err);
       } finally {

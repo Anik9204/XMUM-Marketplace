@@ -288,13 +288,14 @@ export async function deleteShopListing(listingId: string, shopId: string): Prom
   await updateDoc(doc(db, "shops", shopId), { totalListings: increment(-1) });
 }
 
-export async function incrementShopListingView(listingId: string, shopId?: string): Promise<void> {
+export async function incrementShopListingView(listingId: string, shopId?: string, visitorId?: string): Promise<void> {
   await updateDoc(doc(db, "shopListings", listingId), { viewCount: increment(1) });
   if (shopId) {
     addDoc(collection(db, "shopVisits"), {
       shopId,
       listingId,
       visitedAt: Date.now(),
+      ...(visitorId ? { visitorId } : {}),
     }).catch(() => {});
   }
 }
@@ -493,7 +494,12 @@ export async function getShopVisitorCount30Days(shopId: string): Promise<number>
       where("visitedAt", ">=", since)
     );
     const snap = await getDocs(q);
-    return snap.size;
+    const uniqueVisitors = new Set<string>();
+    snap.docs.forEach((d) => {
+      const vid = d.data().visitorId as string | undefined;
+      if (vid) uniqueVisitors.add(vid);
+    });
+    return uniqueVisitors.size > 0 ? uniqueVisitors.size : snap.size;
   } catch {
     return 0;
   }
