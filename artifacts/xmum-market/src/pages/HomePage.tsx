@@ -13,7 +13,7 @@ import AuthModal from "@/components/AuthModal";
 import { Search, Loader2, Store, Star, ChevronRight } from "lucide-react";
 
 const BUY_SELL_CATEGORIES = [
-  "electronics", "books", "clothing", "furniture", "food", "services", "others",
+  "electronics", "books", "clothing", "furniture", "food", "services", "car", "motorcycle", "others",
 ];
 const LOST_FOUND_CATEGORIES = ["lostItem", "foundItem"];
 const JOBS_CATEGORIES = [
