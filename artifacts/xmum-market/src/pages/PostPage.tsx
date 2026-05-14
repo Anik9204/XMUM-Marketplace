@@ -513,7 +513,7 @@ export default function PostPage() {
         setLoading(false);
         return;
       }
-      if (!vehicleBrand.trim() || !vehicleModel.trim() || !plateNumber.trim()) {
+      if (vehicleType !== "bicycle" && (!vehicleBrand.trim() || !vehicleModel.trim() || !plateNumber.trim())) {
         setError("Please fill in all required vehicle details (Brand, Model, Plate Number).");
         setLoading(false);
         return;
@@ -610,10 +610,12 @@ export default function PostPage() {
       } else if (type === "rental") {
         baseData.category = vehicleType;
         baseData.vehicleType = vehicleType;
-        baseData.vehicleBrand = vehicleBrand.trim();
-        baseData.vehicleModel = vehicleModel.trim();
-        baseData.vehicleYear = vehicleYear;
-        baseData.plateNumber = plateNumber.trim();
+        if (vehicleType !== "bicycle") {
+          baseData.vehicleBrand = vehicleBrand.trim();
+          baseData.vehicleModel = vehicleModel.trim();
+          baseData.vehicleYear = vehicleYear;
+          baseData.plateNumber = plateNumber.trim();
+        }
         baseData.rentalPricePerDay = rentalPricePerDayCents / 100;
         if (rentalPricePerHourCents > 0) baseData.rentalPricePerHour = rentalPricePerHourCents / 100;
         baseData.depositAmount = depositCents / 100;
@@ -980,24 +982,26 @@ export default function PostPage() {
                 ))}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={labelCls}>{t.rentalBrandLabel} *</label>
-                <input type="text" value={vehicleBrand} onChange={(e) => { setVehicleBrand(e.target.value); setIsDirty(true); }} placeholder="e.g. Honda" className={inputCls} />
+            {vehicleType !== "bicycle" && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>{t.rentalBrandLabel} *</label>
+                  <input type="text" value={vehicleBrand} onChange={(e) => { setVehicleBrand(e.target.value); setIsDirty(true); }} placeholder="e.g. Honda" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>{t.rentalModelLabel} *</label>
+                  <input type="text" value={vehicleModel} onChange={(e) => { setVehicleModel(e.target.value); setIsDirty(true); }} placeholder="e.g. City" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>{t.rentalYearLabel}</label>
+                  <input type="number" value={vehicleYear} onChange={(e) => { setVehicleYear(Number(e.target.value)); setIsDirty(true); }} min={1990} max={currentYear + 1} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>{t.rentalPlateNumber} *</label>
+                  <input type="text" value={plateNumber} onChange={(e) => { setPlateNumber(e.target.value.toUpperCase()); setIsDirty(true); }} placeholder="e.g. PBJ 1234" className={`${inputCls} uppercase font-mono tracking-widest`} />
+                </div>
               </div>
-              <div>
-                <label className={labelCls}>{t.rentalModelLabel} *</label>
-                <input type="text" value={vehicleModel} onChange={(e) => { setVehicleModel(e.target.value); setIsDirty(true); }} placeholder="e.g. City" className={inputCls} />
-              </div>
-              <div>
-                <label className={labelCls}>{t.rentalYearLabel}</label>
-                <input type="number" value={vehicleYear} onChange={(e) => { setVehicleYear(Number(e.target.value)); setIsDirty(true); }} min={1990} max={currentYear + 1} className={inputCls} />
-              </div>
-              <div>
-                <label className={labelCls}>{t.rentalPlateNumber} *</label>
-                <input type="text" value={plateNumber} onChange={(e) => { setPlateNumber(e.target.value.toUpperCase()); setIsDirty(true); }} placeholder="e.g. PBJ 1234" className={`${inputCls} uppercase font-mono tracking-widest`} />
-              </div>
-            </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={labelCls}>Per Day (RM) *</label>

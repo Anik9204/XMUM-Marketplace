@@ -421,11 +421,13 @@ export default function EditListingPage() {
         baseData.availability = availability.trim();
       } else if (type === "rental") {
         baseData.vehicleType = vehicleType;
-        if (vehicleBrand.trim()) baseData.vehicleBrand = vehicleBrand.trim();
-        if (vehicleModel.trim()) baseData.vehicleModel = vehicleModel.trim();
-        const yr = parseInt(vehicleYear);
-        if (!isNaN(yr) && yr > 1900) baseData.vehicleYear = yr;
-        if (plateNumber.trim()) baseData.plateNumber = plateNumber.trim();
+        if (vehicleType !== "bicycle") {
+          if (vehicleBrand.trim()) baseData.vehicleBrand = vehicleBrand.trim();
+          if (vehicleModel.trim()) baseData.vehicleModel = vehicleModel.trim();
+          const yr = parseInt(vehicleYear);
+          if (!isNaN(yr) && yr > 1900) baseData.vehicleYear = yr;
+          if (plateNumber.trim()) baseData.plateNumber = plateNumber.trim();
+        }
         baseData.rentalPricePerDay = rentalPricePerDay;
         if (rentalPricePerHour > 0) baseData.rentalPricePerHour = rentalPricePerHour;
         if (depositAmount > 0) baseData.depositAmount = depositAmount;
@@ -848,24 +850,26 @@ export default function EditListingPage() {
                 ))}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={labelCls}>Brand *</label>
-                <input type="text" value={vehicleBrand} onChange={(e) => { setVehicleBrand(e.target.value); setIsDirty(true); }} placeholder="e.g. Honda" className={inputCls} />
+            {vehicleType !== "bicycle" && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Brand *</label>
+                  <input type="text" value={vehicleBrand} onChange={(e) => { setVehicleBrand(e.target.value); setIsDirty(true); }} placeholder="e.g. Honda" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Model *</label>
+                  <input type="text" value={vehicleModel} onChange={(e) => { setVehicleModel(e.target.value); setIsDirty(true); }} placeholder="e.g. City" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Year</label>
+                  <input type="number" value={vehicleYear} onChange={(e) => { setVehicleYear(e.target.value); setIsDirty(true); }} placeholder="e.g. 2020" min={1960} max={new Date().getFullYear() + 1} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Plate Number</label>
+                  <input type="text" value={plateNumber} onChange={(e) => { setPlateNumber(e.target.value.toUpperCase()); setIsDirty(true); }} placeholder="e.g. WXY 1234" className={inputCls} />
+                </div>
               </div>
-              <div>
-                <label className={labelCls}>Model *</label>
-                <input type="text" value={vehicleModel} onChange={(e) => { setVehicleModel(e.target.value); setIsDirty(true); }} placeholder="e.g. City" className={inputCls} />
-              </div>
-              <div>
-                <label className={labelCls}>Year</label>
-                <input type="number" value={vehicleYear} onChange={(e) => { setVehicleYear(e.target.value); setIsDirty(true); }} placeholder="e.g. 2020" min={1960} max={new Date().getFullYear() + 1} className={inputCls} />
-              </div>
-              <div>
-                <label className={labelCls}>Plate Number</label>
-                <input type="text" value={plateNumber} onChange={(e) => { setPlateNumber(e.target.value.toUpperCase()); setIsDirty(true); }} placeholder="e.g. WXY 1234" className={inputCls} />
-              </div>
-            </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={labelCls}>Price / Day (RM) *</label>

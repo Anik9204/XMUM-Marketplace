@@ -107,6 +107,28 @@ export async function notifyShopInquiryReceived(
   });
 }
 
+export async function notifyShopOrderReceived(
+  shopOwnerId: string,
+  shopName: string,
+  buyerName: string,
+  orderId: string,
+  shopId: string,
+  editorIds: string[],
+): Promise<void> {
+  const recipients = [shopOwnerId, ...editorIds.filter((id) => id !== shopOwnerId)];
+  await Promise.all(
+    recipients.map((uid) =>
+      addNotification(uid, {
+        type: "shop_inquiry_received",
+        title: "New order received",
+        body: `${buyerName} placed an order at your shop "${shopName}".`,
+        shopId,
+        inquiryId: orderId,
+      })
+    )
+  );
+}
+
 export async function notifyInquiryStatusChanged(
   buyerId: string,
   shopName: string,

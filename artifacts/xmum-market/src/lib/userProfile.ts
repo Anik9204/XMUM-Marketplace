@@ -60,11 +60,26 @@ export async function updateProfile(
 }
 
 export async function uploadAvatar(file: File, uid: string): Promise<string> {
+  const profileSnap = await getDoc(doc(db, "users", uid));
+  const oldAvatarUrl: string | undefined = profileSnap.data()?.avatarUrl;
+
   const ext = file.name.split(".").pop() ?? "jpg";
   const avatarRef = ref(storage, `avatars/${uid}/avatar.${ext}`);
   await uploadBytes(avatarRef, file);
   const url = await getDownloadURL(avatarRef);
   await updateDoc(doc(db, "users", uid), { avatarUrl: url });
+
+  if (oldAvatarUrl) {
+    try {
+      const oldRef = ref(storage, decodeURIComponent(
+        oldAvatarUrl.split("/o/")[1]?.split("?")[0] ?? ""
+      ));
+      await deleteObject(oldRef);
+    } catch {
+      // Silently ignore — old file may already be deleted or URL may be external
+    }
+  }
+
   return url;
 }
 

@@ -105,10 +105,10 @@ function ShopPillCard({ shop }: { shop: Shop }) {
         <p className="text-[11px] font-bold font-display text-gray-800 dark:text-slate-200 text-center line-clamp-1 w-full leading-tight">
           {shop.name}
         </p>
-        {shop.reviewCount > 0 ? (
+        {(shop.reviewCount ?? 0) > 0 ? (
           <div className="flex items-center gap-0.5 mt-0.5">
-            <StarRowSmall rating={shop.rating} />
-            <span className="text-[9px] text-gray-400 dark:text-slate-500">{shop.rating.toFixed(1)}</span>
+            <StarRowSmall rating={shop.rating ?? 0} />
+            <span className="text-[9px] text-gray-400 dark:text-slate-500">{(shop.rating ?? 0).toFixed(1)}</span>
           </div>
         ) : (
           <p className="text-[9px] text-gray-400 dark:text-slate-500 text-center truncate w-full mt-0.5">
@@ -150,9 +150,9 @@ function ShopListingMiniCard({ listing }: { listing: ShopListing }) {
         ) : (
           <p className="text-[11px] text-gray-400 dark:text-slate-500">Contact for price</p>
         )}
-        {listing.reviewCount > 0 && (
+        {(listing.reviewCount ?? 0) > 0 && (
           <div className="flex items-center gap-0.5 mt-0.5">
-            <StarRowSmall rating={listing.rating} />
+            <StarRowSmall rating={listing.rating ?? 0} />
             <span className="text-[9px] text-gray-400">({listing.reviewCount})</span>
           </div>
         )}
@@ -181,6 +181,7 @@ export default function HomePage() {
   const [recentShopListings, setRecentShopListings] = useState<ShopListing[]>([]);
   const [loadingShops, setLoadingShops] = useState(true);
   const chipRowRef = useRef<HTMLDivElement>(null);
+  const listingsRef = useRef<HTMLDivElement>(null);
   const [showLeftShadow, setShowLeftShadow] = useState(false);
   const [showRightShadow, setShowRightShadow] = useState(true);
 
@@ -397,7 +398,12 @@ export default function HomePage() {
             {["all", ...getCategoriesForTab(activeTab)].map((cat) => (
               <button
                 key={cat}
-                onClick={() => setCategoryFilter(cat)}
+                onClick={() => {
+                  setCategoryFilter(cat);
+                  setTimeout(() => {
+                    listingsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }, 50);
+                }}
                 className={`chip flex-shrink-0 ${categoryFilter === cat ? "chip-active" : ""}`}
               >
                 <span>{CATEGORY_ICONS[cat] ?? "📦"}</span>
@@ -500,7 +506,7 @@ export default function HomePage() {
       {/* ── End Campus Market Discovery ─────────────────────────────────────── */}
 
       {/* Listings grid */}
-      <div className="max-w-5xl mx-auto px-4 py-5">
+      <div ref={listingsRef} className="max-w-5xl mx-auto px-4 py-5">
         {loading ? (
           <SkeletonGrid />
         ) : displayedListings.length === 0 ? (
@@ -592,17 +598,13 @@ export default function HomePage() {
             <div>
               <h3 className="text-sm font-semibold text-[#003366] dark:text-blue-400 uppercase tracking-wide mb-2">What is XMUM Market?</h3>
               <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-                XMUM Market is a safe, student-only digital marketplace built exclusively for the XMUM community.
-                It allows students to <strong className="text-slate-800 dark:text-white">buy and sell</strong> second-hand items,
-                post <strong className="text-slate-800 dark:text-white">Lost &amp; Found</strong> notices,
-                offer <strong className="text-slate-800 dark:text-white">jobs and freelance services</strong>,
-                request <strong className="text-slate-800 dark:text-white">peer assistance</strong>,
-                and list <strong className="text-slate-800 dark:text-white">vehicle rentals</strong> — all within a trusted campus network.
+                XMUM Market is a free, student-built platform created to make campus life easier. Whether you're moving out of your dorm, looking for affordable textbooks, or offering tutoring services, this is the place to connect with fellow XMUM students.
               </p>
               <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed mt-3">
-                Every account is verified with an XMUM student email, ensuring all users are genuine members of the campus community.
-                The platform supports bilingual browsing in English and Chinese (中文), real-time messaging between buyers and sellers,
-                and in-app notifications so you never miss a deal.
+                Every account is verified using an <strong className="text-slate-800 dark:text-white">@xmu.edu.my</strong> email address, so you can trust that everyone on the platform is a real XMUM student. No strangers, no scammers — just your campus community.
+              </p>
+              <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed mt-3">
+                From <strong className="text-slate-800 dark:text-white">buying and selling</strong> second-hand goods to finding <strong className="text-slate-800 dark:text-white">lost items</strong>, hiring for <strong className="text-slate-800 dark:text-white">part-time jobs</strong>, renting a <strong className="text-slate-800 dark:text-white">bicycle or car</strong>, or browsing student-run <strong className="text-slate-800 dark:text-white">Campus Market</strong> shops — everything happens right here, in English or Chinese (中文).
               </p>
             </div>
 

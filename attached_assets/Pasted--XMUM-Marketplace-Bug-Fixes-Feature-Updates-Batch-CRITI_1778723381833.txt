@@ -1,0 +1,375 @@
+ XMUM Marketplace — Bug Fixes & Feature Updates (Batch)
+
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: `pnpm --filter @workspace/xmum-market run build`
+
+**Primary files to read completely before writing a single line of code:**
+- `artifacts/xmum-market/src/pages/PostPage.tsx`
+- `artifacts/xmum-market/src/pages/EditListingPage.tsx`
+- `artifacts/xmum-market/src/pages/ListingDetailPage.tsx`
+- `artifacts/xmum-market/src/pages/ShopListingDetailPage.tsx`
+- `artifacts/xmum-market/src/pages/HomePage.tsx`
+- `artifacts/xmum-market/src/pages/CampusMarketPage.tsx`
+- `artifacts/xmum-market/src/pages/SearchPage.tsx`
+- `artifacts/xmum-market/src/pages/SettingsPage.tsx`
+- `artifacts/xmum-market/src/components/ShopManagementPanel.tsx`
+- `artifacts/xmum-market/src/components/ListingCard.tsx`
+- `artifacts/xmum-market/src/components/Layout.tsx`
+- `artifacts/xmum-market/src/lib/i18n.ts`
+- `artifacts/xmum-market/src/lib/messaging.ts`
+- `artifacts/xmum-market/src/lib/shops.ts`
+- `artifacts/xmum-market/src/lib/userProfile.ts`
+- `artifacts/xmum-market/src/lib/types.ts`
+- `artifacts/xmum-market/src/contexts/AuthContext.tsx`
+
+Read every one of these files in full before starting. Do not skip any.
+
+---
+
+## ISSUE 1 — Rental Post: Bicycle Should Not Require Brand, Model, Year, or Plate Number
+
+### Files to edit:
+- `src/pages/PostPage.tsx`
+- `src/pages/EditListingPage.tsx`
+
+### What is happening:
+When a user selects `vehicleType === "bicycle"` in the Rental listing form, the fields for Brand, Model, Year, and Plate Number are shown and marked as required. Bicycles do not have these. They should be hidden and their values should not be submitted.
+
+### Fix for `PostPage.tsx`:
+1. Find the block that renders the `vehicleType` fields (Brand, Model, Year, Plate Number). It is conditionally shown when `type === "rental"`.
+2. Wrap the Brand, Model, Year, and Plate Number inputs in an additional condition: only render them when `vehicleType !== "bicycle"`. Do not change any other field — Deposit, Availability, Rental Price, License Required, Insurance Proof, and Terms must still show for bicycles.
+3. In the submit handler, when `vehicleType === "bicycle"`, ensure `vehicleBrand`, `vehicleModel`, `vehicleYear`, and `plateNumber` are explicitly set to `undefined` (or omitted) before the Firestore write, regardless of any leftover state values.
+
+### Fix for `EditListingPage.tsx`:
+Apply the exact same conditional rendering logic and submit-time clearing as described above for `PostPage.tsx`.
+
+---
+
+## ISSUE 2 — Chinese Language (ZH) Not Applied Throughout the App
+
+### Files to edit:
+- `src/lib/i18n.ts`
+- Any page or component where hardcoded English strings are used instead of `t("key")` calls — you will identify these during your read.
+
+### What is happening:
+When the user switches to Chinese (ZH) using the language toggle, many strings across the app remain in English because they are hardcoded strings instead of using the `t()` translation function from `lib/i18n.ts`.
+
+### Fix:
+1. Read `lib/i18n.ts` in full to understand the existing key structure for both `en` and `zh`.
+2. Audit every `.tsx` file in `src/pages/` and `src/components/` for hardcoded English strings that should be translated. Look for patterns like: button labels, tab names, placeholder text, empty-state messages, section headings, error messages, confirmation dialogs, and toast messages.
+3. For every hardcoded string you find that has no corresponding `t("key")` call:
+   - Add the English value under the correct key in the `en` object in `i18n.ts`
+   - Add the correct Simplified Chinese translation under the same key in the `zh` object in `i18n.ts`
+   - Replace the hardcoded string in the component with `t("key")`
+4. Pay special attention to these areas which are known to be missing translations:
+   - All tab labels in `HomePage.tsx` (Buy & Sell, Lost & Found, Jobs, Assistance, Rental, Market)
+   - Category filter pill labels in `HomePage.tsx`, `SearchPage.tsx`, and `CampusMarketPage.tsx`
+   - The Rental listing form field labels in `PostPage.tsx` and `EditListingPage.tsx` (Vehicle Type, Brand, Model, Year, Plate Number, Deposit, etc.)
+   - The Shop system labels in `ShopListingDetailPage.tsx`, `CampusMarketPage.tsx`, and `ShopManagementPanel.tsx` (Contact Seller, Inquire, View Shop, etc.)
+   - Empty state messages ("No listings yet", "Nothing here", etc.)
+   - Button labels inside modals and confirmation dialogs
+   - The "Contact Seller" block label (see Issue 5 — rename it to "Contact Seller" in both languages)
+5. Do not change any key that already has a correct Chinese value. Only add missing keys or fix empty/wrong Chinese values.
+6. Do not change the structure of `i18n.ts` — only add new key-value pairs inside the existing `en` and `zh` objects.
+
+---
+
+## ISSUE 3 — Category Filter: Auto-Scroll to Listing Feed When a Category is Selected
+
+### Files to edit:
+- `src/pages/HomePage.tsx`
+- `src/pages/CampusMarketPage.tsx`
+- `src/pages/SearchPage.tsx` (if it has category filter pills)
+
+### What is happening:
+When a user taps a category filter pill (e.g. Electronics, Books, Clothing), the listings below update but the user's viewport stays at the top of the page. On mobile, the listings are below the fold and the user does not realise the content has changed.
+
+### Fix:
+1. In each of the three files above, find where the category filter state is updated (the `onClick` handler on the category pill or `<button>` element).
+2. Add a `useRef` attached to the listings container `<div>` (the div that wraps the listing cards grid/list). Name it `listingsRef`.
+3. Inside the category `onClick` handler, after updating the category state, call:
+   ```ts
+   setTimeout(() => {
+     listingsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+   }, 50);
+   ```
+   The 50ms delay allows React to re-render the filtered results before scrolling.
+4. The `scrollIntoView` must scroll to the **top of the listings section**, not the top of the page. Attach `listingsRef` to the outermost `<div>` that wraps the listing cards — not to the category pills row itself.
+5. Do not change any existing layout, padding, or CSS. Only add the ref and the scroll call.
+
+---
+
+## ISSUE 4 — Multi-Photo Listings: Swipeable Photo Gallery with Thumbnail Strip
+
+### Files to edit:
+- `src/pages/ListingDetailPage.tsx`
+- `src/pages/ShopListingDetailPage.tsx`
+
+### What is happening:
+When a listing or shop listing has multiple photos, there is no way for the user to swipe between them or see which photo they are on. Only the first photo is viewable. This needs a swipeable gallery like mudah.my — a main large photo with a thumbnail strip below it.
+
+### Fix for both `ListingDetailPage.tsx` and `ShopListingDetailPage.tsx`:
+
+**Step 1 — Add local state:**
+```ts
+const [activePhotoIndex, setActivePhotoIndex] = useState(0);
+```
+
+**Step 2 — Replace the current single main photo `<img>` with a gallery block.** Find the existing photo display (it is likely a single `<img>` tag or a simple `<div>` with one image). Replace it with this structure — do not change any surrounding padding, margins, or layout divs outside this block:
+
+```tsx
+{listing.photos && listing.photos.length > 0 && (
+  <div className="relative w-full">
+    {/* Main photo */}
+    <div
+      className="w-full overflow-hidden relative"
+      style={{ aspectRatio: "4/3" }}
+    >
+      <img
+        src={listing.photos[activePhotoIndex]}
+        alt={listing.title}
+        className="w-full h-full object-cover"
+        draggable={false}
+      />
+      {/* Left / Right arrow buttons — only show if more than 1 photo */}
+      {listing.photos.length > 1 && (
+        <>
+          <button
+            onClick={() => setActivePhotoIndex((i) => Math.max(0, i - 1))}
+            disabled={activePhotoIndex === 0}
+            className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 disabled:opacity-20 text-white rounded-full w-8 h-8 flex items-center justify-center transition z-10"
+            aria-label="Previous photo"
+          >
+            ‹
+          </button>
+          <button
+            onClick={() => setActivePhotoIndex((i) => Math.min(listing.photos.length - 1, i + 1))}
+            disabled={activePhotoIndex === listing.photos.length - 1}
+            className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 disabled:opacity-20 text-white rounded-full w-8 h-8 flex items-center justify-center transition z-10"
+            aria-label="Next photo"
+          >
+            ›
+          </button>
+        </>
+      )}
+    </div>
+    {/* Thumbnail strip — only show if more than 1 photo */}
+    {listing.photos.length > 1 && (
+      <div className="flex gap-2 px-4 pt-2 pb-1 overflow-x-auto scrollbar-hide">
+        {listing.photos.map((url, idx) => (
+          <button
+            key={idx}
+            onClick={() => setActivePhotoIndex(idx)}
+            className={`shrink-0 w-14 h-14 rounded-lg overflow-hidden border-2 transition ${
+              idx === activePhotoIndex
+                ? "border-[#003366] dark:border-blue-400"
+                : "border-transparent opacity-60"
+            }`}
+          >
+            <img src={url} alt="" className="w-full h-full object-cover" draggable={false} />
+          </button>
+        ))}
+      </div>
+    )}
+  </div>
+)}
+```
+
+**Step 3 — Touch/swipe support.** Add swipe gesture support to the main photo div using `onTouchStart` and `onTouchEnd`:
+```ts
+const touchStartX = useRef<number | null>(null);
+```
+On the main photo `<div>`:
+```tsx
+onTouchStart={(e) => { touchStartX.current = e.touches[0].clientX; }}
+onTouchEnd={(e) => {
+  if (touchStartX.current === null) return;
+  const delta = touchStartX.current - e.changedTouches[0].clientX;
+  if (delta > 40) setActivePhotoIndex((i) => Math.min(listing.photos.length - 1, i + 1));
+  if (delta < -40) setActivePhotoIndex((i) => Math.max(0, i - 1));
+  touchStartX.current = null;
+}}
+```
+
+**Step 4 — Reset index when listing changes.** Add:
+```ts
+useEffect(() => { setActivePhotoIndex(0); }, [listing?.id]);
+```
+
+---
+
+## ISSUE 5 — Profile Picture Update: Delete Previous Avatar from Storage
+
+### File to edit:
+- `src/lib/userProfile.ts`
+- `src/pages/SettingsPage.tsx`
+
+### What is happening:
+When a user uploads a new profile picture, the new avatar is uploaded to Firebase Storage and the `avatarUrl` in Firestore is updated. However, the old avatar file is never deleted from Firebase Storage, causing orphaned files to accumulate.
+
+### Fix in `src/lib/userProfile.ts`:
+
+Find the `uploadAvatar` function. Before it uploads the new file, it must read the user's current `avatarUrl` from Firestore and delete the old storage object if it exists.
+
+Make this surgical change inside `uploadAvatar`:
+```ts
+// At the top of uploadAvatar, before the new upload:
+const profileSnap = await getDoc(doc(db, "users", uid));
+const oldAvatarUrl: string | undefined = profileSnap.data()?.avatarUrl;
+
+// After new file is uploaded and newUrl is obtained, before or after updating Firestore:
+if (oldAvatarUrl) {
+  try {
+    // Extract the storage path from the download URL
+    const oldRef = ref(storage, decodeURIComponent(
+      oldAvatarUrl.split("/o/")[1]?.split("?")[0] ?? ""
+    ));
+    await deleteObject(oldRef);
+  } catch {
+    // Silently ignore — old file may already be deleted or URL may be external
+  }
+}
+```
+
+Make sure `deleteObject` and `ref` are already imported from `firebase/storage` in this file. If not, add them to the existing import line — do not add a new import statement.
+
+---
+
+## ISSUE 6 — Replace "Send Inquiry" with Direct In-App Shop Chat (Shopee-style)
+
+This is a significant feature change. Read the instructions carefully and make only the surgical changes described.
+
+### Context:
+Currently, `ShopListingDetailPage.tsx` has a "Send Inquiry" form that submits a `ShopInquiry` document to Firestore. The goal is to replace this with a direct in-app chat button, so that:
+- Clicking "Chat" opens a conversation in `MessagesPage.tsx` directly between the customer and the shop (specifically, between the customer and the shop owner's UID as the other participant).
+- The conversation is created (or retrieved if already exists) using `getOrCreateConversation()` from `lib/messaging.ts`.
+- The shop owner AND all editors can see and reply to this conversation from the Messages page, because the conversation is tied to the shop owner's UID — editors already manage the shop under the owner context.
+- The existing `ShopInquiry` system (Firestore collection `shopInquiries`, `createInquiry()`, `getInquiriesForShop()`, etc.) is NOT deleted from `lib/shops.ts` or `lib/types.ts`. Leave those functions in place. Only remove the UI entry points.
+
+### Files to edit:
+- `src/pages/ShopListingDetailPage.tsx`
+- `src/components/ShopManagementPanel.tsx`
+
+### DO NOT edit:
+- `lib/shops.ts` — do not remove `createInquiry`, `getInquiriesForShop`, `updateInquiryStatus`, `deleteInquiry`, or any related functions.
+- `lib/types.ts` — do not remove `ShopInquiry` or `InquiryStatus`.
+- `lib/messaging.ts` — no changes needed.
+- `firestore.rules` — no changes needed.
+- The admin panel files — no changes needed.
+
+---
+
+### 6A — Changes to `ShopListingDetailPage.tsx`
+
+**Step 1 — Remove the inquiry form UI entirely.** Find the section that renders the inquiry form (the textarea + quantity input + "Send Inquiry" button). Remove only that JSX block. Do not remove the surrounding shop info card, the price display, or any other section.
+
+**Step 2 — Remove inquiry-related state and imports.** Remove only the state variables that were exclusively used by the inquiry form (e.g. `inquiryNote`, `inquiryQty`, `submittingInquiry`, `inquirySubmitted`, etc.). Do not remove any state used by other parts of the page.
+
+**Step 3 — Remove the `createInquiry` import** from the import line at the top (it imports from `lib/shops`). Remove only `createInquiry` from that import — do not remove any other imported names.
+
+**Step 4 — Add a "Chat" button.** In the place where the inquiry form was, add a single prominent "Chat" button:
+
+```tsx
+{user ? (
+  !canManage && (
+    <button
+      onClick={async () => {
+        if (!shop) return;
+        const convId = await getOrCreateConversation(
+          user.uid,
+          shop.ownerId,
+          { id: listing.id, title: listing.title, photos: listing.photos },
+          { shopName: shop.name, shopOwnerUid: shop.ownerId }
+        );
+        navigate(`/messages?conv=${convId}`);
+      }}
+      className="w-full min-h-[48px] bg-[#003366] dark:bg-blue-600 text-white font-bold text-sm rounded-2xl hover:bg-[#002244] dark:hover:bg-blue-700 transition flex items-center justify-center gap-2 shadow-md"
+    >
+      <MessageSquare size={16} /> Chat
+    </button>
+  )
+) : (
+  <button
+    onClick={() => setShowAuth(true)}
+    className="w-full min-h-[48px] bg-[#003366] dark:bg-blue-600 text-white font-bold text-sm rounded-2xl hover:bg-[#002244] dark:hover:bg-blue-700 transition flex items-center justify-center gap-2 shadow-md"
+  >
+    <MessageSquare size={16} /> Chat
+  </button>
+)}
+```
+
+Make sure `getOrCreateConversation` is imported from `@/lib/messaging` and `MessageSquare` is imported from `lucide-react`. Add these to the existing import lines if they are not already present.
+
+---
+
+### 6B — Changes to `ShopManagementPanel.tsx`
+
+**Step 1 — Remove the Inquiries tab from the tab navigation.** Find the tab bar that lists tabs like "Listings", "Inquiries", "Orders", "Analytics", "Settings" (or similar). Remove only the tab button/pill for "Inquiries". Do not remove any other tab.
+
+**Step 2 — Remove the Inquiries tab panel content.** Find the JSX block that renders when the "inquiries" tab is active (the `InquiriesTab` component render or the inline inquiries JSX). Remove only that conditional block. Do not remove the `InquiriesTab` function definition itself — leave it in the file as dead code in case it is needed again. Just remove the render call inside the tab switcher.
+
+**Step 3 — Remove the Inquiries-related state and data-fetching** that was called exclusively for the inquiries tab. This includes: the `inquiries` state array, the `useEffect` or function call that fetches/subscribes to inquiries, and the `pendingInquiryCount` badge if it was only displayed on the Inquiries tab button. Do not remove these if they are used anywhere else in the file.
+
+**Step 4 — Remove the `getInquiriesForShop`, `updateInquiryStatus`, `deleteInquiry` imports** from the `lib/shops` import line at the top of the file — but only if they are no longer referenced anywhere in the file after Step 2 and 3. If any of them are still referenced, leave them in.
+
+**Step 5 — Verify the tab default.** If the currently active tab was defaulting to `"inquiries"` on load, change the default to `"listings"`.
+
+---
+
+## ISSUE 7 — Hide "Contact Seller" Block for Signed-Out Users; Rename to "Contact Seller"
+
+### File to edit:
+- `src/pages/ShopListingDetailPage.tsx`
+
+### Fix Part A — Rename:
+Find every occurrence of the text `"Contact Shop"` in this file (in JSX, in `t()` calls, or in `i18n.ts` keys referenced here). Rename to `"Contact Seller"`. Also update the corresponding key in `lib/i18n.ts` for both `en` and `zh`.
+
+### Fix Part B — Hide when signed out:
+Find the "Contact Seller" block (the `<div>` that shows WhatsApp and WeChat links). It currently renders for all users. Wrap the entire block in a check for the authenticated user:
+
+```tsx
+{user && shop && (shop.whatsapp || shop.wechat) && (
+  // ... existing contact block JSX unchanged ...
+)}
+```
+
+The `user` value comes from `useAuth()` which is already imported in this file. Do not add a new import. Do not change the inner JSX of the contact block at all — only add the `user &&` condition to the outer wrapper.
+
+---
+
+## ISSUE 8 — Update the App Description Text to Include the Campus Market Feature
+
+### File to edit:
+Find where this exact paragraph appears in the codebase (search for `"XMUM Market is a safe, student-only digital marketplace"` across all files in `src/`). It may be in `HomePage.tsx`, `Layout.tsx`, `AboutPage.tsx`, or a component.
+
+### Fix:
+Replace the existing two-paragraph description with this updated version (do not change any surrounding JSX, className, or layout — only the text content inside the element):
+
+```
+XMUM Market is a safe, student-only digital marketplace built exclusively for the XMUM community. It allows students to buy and sell second-hand items, post Lost & Found notices, offer jobs and freelance services, request peer assistance, and list vehicle rentals — all within a trusted campus network.
+
+The Campus Market lets XMUM students open their own digital shops to sell products and services directly to the community — from homemade food and handcraft to tutoring, fashion, and more. Shops can showcase their listings, receive orders, and chat with customers in real time.
+
+Every account is verified with an XMUM student email, ensuring all users are genuine members of the campus community. The platform supports bilingual browsing in English and Chinese (中文), real-time messaging between buyers and sellers, and in-app notifications so you never miss a deal.
+```
+
+Also add a Chinese translation for this updated description text to `lib/i18n.ts` under the same key used for the existing description — if the description is hardcoded (not using `t()`), leave it hardcoded in English for now and add a TODO comment: `{/* TODO: add i18n key for app description */}`.
+
+---
+
+## Final Checklist Before Submitting
+
+After completing all issues above:
+
+1. Run `pnpm --filter @workspace/xmum-market run build` and confirm **zero TypeScript errors and zero build warnings**.
+2. Confirm that `OrderFormPage.tsx` is now imported and registered as `<Route path="/order/:listingId" component={OrderFormPage} />` in `App.tsx` — this was a pre-existing bug found in the codebase audit where the page exists but has no route.
+3. Confirm the `ShopOrderQuestion`, `ShopOrder`, and `ShopReview` types are declared in `lib/types.ts` and exported — these are used in `shops.ts` and `ShopManagementPanel.tsx` but are currently missing from `types.ts`.
+4. Confirm the Firestore email rule in `firestore.rules` ends with a `$` anchor: `matches('.*@xmu\\.edu\\.my$')` — the current regex without the anchor can be bypassed.
+5. Do not submit until the build is clean with zero errors.

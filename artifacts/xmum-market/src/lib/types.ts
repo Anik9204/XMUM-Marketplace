@@ -34,6 +34,61 @@ export interface Shop {
   totalInquiries: number;
   autoReplyEnabled?: boolean;
   autoReplyMessage?: string;
+  rating?: number;
+  reviewCount?: number;
+  orderQuestions?: ShopOrderQuestion[];
+}
+
+export interface ShopOrderQuestion {
+  id: string;
+  label: string;
+  type: "text" | "textarea" | "select" | "number";
+  options?: string[];
+  required: boolean;
+}
+
+export interface ShopOrder {
+  id: string;
+  shopId: string;
+  shopName: string;
+  shopOwnerId: string;
+  listingId: string;
+  shopListingId?: string;
+  listingTitle: string;
+  buyerId: string;
+  buyerName: string;
+  buyerEmail: string;
+  quantity: number;
+  offeredPrice?: number | null;
+  answers: Record<string, string>;
+  status: "pending" | "confirmed" | "completed" | "cancelled";
+  createdAt: number;
+  updatedAt: number;
+  reviewLeft: boolean;
+  hasReviewed?: boolean;
+}
+
+export interface ShopReview {
+  id: string;
+  shopId: string;
+  shopListingId?: string;
+  inquiryId?: string;
+  buyerId: string;
+  buyerName: string;
+  buyerEmail: string;
+  rating: number;
+  comment?: string;
+  createdAt: number;
+}
+
+export interface Review {
+  id: string;
+  buyerId: string;
+  sellerId: string;
+  listingId?: string;
+  rating: number;
+  comment?: string;
+  createdAt: number;
 }
 
 export interface ShopListing {
@@ -52,6 +107,9 @@ export interface ShopListing {
   createdAt: number;
   viewCount: number;
   inquiryCount: number;
+  orderQuestions?: ShopOrderQuestion[];
+  rating?: number;
+  reviewCount?: number;
   isReportHeld?: boolean;
   reportHeldAt?: number;
 }

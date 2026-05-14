@@ -45,7 +45,7 @@ export default function ReviewModal({ order, onClose, onSubmitted }: ReviewModal
     try {
       await leaveShopReview({
         shopId: order.shopId,
-        shopListingId: order.shopListingId,
+        shopListingId: order.shopListingId ?? order.listingId,
         inquiryId: order.id,
         reviewerId: user!.uid,
         reviewerName: userProfile?.fullName || user?.email?.split("@")[0] || "Student",

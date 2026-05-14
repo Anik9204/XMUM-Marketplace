@@ -3,14 +3,15 @@ import { useRoute, useLocation, Link } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { getDoc, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { getShopById, incrementShopListingView, createInquiry, deleteShopListing } from "@/lib/shops";
+import { getShopById, incrementShopListingView, deleteShopListing } from "@/lib/shops";
+import { getOrCreateConversation } from "@/lib/messaging";
 import ReportHoldModal from "@/components/ReportHoldModal";
-import { Shop, ShopListing } from "@/lib/types";
+import { Shop, ShopListing, Listing } from "@/lib/types";
 import AuthModal from "@/components/AuthModal";
 import ReportModal from "@/components/ReportModal";
 import {
   ArrowLeft, ChevronLeft, ChevronRight, Package,
-  Loader2, Store, Send, Edit2, Trash2, MoreHorizontal, Flag,
+  Loader2, Store, MessageSquare, Edit2, Trash2, MoreHorizontal, Flag,
 } from "lucide-react";
 import { SiWhatsapp, SiWechat } from "react-icons/si";
 
@@ -41,11 +42,6 @@ export default function ShopListingDetailPage() {
   const [photoIdx, setPhotoIdx] = useState(0);
   const [showAuth, setShowAuth] = useState(false);
 
-  const [showInquiry, setShowInquiry] = useState(false);
-  const [note, setNote] = useState("");
-  const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState(false);
-  const [inquiryError, setInquiryError] = useState("");
   const [deletingListing, setDeletingListing] = useState(false);
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
   const [showReport, setShowReport] = useState(false);
@@ -87,35 +83,6 @@ export default function ShopListingDetailPage() {
     })();
   }, [listingId]);
 
-  const handleInquiry = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user || !userProfile) {
-      setShowAuth(true);
-      return;
-    }
-    if (!listing || !shop) return;
-    setInquiryError("");
-    setSending(true);
-    try {
-      await createInquiry({
-        shopId: shop.id,
-        shopName: shop.name,
-        shopListingId: listing.id,
-        listingTitle: listing.title,
-        buyerId: user.uid,
-        buyerName:
-          userProfile.fullName || userProfile.displayName || user.email || "Anonymous",
-        buyerEmail: user.email ?? "",
-        note: note.trim(),
-      });
-      setSent(true);
-      setShowInquiry(false);
-    } catch (err: any) {
-      setInquiryError(err.message ?? "Failed to send inquiry.");
-    } finally {
-      setSending(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -276,9 +243,9 @@ export default function ShopListingDetailPage() {
         )}
 
         {/* Contact buttons */}
-        {shop && (shop.whatsapp || shop.wechat) && (
+        {user && shop && (shop.whatsapp || shop.wechat) && (
           <div className="mt-3 rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 flex flex-col gap-2">
-            <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Contact Shop</p>
+            <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Contact Seller</p>
             {shop.whatsapp && (
               <a
                 href={`https://wa.me/${shop.whatsapp.replace(/[^0-9]/g, "")}`}
@@ -348,89 +315,39 @@ export default function ShopListingDetailPage() {
           </div>
         )}
 
-        {/* Inquiry success */}
-        {sent && (
-          <>
-            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl px-4 py-3 text-sm text-green-700 dark:text-green-400 font-semibold text-center">
-              ✅ Inquiry sent! The shop will contact you soon.
-            </div>
-            {shop?.autoReplyEnabled && shop.autoReplyMessage && (
-              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-xl px-4 py-3 text-sm text-blue-700 dark:text-blue-300">
-                <p className="font-semibold text-xs mb-1">
-                  Automated reply from {shop.name}:
-                </p>
-                <p>{shop.autoReplyMessage}</p>
-              </div>
-            )}
-          </>
-        )}
-
-        {/* Inline inquiry form */}
-        {showInquiry && !canManage && (
-          <form
-            onSubmit={handleInquiry}
-            className="space-y-3 bg-blue-50 dark:bg-slate-800 rounded-xl p-4"
-          >
-            <h3 className="text-sm font-bold text-gray-900 dark:text-slate-100">
-              Send Inquiry
-            </h3>
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1">
-                Message (optional)
-              </label>
-              <textarea
-                rows={3}
-                maxLength={500}
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="Ask anything about this listing before ordering…"
-                className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none"
-              />
-            </div>
-            {inquiryError && <p className="text-xs text-red-500">{inquiryError}</p>}
-            <div className="flex gap-2">
-              <button
-                type="submit"
-                disabled={sending}
-                className="flex-1 bg-[#003366] dark:bg-blue-600 text-white font-semibold text-sm py-2.5 rounded-xl hover:bg-[#002244] disabled:opacity-50 transition flex items-center justify-center gap-2"
-              >
-                {sending ? (
-                  <>
-                    <Loader2 size={14} className="animate-spin" /> Sending…
-                  </>
-                ) : (
-                  <>
-                    <Send size={13} /> Send
-                  </>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowInquiry(false)}
-                className="px-4 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-300 font-semibold text-sm rounded-xl hover:bg-gray-200 transition"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        )}
       </div>
 
       {/* Sticky action bar */}
-      {!canManage && !sent && !showInquiry && (
+      {!canManage && (
         <div className="fixed bottom-14 md:bottom-0 left-0 right-0 z-40 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-700 px-4 py-3 shadow-lg">
-          <button
-            onClick={() => {
-              if (!user) {
-                setShowAuth(true);
-              } else {
-                setShowInquiry(true);
-              }
-            }}
-            className="w-full min-h-[48px] bg-[#003366] dark:bg-blue-600 text-white font-semibold text-sm rounded-xl hover:bg-[#002244] transition"
-          >
-            Send Inquiry
-          </button>
+          {user ? (
+            <button
+              onClick={async () => {
+                if (!listing || !shop) return;
+                try {
+                  const convId = await getOrCreateConversation(
+                    user.uid,
+                    shop.ownerId,
+                    { id: listing.id, title: listing.title, photos: listing.photos ?? [] },
+                    { shopName: shop.name, shopOwnerUid: shop.ownerId },
+                  );
+                  navigate(`/messages?conv=${convId}`);
+                } catch (err) {
+                  console.error("[ShopListingDetailPage] chat error:", err);
+                }
+              }}
+              className="w-full min-h-[48px] bg-[#003366] dark:bg-blue-600 text-white font-semibold text-sm rounded-xl hover:bg-[#002244] transition flex items-center justify-center gap-2"
+            >
+              <MessageSquare size={16} /> Chat with Seller
+            </button>
+          ) : (
+            <button
+              onClick={() => setShowAuth(true)}
+              className="w-full min-h-[48px] bg-[#003366] dark:bg-blue-600 text-white font-semibold text-sm rounded-xl hover:bg-[#002244] transition"
+            >
+              Sign in to Chat
+            </button>
+          )}
         </div>
       )}
 

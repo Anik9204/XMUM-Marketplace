@@ -6,12 +6,13 @@ import {
 
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { db, storage, auth } from "@/lib/firebase";
-import { Shop, ShopListing, ShopInquiry, ShopAd, InquiryStatus } from "@/lib/types";
+import { Shop, ShopListing, ShopInquiry, ShopAd, InquiryStatus, ShopOrderQuestion, ShopOrder, ShopReview } from "@/lib/types";
 import { shopListingHasActiveReport } from "@/lib/reportHold";
 
 import {
   notifyShopInquiryReceived,
   notifyInquiryStatusChanged,
+  notifyShopOrderReceived,
 } from "@/lib/notifications";
 
 function stripUndefined(obj: Record<string, any>): Record<string, any> {
@@ -178,7 +179,7 @@ export async function getFeaturedShops(limitCount = 8): Promise<Shop[]> {
 
     // Sort: shops with ratings first, then by createdAt
     active.sort((a, b) => {
-      if (b.reviewCount !== a.reviewCount) return b.reviewCount - a.reviewCount;
+      if ((b.reviewCount ?? 0) !== (a.reviewCount ?? 0)) return (b.reviewCount ?? 0) - (a.reviewCount ?? 0);
       return b.createdAt - a.createdAt;
     });
 
