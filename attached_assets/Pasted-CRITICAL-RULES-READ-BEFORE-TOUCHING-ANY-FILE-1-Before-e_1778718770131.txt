@@ -1,0 +1,294 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless I have explicitly told you to remove it.
+
+4. After every change, mentally verify: "Does this break anything
+   that was working before?" If yes, do not proceed — find a
+   different approach.
+
+5. If fixing Issue X requires changing a shared component used by
+   other pages, STOP and tell me what the impact will be before
+   making the change. Ask for permission first.
+
+6. Never change any CSS class, layout structure, z-index, or
+   responsive breakpoint unless it is directly part of the fix.
+
+7. Confirm the app builds with zero errors before finishing:
+   pnpm --filter @workspace/xmum-market run build
+
+
+>
+> ## ISSUE 1 — Show Shop WhatsApp / WeChat on Every Shop Listing Detail Page
+>
+> ### File to edit: `src/pages/ShopListingDetailPage.tsx`
+>
+> ### Root Cause
+> The shop contact block on line ~279 is conditionally wrapped: `{shop && (shop.whatsapp || shop.wechat) && (...)}`. While logically correct, the contact info is **not prominently shown** — it renders as small icon links below the shop info card and is easy to miss. The screenshot confirms the area next to the title/price is visually empty.
+>
+> ### Fix
+>
+> **Step 1 — Make contact info visually prominent.** Find the existing block that looks like this:
+> ```tsx
+> {shop && (shop.whatsapp || shop.wechat) && (
+>   <div ...>
+>     {shop.whatsapp && (
+>       <a href={`https://wa.me/${shop.whatsapp.replace(/[^0-9]/g, "")}`} ...>
+>         <SiWhatsapp size={13} /> WhatsApp
+>       </a>
+>     )}
+>     {shop.wechat && (
+>       <... > <SiWechat size={13} /> {shop.wechat} </...>
+>     )}
+>   </div>
+> )}
+> ```
+>
+> Replace the contact `<div>` with this improved version (keep the outer condition exactly the same — only change the inner markup):
+> ```tsx
+> {shop && (shop.whatsapp || shop.wechat) && (
+>   <div className="mt-3 rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 flex flex-col gap-2">
+>     <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Contact Shop</p>
+>     {shop.whatsapp && (
+>       
+>         href={`https://wa.me/${shop.whatsapp.replace(/[^0-9]/g, "")}`}
+>         target="_blank"
+>         rel="noopener noreferrer"
+>         className="flex items-center gap-2 text-sm font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"
+>       >
+>         <SiWhatsapp size={16} /> WhatsApp: {shop.whatsapp}
+>       </a>
+>     )}
+>     {shop.wechat && (
+>       <button
+>         onClick={() => { navigator.clipboard.writeText(shop.wechat!); alert(`WeChat ID copied: ${shop.wechat}`); }}
+>         className="flex items-center gap-2 text-sm font-semibold text-sky-600 dark:text-sky-400 hover:underline text-left"
+>       >
+>         <SiWechat size={16} /> WeChat: {shop.wechat}
+>       </button>
+>     )}
+>   </div>
+> )}
+> ```
+>
+> Place this block **directly after** the shop info card `</div>` (the one containing the logo, name, and "View Shop →" button), and **before** the "You manage this shop" block. This makes the contact methods appear prominently on the listing page for every customer.
+>
+> **Step 2 — Make WhatsApp or WeChat required when creating/editing a shop.**
+>
+> File: `src/lib/shops.ts` — find the `createShop` function signature:
+> ```ts
+> data: { name: string; slug: string; bio: string; category: string; whatsapp?: string; wechat?: string }
+> ```
+> This does NOT need a code change — validation belongs in the UI. Instead:
+>
+> File: `src/pages/CreateShopPage.tsx` — find the form submission handler (where `createShop(...)` is called). Before the `createShop` call, add this validation gate:
+> ```ts
+> if (!whatsapp.trim() && !wechat.trim()) {
+>   setError("Please provide at least one contact method — WhatsApp or WeChat.");
+>   return;
+> }
+> ```
+> Also add a visible note below the WhatsApp and WeChat input fields:
+> ```tsx
+> <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+>   ⚠️ At least one of WhatsApp or WeChat is required so customers can reach you.
+> </p>
+> ```
+>
+> Do the same in `src/components/ShopManagementPanel.tsx` — find where shop settings are saved (the `handleSave` or equivalent submit function) and add the same guard before saving:
+> ```ts
+> if (!whatsapp.trim() && !wechat.trim()) {
+>   setError("At least one contact method (WhatsApp or WeChat) is required.");
+>   return;
+> }
+> ```
+>
+> ---
+>
+> ## ISSUE 2 — Add Cancel Button to All Post/Edit Forms
+>
+> ### Root Cause
+> `PostPage.tsx` has a "Discard" link that only appears in certain states (when the draft is dirty/confirm modal). On a fresh open of the form, there is no obvious escape route. `EditListingPage.tsx` has a "Back to Profile" link buried at the top inside an early-return block (only shown when there's a `reportHold`). Neither page has a universally visible cancel/back button at the top of the main form.
+>
+> ### Files to edit: `src/pages/PostPage.tsx` and `src/pages/EditListingPage.tsx`
+>
+> **In `PostPage.tsx`:**
+> Find the top of the main form JSX — there will be a `<div>` or `<main>` wrapping the form content. At the very top of the form card (before the first field or section heading), add this cancel button:
+> ```tsx
+> <button
+>   type="button"
+>   onClick={() => {
+>     if (isDirty && !window.confirm("Discard changes and go back?")) return;
+>     navigate("/");
+>   }}
+>   className="flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors mb-4"
+> >
+>   ← Cancel
+> </button>
+> ```
+> Use the existing `navigate` and `isDirty` variables — they are already declared in this file. Do NOT add any new imports.
+>
+> **In `EditListingPage.tsx`:**
+> The page already has `navigate` declared. Find the top of the form render (after any loading/error early returns). Add the same cancel button:
+> ```tsx
+> <button
+>   type="button"
+>   onClick={() => {
+>     if (isDirty && !window.confirm("Discard changes and go back?")) return;
+>     navigate(`/listing/${id}`);
+>   }}
+>   className="flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors mb-4"
+> >
+>   ← Cancel
+> </button>
+> ```
+> Check if `EditListingPage` has an `isDirty` state. If it does not, replace `isDirty &&` with just the `navigate` call — do not add a new state variable.
+>
+> **Also check `src/pages/SettingsPage.tsx`** — if it has any full-page forms (not modals) that lack a back/cancel button, apply the same pattern. Do not add cancel to modals that already have an X button.
+>
+> ---
+>
+> ## ISSUE 3 — WhatsApp-Style Unread Message Counting (1 notification per conversation, not per message)
+>
+> ### Root Cause
+> In `src/lib/messaging.ts`, the `sendMessage` function calls `sendNewMessageNotification(...)` on every single message sent:
+> ```ts
+> // line ~106
+> await sendNewMessageNotification(otherUid, senderName, listingTitle);
+> ```
+> This fires a new notification document into Firestore for **every message**, so 9 rapid messages → 9 notification items. The badge count in `subscribeToUnreadCount` sums the raw `unreadCount` integers, which are also incremented per message, causing the badge to show `9` instead of `1`.
+>
+> The badge count behaviour (`subscribeToUnreadCount`) is actually correct for showing total unread messages — but the **notification bell** should show conversations with unread messages, not total messages. Fix both layers:
+>
+> ### Fix — Layer 1: One notification per conversation, not per message
+>
+> **File: `src/lib/messaging.ts`**
+>
+> Find the `sendMessage` function. The `sendNewMessageNotification` call currently runs unconditionally. Change it to only fire when the **recipient currently has zero unread messages** in this conversation (i.e., this is the first unread message in the thread):
+>
+> ```ts
+> // BEFORE (inside sendMessage, after the updateDoc call):
+> await sendNewMessageNotification(otherUid, senderName, listingTitle);
+>
+> // AFTER — only notify if this is the FIRST unread message in this conversation:
+> const prevUnread = convSnap.data()?.unreadCount?.[otherUid] ?? 0;
+> if (prevUnread === 0) {
+>   await sendNewMessageNotification(otherUid, senderName, listingTitle);
+> }
+> ```
+>
+> IMPORTANT: The variable `convSnap` is already fetched earlier in `sendMessage` (it's used to get `unreadCount` for the `updateDoc` call). Do NOT re-fetch it. Read `prevUnread` from the **same `convSnap`** that already exists in that function scope, before the `updateDoc` runs (since `updateDoc` modifies it).
+>
+> ### Fix — Layer 2: Badge shows number of conversations with unread messages, not total message count
+>
+> **File: `src/lib/messaging.ts`** — find `subscribeToUnreadCount`:
+>
+> ```ts
+> // CURRENT — sums all unread message counts (shows "9" for 9 messages in 1 chat):
+> const total = snap.docs.reduce((sum, d) => {
+>   const count = d.data()?.unreadCount?.[uid] ?? 0;
+>   return sum + (typeof count === "number" ? count : 0);
+> }, 0);
+> callback(total);
+>
+> // REPLACE WITH — counts conversations that have at least 1 unread (WhatsApp style):
+> const total = snap.docs.filter((d) => {
+>   const count = d.data()?.unreadCount?.[uid] ?? 0;
+>   return typeof count === "number" && count > 0;
+> }).length;
+> callback(total);
+> ```
+>
+> This means if one person sends you 9 messages in one chat, the badge shows `1` (one conversation has unread), not `9`. If two separate conversations each have unread messages, the badge shows `2`.
+>
+> **File: `src/components/NotificationBell.tsx`** — check how it counts unread notifications. If it counts individual notification documents (each message = 1 doc), apply the same deduplication: only count notification documents with `type: "new_message"` once **per conversation** (group by `conversationId` if that field exists, or just count unread non-message notifications + at most 1 per conversation). If `conversationId` is not stored on the notification document, the simplest safe fix is: don't count `new_message` notifications individually — instead use the `unreadConversations` count from `subscribeToUnreadCount` for the message badge, and only show the notification bell count for non-message notification types. Check the notification document structure before deciding.
+>
+> ---
+>
+> ## ISSUE 4 — AvatarCropModal: Auto-Zoom Fix + Ghost Overlay Fix
+>
+> ### File to edit: `src/components/AvatarCropModal.tsx`
+> **Who uses it:** Only `src/pages/SettingsPage.tsx` (controlled via `cropFile` state — the modal mounts when `cropFile !== null` and unmounts when `setCropFile(null)` is called). No other files import this component.
+>
+> ### Bug A — Image Loads Zoomed In
+>
+> **Root Cause:** In the `useEffect` that loads the image (line ~79):
+> ```ts
+> const scale = Math.max(canvas.width / img.naturalWidth, canvas.height / img.naturalHeight);
+> scaleRef.current = Math.max(1, scale);
+> ```
+> `Math.max(canvas.width / w, canvas.height / h)` is the **cover** algorithm — it scales the image up to fill the canvas. For a 4000×3000 phone photo on a 320×320 canvas, this gives `320/4000 = 0.08`, but then `Math.max(1, 0.08) = 1` — so the scale clamps to `1` and the 4000px image is drawn at full size, appearing massively zoomed in.
+>
+> **Fix:** Change the scale algorithm to **contain** (fit the image inside the circle) and allow the scale to go below 1:
+> ```ts
+> // REPLACE these two lines:
+> const scale = Math.max(canvas.width / img.naturalWidth, canvas.height / img.naturalHeight);
+> scaleRef.current = Math.max(1, scale);
+>
+> // WITH (contain = fit entirely inside the crop circle, scale can be < 1):
+> const circleDiameter = Math.min(canvas.width, canvas.height) * 0.85;
+> const scale = Math.min(circleDiameter / img.naturalWidth, circleDiameter / img.naturalHeight);
+> scaleRef.current = scale; // no Math.max(1, ...) clamp — allow scaling down
+> ```
+>
+> Also update the `handleWheel` and `handleTouchMove` zoom clamps from `Math.max(1, ...)` to `Math.max(0.1, ...)` so the user can zoom out:
+> ```ts
+> // handleWheel:
+> scaleRef.current = Math.min(4, Math.max(0.1, scaleRef.current + delta));
+>
+> // handleTouchMove:
+> scaleRef.current = Math.min(4, Math.max(0.1, pinchRef.current.origScale * ratio));
+> ```
+>
+> ### Bug B — Ghost Overlay After Cancel
+>
+> **Root Cause:** The modal is unmounted in `SettingsPage.tsx` by calling `setCropFile(null)` (triggered by `onCancel`). In React, this removes the component from the DOM, which should clean up the overlay. However, the `objectUrl` cleanup in the `useEffect` return runs AFTER the state update that caused the unmount, which can leave the canvas drawing loop in a torn state and cause a visual glitch on some browsers.
+>
+> **Fix:** In `AvatarCropModal.tsx`, add an explicit reset in the `onCancel` handlers to revoke the object URL and clear refs before the parent unmounts:
+>
+> Create a `handleCancel` wrapper function inside the component:
+> ```ts
+> const handleCancel = useCallback(() => {
+>   // Revoke the object URL immediately to prevent memory leak and visual ghost
+>   if (objectUrlRef.current) {
+>     URL.revokeObjectURL(objectUrlRef.current);
+>     objectUrlRef.current = null;
+>   }
+>   // Clear the canvas so no ghost frame remains if unmount is async
+>   const canvas = canvasRef.current;
+>   if (canvas) {
+>     const ctx = canvas.getContext("2d");
+>     ctx?.clearRect(0, 0, canvas.width, canvas.height);
+>   }
+>   imgRef.current = null;
+>   onCancel();
+> }, [onCancel]);
+> ```
+>
+> Then replace ALL occurrences of `onClick={onCancel}` in the JSX with `onClick={handleCancel}`. There are exactly **two** — the X button in the header and the "Cancel" text button at the bottom.
+>
+> Also, update the `useEffect` cleanup to guard against double-revoke:
+> ```ts
+> return () => {
+>   if (objectUrlRef.current) {
+>     URL.revokeObjectURL(objectUrlRef.current);
+>     objectUrlRef.current = null;
+>   }
+> };
+> ```
+>
+> ---
+>
+> ## Build Verification
+>
+> After all changes:
+> ```bash
+> pnpm --filter @workspace/xmum-market run build
+> ```
+> The build must complete with **zero TypeScript errors and zero warnings about missing variables or imports.** If any error appears, fix it before finishing — do not leave the project in a broken state.

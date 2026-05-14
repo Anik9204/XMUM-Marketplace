@@ -467,6 +467,17 @@ export default function EditListingPage() {
     <div className="relative max-w-lg mx-auto px-4 py-5 pb-28 sm:pb-8 animate-in fade-in duration-200">
       {toast && <SuccessToast message={toast} onDone={() => navigate(`/listing/${id}`)} />}
 
+      <button
+        type="button"
+        onClick={() => {
+          if (isDirty && !window.confirm("Discard changes and go back?")) return;
+          navigate(`/listing/${id}`);
+        }}
+        className="flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors mb-4"
+      >
+        ← Cancel
+      </button>
+
       <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-4">{t.editListingTitle}</h1>
 
       {/* Type selector — read-only */}

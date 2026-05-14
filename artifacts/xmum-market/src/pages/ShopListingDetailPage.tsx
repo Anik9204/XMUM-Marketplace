@@ -277,21 +277,25 @@ export default function ShopListingDetailPage() {
 
         {/* Contact buttons */}
         {shop && (shop.whatsapp || shop.wechat) && (
-          <div className="flex flex-wrap gap-2">
+          <div className="mt-3 rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 flex flex-col gap-2">
+            <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Contact Shop</p>
             {shop.whatsapp && (
               <a
                 href={`https://wa.me/${shop.whatsapp.replace(/[^0-9]/g, "")}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-1.5 bg-green-500 text-white text-xs font-semibold px-4 py-2.5 rounded-xl hover:bg-green-600 transition shadow-sm"
+                className="flex items-center gap-2 text-sm font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"
               >
-                <SiWhatsapp size={13} /> WhatsApp
+                <SiWhatsapp size={16} /> WhatsApp: {shop.whatsapp}
               </a>
             )}
             {shop.wechat && (
-              <div className="flex items-center gap-1.5 bg-[#07C160] text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-sm">
-                <SiWechat size={13} /> {shop.wechat}
-              </div>
+              <button
+                onClick={() => { navigator.clipboard.writeText(shop.wechat!); alert(`WeChat ID copied: ${shop.wechat}`); }}
+                className="flex items-center gap-2 text-sm font-semibold text-sky-600 dark:text-sky-400 hover:underline text-left"
+              >
+                <SiWechat size={16} /> WeChat: {shop.wechat}
+              </button>
             )}
           </div>
         )}

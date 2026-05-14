@@ -695,6 +695,17 @@ export default function PostPage() {
         </div>
       )}
 
+      <button
+        type="button"
+        onClick={() => {
+          if (isDirty && !window.confirm("Discard changes and go back?")) return;
+          navigate("/");
+        }}
+        className="flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors mb-4"
+      >
+        ← Cancel
+      </button>
+
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-display font-bold text-gray-900 dark:text-slate-100">{t.postItem}</h1>

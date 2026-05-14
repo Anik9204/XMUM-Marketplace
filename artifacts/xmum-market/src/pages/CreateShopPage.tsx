@@ -97,6 +97,10 @@ export default function CreateShopPage() {
     if (!slug) { setError("URL slug is required."); return; }
     if (slugAvailable === false) { setError("That slug is already taken. Choose another."); return; }
     if (!user?.email) { setError("You must be signed in with an XMUM email."); return; }
+    if (!whatsapp.trim() && !wechat.trim()) {
+      setError("Please provide at least one contact method — WhatsApp or WeChat.");
+      return;
+    }
 
     setLoading(true);
     try {
@@ -231,6 +235,10 @@ export default function CreateShopPage() {
             onChange={(e) => setWechat(e.target.value)}
           />
         </div>
+
+        <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+          ⚠️ At least one of WhatsApp or WeChat is required so customers can reach you.
+        </p>
 
         <div className="sticky bottom-0 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-700 px-4 pt-3 pb-4 -mx-4 md:static md:bg-transparent md:border-0 md:p-0 md:mt-2">
           <button

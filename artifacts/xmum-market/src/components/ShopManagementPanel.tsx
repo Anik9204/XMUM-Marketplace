@@ -623,6 +623,11 @@ function SettingsTab({
   const [logoUploading, setLogoUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const handleSave = async () => {
+    if (!whatsapp.trim() && !wechat.trim()) {
+      setUploadError("At least one contact method (WhatsApp or WeChat) is required.");
+      return;
+    }
+    setUploadError("");
     await onSave();
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);

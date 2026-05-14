@@ -96,6 +96,7 @@ export async function sendMessage(
   });
 
   const convSnap = await getDoc(convRef);
+  const prevUnread = convSnap.data()?.unreadCount?.[otherUid] ?? 0;
   await updateDoc(convRef, {
     lastMessage: trimmed.slice(0, 80),
     lastMessageAt: Date.now(),
@@ -103,11 +104,13 @@ export async function sendMessage(
   });
 
   try {
-    await sendNewMessageNotification(
-      otherUid,
-      senderName,
-      convSnap.data()?.listingTitle ?? "a listing"
-    );
+    if (prevUnread === 0) {
+      await sendNewMessageNotification(
+        otherUid,
+        senderName,
+        convSnap.data()?.listingTitle ?? "a listing"
+      );
+    }
   } catch {}
 }
 
@@ -275,10 +278,10 @@ export function subscribeToUnreadCount(
   return onSnapshot(
     q,
     (snap) => {
-      const total = snap.docs.reduce((sum, d) => {
+      const total = snap.docs.filter((d) => {
         const count = d.data()?.unreadCount?.[uid] ?? 0;
-        return sum + (typeof count === "number" ? count : 0);
-      }, 0);
+        return typeof count === "number" && count > 0;
+      }).length;
       callback(total);
     },
     () => callback(0)

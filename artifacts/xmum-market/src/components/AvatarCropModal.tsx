@@ -76,14 +76,18 @@ export default function AvatarCropModal({ file, uid, onSuccess, onCancel }: Prop
       // Fit image to canvas initially
       const canvas = canvasRef.current;
       if (!canvas) return;
-      const scale = Math.max(canvas.width / img.naturalWidth, canvas.height / img.naturalHeight);
-      scaleRef.current = Math.max(1, scale);
+      const circleDiameter = Math.min(canvas.width, canvas.height) * 0.85;
+      const scale = Math.min(circleDiameter / img.naturalWidth, circleDiameter / img.naturalHeight);
+      scaleRef.current = scale;
       offsetRef.current = { x: 0, y: 0 };
       draw();
     };
     img.src = url;
     return () => {
-      URL.revokeObjectURL(url);
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = null;
+      }
     };
   }, [file, draw]);
 
@@ -115,7 +119,7 @@ export default function AvatarCropModal({ file, uid, onSuccess, onCancel }: Prop
   const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
     e.preventDefault();
     const delta = e.deltaY < 0 ? 0.1 : -0.1;
-    scaleRef.current = Math.min(4, Math.max(1, scaleRef.current + delta));
+    scaleRef.current = Math.min(4, Math.max(0.1, scaleRef.current + delta));
     draw();
   };
 
@@ -128,7 +132,7 @@ export default function AvatarCropModal({ file, uid, onSuccess, onCancel }: Prop
       const dist = Math.sqrt(dx * dx + dy * dy);
       if (pinchRef.current) {
         const ratio = dist / pinchRef.current.startDist;
-        scaleRef.current = Math.min(4, Math.max(1, pinchRef.current.origScale * ratio));
+        scaleRef.current = Math.min(4, Math.max(0.1, pinchRef.current.origScale * ratio));
         draw();
       } else {
         pinchRef.current = { startDist: dist, origScale: scaleRef.current };
@@ -139,6 +143,20 @@ export default function AvatarCropModal({ file, uid, onSuccess, onCancel }: Prop
   const handleTouchEnd = () => {
     pinchRef.current = null;
   };
+
+  const handleCancel = useCallback(() => {
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext("2d");
+      ctx?.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    imgRef.current = null;
+    onCancel();
+  }, [onCancel]);
 
   const handleSave = async () => {
     const canvas = canvasRef.current;
@@ -204,7 +222,7 @@ export default function AvatarCropModal({ file, uid, onSuccess, onCancel }: Prop
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-slate-700">
           <h2 className="text-base font-bold text-gray-900 dark:text-slate-100">Crop Profile Photo</h2>
           <button
-            onClick={onCancel}
+            onClick={handleCancel}
             className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 dark:text-slate-500 transition-colors"
           >
             <X size={18} />
@@ -242,7 +260,7 @@ export default function AvatarCropModal({ file, uid, onSuccess, onCancel }: Prop
             {uploading ? <><Loader2 size={16} className="animate-spin" /> Uploading…</> : "Use This Photo"}
           </button>
           <button
-            onClick={onCancel}
+            onClick={handleCancel}
             className="mt-2 w-full text-sm text-slate-400 dark:text-slate-500 py-2 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
           >
             Cancel
