@@ -584,31 +584,58 @@ export default function HomePage() {
         {/* About card */}
         <div className="max-w-2xl mx-auto bg-white dark:bg-[#1E293B] rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
 
-          {/* Header band */}
-          <div className="bg-[#003366] dark:bg-[#0D2B6B] px-6 py-5">
-            <div className="flex items-center gap-3">
-              <span className="text-3xl">🏪</span>
-              <div>
-                <h2 className="text-white text-lg font-bold tracking-tight">About XMUM Market</h2>
-                <p className="text-blue-200 text-xs mt-0.5">Student Marketplace · XMUM</p>
-              </div>
+          {/* Header band — redesigned */}
+          <div className="relative bg-[#003366] dark:bg-[#0A1F4E] overflow-hidden px-6 pt-7 pb-8">
+            {/* Decorative geometry */}
+            <div className="absolute -top-12 -right-12 w-56 h-56 rounded-full bg-white/[0.04] pointer-events-none" />
+            <div className="absolute -bottom-10 -left-10 w-44 h-44 rounded-full bg-white/[0.04] pointer-events-none" />
+            <div className="absolute top-5 right-8 w-3 h-3 rounded-full bg-blue-300/30 pointer-events-none" />
+            <div className="absolute bottom-6 right-24 w-1.5 h-1.5 rounded-full bg-blue-200/40 pointer-events-none" />
+            <div className="absolute top-8 left-1/2 w-px h-20 bg-white/5 pointer-events-none" />
+
+            {/* Verified badge */}
+            <div className="inline-flex items-center gap-1.5 bg-white/10 border border-white/15 rounded-full px-3 py-1 mb-4">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-400 shadow-[0_0_4px_#4ade80]" />
+              <span className="text-white/75 text-[9px] font-bold tracking-[0.12em] uppercase">Verified Student Platform · Free</span>
             </div>
+
+            <h2 className="text-white text-[22px] font-bold tracking-tight leading-tight">
+              XMUM Market
+            </h2>
+            <p className="text-blue-200/70 text-[13px] font-medium mt-1 leading-snug">
+              The campus marketplace — built by students, for students.
+            </p>
           </div>
 
           <div className="px-6 py-6 space-y-6">
 
             {/* Product description */}
-            <div>
-              <h3 className="text-sm font-semibold text-[#003366] dark:text-blue-400 uppercase tracking-wide mb-2">What is XMUM Market?</h3>
-              <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-                XMUM Market is a free, student-built platform created to make campus life easier. Whether you're moving out of your dorm, looking for affordable textbooks, or offering tutoring services, this is the place to connect with fellow XMUM students.
-              </p>
-              <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed mt-3">
-                Every account is verified using an <strong className="text-slate-800 dark:text-white">@xmu.edu.my</strong> email address, so you can trust that everyone on the platform is a real XMUM student. No strangers, no scammers — just your campus community.
-              </p>
-              <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed mt-3">
-                From <strong className="text-slate-800 dark:text-white">buying and selling</strong> second-hand goods to finding <strong className="text-slate-800 dark:text-white">lost items</strong>, hiring for <strong className="text-slate-800 dark:text-white">part-time jobs</strong>, renting a <strong className="text-slate-800 dark:text-white">bicycle or car</strong>, or browsing student-run <strong className="text-slate-800 dark:text-white">Campus Market</strong> shops — everything happens right here, in English or Chinese (中文).
-              </p>
+            <div className="space-y-4">
+              <div>
+                <p className="text-[11px] font-bold text-[#003366] dark:text-blue-400 uppercase tracking-widest mb-2">What is XMUM Market?</p>
+                <p className="text-[13px] font-semibold text-slate-800 dark:text-slate-100 leading-snug">
+                  A free, student-built platform for campus life.
+                </p>
+                <p className="text-[13px] text-slate-500 dark:text-slate-400 leading-relaxed mt-1">
+                  Whether you're moving out of your dorm, looking for affordable textbooks, or offering tutoring services — this is the place to connect with fellow XMUM students.
+                </p>
+              </div>
+              <div>
+                <p className="text-[13px] font-semibold text-slate-800 dark:text-slate-100 leading-snug">
+                  Every account is verified with an <span className="text-[#003366] dark:text-blue-400">@xmu.edu.my</span> email address.
+                </p>
+                <p className="text-[13px] text-slate-500 dark:text-slate-400 leading-relaxed mt-1">
+                  No strangers, no scammers — just your campus community.
+                </p>
+              </div>
+              <div>
+                <p className="text-[13px] font-semibold text-slate-800 dark:text-slate-100 leading-snug">
+                  Buy &amp; sell, find lost items, hire for jobs, rent vehicles, browse Campus Market shops.
+                </p>
+                <p className="text-[13px] text-slate-500 dark:text-slate-400 leading-relaxed mt-1">
+                  Everything happens right here, in English or Chinese (中文).
+                </p>
+              </div>
             </div>
 
             {/* Feature highlights */}
