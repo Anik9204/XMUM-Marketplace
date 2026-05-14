@@ -513,7 +513,7 @@ export default function PostPage() {
         setLoading(false);
         return;
       }
-      if (vehicleType !== "bicycle" && (!vehicleBrand.trim() || !vehicleModel.trim() || !plateNumber.trim())) {
+      if (vehicleType !== "bicycle" && vehicleType !== "electric-bike" && (!vehicleBrand.trim() || !vehicleModel.trim() || !plateNumber.trim())) {
         setError("Please fill in all required vehicle details (Brand, Model, Plate Number).");
         setLoading(false);
         return;
@@ -610,7 +610,7 @@ export default function PostPage() {
       } else if (type === "rental") {
         baseData.category = vehicleType;
         baseData.vehicleType = vehicleType;
-        if (vehicleType !== "bicycle") {
+        if (vehicleType !== "bicycle" && vehicleType !== "electric-bike") {
           baseData.vehicleBrand = vehicleBrand.trim();
           baseData.vehicleModel = vehicleModel.trim();
           baseData.vehicleYear = vehicleYear;
@@ -982,7 +982,7 @@ export default function PostPage() {
                 ))}
               </div>
             </div>
-            {vehicleType !== "bicycle" && (
+            {vehicleType !== "bicycle" && vehicleType !== "electric-bike" && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelCls}>{t.rentalBrandLabel} *</label>

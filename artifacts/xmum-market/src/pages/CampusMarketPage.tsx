@@ -193,6 +193,7 @@ function MyShopCard({ shop, pendingCount }: { shop: Shop; pendingCount: number }
 export default function CampusMarketPage() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
+  const listingsRef = useRef<HTMLDivElement>(null);
 
   const [ads, setAds] = useState<ShopAd[]>([]);
   const [shops, setShops] = useState<Shop[]>([]);
@@ -280,7 +281,16 @@ export default function CampusMarketPage() {
         {["All", ...SHOP_CATEGORIES].map((cat) => (
           <button
             key={cat}
-            onClick={() => setSelectedCategory(cat as ShopCategory | "All")}
+            onClick={() => {
+              setSelectedCategory(cat as ShopCategory | "All");
+              setTimeout(() => {
+                const el = listingsRef.current;
+                if (el) {
+                  const top = el.getBoundingClientRect().top + window.scrollY - 80;
+                  window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+                }
+              }, 50);
+            }}
             className={`chip shrink-0 ${selectedCategory === cat ? "chip-active" : ""}`}
           >
             {cat}
@@ -332,7 +342,7 @@ export default function CampusMarketPage() {
       </div>
 
       {/* Listings grid */}
-      <div className="px-4">
+      <div ref={listingsRef} className="px-4">
         <div className="flex items-center justify-between mb-3">
           <h2 className="section-header">
             🛍️ {selectedCategory === "All" ? "All Listings" : selectedCategory}

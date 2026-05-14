@@ -128,35 +128,29 @@ function ShopListingMiniCard({ listing }: { listing: ShopListing }) {
       className="card-base overflow-hidden transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
     >
       {listing.photos[0] ? (
-        <img src={listing.photos[0]} alt={listing.title} className="w-full aspect-square object-cover" />
+        <img src={listing.photos[0]} alt={listing.title} className="w-full aspect-[4/3] object-cover" />
       ) : (
-        <div className="w-full aspect-square bg-gradient-to-br from-gray-100 to-gray-200 dark:from-slate-700 dark:to-slate-600 flex items-center justify-center">
-          <Store size={24} className="text-gray-300 dark:text-slate-500" />
+        <div className="w-full aspect-[4/3] bg-gradient-to-br from-gray-100 to-gray-200 dark:from-slate-700 dark:to-slate-600 flex items-center justify-center">
+          <Store size={18} className="text-gray-300 dark:text-slate-500" />
         </div>
       )}
-      <div className="p-2">
-        <p className="text-[11px] font-semibold font-display text-gray-900 dark:text-slate-100 line-clamp-2 leading-tight mb-0.5">
+      <div className="p-1.5">
+        <p className="text-[10px] font-semibold font-display text-gray-900 dark:text-slate-100 line-clamp-1 leading-tight mb-0.5">
           {listing.title}
         </p>
         {listing.price != null ? (
-          <p className="text-xs font-bold text-[#003366] dark:text-blue-400">
+          <p className="text-[11px] font-bold text-[#003366] dark:text-blue-400 leading-tight">
             RM {listing.price.toFixed(2)}
             {listing.pricingModel && listing.pricingModel !== "fixed" && (
-              <span className="font-normal text-[10px] text-gray-400">
+              <span className="font-normal text-[9px] text-gray-400">
                 /{listing.pricingModel.replace("per_", "")}
               </span>
             )}
           </p>
         ) : (
-          <p className="text-[11px] text-gray-400 dark:text-slate-500">Contact for price</p>
+          <p className="text-[10px] text-gray-400 dark:text-slate-500">Contact</p>
         )}
-        {(listing.reviewCount ?? 0) > 0 && (
-          <div className="flex items-center gap-0.5 mt-0.5">
-            <StarRowSmall rating={listing.rating ?? 0} />
-            <span className="text-[9px] text-gray-400">({listing.reviewCount})</span>
-          </div>
-        )}
-        <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5 truncate">{listing.shopName}</p>
+        <p className="text-[9px] text-gray-400 dark:text-slate-500 truncate">{listing.shopName}</p>
       </div>
     </div>
   );
@@ -401,7 +395,11 @@ export default function HomePage() {
                 onClick={() => {
                   setCategoryFilter(cat);
                   setTimeout(() => {
-                    listingsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    const el = listingsRef.current;
+                    if (el) {
+                      const top = el.getBoundingClientRect().top + window.scrollY - 130;
+                      window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+                    }
                   }, 50);
                 }}
                 className={`chip flex-shrink-0 ${categoryFilter === cat ? "chip-active" : ""}`}
@@ -506,7 +504,12 @@ export default function HomePage() {
       {/* ── End Campus Market Discovery ─────────────────────────────────────── */}
 
       {/* Listings grid */}
-      <div ref={listingsRef} className="max-w-5xl mx-auto px-4 py-5">
+      <div ref={listingsRef} className="max-w-5xl mx-auto px-4 pt-4 pb-5">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="h-px flex-1 bg-[#E2E8F0] dark:bg-slate-700" />
+          <span className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-slate-500 whitespace-nowrap">👥 Student Listings</span>
+          <div className="h-px flex-1 bg-[#E2E8F0] dark:bg-slate-700" />
+        </div>
         {loading ? (
           <SkeletonGrid />
         ) : displayedListings.length === 0 ? (

@@ -27,7 +27,7 @@ const ASSISTANCE_CATEGORIES = [
   "event_setup", "tech_help", "other_assistance",
 ];
 
-const RENTAL_VEHICLE_TYPES = ["car", "bike", "motorcycle", "bicycle", "scooter"] as const;
+const RENTAL_VEHICLE_TYPES = ["car", "motorcycle", "bicycle", "electric-bike"] as const;
 type VehicleType = typeof RENTAL_VEHICLE_TYPES[number];
 
 function formatCents(cents: number): string {
@@ -421,7 +421,7 @@ export default function EditListingPage() {
         baseData.availability = availability.trim();
       } else if (type === "rental") {
         baseData.vehicleType = vehicleType;
-        if (vehicleType !== "bicycle") {
+        if (vehicleType !== "bicycle" && vehicleType !== "electric-bike") {
           if (vehicleBrand.trim()) baseData.vehicleBrand = vehicleBrand.trim();
           if (vehicleModel.trim()) baseData.vehicleModel = vehicleModel.trim();
           const yr = parseInt(vehicleYear);
@@ -844,13 +844,13 @@ export default function EditListingPage() {
                         : "bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600"
                     }`}
                   >
-                    <span className="text-lg">{vt === "car" ? "🚗" : vt === "bicycle" ? "🚲" : vt === "scooter" ? "🛵" : "🏍️"}</span>
+                    <span className="text-lg">{vt === "car" ? "🚗" : vt === "bicycle" ? "🚲" : vt === "electric-bike" ? "⚡" : "🏍️"}</span>
                     <span className="text-[9px] capitalize">{vt}</span>
                   </button>
                 ))}
               </div>
             </div>
-            {vehicleType !== "bicycle" && (
+            {vehicleType !== "bicycle" && vehicleType !== "electric-bike" && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelCls}>Brand *</label>
