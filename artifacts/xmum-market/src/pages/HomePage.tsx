@@ -6,7 +6,8 @@ import { getListingsPage, getTabCounts } from "@/lib/listings";
 import { getActiveAds } from "@/lib/ads";
 import { getFeaturedShops, getRecentShopListings } from "@/lib/shops";
 import { Listing, ListingType, SponsoredAd, Shop, ShopListing } from "@/lib/types";
-import { QueryDocumentSnapshot } from "firebase/firestore";
+import { QueryDocumentSnapshot, collection, query, where, orderBy, limit, onSnapshot } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import ListingCard from "@/components/ListingCard";
 import SponsoredAdCard from "@/components/SponsoredAdCard";
 import AuthModal from "@/components/AuthModal";
@@ -178,6 +179,8 @@ export default function HomePage() {
   const listingsRef = useRef<HTMLDivElement>(null);
   const [showLeftShadow, setShowLeftShadow] = useState(false);
   const [showRightShadow, setShowRightShadow] = useState(true);
+  const [newItemsBuffer, setNewItemsBuffer] = useState<Listing[]>([]);
+  const pageLoadTsRef = useRef<number>(Date.now());
 
   const tabLabel = (tab: ListingType) => {
     if (tab === "buy-sell") return t.buySell;
@@ -229,6 +232,34 @@ export default function HomePage() {
       setRecentShopListings(listings);
     }).catch(() => {}).finally(() => setLoadingShops(false));
   }, []);
+
+  useEffect(() => {
+    pageLoadTsRef.current = Date.now();
+    setNewItemsBuffer([]);
+
+    const q = query(
+      collection(db, "listings"),
+      where("type", "==", activeTab),
+      where("isArchived", "==", false),
+      where("createdAt", ">", pageLoadTsRef.current),
+      orderBy("createdAt", "desc"),
+      limit(20)
+    );
+
+    const unsub = onSnapshot(q, (snap) => {
+      snap.docChanges().forEach((change) => {
+        if (change.type === "added") {
+          const newListing = { id: change.doc.id, ...change.doc.data() } as Listing;
+          if (categoryFilter && categoryFilter !== "all" && newListing.category !== categoryFilter) return;
+          setNewItemsBuffer((prev) =>
+            prev.some((l) => l.id === newListing.id) ? prev : [newListing, ...prev]
+          );
+        }
+      });
+    }, () => {});
+
+    return () => unsub();
+  }, [activeTab, categoryFilter]);
 
   const handleLoadMore = async () => {
     if (loadingMore || !hasMore) return;
@@ -510,6 +541,21 @@ export default function HomePage() {
           <span className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-slate-500 whitespace-nowrap">👥 Student Listings</span>
           <div className="h-px flex-1 bg-[#E2E8F0] dark:bg-slate-700" />
         </div>
+        {newItemsBuffer.length > 0 && (
+          <button
+            onClick={() => {
+              setListings((prev) => {
+                const existingIds = new Set(prev.map((l) => l.id));
+                const fresh = newItemsBuffer.filter((l) => !existingIds.has(l.id));
+                return [...fresh, ...prev];
+              });
+              setNewItemsBuffer([]);
+            }}
+            className="w-full text-center text-sm font-semibold text-white bg-[#003366] dark:bg-blue-600 py-2 rounded-xl mb-3"
+          >
+            ↑ {newItemsBuffer.length} new listing{newItemsBuffer.length > 1 ? "s" : ""} — tap to show
+          </button>
+        )}
         {loading ? (
           <SkeletonGrid />
         ) : displayedListings.length === 0 ? (

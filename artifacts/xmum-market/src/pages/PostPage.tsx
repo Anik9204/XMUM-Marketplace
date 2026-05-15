@@ -501,6 +501,10 @@ export default function PostPage() {
     setFieldError(null);
     setLoading(true);
 
+    if (!title.trim()) { setError("Title is required."); setLoading(false); return; }
+    if (!description.trim()) { setError("Description is required."); setLoading(false); return; }
+    if (type === "buy-sell" && priceCents <= 0) { setError("Please enter a price."); setLoading(false); return; }
+
     if (!checkRateLimit(`post_daily_${user.uid}`, 6, 24 * 60 * 60 * 1000)) {
       setError("You've posted too many listings in the last hour. Please wait before posting again.");
       setLoading(false);

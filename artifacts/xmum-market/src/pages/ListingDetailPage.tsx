@@ -145,9 +145,6 @@ export default function ListingDetailPage() {
             .then(setSellerProfile)
             .catch(() => setSellerProfile(null))
             .finally(() => setProfileLoading(false));
-          if (user?.uid !== l.userId) {
-            updateDoc(doc(db, "listings", l.id), { viewCount: increment(1) }).catch(() => {});
-          }
         } else {
           setProfileLoading(false);
         }
@@ -162,6 +159,16 @@ export default function ListingDetailPage() {
       })
       .finally(() => setLoading(false));
   }, [params?.id]);
+
+  useEffect(() => {
+    if (!listing || !listing.id) return;
+    if (user?.uid === listing.userId) return;
+    const timer = setTimeout(() => {
+      updateDoc(doc(db, "listings", listing.id), { viewCount: increment(1) }).catch(() => {});
+      setListing((prev) => prev ? { ...prev, viewCount: (prev.viewCount ?? 0) + 1 } : prev);
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [listing?.id]);
 
   if (loading) {
     return (
@@ -703,50 +710,67 @@ export default function ListingDetailPage() {
           {/* ── Seller Card ────────────────────────────────────────────────── */}
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden border-t-4 border-t-[#003366]">
             <div className="p-4">
-              <div className="flex items-center gap-3">
-                <img
-                  src={sellerProfile?.avatarUrl || avatarFallback}
-                  alt={listing.userName}
-                  className="w-12 h-12 rounded-full object-cover border-2 border-white dark:border-slate-600 shadow-sm shrink-0"
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm text-slate-900 dark:text-slate-100 truncate">{listing.userName}</p>
-                  {sellerProfile?.isVerified ? (
-                    <p className="text-[11px] font-display font-medium text-teal-600 dark:text-teal-400 flex items-center gap-1">
-                      <ShieldCheck size={11} /> Verified XMUM Student
-                    </p>
-                  ) : null}
-                  <div className="flex items-center gap-2 mt-0.5">
-                    {sellerProfile?.rating != null && sellerProfile.rating > 0 && (
-                      <StarRating rating={sellerProfile.rating} />
+              {user ? (
+                <>
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={sellerProfile?.avatarUrl || avatarFallback}
+                      alt={listing.userName}
+                      className="w-12 h-12 rounded-full object-cover border-2 border-white dark:border-slate-600 shadow-sm shrink-0"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm text-slate-900 dark:text-slate-100 truncate">{listing.userName}</p>
+                      {sellerProfile?.isVerified ? (
+                        <p className="text-[11px] font-display font-medium text-teal-600 dark:text-teal-400 flex items-center gap-1">
+                          <ShieldCheck size={11} /> Verified XMUM Student
+                        </p>
+                      ) : null}
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {sellerProfile?.rating != null && sellerProfile.rating > 0 && (
+                          <StarRating rating={sellerProfile.rating} />
+                        )}
+                        {sellerProfile?.createdAt && (
+                          <span className="text-[11px] text-gray-400 dark:text-slate-500">
+                            Member since {memberSince(sellerProfile.createdAt)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 mt-4">
+                    {!isOwner && user.emailVerified && (
+                      <button
+                        onClick={handleMessageSeller}
+                        disabled={startingChat}
+                        className="btn-primary flex-1 flex items-center justify-center gap-2 min-h-[44px] disabled:opacity-50"
+                      >
+                        {startingChat ? <Loader2 size={15} className="animate-spin" /> : <MessageCircle size={15} />}
+                        Message
+                      </button>
                     )}
-                    {sellerProfile?.createdAt && (
-                      <span className="text-[11px] text-gray-400 dark:text-slate-500">
-                        Member since {memberSince(sellerProfile.createdAt)}
-                      </span>
+                    {!isOwner && (
+                      <Link
+                        href={`/seller/${listing.userId}`}
+                        className="flex-1 flex items-center justify-center gap-2 border-2 border-[#003366] dark:border-blue-500 text-[#003366] dark:text-blue-400 text-sm font-semibold rounded-xl py-2.5 min-h-[44px] hover:bg-[#003366]/5 dark:hover:bg-blue-500/10 transition-colors"
+                      >
+                        View Profile <ArrowRight size={14} />
+                      </Link>
                     )}
                   </div>
-                </div>
-              </div>
-
-              <div className="flex gap-2 mt-4">
-                {!isOwner && user && user.emailVerified && (
+                </>
+              ) : (
+                <div className="flex flex-col items-center gap-3 py-2 text-center">
+                  <div className="w-12 h-12 rounded-full bg-gray-200 dark:bg-slate-700 blur-sm" />
+                  <p className="text-sm font-semibold text-gray-500 dark:text-slate-400">Sign in to see seller details</p>
                   <button
-                    onClick={handleMessageSeller}
-                    disabled={startingChat}
-                    className="btn-primary flex-1 flex items-center justify-center gap-2 min-h-[44px] disabled:opacity-50"
+                    onClick={() => setShowAuth(true)}
+                    className="btn-primary px-5 py-2 text-sm"
                   >
-                    {startingChat ? <Loader2 size={15} className="animate-spin" /> : <MessageCircle size={15} />}
-                    Message
+                    Sign In
                   </button>
-                )}
-                <Link
-                  href={`/seller/${listing.userId}`}
-                  className="flex-1 flex items-center justify-center gap-2 border-2 border-[#003366] dark:border-blue-500 text-[#003366] dark:text-blue-400 text-sm font-semibold rounded-xl py-2.5 min-h-[44px] hover:bg-[#003366]/5 dark:hover:bg-blue-500/10 transition-colors"
-                >
-                  View Profile <ArrowRight size={14} />
-                </Link>
-              </div>
+                </div>
+              )}
             </div>
           </div>
 

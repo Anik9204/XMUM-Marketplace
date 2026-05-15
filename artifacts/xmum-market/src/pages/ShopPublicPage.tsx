@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { SiWhatsapp, SiWechat } from "react-icons/si";
 import ShopManagementPanel from "@/components/ShopManagementPanel";
+import AuthModal from "@/components/AuthModal";
 
 function relativeTime(ms: number): string {
   const diff = Date.now() - ms;
@@ -62,6 +63,7 @@ export default function ShopPublicPage() {
   const [shop, setShop] = useState<Shop | null>(null);
   const [listings, setListings] = useState<ShopListing[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showAuth, setShowAuth] = useState(false);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
@@ -179,21 +181,35 @@ export default function ShopPublicPage() {
           </div>
 
           {(shop.whatsapp || shop.wechat) && (
-            <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-100 dark:border-slate-700">
-              {shop.whatsapp && (
-                <a
-                  href={`https://wa.me/${shop.whatsapp.replace(/[^0-9]/g, "")}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 bg-green-500 text-white text-xs font-semibold px-4 py-2.5 rounded-xl hover:bg-green-600 transition shadow-sm"
-                >
-                  <SiWhatsapp size={13} /> WhatsApp
-                </a>
-              )}
-              {shop.wechat && (
-                <div className="flex items-center gap-1.5 bg-[#07C160] text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-sm">
-                  <SiWechat size={13} /> {shop.wechat}
+            <div className="mt-4 pt-4 border-t border-gray-100 dark:border-slate-700">
+              {user ? (
+                <div className="flex flex-wrap gap-2">
+                  {shop.whatsapp && (
+                    <a
+                      href={`https://wa.me/${shop.whatsapp.replace(/[^0-9]/g, "")}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 bg-green-500 text-white text-xs font-semibold px-4 py-2.5 rounded-xl hover:bg-green-600 transition shadow-sm"
+                    >
+                      <SiWhatsapp size={13} /> WhatsApp
+                    </a>
+                  )}
+                  {shop.wechat && (
+                    <div className="flex items-center gap-1.5 bg-[#07C160] text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-sm">
+                      <SiWechat size={13} /> {shop.wechat}
+                    </div>
+                  )}
                 </div>
+              ) : (
+                <p className="text-xs text-gray-500 dark:text-slate-400">
+                  <button
+                    onClick={() => setShowAuth(true)}
+                    className="text-[#003366] dark:text-blue-400 font-semibold underline"
+                  >
+                    Sign in
+                  </button>
+                  {" "}to see contact details
+                </p>
               )}
             </div>
           )}
@@ -238,6 +254,8 @@ export default function ShopPublicPage() {
       </div>
 
       {/* Management Section — owners and editors only */}
+      {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
+
       {canManage && (
         <div className="px-4 mt-8">
           <div className="border-t-2 border-dashed border-gray-200 dark:border-slate-700 pt-6 mb-5">

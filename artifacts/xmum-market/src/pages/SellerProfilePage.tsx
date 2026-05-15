@@ -77,6 +77,11 @@ export default function SellerProfilePage() {
       .finally(() => setLoading(false));
   }, [uid]);
 
+  if (!user) {
+    navigate("/");
+    return null;
+  }
+
   const handleMessage = async () => {
     if (!user || !profile) return;
     setChatError(null);

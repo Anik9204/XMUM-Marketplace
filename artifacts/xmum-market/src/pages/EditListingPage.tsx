@@ -349,6 +349,10 @@ export default function EditListingPage() {
     setFieldError(null);
     setLoading(true);
 
+    if (!title.trim()) { setError("Title is required."); setLoading(false); return; }
+    if (!description.trim()) { setError("Description is required."); setLoading(false); return; }
+    if (type === "buy-sell" && priceCents <= 0) { setError("Please enter a price."); setLoading(false); return; }
+
     if (whatsapp.trim()) {
       const result = validateWhatsApp(whatsapp);
       if (!result.valid) {

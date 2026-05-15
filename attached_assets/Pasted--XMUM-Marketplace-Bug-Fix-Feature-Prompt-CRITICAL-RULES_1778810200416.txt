@@ -1,0 +1,274 @@
+# XMUM Marketplace — Bug Fix & Feature Prompt
+
+---
+
+## CRITICAL RULES — READ BEFORE TOUCHING ANY FILE
+
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless explicitly told to remove it.
+4. After every change, mentally verify: "Does this break anything
+   that was working before?" If yes, do not proceed — find a
+   different approach.
+5. If fixing an issue requires changing a shared component used by
+   other pages, STOP and describe the impact before making the change.
+   Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or
+   responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing:
+   `pnpm --filter @workspace/xmum-market run build`
+
+---
+
+## ISSUE 1 — Guest users must NOT see any user identity or contact information
+
+### What is broken
+Users who are NOT signed in can currently:
+- See the seller's name, avatar, and "Member since" on `ListingDetailPage`
+- Click "View Profile" → `SellerProfilePage` for any seller
+- See shop contact info (WhatsApp, WeChat) on `ShopPublicPage` and `ShopListingDetailPage`
+- See shop owner links from `CampusMarketPage`
+- Navigate to `/shop/:slug` and see full shop details including contacts
+
+### What must happen
+If `user` from `useAuth()` is `null` (not signed in):
+- The seller card on `ListingDetailPage` must show a blurred/hidden placeholder instead of the seller name, avatar, rating, and "Member since". Replace it with a call-to-action: *"Sign in to see seller details"* that opens the `AuthModal`.
+- The "View Profile" and "Message" buttons on `ListingDetailPage` must be hidden entirely when the user is not signed in.
+- On `ShopPublicPage` (`/shop/:slug`): hide the shop's WhatsApp and WeChat contact links. Show a sign-in prompt instead. The shop name, description, category, and listings grid can remain visible (it's a storefront), but any personal contact detail must be hidden.
+- On `ShopListingDetailPage`: same rule — hide contact details, hide "Message Shop" or inquiry buttons.
+- On `CampusMarketPage`: the shop grid itself can remain visible to guests. But clicking a shop card must navigate to `/shop/:slug` as normal — the contact hiding is handled by `ShopPublicPage` itself as above.
+- On `SellerProfilePage` (`/seller/:uid`): the entire page should redirect guests to the home page (or show an auth wall) — guests should not be able to view another user's profile page at all.
+- On `ListingCard` component: do NOT hide the listing title, price, photo, or category. Only hide any direct contact links if they ever appear there.
+
+### Files to read first (before editing)
+- `src/pages/ListingDetailPage.tsx`
+- `src/pages/ShopPublicPage.tsx`
+- `src/pages/ShopListingDetailPage.tsx`
+- `src/pages/SellerProfilePage.tsx`
+- `src/pages/CampusMarketPage.tsx`
+- `src/components/ListingCard.tsx`
+- `src/components/AuthModal.tsx`
+- `src/contexts/AuthContext.tsx`
+
+### Implementation approach
+- In `ListingDetailPage.tsx`: locate the seller card section (around line 703–756). Wrap the avatar, name, rating, and "Member since" in a conditional. When `!user`, render a locked placeholder div (e.g. blurred avatar placeholder + text "Sign in to see seller details" + a button that calls `setShowAuth(true)`). The `showAuth` / `AuthModal` state already exists in this page — reuse it.
+- In `ListingDetailPage.tsx`: the "View Profile" `<Link>` and "Message" button are already conditionally rendered with `user && user.emailVerified` for Message — extend the same guard to "View Profile".
+- In `ShopPublicPage.tsx`: find where `shop.whatsapp` and `shop.wechat` are rendered (around line 181–196). Wrap that block: if `!user`, replace with a small sign-in prompt text. Do not restructure the layout.
+- In `SellerProfilePage.tsx`: at the top of the component, after `const { user } = useAuth()`, add: `if (!user) { navigate("/"); return null; }` using Wouter's `useLocation`.
+- Do NOT touch `firestore.rules` for this change — this is purely a UI gate, the Firestore rules already require `isSignedIn()` for reading user profiles.
+
+---
+
+## ISSUE 2 — Users can submit listings without filling all required fields
+
+### What is broken
+In `PostPage.tsx` (`/post`), the `handleSubmit` function does NOT validate that `title` and `description` are non-empty before submitting. A user can submit with a blank title or description. The same issue exists in `EditListingPage.tsx` (`/edit/:id`).
+
+Additionally, for `buy-sell` type listings, `price` is required (the form shows a price input) but there is no check that `priceCents > 0` before submission.
+
+### What must happen
+In both `PostPage.tsx` and `EditListingPage.tsx`, the `handleSubmit` function must check the following **before** the existing rate-limit / rental / WhatsApp checks:
+
+1. `title.trim()` must not be empty. If it is: `setError("Title is required.")`, `setLoading(false)`, `return`.
+2. `description.trim()` must not be empty. If it is: `setError("Description is required.")`, `setLoading(false)`, `return`.
+3. For `type === "buy-sell"` only: `priceCents` must be `> 0`. If it is 0 or negative: `setError("Please enter a price.")`, `setLoading(false)`, `return`.
+4. For `type === "jobs"` with `jobSubtype` of `"offering"`: `priceCents` (the rate/fee) should be `>= 0` — this is already fine, no change needed.
+
+### Files to read first (before editing)
+- `src/pages/PostPage.tsx`
+- `src/pages/EditListingPage.tsx`
+
+### Implementation approach
+- In `PostPage.tsx`, find the `handleSubmit` function (starts around line 498). After `setLoading(true)`, and before the rate-limit check, insert the three guards listed above.
+- In `EditListingPage.tsx`, find the `handleSubmit` function (starts around line 346). Apply the same guards in the same position — after `setLoading(true)` and before the WhatsApp validation.
+- The `<input>` for title already has `required` HTML attribute (line ~861 in PostPage), but HTML5 `required` can be bypassed if the form's `onSubmit` is called programmatically. The JS guard in `handleSubmit` is the authoritative check.
+- Do NOT change the form JSX, input elements, or their `required` attributes. Only add the JS guards inside `handleSubmit`.
+
+---
+
+## ISSUE 3 — View count always shows 0 on listings
+
+### What is broken
+In `ListingDetailPage.tsx`, the `viewCount` is incremented via `updateDoc(..., { viewCount: increment(1) })` immediately when the page loads (inside the `getListing` fetch callback). However, the local `listing` state is set from `getListing()` which fetches the document **before** the increment happens. So the local state always has the old value (e.g. 0), and the UI renders the pre-increment value. The `listing.viewCount` shown is from the fetch, not from Firestore after the write.
+
+Also: the current code increments on every page load instantly — there is no 5-second dwell time requirement.
+
+### What must happen
+1. **5-second dwell timer**: Only count a view if the user stays on the page for at least 5 seconds. Use a `setTimeout` inside a `useEffect` that cleans up on unmount. If the user navigates away before 5 seconds, the `setTimeout` should be cleared and no increment should happen.
+2. **Show the correct count**: After the increment fires (after 5 seconds), update the local `listing` state to reflect the new viewCount by doing `setListing(prev => prev ? { ...prev, viewCount: (prev.viewCount ?? 0) + 1 } : prev)`. This ensures the UI updates without a re-fetch.
+3. The owner (`user?.uid === listing.userId`) must still be excluded from incrementing their own view count.
+4. The view count must be displayed on `ProfilePage.tsx` in the "My Listings" stats section — this already reads from the local listing objects, so once the listing data is fetched correctly it will show. No change needed in ProfilePage.
+
+### Files to read first (before editing)
+- `src/pages/ListingDetailPage.tsx`
+- `src/lib/listings.ts` (to understand the `getListing` function)
+
+### Implementation approach
+In `ListingDetailPage.tsx`, find the `useEffect` that calls `getListing(params.id)` (around line 139). Currently it contains this inline:
+```ts
+if (user?.uid !== l.userId) {
+  updateDoc(doc(db, "listings", l.id), { viewCount: increment(1) }).catch(() => {});
+}
+```
+
+**Remove** these 3 lines from that `useEffect`.
+
+Then, **add a new, separate `useEffect`** after the existing one:
+```ts
+useEffect(() => {
+  if (!listing || !listing.id) return;
+  if (user?.uid === listing.userId) return; // owner never counts as a view
+  const timer = setTimeout(() => {
+    updateDoc(doc(db, "listings", listing.id), { viewCount: increment(1) }).catch(() => {});
+    setListing((prev) => prev ? { ...prev, viewCount: (prev.viewCount ?? 0) + 1 } : prev);
+  }, 5000);
+  return () => clearTimeout(timer);
+}, [listing?.id]); // only run once when listing.id is first set
+```
+
+Make sure `updateDoc`, `doc`, and `increment` are already imported from `firebase/firestore` in this file (they are — check line ~6). If `db` is not already imported, import it from `@/lib/firebase`.
+
+The dependency array `[listing?.id]` ensures the timer only starts once when the listing first loads, not on every re-render.
+
+---
+
+## ISSUE 4 — Feed and data are not updating in real time
+
+### What is broken
+The home page (`HomePage.tsx`) uses `getListingsPage()` which is a one-time `getDocs()` fetch. After the initial load, if another user posts a new listing, the current user's feed does not update unless they manually refresh. The same issue applies to:
+- The listing count/tab badges on `HomePage`
+- The messages list on `MessagesPage` (conversations list panel)
+- Notifications in `NotificationBell`
+- Shop listings on `ShopPublicPage` and `CampusMarketPage`
+
+### What must happen
+**Home page feed — real-time for new posts only:**
+In `HomePage.tsx`, after the initial `getListingsPage()` load, set up a Firestore `onSnapshot` listener on the `listings` collection that watches for newly created documents (created after the page load timestamp). When a new listing comes in that matches the current tab and active category filter, prepend it to the top of the `listings` state array (if it's not already there). Show a "New listings available" tap-to-refresh banner at the top rather than auto-injecting into the feed (to avoid jarring layout shifts during scrolling). When the user taps the banner, prepend the buffered new items.
+
+**Important constraints for HomePage:**
+- Do NOT replace the existing `getListingsPage` / cursor-based pagination logic. Real-time only supplements it.
+- The `onSnapshot` listener must be cleaned up in the `useEffect` return function to prevent memory leaks.
+- Only listen for documents where `type == currentTab` AND `isArchived == false` AND `createdAt > pageLoadTimestamp`.
+- The listener should reset when `activeTab` or `activeCategory` changes.
+
+**MessagesPage — real-time conversations list:**
+The left-panel conversations list in `MessagesPage.tsx` should already use `onSnapshot` (check `src/lib/messaging.ts` → `subscribeToConversations`). If it does not, look at how messages within a conversation are listened to (which likely uses `onSnapshot`) and apply the same pattern to the conversations list. Do not break the existing message-thread real-time listener.
+
+**NotificationBell — already real-time:**
+Check `src/components/NotificationBell.tsx` — it likely already uses `onSnapshot` via `subscribeToNotifications` in `src/lib/notifications.ts`. If it does, no change is needed here. If it uses a one-time fetch, convert it to `onSnapshot` following the same pattern used in the messaging code.
+
+**ShopPublicPage — shop listings:**
+Currently shop listings on `ShopPublicPage` are fetched once. Wrap the fetch in a `useEffect` that re-fetches when `shopId` changes. This is acceptable without `onSnapshot` since shop listings don't change as frequently — a manual re-fetch on focus or a 30-second polling interval is acceptable here. Do NOT add `onSnapshot` to shop listings if it risks breaking the existing management panel tabs.
+
+**CampusMarketPage — shop grid:**
+This is a discovery page. One-time fetch is acceptable. No real-time needed.
+
+### Files to read first (before editing)
+- `src/pages/HomePage.tsx` (full file)
+- `src/lib/listings.ts` (understand `getListingsPage`, its cache, and available Firestore imports)
+- `src/lib/messaging.ts` (check if `subscribeToConversations` exists)
+- `src/pages/MessagesPage.tsx` (check the conversations list loading)
+- `src/components/NotificationBell.tsx` (check if it already uses real-time)
+- `src/lib/notifications.ts` (check `subscribeToNotifications`)
+
+### Implementation approach for HomePage
+
+**Step 1 — Read the full `HomePage.tsx`** before writing a single line. Understand all existing state variables, the `loadListings` function, the `activeTab`, `activeCategory`, and pagination cursor logic.
+
+**Step 2 — Add state for buffered new items** (add near existing state declarations):
+```ts
+const [newItemsBuffer, setNewItemsBuffer] = useState<Listing[]>([]);
+const pageLoadTsRef = useRef<number>(Date.now());
+```
+
+**Step 3 — Add `onSnapshot` listener in a new `useEffect`**:
+```ts
+useEffect(() => {
+  pageLoadTsRef.current = Date.now();
+  setNewItemsBuffer([]);
+
+  const q = query(
+    collection(db, "listings"),
+    where("type", "==", activeTab),
+    where("isArchived", "==", false),
+    where("createdAt", ">", pageLoadTsRef.current),
+    orderBy("createdAt", "desc"),
+    limit(20)
+  );
+
+  const unsub = onSnapshot(q, (snap) => {
+    snap.docChanges().forEach((change) => {
+      if (change.type === "added") {
+        const newListing = { id: change.doc.id, ...change.doc.data() } as Listing;
+        // Apply category filter if active
+        if (activeCategory && activeCategory !== "all" && newListing.category !== activeCategory) return;
+        setNewItemsBuffer((prev) =>
+          prev.some((l) => l.id === newListing.id) ? prev : [newListing, ...prev]
+        );
+      }
+    });
+  }, () => {}); // silent error handler
+
+  return () => unsub();
+}, [activeTab, activeCategory]);
+```
+
+You will need to import `collection`, `query`, `where`, `orderBy`, `limit`, `onSnapshot` from `firebase/firestore` and `db` from `@/lib/firebase` at the top of `HomePage.tsx`. Check if they are already imported before adding.
+
+**Step 4 — Add the "New listings" banner** in the JSX, directly above the listings grid (not inside the scroll area). Only show when `newItemsBuffer.length > 0`:
+```tsx
+{newItemsBuffer.length > 0 && (
+  <button
+    onClick={() => {
+      setListings((prev) => {
+        const existingIds = new Set(prev.map((l) => l.id));
+        const fresh = newItemsBuffer.filter((l) => !existingIds.has(l.id));
+        return [...fresh, ...prev];
+      });
+      setNewItemsBuffer([]);
+    }}
+    className="w-full text-center text-sm font-semibold text-white bg-[#003366] dark:bg-blue-600 py-2 rounded-xl mb-3"
+  >
+    ↑ {newItemsBuffer.length} new listing{newItemsBuffer.length > 1 ? "s" : ""} — tap to show
+  </button>
+)}
+```
+
+**Step 5 — MessagesPage conversations list:**
+In `MessagesPage.tsx`, find how the conversations list is loaded (look for `getConversations` or `getUserConversations` call). If it is a one-time `getDocs` call, check `src/lib/messaging.ts` for a `subscribeToConversations` function. If that function doesn't exist, add it to `messaging.ts`:
+```ts
+export function subscribeToConversations(
+  uid: string,
+  onUpdate: (convs: Conversation[]) => void
+): () => void {
+  const q = query(
+    collection(db, "conversations"),
+    where("participants", "array-contains", uid),
+    orderBy("lastMessageAt", "desc"),
+    limit(30)
+  );
+  return onSnapshot(q, (snap) => {
+    const convs = snap.docs.map((d) => ({
+      id: d.id,
+      ...d.data(),
+      lastMessageAt: toMillis(d.data().lastMessageAt),
+    } as Conversation));
+    onUpdate(convs);
+  }, () => {});
+}
+```
+Then in `MessagesPage.tsx`, replace the one-time fetch with a call to `subscribeToConversations` inside a `useEffect` that returns the unsubscribe function.
+
+---
+
+## FINAL CHECKLIST (complete in this order)
+
+1. Fix Issue 2 (form validation) first — it is the simplest and least risky.
+2. Fix Issue 3 (view count / 5-second timer) — isolated to one file.
+3. Fix Issue 1 (guest access restrictions) — touches multiple pages, do one at a time.
+4. Fix Issue 4 (real-time feed) — most complex, do last.
+5. After all fixes: run `pnpm --filter @workspace/xmum-market run build` and resolve any TypeScript errors.
+6. Verify in the browser: post a listing and check the title/description validation fires. View a listing as a guest and confirm no name/contact is shown. View a listing for 6 seconds and confirm the view count increments by 1 in the "My Listings" profile stats. Post a new listing in another browser tab and confirm the banner appears in the home page tab.
