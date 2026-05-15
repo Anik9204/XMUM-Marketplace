@@ -65,6 +65,10 @@ const TYPE_BADGE: Record<string, { bg: string; text: string; label: string }> = 
   "rental":     { bg: "bg-amber-600",  text: "text-white", label: "Rental" },
 };
 
+function displayName(userName: string): string {
+  return userName.replace(/^@/, "");
+}
+
 export default function ListingCard({
   listing,
   onDelete,
@@ -335,7 +339,7 @@ export default function ListingCard({
           className="block px-3 py-2 text-[11px] text-gray-400 dark:text-slate-500 hover:text-[#003366] dark:hover:text-blue-400 transition-colors border-t border-gray-50 dark:border-slate-700/50 font-medium"
         >
           <span className="flex items-center gap-1">
-            by {listing.userName}
+            by {displayName(listing.userName)}
             {sellerVerified && (
               <CheckCircle2 size={11} className="text-teal-500 dark:text-teal-400 shrink-0" />
             )}
