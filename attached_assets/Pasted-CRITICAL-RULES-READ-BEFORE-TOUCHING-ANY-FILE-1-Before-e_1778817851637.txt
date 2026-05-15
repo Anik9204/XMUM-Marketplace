@@ -1,0 +1,199 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless I have explicitly told you to remove it.
+
+4. After every change, mentally verify: "Does this break anything
+   that was working before?" If yes, do not proceed — find a
+   different approach.
+
+5. If fixing Issue X requires changing a shared component used by
+   other pages, STOP and tell me what the impact will be before
+   making the change. Ask for permission first.
+
+6. Never change any CSS class, layout structure, z-index, or
+   responsive breakpoint unless it is directly part of the fix.
+
+7. Confirm the app builds with zero errors before finishing:
+   pnpm --filter @workspace/xmum-market run build
+
+
+
+# Replit Fix Prompt — View Count Bugs (XMUM Market)
+
+## Context
+
+You are a senior full-stack developer working on the **XMUM Market** app located at `artifacts/xmum-market`. The app is a React 19 + Vite + TypeScript + Firebase (Firestore) campus marketplace PWA. The user has reported that:
+
+1. The **"Views" stat on the Profile page always shows 0**, even after other users have viewed their listings.
+2. **Individual listing cards in "My Listings" show no view count** — not even a "0 views" indicator.
+3. There is no way for the owner to see how many views each individual listing has received.
+
+The user tested by logging into a second account, opening one of their listings and staying on it for more than 5 seconds (which should trigger the view increment), then logging back into their main account — and the Views stat still showed 0.
+
+---
+
+## Root Cause Analysis
+
+### How view counting works (this part is correct and must NOT be changed)
+
+In `src/pages/ListingDetailPage.tsx`, there is a `useEffect` that fires after 5 seconds if the viewer is not the listing owner:
+
+```ts
+useEffect(() => {
+  if (!listing || !listing.id) return;
+  if (user?.uid === listing.userId) return; // owner doesn't count their own views
+  const timer = setTimeout(() => {
+    updateDoc(doc(db, "listings", listing.id), { viewCount: increment(1) }).catch(() => {});
+    setListing((prev) => prev ? { ...prev, viewCount: (prev.viewCount ?? 0) + 1 } : prev);
+  }, 5000);
+  return () => clearTimeout(timer);
+}, [listing?.id]);
+```
+
+This is **working correctly** — it increments `viewCount` in Firestore after 5 seconds. **Do not touch this file.**
+
+---
+
+### Bug 1 — Stale in-memory cache prevents fresh view counts from loading
+
+**File:** `src/pages/ProfilePage.tsx`
+
+The profile page fetches listings with `getUserListings(user.uid)` and stores the result in a React ref (`listingsCache.current`). On subsequent renders or tab switches, the fetch is skipped entirely if the cache is non-empty:
+
+```ts
+if (listingsCache.current.length > 0) {
+  setListings(listingsCache.current);
+  return;  // ← PROBLEM: always returns stale data, never re-fetches from Firestore
+}
+```
+
+Because of this early return, view counts that were incremented in Firestore by other users are **never picked up** — the profile always shows the view counts from the very first load of the session.
+
+The total "Views" stat in the profile header:
+```ts
+const viewCount = listings.reduce((sum, l) => sum + (l.viewCount ?? 0), 0);
+```
+...is calculated from `listings` state, which always comes from the stale cache. So it always shows 0 (or whatever it was on first load).
+
+---
+
+### Bug 2 — Per-listing view count is hidden when 0 or undefined
+
+**File:** `src/pages/ProfilePage.tsx`
+
+The listing card in the owner's "My Listings" tab only renders the eye icon when `viewCount > 0`:
+
+```tsx
+{typeof listing.viewCount === "number" && listing.viewCount > 0 && (
+  <Eye size={9} /> {listing.viewCount}
+)}
+```
+
+This means:
+- Listings with **0 views show nothing** (no eye icon, no number).
+- Listings created before `viewCount` was added to the schema (field is `undefined`) also show nothing.
+- The owner has **no visual indicator** that the field even exists or is being tracked.
+
+---
+
+## Fixes Required
+
+### Fix 1 — Always fetch fresh listings from Firestore on Profile page mount
+
+**File:** `src/pages/ProfilePage.tsx`
+
+Remove the cache short-circuit so that `getUserListings` is always called when the Profile page mounts (or the user navigates back to it). The cache ref can still be kept for **within-session** updates (bump, delete, mark as sold) so those local mutations are reflected instantly — but it must be **invalidated on mount** so Firestore is always the source of truth when the page first loads.
+
+**Change this pattern:**
+```ts
+let isMounted = true;
+if (listingsCache.current.length > 0) {
+  setListings(listingsCache.current);
+  return;
+}
+setLoading(true);
+getUserListings(user.uid)
+  .then((data) => {
+    // ...
+    listingsCache.current = active;
+    setListings(active);
+  })
+```
+
+**To this pattern** (invalidate cache on every mount, always fetch fresh):
+```ts
+let isMounted = true;
+listingsCache.current = []; // ← invalidate so we always get fresh Firestore data
+setLoading(true);
+getUserListings(user.uid)
+  .then((data) => {
+    // ...
+    listingsCache.current = active;
+    setListings(active);
+  })
+```
+
+By resetting `listingsCache.current = []` at the start of the effect, every time the Profile page mounts it will always call `getUserListings` and get the latest `viewCount` values from Firestore. Local mutations (bump, delete, mark as sold) that update `listingsCache.current` mid-session will still work correctly because they update the ref directly after their Firestore write.
+
+---
+
+### Fix 2 — Always show per-listing view count on owner's listing card
+
+**File:** `src/pages/ProfilePage.tsx`
+
+Find the listing card render block (inside the owner's "My Listings" tab). Locate this conditional:
+
+```tsx
+{typeof listing.viewCount === "number" && listing.viewCount > 0 && (
+  <span className="...">
+    <Eye size={9} /> {listing.viewCount}
+  </span>
+)}
+```
+
+Replace it so the eye icon and count is **always visible** for every listing card, treating `undefined` as `0`:
+
+```tsx
+<span className="flex items-center gap-0.5 text-[10px] text-gray-400 dark:text-slate-500">
+  <Eye size={9} /> {listing.viewCount ?? 0} views
+</span>
+```
+
+Make sure this span is placed in a logical location on the card — ideally near the timestamp or below the price, so the owner can see at a glance how many views each listing has received.
+
+---
+
+## Files to Edit
+
+| File | Change |
+|---|---|
+| `artifacts/xmum-market/src/pages/ProfilePage.tsx` | Invalidate `listingsCache.current` on mount; always show view count on listing cards |
+
+**Do not edit any other files.** Specifically:
+- Do **not** change `ListingDetailPage.tsx` — the view increment logic there is correct.
+- Do **not** change `lib/listings.ts` — `getUserListings` and `mapDoc` are correct; `viewCount` is included via the spread `...data`.
+
+---
+
+## Expected Behaviour After Fix
+
+1. Every time the user opens their Profile page, `getUserListings` fetches fresh data from Firestore — so `viewCount` values updated by other users are always reflected.
+2. The **"Views" stat** in the profile header accurately shows the total views across all the user's listings.
+3. Every listing card in "My Listings" shows an eye icon with the view count — even if it's `0 views` — so the owner always knows the field is being tracked.
+4. Local mutations (bump, delete, mark as sold) that happen within the same session still update the UI instantly because `listingsCache.current` is updated after each write.
+
+---
+
+## No Behaviour Changes
+
+- The 5-second view increment in `ListingDetailPage.tsx` is untouched.
+- The owner still does not count their own views (`user?.uid === listing.userId` guard is untouched).
+- Session-level cache updates for bump/delete/sold remain intact.
+- All other profile tabs (Sold, Saved, My Shop, My Inquiries, My Orders) are unaffected.s.

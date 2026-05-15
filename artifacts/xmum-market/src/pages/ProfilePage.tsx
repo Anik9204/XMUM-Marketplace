@@ -161,14 +161,12 @@ function OwnerListingRow({
 
             <div className="flex items-center gap-2 mt-1.5">
               <span className="text-[10px] text-gray-400 dark:text-slate-500">{relTime}</span>
-              {typeof listing.viewCount === "number" && listing.viewCount > 0 && (
-                <>
-                  <span className="text-gray-200 dark:text-slate-700">·</span>
-                  <span className="flex items-center gap-0.5 text-[10px] text-gray-400 dark:text-slate-500">
-                    <Eye size={9} /> {listing.viewCount}
-                  </span>
-                </>
-              )}
+              <>
+                <span className="text-gray-200 dark:text-slate-700">·</span>
+                <span className="flex items-center gap-0.5 text-[10px] text-gray-400 dark:text-slate-500">
+                  <Eye size={9} /> {listing.viewCount ?? 0} views
+                </span>
+              </>
             </div>
 
             {/* Expiry bar */}
@@ -278,10 +276,7 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!user) return;
     let isMounted = true;
-    if (listingsCache.current.length > 0) {
-      setListings(listingsCache.current);
-      return;
-    }
+    listingsCache.current = [];
     setLoading(true);
     getUserListings(user.uid)
       .then((data) => {
