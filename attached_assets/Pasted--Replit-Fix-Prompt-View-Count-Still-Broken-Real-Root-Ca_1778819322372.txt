@@ -1,0 +1,193 @@
+# Replit Fix Prompt — View Count Still Broken (Real Root Cause)
+
+---
+
+## CRITICAL RULES — READ BEFORE TOUCHING ANY FILE
+
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless explicitly told to do so.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and explain the impact before making the change.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: `pnpm --filter @workspace/xmum-market run build`
+
+---
+
+## What the Previous Fix Got Wrong
+
+The previous fix (invalidating `listingsCache.current` on mount) was a good idea but it **did not fix the actual bug**. It only ensures the Profile page reads fresh data from Firestore. The problem is that **view counts are never being written to Firestore in the first place** — so there is nothing fresh to read.
+
+The view count increment is being **silently rejected by Firestore Security Rules** with a `permission-denied` error, which is swallowed by `.catch(() => {})` in `ListingDetailPage.tsx`. The count appears to increment locally in the UI (because of the optimistic `setListing` call on line 168), but nothing is ever written to Firestore.
+
+---
+
+## Root Cause — Firestore Security Rules
+
+**File:** `artifacts/xmum-market/firestore.rules`
+
+Open this file and find the `listings` collection rule block. The current `allow update` rule reads:
+
+```js
+allow update: if isXmuEmail()
+  && resource.data.userId == request.auth.uid
+  && resource.data.isReportHeld != true
+  && (!request.resource.data.keys().hasAny(["price"])
+      || (request.resource.data.price >= 0
+          && request.resource.data.price <= 1000000));
+```
+
+**The problem:** `resource.data.userId == request.auth.uid` means **only the listing owner can update the document**. When any other signed-in user views a listing for 5 seconds and `ListingDetailPage.tsx` calls:
+
+```ts
+updateDoc(doc(db, "listings", listing.id), { viewCount: increment(1) })
+```
+
+...Firestore evaluates the rule, sees that `auth.uid` ≠ `listing.userId`, and **rejects the write with `permission-denied`**. The `.catch(() => {})` silently discards the error. Nothing is written. The number stays at 0.
+
+Now look at the `shopListings` rule in the same file — it correctly handles this case:
+
+```js
+allow update: if isXmuEmail() && (
+  isShopMember(resource.data.shopId)
+  || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['inquiryCount'])
+  || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount'])  // ← THIS
+);
+```
+
+The `shopListings` rule has a `viewCount`-only exception that allows any signed-in XMU user to increment the view count. The `listings` rule is missing this exception entirely.
+
+---
+
+## Fix 1 — Add the `viewCount`-only exception to the `listings` rule
+
+**File:** `artifacts/xmum-market/firestore.rules`
+
+**Surgical edit — add one OR branch to the existing `allow update` rule for `listings`.**
+
+Find this exact block:
+
+```js
+match /listings/{listingId} {
+  allow read: if true;
+  allow create: if isXmuEmail()
+    && request.resource.data.userId == request.auth.uid
+    && request.resource.data.title is string
+    && request.resource.data.title.size() > 0
+    && request.resource.data.title.size() <= 100
+    && request.resource.data.description is string
+    && request.resource.data.description.size() <= 1000
+    && request.resource.data.type in
+       ["buy-sell", "lost-found", "jobs", "assistance", "rental"]
+    && (!request.resource.data.keys().hasAny(["price"])
+        || (request.resource.data.price >= 0
+            && request.resource.data.price <= 1000000));
+  allow update: if isXmuEmail()
+    && resource.data.userId == request.auth.uid
+    && resource.data.isReportHeld != true
+    && (!request.resource.data.keys().hasAny(["price"])
+        || (request.resource.data.price >= 0
+            && request.resource.data.price <= 1000000));
+  allow delete: if ((isXmuEmail() && resource.data.userId == request.auth.uid && resource.data.isReportHeld != true)
+    || isEditorRole());
+}
+```
+
+Replace **only the `allow update` line** with this updated version that adds a `viewCount`-only exception as a second branch:
+
+```js
+  allow update: if (isXmuEmail()
+    && resource.data.userId == request.auth.uid
+    && resource.data.isReportHeld != true
+    && (!request.resource.data.keys().hasAny(["price"])
+        || (request.resource.data.price >= 0
+            && request.resource.data.price <= 1000000)))
+    || (isXmuEmail()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount']));
+```
+
+**What this does:** Any verified XMU user can now write to a listing document — but ONLY if the write touches nothing except the `viewCount` field. The `diff(...).affectedKeys().hasOnly(['viewCount'])` check is a Firestore Rules built-in that ensures the request cannot change any other field. The owner-only restriction remains fully intact for all other updates (status, price, title, etc.).
+
+Do not change `allow read`, `allow create`, or `allow delete`. Only `allow update` changes.
+
+---
+
+## Fix 2 — Surface the error instead of swallowing it silently
+
+**File:** `artifacts/xmum-market/src/pages/ListingDetailPage.tsx`
+
+This is a minor but important fix so future permission issues are visible during development.
+
+Find line 167 (the view count increment inside the `setTimeout`):
+
+```ts
+updateDoc(doc(db, "listings", listing.id), { viewCount: increment(1) }).catch(() => {});
+```
+
+Replace with:
+
+```ts
+updateDoc(doc(db, "listings", listing.id), { viewCount: increment(1) }).catch((err) => {
+  console.warn("[viewCount] Failed to increment:", err?.code, err?.message);
+});
+```
+
+**What this does:** The silent `.catch(() => {})` was hiding the `permission-denied` error completely. With this change, any future Firestore rule failures will appear in the browser console as a warning, making them much easier to diagnose. This does not change any user-facing behaviour.
+
+---
+
+## Fix 3 — Deploy the updated Firestore rules
+
+After editing `firestore.rules`, the new rules must be deployed to Firebase for them to take effect. Run:
+
+```bash
+cd artifacts/xmum-market
+npx firebase deploy --only firestore:rules
+```
+
+If the Firebase CLI is not authenticated in this environment, provide the deploy command as an instruction for the user to run manually, and note that **the app code change alone is not enough** — the rules file must be deployed to the live Firebase project.
+
+---
+
+## Files to Edit
+
+| File | Change |
+|---|---|
+| `artifacts/xmum-market/firestore.rules` | Add `viewCount`-only update exception to the `listings` rule |
+| `artifacts/xmum-market/src/pages/ListingDetailPage.tsx` | Log the error instead of silently swallowing it |
+
+**Do not edit any other files.**
+
+Specifically:
+- Do **not** change `ProfilePage.tsx` again — the cache fix from the previous round is correct and should stay.
+- Do **not** change `lib/listings.ts`.
+- Do **not** change any other Firestore rule blocks — only the `allow update` inside `match /listings/{listingId}`.
+
+---
+
+## Why the Cache Fix Still Matters
+
+The cache fix from the previous round (`listingsCache.current = []` on mount) is **still correct and necessary** — it ensures the Profile page reads the freshest `viewCount` values from Firestore each time you visit. Without it, even after fixing the rules, the profile would show stale 0s until you hard-refreshed. Keep that fix in place.
+
+---
+
+## Expected Behaviour After Both Fixes
+
+1. When a non-owner views a listing for 5+ seconds, `updateDoc` with `{ viewCount: increment(1) }` now succeeds because the Firestore rule allows `viewCount`-only writes from any verified XMU user.
+2. The listing owner's Profile page re-fetches from Firestore on every mount (previous fix), so the updated `viewCount` is immediately visible in the "Views" stat and on each listing card.
+3. The per-listing `· 👁 0 views` indicator (previous fix) correctly shows 0 for new listings and increments as views come in.
+4. No other update operations (edit listing, mark as sold, bump, delete) are affected — those paths all still require `resource.data.userId == request.auth.uid`.
+
+---
+
+## Verification Steps
+
+After deploying the rules:
+
+1. Log into Account B (not the listing owner).
+2. Open any listing owned by Account A. Stay on the page for at least 6 seconds.
+3. Check the browser console — there should be **no** `[viewCount] Failed to increment` warning.
+4. Log into Account A.
+5. Open the Profile page — the "Views" stat and the per-card view count should now show 1 (or more).
+
+If the console still shows a `permission-denied` error after deploying, the rules file was not deployed correctly. Rerun `firebase deploy --only firestore:rules` and verify the project ID in `.firebaserc`.

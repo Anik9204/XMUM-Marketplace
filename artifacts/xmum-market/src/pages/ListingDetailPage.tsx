@@ -164,7 +164,9 @@ export default function ListingDetailPage() {
     if (!listing || !listing.id) return;
     if (user?.uid === listing.userId) return;
     const timer = setTimeout(() => {
-      updateDoc(doc(db, "listings", listing.id), { viewCount: increment(1) }).catch(() => {});
+      updateDoc(doc(db, "listings", listing.id), { viewCount: increment(1) }).catch((err) => {
+        console.warn("[viewCount] Failed to increment:", err?.code, err?.message);
+      });
       setListing((prev) => prev ? { ...prev, viewCount: (prev.viewCount ?? 0) + 1 } : prev);
     }, 5000);
     return () => clearTimeout(timer);

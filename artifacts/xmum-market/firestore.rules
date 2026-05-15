@@ -78,12 +78,14 @@ service cloud.firestore {
         && (!request.resource.data.keys().hasAny(["price"])
             || (request.resource.data.price >= 0
                 && request.resource.data.price <= 1000000));
-      allow update: if isXmuEmail()
+      allow update: if (isXmuEmail()
         && resource.data.userId == request.auth.uid
         && resource.data.isReportHeld != true
         && (!request.resource.data.keys().hasAny(["price"])
             || (request.resource.data.price >= 0
-                && request.resource.data.price <= 1000000));
+                && request.resource.data.price <= 1000000)))
+        || (isXmuEmail()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount']));
       allow delete: if ((isXmuEmail() && resource.data.userId == request.auth.uid && resource.data.isReportHeld != true)
         || isEditorRole());
     }
