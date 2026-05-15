@@ -1,0 +1,403 @@
+# XMUM Marketplace — Bug Fix & Feature Prompt (Batch 2)
+
+---
+
+## CRITICAL RULES — READ BEFORE TOUCHING ANY FILE
+
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless explicitly told to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing an issue requires changing a shared component used by other pages, STOP and describe the impact before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing:
+   `pnpm --filter @workspace/xmum-market run build`
+
+---
+
+## ISSUE 1 — ListingCard shows user ID next to the location pin when no meetup spot is selected
+
+### What is broken
+
+In `src/components/ListingCard.tsx`, when `listing.meetupSpot` is falsy (empty string or undefined), the component falls into an `else` branch that renders the `listing.userEmail.split("@")[0]` (the email prefix / user ID) next to a `<MapPin>` icon. This looks like a location but is actually just the user's ID, which is confusing and wrong.
+
+Specifically, the broken code block looks like this (around line 316–327):
+
+```tsx
+{listing.meetupSpot ? (
+  <span className="flex items-center gap-1 truncate">
+    <MapPin size={10} />
+    {listing.meetupSpot}
+  </span>
+) : (
+  <span className="flex items-center gap-1">
+    <MapPin size={10} />
+    {listing.userEmail.split("@")[0]}    {/* ← THIS IS THE BUG */}
+  </span>
+)}
+```
+
+### What must happen
+
+If `listing.meetupSpot` is empty or undefined, show **nothing at all** in that slot — not the user ID, not a pin icon, not any placeholder. The `<Clock>` timestamp on the right must stay exactly where it is.
+
+### Files to read first
+
+- `src/components/ListingCard.tsx` (full file)
+
+### Implementation — surgical edit only
+
+Find the exact `else` branch above and replace the entire ternary with:
+
+```tsx
+{listing.meetupSpot ? (
+  <span className="flex items-center gap-1 truncate">
+    <MapPin size={10} />
+    {listing.meetupSpot}
+  </span>
+) : (
+  <span /> 
+)}
+```
+
+That is the **only change** in this file. Do not touch any other line.
+
+---
+
+## ISSUE 2 — Rental form: make deposit optional, fix pricing rule, hide toggles for bicycle/e-bike, rename toggle labels, make dates optional
+
+### What is broken / needs changing
+
+There are **five separate sub-fixes** in the rental form inside `src/pages/PostPage.tsx`. Read the full rental form section (approx lines 989–1055) before making any change.
+
+---
+
+### Sub-fix 2A — Make deposit optional (remove its required validation)
+
+**In `handleSubmit`** (around line 530), remove these lines:
+```ts
+if (depositCents <= 0) {
+  setError("Please enter a deposit amount.");
+  setLoading(false);
+  return;
+}
+```
+
+**In the JSX label** (around line 1019), change:
+```tsx
+<label className={labelCls}>{t.rentalDeposit} (RM) *</label>
+```
+to:
+```tsx
+<label className={labelCls}>{t.rentalDeposit} (RM) <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
+```
+
+---
+
+### Sub-fix 2B — User must fill in AT LEAST one of per-day or per-hour price
+
+**Replace** the existing validation in `handleSubmit`:
+```ts
+if (rentalPricePerDayCents <= 0) {
+  setError("Please enter a rental price per day.");
+  setLoading(false);
+  return;
+}
+```
+**With:**
+```ts
+if (rentalPricePerDayCents <= 0 && rentalPricePerHourCents <= 0) {
+  setError("Please enter at least a per-day or per-hour rental price.");
+  setLoading(false);
+  return;
+}
+```
+
+**In the JSX label** for "Per Day", change:
+```tsx
+<label className={labelCls}>Per Day (RM) *</label>
+```
+to:
+```tsx
+<label className={labelCls}>Per Day (RM) <span className="text-gray-400 font-normal text-xs">(required if no hourly)</span></label>
+```
+
+And for "Per Hour", change:
+```tsx
+<label className={labelCls}>Per Hour (RM) <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
+```
+to:
+```tsx
+<label className={labelCls}>Per Hour (RM) <span className="text-gray-400 font-normal text-xs">(required if no daily)</span></label>
+```
+
+---
+
+### Sub-fix 2C — Make available-from and available-to dates optional
+
+**In `handleSubmit`**, remove these lines:
+```ts
+if (!availableFrom || !availableTo) {
+  setError("Please set the availability dates.");
+  setLoading(false);
+  return;
+}
+```
+
+**In the `baseData` construction** for rental (around line 626–627), wrap the date assignments so they only set if the values exist:
+```ts
+// BEFORE:
+baseData.availableFrom = new Date(availableFrom).getTime();
+baseData.availableTo = new Date(availableTo).getTime();
+
+// AFTER:
+if (availableFrom) baseData.availableFrom = new Date(availableFrom).getTime();
+if (availableTo) baseData.availableTo = new Date(availableTo).getTime();
+```
+
+**In the JSX labels** for the two date fields, change the `t.rentalAvailableFromLabel` and `t.rentalAvailableToLabel` display. Since those i18n strings currently include `*` (checked in `i18n.ts` lines 218–219: `"Available From *"` / `"Available To *"`), update both keys **in `src/lib/i18n.ts`** — and their Chinese equivalents:
+
+In `src/lib/i18n.ts`, find:
+```ts
+rentalAvailableFromLabel: "Available From *",
+rentalAvailableToLabel: "Available To *",
+```
+Change to:
+```ts
+rentalAvailableFromLabel: "Available From",
+rentalAvailableToLabel: "Available To",
+```
+And in the Chinese block, find:
+```ts
+rentalAvailableFromLabel: "可租开始日期 *",
+rentalAvailableToLabel: "可租结束日期 *",
+```
+Change to:
+```ts
+rentalAvailableFromLabel: "可租开始日期",
+rentalAvailableToLabel: "可租结束日期",
+```
+Add `(optional)` note in the JSX labels directly (since the i18n string no longer has `*`):
+```tsx
+<label className={labelCls}>{t.rentalAvailableFromLabel} <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
+<label className={labelCls}>{t.rentalAvailableToLabel} <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
+```
+
+Also update the `rentalDepositLabel` in `i18n.ts` the same way (remove `*` from it):
+```ts
+// English:
+rentalDepositLabel: "Deposit Amount (RM)",
+// Chinese:
+rentalDepositLabel: "押金（令吉）",
+```
+
+---
+
+### Sub-fix 2D — Hide both toggle rows for bicycle and electric-bike
+
+The two toggle rows (licence required and insurance/roadtax) currently always show. They should **only appear when `vehicleType === "car" || vehicleType === "motorcycle"`**.
+
+Find the `<div className="space-y-2">` block containing both toggle rows (around line 1033). It currently looks like:
+```tsx
+<div className="space-y-2">
+  <div className="flex items-center justify-between ...">
+    <p ...>{t.rentalLicenceRequired}</p>
+    <button ...> ... </button>
+  </div>
+  <div className="flex items-center justify-between ...">
+    <p ...>{t.rentalInsuranceRequired}</p>
+    <button ...> ... </button>
+  </div>
+</div>
+```
+
+Wrap the **entire** `<div className="space-y-2">` block with a conditional:
+```tsx
+{(vehicleType === "car" || vehicleType === "motorcycle") && (
+  <div className="space-y-2">
+    {/* ... existing toggle rows unchanged ... */}
+  </div>
+)}
+```
+
+Do NOT change the inner content of the two toggle rows — just wrap the parent div.
+
+---
+
+### Sub-fix 2E — Rename toggle labels and add "For Renter" annotation
+
+Make two text changes **inside the toggle rows** (only after wrapping them per 2D above):
+
+1. For the licence toggle row, add the label annotation `"For Renter"` as a secondary line. Find:
+```tsx
+<p className="text-sm font-semibold text-gray-700 dark:text-slate-200">{t.rentalLicenceRequired}</p>
+```
+Change to:
+```tsx
+<div>
+  <p className="text-sm font-semibold text-gray-700 dark:text-slate-200">{t.rentalLicenceRequired}</p>
+  <p className="text-xs text-gray-400 dark:text-slate-500">For Renter</p>
+</div>
+```
+
+2. For the insurance toggle label, update the i18n key value in `src/lib/i18n.ts`. Find:
+```ts
+rentalInsuranceRequired: "Insurance proof required",
+```
+Change to:
+```ts
+rentalInsuranceRequired: "Seller has valid insurance and Roadtax",
+```
+Also update the Chinese equivalent. Find the Chinese key (search for `保险` or `rentalInsuranceRequired` in the Chinese block) and change its value appropriately, e.g.:
+```ts
+rentalInsuranceRequired: "卖家拥有有效保险及路税",
+```
+
+---
+
+## ISSUE 3 — Description character limit: increase to 3000 characters in all forms
+
+### What is broken
+
+The description field allows only 1000 characters. The limit needs to be raised to 3000 everywhere it appears.
+
+### Files to read first
+
+- `src/pages/PostPage.tsx`
+- `src/pages/EditListingPage.tsx`
+
+### Where the limit appears — exact locations
+
+There is a shared `DescriptionEditorModal` component defined **at the top of both** `PostPage.tsx` and `EditListingPage.tsx` (they each have their own copy). In each file, find the modal's textarea which has:
+
+```ts
+onChange={(e) => setDraft(e.target.value.slice(0, 1000))}
+maxLength={1000}
+```
+and a counter line:
+```tsx
+<div className={`... ${draft.length > 900 ? "text-red-500 ..." : "text-gray-400 ..."}`}>
+  {draft.length} / 1000
+</div>
+```
+
+**In `PostPage.tsx`** — make these 3 changes inside `DescriptionEditorModal`:
+1. `.slice(0, 1000)` → `.slice(0, 3000)`
+2. `maxLength={1000}` → `maxLength={3000}`
+3. `draft.length > 900` → `draft.length > 2700`
+4. `{draft.length} / 1000` → `{draft.length} / 3000`
+
+**In `PostPage.tsx`** — also update the counter shown **outside** the modal (the preview counter, around line 941–942):
+```tsx
+{description.length > 900 ? "text-red-500 ..." : "text-gray-400 ..."}
+{description.length} / 1000
+```
+Change to:
+```tsx
+{description.length > 2700 ? "text-red-500 ..." : "text-gray-400 ..."}
+{description.length} / 3000
+```
+
+**In `EditListingPage.tsx`** — apply the exact same 4 changes to its `DescriptionEditorModal` (same pattern, same line numbers approximately). Also check if there is an outside preview counter there and apply the same update.
+
+Do NOT change any textarea `rows`, `className`, or placeholder text.
+
+---
+
+## ISSUE 4 — Show last name (not user ID) in listing cards and home page greeting
+
+### What is broken
+
+**A — ListingCard** (`src/components/ListingCard.tsx`): The "by @{listing.userName}" line (around line 341) shows the email prefix (e.g., `@s12345`) because `listing.userName` is set to `user.email?.split("@")[0]` when a listing is created in `PostPage.tsx` (line 595).
+
+**B — HomePage greeting** (`src/pages/HomePage.tsx`): The greeting says `Good day, {userProfile.displayName} 👋` (line 352), where `displayName` is the email prefix (set during sign-up in `auth.ts` line 40 as `email.split("@")[0]`).
+
+**C — PostPage** (`src/pages/PostPage.tsx`): When creating a listing, `userName` is saved as the email prefix. It should instead be saved as the last name derived from `userProfile.fullName`.
+
+### Helper function — define once, use everywhere
+
+A "last name" extractor is needed in multiple places. Define this small pure function **at the top of each file that needs it** (do not create a new shared lib file for this — just inline it where needed):
+
+```ts
+function getLastName(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/);
+  return parts[parts.length - 1] || fullName.trim();
+}
+```
+
+Logic: split on whitespace, return the last word. If the user has only one word as their name, it returns that word. If `fullName` is empty, fall back to the raw value.
+
+---
+
+### Sub-fix 4A — PostPage: save last name as `userName` in new listings
+
+**File:** `src/pages/PostPage.tsx`
+
+**Read first:** lines 580–600 (the `baseData` construction in `handleSubmit`).
+
+Currently (line 595):
+```ts
+userName: user.email?.split("@")[0] ?? "",
+```
+
+Change to:
+```ts
+userName: userProfile?.fullName ? getLastName(userProfile.fullName) : (user.email?.split("@")[0] ?? ""),
+```
+
+Add the `getLastName` helper near the top of the file, before the component function definition. `userProfile` is already destructured from `useAuth()` at line 197 — no new import needed.
+
+---
+
+### Sub-fix 4B — ListingCard: update the display label
+
+**File:** `src/components/ListingCard.tsx`
+
+The card displays `by @{listing.userName}` (around line 341). Change it to show the name without the `@` prefix, since it will now be a real name (last name), not an ID:
+
+Find:
+```tsx
+by @{listing.userName}
+```
+Change to:
+```tsx
+by {listing.userName}
+```
+
+That is the **only change** in this file for this issue. The `listing.userName` value itself is corrected at source (in PostPage).
+
+> **Note for existing listings:** Old listings already stored in Firestore will still have the email-prefix format for `userName`. The `by {listing.userName}` display will show whatever is stored. This is acceptable — no data migration needed.
+
+---
+
+### Sub-fix 4C — HomePage: show last name in greeting
+
+**File:** `src/pages/HomePage.tsx`
+
+Add the `getLastName` helper near the top of the file (before the component function).
+
+Find (around line 352):
+```tsx
+Good day, {userProfile.displayName} 👋
+```
+Change to:
+```tsx
+Good day, {getLastName(userProfile.fullName || userProfile.displayName)} 👋
+```
+
+`userProfile` is already destructured on line 162 — no new import needed. `userProfile.fullName` is available on the `UserProfile` type (confirmed in `types.ts` line 281).
+
+---
+
+## FINAL CHECKLIST (complete in this order)
+
+1. **Issue 1** — `ListingCard.tsx`: remove the fallback `userEmail` display next to `<MapPin>`. Single surgical change.
+2. **Issue 3** — `PostPage.tsx` + `EditListingPage.tsx`: update the 4 occurrences of `1000` → `3000` (and `900` → `2700`) in the description editor modal and preview counter in each file.
+3. **Issue 4A** — `PostPage.tsx`: add `getLastName` helper and update `userName` assignment in `handleSubmit`.
+4. **Issue 4B** — `ListingCard.tsx`: remove `@` prefix from `by @{listing.userName}`.
+5. **Issue 4C** — `HomePage.tsx`: add `getLastName` helper and update greeting.
+6. **Issue 2A+2B** — `PostPage.tsx`: update rental validation (deposit optional, at-least-one-price rule).
+7. **Issue 2C** — `PostPage.tsx` + `i18n.ts`: make dates optional (remove validation + update i18n strings + wrap date assignments).
+8. **Issue 2D** — `PostPage.tsx`: wrap toggle rows with `vehicleType === "car" || vehicleType === "motorcycle"` conditional.
+9. **Issue 2E** — `PostPage.tsx` + `i18n.ts`: add "For Renter" sub-label on licence toggle; rename insurance toggle label.
+10. Run `pnpm --filter @workspace/xmum-market run build` — zero errors required before done.

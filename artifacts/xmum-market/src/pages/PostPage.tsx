@@ -110,13 +110,13 @@ function DescriptionEditorModal({ value, onChange, onClose }: DescriptionEditorM
         <textarea
           autoFocus
           value={draft}
-          onChange={(e) => setDraft(e.target.value.slice(0, 1000))}
-          maxLength={1000}
+          onChange={(e) => setDraft(e.target.value.slice(0, 3000))}
+          maxLength={3000}
           placeholder={t.descriptionPlaceholder}
           className="flex-1 w-full resize-none bg-transparent text-gray-900 dark:text-slate-100 text-sm leading-relaxed placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none"
         />
-        <div className={`text-right text-xs mt-2 font-medium ${draft.length > 900 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
-          {draft.length} / 1000
+        <div className={`text-right text-xs mt-2 font-medium ${draft.length > 2700 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
+          {draft.length} / 3000
         </div>
       </div>
     </div>
@@ -191,6 +191,11 @@ function CentsInput({
 }
 
 const ALL_TABS: ListingType[] = ["buy-sell", "lost-found", "jobs", "assistance", "rental"];
+
+function getLastName(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/);
+  return parts[parts.length - 1] || fullName.trim();
+}
 
 export default function PostPage() {
   const { t } = useLang();
@@ -522,18 +527,8 @@ export default function PostPage() {
         setLoading(false);
         return;
       }
-      if (rentalPricePerDayCents <= 0) {
-        setError("Please enter a rental price per day.");
-        setLoading(false);
-        return;
-      }
-      if (depositCents <= 0) {
-        setError("Please enter a deposit amount.");
-        setLoading(false);
-        return;
-      }
-      if (!availableFrom || !availableTo) {
-        setError("Please set the availability dates.");
+      if (rentalPricePerDayCents <= 0 && rentalPricePerHourCents <= 0) {
+        setError("Please enter at least a per-day or per-hour rental price.");
         setLoading(false);
         return;
       }
@@ -592,7 +587,7 @@ export default function PostPage() {
         type, title, description,
         category, condition, photos: urls,
         userId: user.uid, userEmail: user.email ?? "",
-        userName: user.email?.split("@")[0] ?? "",
+        userName: userProfile?.fullName ? getLastName(userProfile.fullName) : (user.email?.split("@")[0] ?? ""),
         whatsapp, wechat, teams,
       };
 
@@ -623,8 +618,8 @@ export default function PostPage() {
         baseData.rentalPricePerDay = rentalPricePerDayCents / 100;
         if (rentalPricePerHourCents > 0) baseData.rentalPricePerHour = rentalPricePerHourCents / 100;
         baseData.depositAmount = depositCents / 100;
-        baseData.availableFrom = new Date(availableFrom).getTime();
-        baseData.availableTo = new Date(availableTo).getTime();
+        if (availableFrom) baseData.availableFrom = new Date(availableFrom).getTime();
+        if (availableTo) baseData.availableTo = new Date(availableTo).getTime();
         baseData.requiresLicense = requiresLicense;
         baseData.requiresInsuranceProof = requiresInsuranceProof;
         if (rentalTerms.trim()) baseData.rentalTerms = rentalTerms.trim();
@@ -938,8 +933,8 @@ export default function PostPage() {
             )}
           </button>
           {description && (
-            <div className={`text-right text-xs mt-1 font-medium ${description.length > 900 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
-              {description.length} / 1000
+            <div className={`text-right text-xs mt-1 font-medium ${description.length > 2700 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
+              {description.length} / 3000
             </div>
           )}
         </div>
@@ -1008,42 +1003,47 @@ export default function PostPage() {
             )}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className={labelCls}>Per Day (RM) *</label>
+                <label className={labelCls}>Per Day (RM) <span className="text-gray-400 font-normal text-xs">(required if no hourly)</span></label>
                 <CentsInput value={rentalPricePerDayCents} onChange={(v) => { setRentalPricePerDayCents(v); setIsDirty(true); }} />
               </div>
               <div>
-                <label className={labelCls}>Per Hour (RM) <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
+                <label className={labelCls}>Per Hour (RM) <span className="text-gray-400 font-normal text-xs">(required if no daily)</span></label>
                 <CentsInput value={rentalPricePerHourCents} onChange={(v) => { setRentalPricePerHourCents(v); setIsDirty(true); }} />
               </div>
               <div>
-                <label className={labelCls}>{t.rentalDeposit} (RM) *</label>
+                <label className={labelCls}>{t.rentalDeposit} (RM) <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
                 <CentsInput value={depositCents} onChange={(v) => { setDepositCents(v); setIsDirty(true); }} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className={labelCls}>{t.rentalAvailableFromLabel}</label>
+                <label className={labelCls}>{t.rentalAvailableFromLabel} <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
                 <input type="date" value={availableFrom} onChange={(e) => { setAvailableFrom(e.target.value); setIsDirty(true); }} className={inputCls} min={new Date().toISOString().split("T")[0]} />
               </div>
               <div>
-                <label className={labelCls}>{t.rentalAvailableToLabel}</label>
+                <label className={labelCls}>{t.rentalAvailableToLabel} <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
                 <input type="date" value={availableTo} onChange={(e) => { setAvailableTo(e.target.value); setIsDirty(true); }} className={inputCls} min={availableFrom || new Date().toISOString().split("T")[0]} />
               </div>
             </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-3 min-h-[52px]">
-                <p className="text-sm font-semibold text-gray-700 dark:text-slate-200">{t.rentalLicenceRequired}</p>
-                <button type="button" onClick={() => { setRequiresLicense(!requiresLicense); setIsDirty(true); }} className={`relative w-11 h-6 rounded-full transition-colors ${requiresLicense ? "bg-[#003366] dark:bg-blue-600" : "bg-gray-200 dark:bg-slate-500"}`}>
-                  <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${requiresLicense ? "left-6" : "left-1"}`} />
-                </button>
+            {(vehicleType === "car" || vehicleType === "motorcycle") && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-3 min-h-[52px]">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-700 dark:text-slate-200">{t.rentalLicenceRequired}</p>
+                    <p className="text-xs text-gray-400 dark:text-slate-500">For Renter</p>
+                  </div>
+                  <button type="button" onClick={() => { setRequiresLicense(!requiresLicense); setIsDirty(true); }} className={`relative w-11 h-6 rounded-full transition-colors ${requiresLicense ? "bg-[#003366] dark:bg-blue-600" : "bg-gray-200 dark:bg-slate-500"}`}>
+                    <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${requiresLicense ? "left-6" : "left-1"}`} />
+                  </button>
+                </div>
+                <div className="flex items-center justify-between bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-3 min-h-[52px]">
+                  <p className="text-sm font-semibold text-gray-700 dark:text-slate-200">{t.rentalInsuranceRequired}</p>
+                  <button type="button" onClick={() => { setRequiresInsuranceProof(!requiresInsuranceProof); setIsDirty(true); }} className={`relative w-11 h-6 rounded-full transition-colors ${requiresInsuranceProof ? "bg-[#003366] dark:bg-blue-600" : "bg-gray-200 dark:bg-slate-500"}`}>
+                    <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${requiresInsuranceProof ? "left-6" : "left-1"}`} />
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center justify-between bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-3 min-h-[52px]">
-                <p className="text-sm font-semibold text-gray-700 dark:text-slate-200">{t.rentalInsuranceRequired}</p>
-                <button type="button" onClick={() => { setRequiresInsuranceProof(!requiresInsuranceProof); setIsDirty(true); }} className={`relative w-11 h-6 rounded-full transition-colors ${requiresInsuranceProof ? "bg-[#003366] dark:bg-blue-600" : "bg-gray-200 dark:bg-slate-500"}`}>
-                  <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${requiresInsuranceProof ? "left-6" : "left-1"}`} />
-                </button>
-              </div>
-            </div>
+            )}
             <div>
               <label className={labelCls}>{t.rentalSellerTerms} <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
               <textarea value={rentalTerms} onChange={(e) => { setRentalTerms(e.target.value.slice(0, 500)); setIsDirty(true); }} rows={3} className={`${inputCls} resize-none`} placeholder={t.rentalCustomTermsPlaceholder} />

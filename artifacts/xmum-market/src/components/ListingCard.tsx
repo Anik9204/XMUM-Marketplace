@@ -319,10 +319,7 @@ export default function ListingCard({
                   {listing.meetupSpot}
                 </span>
               ) : (
-                <span className="flex items-center gap-1">
-                  <MapPin size={10} />
-                  {listing.userEmail.split("@")[0]}
-                </span>
+                <span />
               )}
               <span className="flex items-center gap-1 shrink-0 ml-2">
                 <Clock size={10} />
@@ -338,7 +335,7 @@ export default function ListingCard({
           className="block px-3 py-2 text-[11px] text-gray-400 dark:text-slate-500 hover:text-[#003366] dark:hover:text-blue-400 transition-colors border-t border-gray-50 dark:border-slate-700/50 font-medium"
         >
           <span className="flex items-center gap-1">
-            by @{listing.userName}
+            by {listing.userName}
             {sellerVerified && (
               <CheckCircle2 size={11} className="text-teal-500 dark:text-teal-400 shrink-0" />
             )}

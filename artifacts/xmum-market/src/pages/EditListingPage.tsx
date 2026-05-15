@@ -104,13 +104,13 @@ function DescriptionEditorModal({ value, onChange, onClose }: DescriptionEditorM
         <textarea
           autoFocus
           value={draft}
-          onChange={(e) => setDraft(e.target.value.slice(0, 1000))}
-          maxLength={1000}
+          onChange={(e) => setDraft(e.target.value.slice(0, 3000))}
+          maxLength={3000}
           placeholder={t.descriptionPlaceholder}
           className="flex-1 w-full resize-none bg-transparent text-gray-900 dark:text-slate-100 text-sm leading-relaxed placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none"
         />
-        <div className={`text-right text-xs mt-2 font-medium ${draft.length > 900 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
-          {draft.length} / 1000
+        <div className={`text-right text-xs mt-2 font-medium ${draft.length > 2700 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
+          {draft.length} / 3000
         </div>
       </div>
     </div>
@@ -640,7 +640,7 @@ export default function EditListingPage() {
           </button>
           {description && (
             <p className="text-xs text-gray-400 dark:text-slate-500 mt-1 text-right">
-              {description.length} / 1000
+              {description.length} / 3000
             </p>
           )}
         </div>

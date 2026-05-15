@@ -157,6 +157,11 @@ function ShopListingMiniCard({ listing }: { listing: ShopListing }) {
   );
 }
 
+function getLastName(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/);
+  return parts[parts.length - 1] || fullName.trim();
+}
+
 export default function HomePage() {
   const { t, lang } = useLang();
   const { user, userProfile } = useAuth();
@@ -349,7 +354,7 @@ export default function HomePage() {
         <div className="max-w-5xl mx-auto">
           {user && userProfile && (
             <p className="text-sm text-white/70 mb-1">
-              Good day, {userProfile.displayName} 👋
+              Good day, {getLastName(userProfile.fullName || userProfile.displayName)} 👋
             </p>
           )}
           <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold mt-1 leading-tight">
