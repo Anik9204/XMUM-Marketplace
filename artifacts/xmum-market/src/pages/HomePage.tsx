@@ -291,6 +291,13 @@ export default function HomePage() {
       setShowLeftShadow(false);
       setShowRightShadow(el.scrollWidth > el.clientWidth);
     }
+    setTimeout(() => {
+      const listEl = listingsRef.current;
+      if (listEl) {
+        const top = listEl.getBoundingClientRect().top + window.scrollY - 130;
+        window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+      }
+    }, 50);
   };
 
   useEffect(() => {

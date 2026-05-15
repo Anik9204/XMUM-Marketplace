@@ -321,7 +321,7 @@ export default function ListingCard({
               ) : (
                 <span className="flex items-center gap-1">
                   <MapPin size={10} />
-                  {listing.type === "buy-sell" ? catLabel : listing.userEmail.split("@")[0]}
+                  {listing.userEmail.split("@")[0]}
                 </span>
               )}
               <span className="flex items-center gap-1 shrink-0 ml-2">
