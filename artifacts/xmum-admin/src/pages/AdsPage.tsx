@@ -115,7 +115,8 @@ export default function AdsPage() {
   }
 
   const isValid = form.businessName && form.tagline && form.imageUrl &&
-                  form.ctaLabel && form.ctaUrl && form.startsAt && form.endsAt;
+                  form.ctaLabel && form.ctaUrl && form.startsAt && form.endsAt &&
+                  new Date(form.endsAt) >= new Date(form.startsAt);
 
   const FORM_FIELDS = [
     { key: "businessName", label: "Business Name",       placeholder: "e.g. Campus Café" },
@@ -206,6 +207,11 @@ export default function AdsPage() {
                   </div>
                 ))}
               </div>
+              {form.startsAt && form.endsAt && new Date(form.endsAt) < new Date(form.startsAt) && (
+                <p className="text-xs text-red-500 mt-1 col-span-2">
+                  End date must be on or after the start date.
+                </p>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>

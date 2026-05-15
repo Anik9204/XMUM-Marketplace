@@ -120,13 +120,14 @@ export interface ShopAd {
 
 export interface AdminReview {
   id: string;
-  reviewerId: string;
-  reviewerName: string;
-  sellerId: string;
-  sellerName?: string;
-  listingId: string;
-  listingTitle: string;
+  shopId: string;
+  shopListingId?: string;
+  inquiryId?: string;
+  buyerId: string;
+  buyerName: string;
+  buyerEmail: string;
+  shopName?: string;
   rating: number;
-  comment: string;
+  comment?: string;
   createdAt: number;
 }

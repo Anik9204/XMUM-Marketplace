@@ -108,8 +108,29 @@ export async function getShopInquiries(shopId: string) {
 }
 
 export async function deleteShop(shopId: string) {
-  // Fetch shop doc first to get ownerUid for cleanup if needed
   const shopSnap = await getDoc(doc(db, "shops", shopId));
   if (!shopSnap.exists()) throw new Error("Shop not found");
+
+  // Cascade delete all related documents in parallel batches
+  const relatedCollections = [
+    "shopListings",
+    "shopInquiries",
+    "shopOrders",
+    "shopReviews",
+  ];
+
+  await Promise.allSettled(
+    relatedCollections.map(async (col) => {
+      try {
+        const q = query(collection(db, col), where("shopId", "==", shopId));
+        const snap = await getDocs(q);
+        await Promise.allSettled(snap.docs.map((d) => deleteDoc(d.ref)));
+      } catch (err) {
+        console.warn(`[deleteShop] failed to clean ${col}:`, err);
+      }
+    })
+  );
+
+  // Delete the shop document last
   await deleteDoc(doc(db, "shops", shopId));
 }

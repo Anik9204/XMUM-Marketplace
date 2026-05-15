@@ -1,0 +1,255 @@
+You are a senior full-stack developer and DevSecOps engineer working on the
+XMUM Marketplace monorepo. You are making surgical fixes to the ADMIN app
+ONLY (artifacts/xmum-admin/). You must NEVER touch anything inside
+artifacts/xmum-market/ — the main student app must remain completely
+untouched. Zero changes to firestore.rules, firestore.indexes.json,
+storage.rules, or any file outside artifacts/xmum-admin/.
+
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless explicitly instructed below.
+4. After every change, mentally verify: "Does this break anything that was
+   working before?" If yes, find a different approach.
+5. If fixing Issue X requires changing a shared component used by other
+   pages, STOP and tell me the impact before proceeding.
+6. Never change any CSS class, layout structure, z-index, or responsive
+   breakpoint unless it is directly part of the fix.
+7. Confirm zero build errors before finishing:
+   pnpm --filter xmum-admin run build
+
+═══════════════════════════════════════════════════
+BUG 1 — Reviews page queries wrong Firestore collection
+File: artifacts/xmum-admin/src/pages/ReviewsPage.tsx
+═══════════════════════════════════════════════════
+
+DIAGNOSIS:
+The admin ReviewsPage queries the `reviews` collection. However, the main
+app (artifacts/xmum-market/src/lib/shops.ts) writes shop reviews to
+`shopReviews`. The `reviews` collection holds a SEPARATE, older
+user-to-user review system. The admin panel is intended to moderate Campus
+Market reviews, so it must query `shopReviews`.
+
+The `shopReviews` documents have this schema (from main app types.ts):
+  id: string
+  shopId: string
+  shopListingId?: string
+  inquiryId?: string
+  buyerId: string        ← this is the reviewer
+  buyerName: string      ← reviewer display name
+  buyerEmail: string
+  rating: number
+  comment?: string
+  createdAt: number
+
+The current AdminReview type in admin types.ts has different field names
+(reviewerId, reviewerName, sellerId, etc.) that were designed for the old
+`reviews` collection. We need to update AdminReview to match shopReviews.
+
+FIXES TO MAKE:
+
+Step 1 — Update AdminReview type in
+         artifacts/xmum-admin/src/lib/types.ts
+
+Find the current AdminReview interface and REPLACE it entirely with:
+
+  export interface AdminReview {
+    id: string;
+    shopId: string;
+    shopListingId?: string;
+    inquiryId?: string;
+    buyerId: string;
+    buyerName: string;
+    buyerEmail: string;
+    shopName?: string;    // we will populate this from a lookup
+    rating: number;
+    comment?: string;
+    createdAt: number;
+  }
+
+Step 2 — Update ReviewsPage.tsx
+         artifacts/xmum-admin/src/pages/ReviewsPage.tsx
+
+2a. Change the collection name in the onSnapshot query from "reviews" to
+    "shopReviews". The query currently reads:
+      const q = query(collection(db, "reviews"), orderBy("createdAt", "desc"));
+    Change it to:
+      const q = query(collection(db, "shopReviews"), orderBy("createdAt", "desc"));
+
+2b. Update the handleDelete function. It currently:
+    - calls deleteDoc on `reviews` collection
+    - re-queries `reviews` collection to recalculate sellerId's rating
+    - updates `users/{sellerId}` rating
+
+    Replace the entire handleDelete body with this corrected version that:
+    - calls deleteDoc on `shopReviews` collection
+    - re-queries `shopReviews` for the same shopId to recalculate shop rating
+    - updates `shops/{shopId}` with the new rating and review count
+    - does NOT touch the `users` collection (shop ratings are on the shop doc)
+
+    Here is the corrected handleDelete:
+
+      async function handleDelete(review: AdminReview) {
+        if (!window.confirm("Delete this review? This cannot be undone.")) return;
+        setReviews((prev) => prev.filter((r) => r.id !== review.id));
+        try {
+          await deleteDoc(doc(db, "shopReviews", review.id));
+          const remaining = await getDocs(
+            query(collection(db, "shopReviews"), where("shopId", "==", review.shopId))
+          );
+          if (remaining.empty) {
+            await updateDoc(doc(db, "shops", review.shopId), { rating: 0, reviewCount: 0 });
+          } else {
+            const total = remaining.docs.reduce((sum, d) => sum + (d.data().rating ?? 0), 0);
+            const newAvg = Math.round((total / remaining.size) * 10) / 10;
+            await updateDoc(doc(db, "shops", review.shopId), {
+              rating: newAvg,
+              reviewCount: remaining.size,
+            });
+          }
+        } catch (err) {
+          console.error("[ReviewsPage] delete failed:", err);
+          alert("Failed to delete review. Check Firestore permissions.");
+          const q2 = query(collection(db, "shopReviews"), orderBy("createdAt", "desc"));
+          const snap = await getDocs(q2);
+          setReviews(snap.docs.map((d) => ({ id: d.id, ...d.data() } as AdminReview)));
+        }
+      }
+
+    Also add `getDoc` to the existing firebase/firestore import at the top
+    of ReviewsPage.tsx (check if it's already imported — if yes, skip).
+
+2c. Update the JSX rendering of each review card to use the new field names.
+    Find the section inside reviews.map() that renders reviewer name/id and
+    seller name/id, and update it to use the new schema:
+    - reviewerName  → buyerName
+    - reviewerId    → buyerId
+    - sellerName    → shopName (show "—" if undefined)
+    - sellerId      → shopId
+    - listingTitle  → shopListingId (show the ID, or "—" if undefined)
+    - comment is now optional — wrap it in a null check before rendering
+
+2d. Update the handleExport function to use the new field names:
+    - reviewerName  → r.buyerName
+    - reviewerId    → r.buyerId
+    - sellerName    → r.shopName ?? ""
+    - sellerId      → r.shopId
+    - listingTitle  → r.shopListingId ?? ""
+    - comment       → r.comment ?? ""
+
+═══════════════════════════════════════════════════
+BUG 2 — Shop deletion leaves orphan sub-collection data
+File: artifacts/xmum-admin/src/lib/firebase.ts
+═══════════════════════════════════════════════════
+
+DIAGNOSIS:
+The deleteShop() function in artifacts/xmum-admin/src/lib/firebase.ts
+currently only deletes the shops/{shopId} document. It leaves behind ALL
+sub-collection and related data:
+  - shopListings   (where shopId == shopId)
+  - shopInquiries  (where shopId == shopId)
+  - shopOrders     (where shopId == shopId)
+  - shopReviews    (where shopId == shopId)
+
+These become orphaned documents that waste storage and can cause data
+integrity issues.
+
+FIX:
+Find the existing deleteShop function in firebase.ts. It currently reads:
+
+  export async function deleteShop(shopId: string) {
+    const shopSnap = await getDoc(doc(db, "shops", shopId));
+    if (!shopSnap.exists()) throw new Error("Shop not found");
+    await deleteDoc(doc(db, "shops", shopId));
+  }
+
+Replace it entirely with this version. Do NOT change any other function
+in firebase.ts:
+
+  export async function deleteShop(shopId: string) {
+    const shopSnap = await getDoc(doc(db, "shops", shopId));
+    if (!shopSnap.exists()) throw new Error("Shop not found");
+
+    // Cascade delete all related documents in parallel batches
+    const relatedCollections = [
+      "shopListings",
+      "shopInquiries",
+      "shopOrders",
+      "shopReviews",
+    ];
+
+    await Promise.allSettled(
+      relatedCollections.map(async (col) => {
+        try {
+          const q = query(collection(db, col), where("shopId", "==", shopId));
+          const snap = await getDocs(q);
+          await Promise.allSettled(snap.docs.map((d) => deleteDoc(d.ref)));
+        } catch (err) {
+          console.warn(`[deleteShop] failed to clean ${col}:`, err);
+        }
+      })
+    );
+
+    // Delete the shop document last
+    await deleteDoc(doc(db, "shops", shopId));
+  }
+
+Make sure `getDocs` and `query` and `where` are already imported at the top
+of firebase.ts. They should already be there — check before adding. Do not
+add duplicate imports.
+
+═══════════════════════════════════════════════════
+BUG 3 — Ad date validation: end date can be before start date
+File: artifacts/xmum-admin/src/pages/AdsPage.tsx
+═══════════════════════════════════════════════════
+
+DIAGNOSIS:
+The isValid check in AdsPage.tsx is:
+  const isValid = form.businessName && form.tagline && form.imageUrl &&
+                  form.ctaLabel && form.ctaUrl && form.startsAt && form.endsAt;
+
+It checks that both dates are present but does NOT verify that endsAt is
+after startsAt. An admin can accidentally save an ad with an end date
+before the start date, which will never display.
+
+FIX:
+Find the isValid constant (line ~117) and extend it with a date check.
+Change it from:
+  const isValid = form.businessName && form.tagline && form.imageUrl &&
+                  form.ctaLabel && form.ctaUrl && form.startsAt && form.endsAt;
+
+To:
+  const isValid = form.businessName && form.tagline && form.imageUrl &&
+                  form.ctaLabel && form.ctaUrl && form.startsAt && form.endsAt &&
+                  new Date(form.endsAt) >= new Date(form.startsAt);
+
+Then add a visible validation hint below the End Date input field so the
+admin knows why the button is disabled. Find the End Date input field in
+the JSX (it will be the second date input in the form grid). After the
+closing </div> of the End Date field group, add this small error hint:
+
+  {form.startsAt && form.endsAt && new Date(form.endsAt) < new Date(form.startsAt) && (
+    <p className="text-xs text-red-500 mt-1 col-span-2">
+      End date must be on or after the start date.
+    </p>
+  )}
+
+═══════════════════════════════════════════════════
+VERIFICATION
+═══════════════════════════════════════════════════
+
+After all three fixes:
+
+1. Run: pnpm --filter xmum-admin run build
+   — Must complete with zero errors and zero TypeScript errors.
+
+2. Confirm zero changes were made to any file in artifacts/xmum-market/.
+
+3. Confirm zero changes to firestore.rules, storage.rules, or
+   firestore.indexes.json.
+
+4. Do NOT run the Firebase deploy command — the admin only reads/writes
+   Firestore, no rules changes are needed for these fixes

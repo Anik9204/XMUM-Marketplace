@@ -1,7 +1,7 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, Flag, Users, Megaphone, FileText, Star, GraduationCap, List, BarChart2, LogOut, } from "lucide-react";
+import { LayoutDashboard, Flag, Users, Megaphone, FileText, Star, GraduationCap, List, BarChart2, LogOut, Store, Newspaper, } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth, db } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
@@ -31,6 +31,8 @@ export default function Layout({ children }) {
         { href: "/rental-audit", label: "Rental Audit", icon: FileText },
         { href: "/ads", label: "Ads", icon: Megaphone },
         { href: "/analytics", label: "Analytics", icon: BarChart2 },
+        { href: "/shops", label: "Shops", icon: Store },
+        { href: "/shop-ads", label: "Shop Ads", icon: Newspaper },
     ];
     return (_jsxs("div", { className: "flex h-screen bg-slate-50 dark:bg-slate-900", children: [_jsxs("aside", { className: "w-60 flex-shrink-0 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 flex flex-col", children: [_jsx("div", { className: "px-6 py-5 border-b border-gray-100 dark:border-slate-700", children: _jsxs("div", { className: "flex items-center gap-2", children: [_jsx("div", { className: "w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-sm", children: "X" }), _jsxs("div", { children: [_jsx("p", { className: "text-sm font-bold text-slate-800 dark:text-slate-200", children: "XMUM Admin" }), _jsx("p", { className: "text-[10px] text-slate-400 capitalize", children: adminUser?.role })] })] }) }), _jsx("nav", { className: "flex-1 px-3 py-4 space-y-1 overflow-y-auto", children: NAV.map(({ href, label, icon: Icon }) => {
                             const active = location === href;

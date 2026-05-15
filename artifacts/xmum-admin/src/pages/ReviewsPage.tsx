@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   collection, query, orderBy, onSnapshot,
-  deleteDoc, doc, getDocs, where, updateDoc, increment,
+  deleteDoc, doc, getDocs, where, updateDoc,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { AdminReview } from "../lib/types";
@@ -25,7 +25,7 @@ export default function ReviewsPage() {
   const [loading, setLoading]   = useState(true);
 
   useEffect(() => {
-    const q = query(collection(db, "reviews"), orderBy("createdAt", "desc"));
+    const q = query(collection(db, "shopReviews"), orderBy("createdAt", "desc"));
     const unsub = onSnapshot(
       q,
       (snap) => {
@@ -42,30 +42,26 @@ export default function ReviewsPage() {
 
   async function handleDelete(review: AdminReview) {
     if (!window.confirm("Delete this review? This cannot be undone.")) return;
-
     setReviews((prev) => prev.filter((r) => r.id !== review.id));
-
     try {
-      await deleteDoc(doc(db, "reviews", review.id));
-
+      await deleteDoc(doc(db, "shopReviews", review.id));
       const remaining = await getDocs(
-        query(collection(db, "reviews"), where("sellerId", "==", review.sellerId))
+        query(collection(db, "shopReviews"), where("shopId", "==", review.shopId))
       );
-
       if (remaining.empty) {
-        await updateDoc(doc(db, "users", review.sellerId), { rating: 0, totalReviews: 0 });
+        await updateDoc(doc(db, "shops", review.shopId), { rating: 0, reviewCount: 0 });
       } else {
         const total = remaining.docs.reduce((sum, d) => sum + (d.data().rating ?? 0), 0);
         const newAvg = Math.round((total / remaining.size) * 10) / 10;
-        await updateDoc(doc(db, "users", review.sellerId), {
+        await updateDoc(doc(db, "shops", review.shopId), {
           rating: newAvg,
-          totalReviews: increment(-1),
+          reviewCount: remaining.size,
         });
       }
     } catch (err) {
       console.error("[ReviewsPage] delete failed:", err);
       alert("Failed to delete review. Check Firestore permissions.");
-      const q2 = query(collection(db, "reviews"), orderBy("createdAt", "desc"));
+      const q2 = query(collection(db, "shopReviews"), orderBy("createdAt", "desc"));
       const snap = await getDocs(q2);
       setReviews(snap.docs.map((d) => ({ id: d.id, ...d.data() } as AdminReview)));
     }
@@ -74,19 +70,19 @@ export default function ReviewsPage() {
   function handleExport() {
     const timestamp = new Date().toISOString().slice(0, 10);
     const headers = [
-      "ID", "Reviewer Name", "Reviewer UID",
-      "Seller Name", "Seller UID",
-      "Listing Title", "Rating", "Comment", "Date",
+      "ID", "Buyer Name", "Buyer UID",
+      "Shop Name", "Shop ID",
+      "Shop Listing ID", "Rating", "Comment", "Date",
     ];
     const rows = reviews.map((r) => [
       r.id,
-      r.reviewerName,
-      r.reviewerId,
-      r.sellerName ?? "",
-      r.sellerId,
-      r.listingTitle,
+      r.buyerName,
+      r.buyerId,
+      r.shopName ?? "",
+      r.shopId,
+      r.shopListingId ?? "",
       r.rating,
-      r.comment,
+      r.comment ?? "",
       new Date(r.createdAt).toLocaleDateString("en-MY", {
         day: "numeric", month: "short", year: "numeric",
       }),
@@ -161,31 +157,33 @@ export default function ReviewsPage() {
                   <div className="grid grid-cols-2 gap-x-6 gap-y-0.5 text-xs mt-1">
                     <div>
                       <span className="font-medium text-slate-700 dark:text-slate-200">
-                        {review.reviewerName || "Unknown"}
+                        {review.buyerName || "Unknown"}
                       </span>
                       <span className="ml-1.5 text-slate-400 dark:text-slate-500 font-mono text-[10px]">
-                        {review.reviewerId}
+                        {review.buyerId}
                       </span>
                     </div>
                     <div>
                       <span className="text-slate-400 dark:text-slate-500 mr-1">→</span>
                       <span className="font-medium text-slate-700 dark:text-slate-200">
-                        {review.sellerName || "Unknown seller"}
+                        {review.shopName || "Unknown shop"}
                       </span>
                       <span className="ml-1.5 text-slate-400 dark:text-slate-500 font-mono text-[10px]">
-                        {review.sellerId}
+                        {review.shopId}
                       </span>
                     </div>
                   </div>
 
                   <p className="text-[11px] italic text-slate-400 dark:text-slate-500 truncate">
-                    Re: {review.listingTitle}
+                    Re: {review.shopListingId ?? "—"}
                   </p>
 
-                  <p className="text-sm text-slate-700 dark:text-slate-300 leading-snug
-                                line-clamp-2 bg-slate-50 dark:bg-slate-700/50 rounded-xl px-3 py-2 mt-1">
-                    "{review.comment}"
-                  </p>
+                  {review.comment && (
+                    <p className="text-sm text-slate-700 dark:text-slate-300 leading-snug
+                                  line-clamp-2 bg-slate-50 dark:bg-slate-700/50 rounded-xl px-3 py-2 mt-1">
+                      "{review.comment}"
+                    </p>
+                  )}
                 </div>
 
                 <button
