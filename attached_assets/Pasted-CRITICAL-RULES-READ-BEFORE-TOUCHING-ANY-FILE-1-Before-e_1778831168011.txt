@@ -1,0 +1,120 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything
+   that was working before?" If yes, do not proceed — find a
+   different approach.
+5. If fixing Issue X requires changing a shared component used by
+   other pages, STOP and tell me what the impact will be before
+   making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or
+   responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing:
+   pnpm --filter @workspace/xmum-market run build
+
+---
+
+PROBLEM: The view count system is broken — listings always show 0 views
+even after other users have visited the listing detail page.
+
+There are exactly TWO bugs to fix, in exactly TWO files. Read the
+diagnosis carefully before touching anything.
+
+---
+
+DIAGNOSIS:
+
+BUG 1 — Firestore Security Rule is too restrictive (file: artifacts/xmum-market/firestore.rules)
+
+The current update rule for the `listings` collection has this condition
+for viewCount increments:
+
+  || (isXmuEmail()
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount']))
+
+The problem: `isXmuEmail()` requires BOTH an @xmu.edu.my email AND
+email_verified == true. This means the viewCount increment write is
+rejected silently (with permission-denied, caught and swallowed by
+.catch()) for any user whose token doesn't satisfy isXmuEmail() — for
+example, a logged-in XMUM student whose token hasn't refreshed yet, or
+if Firestore offline mode causes a token mismatch.
+
+The fix: Replace `isXmuEmail()` with `isSignedIn()` in ONLY the viewCount
+branch of the listings update rule. This allows any authenticated user
+to increment the view count — which is the correct intent: counting real
+views by real signed-in users, not restricting it to XMUM students only.
+
+Change ONLY this block in firestore.rules (surgical edit):
+
+FROM:
+        || (isXmuEmail()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount']));
+
+TO:
+        || (isSignedIn()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount']));
+
+Do NOT touch any other rule in the file.
+
+---
+
+BUG 2 — ProfilePage shows stale viewCount (file: artifacts/xmum-market/src/pages/ProfilePage.tsx)
+
+The ProfilePage fetches listings once on mount via getUserListings() and
+stores them in React state. The viewCount shown on each listing card in
+"My Listings → Active" reflects only the value at page-load time and
+never updates.
+
+The fix: After the listings are loaded and set into state, set up a
+Firestore onSnapshot real-time listener on each active listing document
+to keep viewCount in sync. But that approach is expensive (N listeners
+for N listings).
+
+A simpler and cheaper fix: when the user switches TO the "Active" tab
+(or when the component mounts), re-fetch the listings fresh from
+Firestore so the viewCount values are always up to date. This is a
+one-line change — trigger a re-fetch whenever the active tab is selected.
+
+Here is what to do in ProfilePage.tsx:
+
+1. Find the existing useEffect that calls getUserListings(user.uid).
+   It currently runs only on [user] dependency.
+
+2. Add a `refreshCounter` state variable:
+   const [refreshCounter, setRefreshCounter] = useState(0);
+
+3. Add setRefreshCounter(c => c + 1) to fire when the user clicks the
+   "Active" tab button (the tab that shows active listings). Find the
+   button/tab that sets the active sub-tab to "active" and add
+   setRefreshCounter(c => c + 1) to its onClick, ALONGSIDE whatever it
+   already does — do NOT replace the existing onClick logic.
+
+4. Add refreshCounter to the dependency array of the getUserListings
+   useEffect so it re-runs on tab click.
+
+Only these two changes to ProfilePage.tsx. Do not restructure the
+component, do not move any state, do not touch any other useEffect.
+
+---
+
+AFTER BOTH FIXES:
+
+1. Deploy the updated firestore.rules to Firebase:
+   cd artifacts/xmum-market && npx firebase-tools deploy --only firestore:rules
+
+   (If firebase-tools is not available, just tell me the rules file is
+   ready and I will deploy it manually from the Firebase Console by
+   pasting the updated rules.)
+
+2. Build check — confirm zero errors:
+   pnpm --filter @workspace/xmum-market run build
+
+3. Do NOT touch: listings.ts, ListingDetailPage.tsx, ListingCard.tsx,
+   Layout.tsx, or any other file. The viewCount increment logic in
+   ListingDetailPage.tsx is already correct (5-second delay, skips
+   owner, uses increment(1)). The only broken parts are the Firestore
+   rule and the stale display on ProfilePage.

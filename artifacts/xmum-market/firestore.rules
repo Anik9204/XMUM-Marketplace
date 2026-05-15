@@ -84,7 +84,7 @@ service cloud.firestore {
         && (!request.resource.data.keys().hasAny(["price"])
             || (request.resource.data.price >= 0
                 && request.resource.data.price <= 1000000)))
-        || (isXmuEmail()
+        || (isSignedIn()
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount']));
       allow delete: if ((isXmuEmail() && resource.data.userId == request.auth.uid && resource.data.isReportHeld != true)
         || isEditorRole());

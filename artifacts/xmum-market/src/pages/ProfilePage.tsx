@@ -259,6 +259,7 @@ export default function ProfilePage() {
   const [successToast, setSuccessToast] = useState("");
   const [expiryReminders, setExpiryReminders] = useState<Listing[]>([]);
   const [tab, setTab] = useState<ListingTab>("active");
+  const [refreshCounter, setRefreshCounter] = useState(0);
 
   const [savedListings, setSavedListings] = useState<Listing[]>([]);
   const [savedLoading, setSavedLoading] = useState(false);
@@ -309,7 +310,7 @@ export default function ProfilePage() {
       })
       .finally(() => { if (isMounted) setLoading(false); });
     return () => { isMounted = false; };
-  }, [user]);
+  }, [user, refreshCounter]);
 
   useEffect(() => {
     if (!user) return;
@@ -563,7 +564,7 @@ export default function ProfilePage() {
             {subTabs.map(({ key, label, count }) => (
               <button
                 key={key}
-                onClick={() => setTab(key)}
+                onClick={() => { setTab(key); if (key === "active") setRefreshCounter(c => c + 1); }}
                 className={`chip ${tab === key ? "chip-active" : ""}`}
               >
                 {key === "saved" && <Bookmark size={12} />}
