@@ -97,7 +97,7 @@ export default function ReportsPage() {
         createdAt:   Date.now(),
       });
       // Lift the report hold when admin dismisses the report
-      if (status === "dismissed" && report) {
+      if ((status === "dismissed" || status === "actioned") && report) {
         const isShopListing = !!(report as any).shopId;
         if (isShopListing) {
           await liftHoldOnShopListing(report.listingId);

@@ -295,7 +295,7 @@ export default function VerificationPage() {
                     Reject
                   </button>
                   <a
-                    href={`https://${window.location.hostname.replace("3002", "5000")}/seller/${u.uid}`}
+                    href={`${import.meta.env.VITE_MAIN_APP_URL ?? ""}/seller/${u.uid}`}
                     target="_blank"
                     rel="noreferrer"
                     className="flex items-center gap-1.5 px-4 py-2 min-h-[44px] rounded-xl border border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300 text-sm font-medium hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors text-center justify-center"

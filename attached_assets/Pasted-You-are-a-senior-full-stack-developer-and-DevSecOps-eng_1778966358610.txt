@@ -1,0 +1,203 @@
+You are a senior full-stack developer and DevSecOps engineer working on the
+XMUM Marketplace monorepo. This prompt makes ONLY surgical fixes to the
+ADMIN app. Never touch artifacts/xmum-market/ except firestore.rules.
+No changes to firestore.rules, firestore.indexes.json, or storage.rules.
+
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed.
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless explicitly instructed below.
+4. After every change, mentally verify: "Does this break anything that
+   was working before?" If yes, find a different approach.
+5. Never change any CSS class, layout structure, z-index, or responsive
+   breakpoint unless it is directly part of the fix.
+6. Confirm zero build errors before finishing:
+   pnpm --filter xmum-admin run build
+
+═══════════════════════════════════════════════════
+FIX 0 — Delete all stale .js files (MUST DO FIRST)
+═══════════════════════════════════════════════════
+
+Replit previously compiled/transpiled every .tsx file into a parallel .js
+file. These stale files exist alongside the canonical .tsx sources and
+can cause Vite to resolve imports to the WRONG (outdated) file at runtime,
+silently breaking audit logging, real-time listeners, and notifications.
+
+Run this exact command from the repo root to delete all of them:
+
+  find artifacts/xmum-admin/src -name "*.js" -type f -delete
+
+Verify the result — there should be ZERO .js files remaining under
+artifacts/xmum-admin/src/:
+
+  find artifacts/xmum-admin/src -name "*.js" -type f
+
+The expected output is empty. If any .js files remain, delete them manually.
+
+Do NOT delete any .tsx, .ts, .css, or .json files.
+
+═══════════════════════════════════════════════════
+FIX 1 — VerificationPage: broken profile link
+File: artifacts/xmum-admin/src/pages/VerificationPage.tsx
+═══════════════════════════════════════════════════
+
+DIAGNOSIS:
+The "Profile" link on each verification request currently builds the URL
+using window.location.hostname.replace("3002", "5000"). This is completely
+broken in production on Vercel where the admin panel runs on its own domain
+(e.g. xmum-admin.vercel.app) — string-replacing a domain that has no port
+returns the exact same domain, linking to a page that doesn't exist on the
+admin panel. ReportsPage already uses VITE_MAIN_APP_URL correctly for this
+exact purpose.
+
+SURGICAL EDIT — change exactly ONE line:
+
+Find this exact line in VerificationPage.tsx (around line 298):
+  href={`https://${window.location.hostname.replace("3002", "5000")}/seller/${u.uid}`}
+
+Replace it with:
+  href={`${import.meta.env.VITE_MAIN_APP_URL ?? ""}/seller/${u.uid}`}
+
+Do NOT change any other attribute on that <a> element (target, rel,
+className, children all stay identical). Do NOT change anything else
+in VerificationPage.tsx.
+
+═══════════════════════════════════════════════════
+FIX 2 — ShopsPage: View link points to admin domain
+File: artifacts/xmum-admin/src/pages/ShopsPage.tsx
+═══════════════════════════════════════════════════
+
+DIAGNOSIS:
+The View button in ShopsPage uses a relative href="/shop/${shop.shopSlug}".
+On the admin Vercel deployment this resolves to the admin domain, which has
+no /shop/ route and will 404. It must link to the student-facing app.
+
+SURGICAL EDIT — change exactly ONE line:
+
+Find this exact line in ShopsPage.tsx (around line 222):
+  href={`/shop/${shop.shopSlug}`}
+
+Replace it with:
+  href={`${import.meta.env.VITE_MAIN_APP_URL ?? ""}/shop/${shop.shopSlug}`}
+
+Do NOT change target, rel, className, title, or the icon/text inside the
+<a> element. Do NOT change anything else in ShopsPage.tsx.
+
+═══════════════════════════════════════════════════
+FIX 3 — ReportsPage: "actioned" status never lifts the report hold
+File: artifacts/xmum-admin/src/pages/ReportsPage.tsx
+═══════════════════════════════════════════════════
+
+DIAGNOSIS:
+In updateStatus(), the liftHold logic runs only when status === "dismissed":
+
+  if (status === "dismissed" && report) {
+    const isShopListing = !!(report as any).shopId;
+    if (isShopListing) {
+      await liftHoldOnShopListing(report.listingId);
+    } else {
+      await liftHoldOnListing(report.listingId);
+    }
+  }
+
+When an admin marks a report as "actioned" (meaning: policy violation
+confirmed, dealt with via warning or other means — WITHOUT deleting the
+listing), the listing remains permanently held (invisible to the owner
+and hidden from the feed) with no way to lift it other than the Firebase
+Console. The correct behavior: both "dismissed" AND "actioned" should
+lift the hold, because in both cases the admin has reviewed the listing
+and made a decision about it.
+
+SURGICAL EDIT — change exactly ONE line:
+
+Find this exact line inside the updateStatus function:
+  if (status === "dismissed" && report) {
+
+Change it to:
+  if ((status === "dismissed" || status === "actioned") && report) {
+
+Do NOT change anything else in this function or anywhere else in
+ReportsPage.tsx. The liftHold logic inside the if block stays identical.
+
+═══════════════════════════════════════════════════
+FIX 4 — UsersPage: role <select> click bubbles to row, opens drawer
+File: artifacts/xmum-admin/src/pages/UsersPage.tsx
+═══════════════════════════════════════════════════
+
+DIAGNOSIS:
+The <tr> has onClick={() => openDrawer(u)}. The role <select> inside it
+has no stopPropagation. In many browsers, clicking or interacting with a
+<select> inside a clickable <tr> fires the row's onClick as well, which
+calls openDrawer simultaneously with handleRoleChange — the drawer opens
+unexpectedly every time the admin touches the role dropdown.
+
+SURGICAL EDIT — add one prop to the <select> element:
+
+Find the <select> for role change in the table (around line 223-224):
+  <select
+    value={u.role || "user"}
+    onChange={e => handleRoleChange(u, e.target.value as UserRole)}
+
+Add onClick={e => e.stopPropagation()} so it reads:
+  <select
+    value={u.role || "user"}
+    onChange={e => handleRoleChange(u, e.target.value as UserRole)}
+    onClick={e => e.stopPropagation()}
+
+Do NOT change value, onChange, className, or the <option> children.
+Do NOT change anything else in UsersPage.tsx in this step.
+
+═══════════════════════════════════════════════════
+FIX 5 — UsersPage: Ban/Unban button click bubbles to row, opens drawer
+File: artifacts/xmum-admin/src/pages/UsersPage.tsx
+(same file as Fix 4 — make both edits in the same pass)
+═══════════════════════════════════════════════════
+
+DIAGNOSIS:
+The Ban/Unban <button> in the last <td> of each table row has
+onClick={() => handleBanToggle(u)} but no stopPropagation. Clicking it
+fires both handleBanToggle AND the row's onClick (openDrawer), so the
+drawer opens every time an admin clicks Ban. This is confusing because the
+drawer's own Ban button closes the drawer first — but the table row button
+should ban silently without opening anything.
+
+SURGICAL EDIT — change ONE line (the onClick of the ban button in the table):
+
+Find the ban button in the table row (around line 259):
+  onClick={() => handleBanToggle(u)}
+
+Change it to:
+  onClick={e => { e.stopPropagation(); handleBanToggle(u); }}
+
+This is the button inside the <td className="px-4 py-3"> that contains
+{u.uid !== adminUser?.uid && ( ... )} — NOT the button inside the drawer
+overlay. The drawer's ban button (around line 402) must NOT be changed.
+
+═══════════════════════════════════════════════════
+FIX 6 — Add VITE_MAIN_APP_URL to .env.example
+File: artifacts/xmum-admin/.env.example
+═══════════════════════════════════════════════════
+
+VITE_MAIN_APP_URL is used in three pages (ReportsPage, VerificationPage,
+ShopsPage) but is not in .env.example, so a new developer or Vercel
+deployment would not know to set it.
+
+Find the .env.example file. It currently ends with:
+  VITE_FIREBASE_MEASUREMENT_ID=
+
+Add this line at the end:
+  VITE_MAIN_APP_URL=
+
+That is all. Do not change any existing line.
+
+═══════════════════════════════════════════════════
+VERIFICATION
+═══════════════════════════════════════════════════
+
+1. Confirm: find artifacts/xmum-admin/src -name "*.js" returns nothing.
+2. Run: pnpm --filter xmum-admin run build — must complete with zero errors.
+3. Confirm: no changes to any file in artifacts/xmum-market/.
+4. Confirm: VITE_MAIN_APP_URL is now in artifacts/xmum-admin/.env.example.

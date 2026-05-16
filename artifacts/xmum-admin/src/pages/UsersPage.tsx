@@ -223,6 +223,7 @@ export default function UsersPage() {
                         <select
                           value={u.role || "user"}
                           onChange={e => handleRoleChange(u, e.target.value as UserRole)}
+                          onClick={e => e.stopPropagation()}
                           className="bg-slate-50 dark:bg-slate-700 border border-gray-200
                                      dark:border-slate-600 rounded-lg px-2 py-1.5 text-xs
                                      text-slate-700 dark:text-slate-300 min-h-[36px]">
@@ -256,7 +257,7 @@ export default function UsersPage() {
                     <td className="px-4 py-3">
                       {u.uid !== adminUser?.uid && (
                         <button
-                          onClick={() => handleBanToggle(u)}
+                          onClick={e => { e.stopPropagation(); handleBanToggle(u); }}
                           className={`flex items-center gap-1.5 text-xs rounded-xl px-3 py-1.5
                                       border min-h-[36px] transition-colors
                                       ${u.isBlacklisted

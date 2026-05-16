@@ -219,7 +219,7 @@ export default function ShopsPage() {
                       <div className="flex items-center justify-center gap-1">
                         {shop.shopSlug && (
                           <a
-                            href={`/shop/${shop.shopSlug}`}
+                            href={`${import.meta.env.VITE_MAIN_APP_URL ?? ""}/shop/${shop.shopSlug}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             title="View public shop page"
