@@ -115,6 +115,17 @@ export default function ShopPublicPage() {
     );
   }
 
+  if (shop.isSuspended) {
+    return (
+      <div className="max-w-lg mx-auto px-4 py-16 text-center">
+        <div className="text-5xl mb-3">🏪</div>
+        <h2 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-1">This shop is currently unavailable</h2>
+        <p className="text-sm text-gray-500 dark:text-slate-400 mb-4">Please check back later.</p>
+        <Link href="/" className="text-[#003366] dark:text-blue-400 underline text-sm">Go home</Link>
+      </div>
+    );
+  }
+
   const isOwner = user?.uid === shop.ownerId;
   const isEditor = shop.editorIds.includes(user?.uid ?? "");
   const canManage = isOwner || isEditor;

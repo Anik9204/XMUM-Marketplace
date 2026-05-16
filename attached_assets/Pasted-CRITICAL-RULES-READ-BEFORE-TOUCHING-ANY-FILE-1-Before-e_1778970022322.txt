@@ -1,0 +1,385 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless I have explicitly told you to remove it.
+
+4. After every change, mentally verify: "Does this break anything
+   that was working before?" If yes, do not proceed — find a
+   different approach.
+
+5. If fixing Issue X requires changing a shared component used by
+   other pages, STOP and tell me what the impact will be before
+   making the change. Ask for permission first.
+
+6. Never change any CSS class, layout structure, z-index, or
+   responsive breakpoint unless it is directly part of the fix.
+
+7. Confirm the app builds with zero errors before finishing:
+   pnpm --filter @workspace/xmum-market run build
+
+
+
+# XMUM Admin × XMUM Market — Bug Fix Super Prompt
+
+> Paste this entire prompt into Replit AI. Do not skip any section.
+> Make ALL changes exactly as described. Do not add unrequested features.
+
+---
+
+## Context
+
+This project has two apps that share the same Firebase project:
+
+- **XMUM Market** (`artifacts/xmum-market/`) — the public-facing React/TypeScript marketplace app
+- **XMUM Admin** (`artifacts/xmum-admin/`) — the internal admin panel (React/TypeScript + Tailwind)
+
+Both apps share the same Firestore database. The `shops` collection is central to both.
+
+---
+
+## Bugs to Fix
+
+### BUG 1 — Admin suspension has zero effect on the market app (CRITICAL)
+
+**What is broken:**
+The admin panel can set `isSuspended: true` on a shop document in Firestore
+(`artifacts/xmum-admin/src/pages/ShopsPage.tsx` → `handleSuspendToggle`).
+However, the XMUM Market app **never reads or checks `isSuspended`** anywhere.
+All shop/listing visibility in the market app is controlled only by `isActive`.
+A suspended shop's listings continue to appear publicly as if nothing happened.
+The `isSuspended` field written by the admin is completely ignored on the market side.
+
+**Where to fix — XMUM Market (`artifacts/xmum-market/`):**
+
+**File 1: `src/lib/shops.ts`**
+
+There are 5 places where shops are fetched and filtered by `isActive`. Every one
+of them must also exclude shops where `isSuspended === true`. Apply this pattern
+consistently:
+
+Current pattern (appears multiple times):
+```ts
+.filter((s) => s.isActive !== false)
+```
+
+Replace every occurrence with:
+```ts
+.filter((s) => s.isActive !== false && s.isSuspended !== true)
+```
+
+There is also a `shopStatuses` pattern used in `getAllShopListings` and
+`getShopListingsByCategory` that checks the parent shop doc before including
+listings. The check there is:
+```ts
+shopStatuses[id] = s.exists() && s.data()?.isActive !== false;
+```
+
+Replace every occurrence with:
+```ts
+shopStatuses[id] = s.exists() && s.data()?.isActive !== false && s.data()?.isSuspended !== true;
+```
+
+These are the exact functions that need updating:
+- `getFeaturedShops` — filters shops directly
+- `getRecentShopListings` — does NOT check shop status (only listing `isActive`) — add a `shopStatuses` check here the same way `getAllShopListings` does it
+- `getAllShopListings` — uses `shopStatuses` pattern, update the status assignment
+- `getShopListingsByCategory` — uses `shopStatuses` pattern, update the status assignment
+- `getAllShops` — filters shops directly
+
+**File 2: `src/lib/types.ts`**
+
+The `Shop` interface is missing `isSuspended`. Add it:
+
+```ts
+export interface Shop {
+  // ... existing fields ...
+  isSuspended?: boolean;   // ← add this line
+}
+```
+
+**File 3: `src/pages/PostPage.tsx` (shop public page)**
+
+When a user navigates to a shop's public page (`/shop/:slug`), the page loads
+the shop via `getShopBySlug`. If the shop is suspended, it must show a
+"This shop is currently unavailable" message instead of the normal shop content,
+and must not allow inquiries or orders to be placed.
+
+Find where the shop data is loaded (after `getShopBySlug` resolves) and add:
+```ts
+if (shop.isSuspended) {
+  // render a "shop unavailable" state — do not show listings or inquiry buttons
+}
+```
+
+Show a simple centered message, for example:
+```
+🏪
+This shop is currently unavailable.
+Please check back later.
+```
+
+Style it consistently with the rest of the page (use existing Tailwind classes).
+
+**File 4: `src/components/ShopManagementPanel.tsx`**
+
+Shop owners and editors who open their own Shop Management Panel should see a
+clear suspension banner at the top if their shop is suspended. Find the top of
+the panel's rendered JSX and add a conditional banner:
+
+```tsx
+{shop.isSuspended && (
+  <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800
+                  rounded-2xl p-4 mb-4 flex items-start gap-3">
+    <span className="text-red-500 text-lg">⚠️</span>
+    <div>
+      <p className="font-semibold text-red-700 dark:text-red-400 text-sm">
+        Your shop has been suspended
+      </p>
+      <p className="text-xs text-red-600 dark:text-red-500 mt-0.5">
+        Your shop and its listings are currently hidden from Campus Market.
+        Please contact an admin for assistance.
+      </p>
+    </div>
+  </div>
+)}
+```
+
+---
+
+### BUG 2 — Admin `deleteShop` does not clean up Storage files
+
+**What is broken:**
+`artifacts/xmum-admin/src/lib/firebase.ts` has a `deleteShop` function that
+cascade-deletes Firestore documents (shopListings, shopInquiries, shopOrders,
+shopReviews, then the shop doc itself). However, it does **not** delete the
+shop's Firebase Storage files — banner images (`shopBanners/`), logo images
+(`shopLogos/`), and shop listing photos (`shopListingPhotos/`). These become
+orphaned files that accumulate in Storage indefinitely.
+
+By contrast, the XMUM Market app's own `deleteShopCompletely` in
+`artifacts/xmum-market/src/lib/shops.ts` already does this correctly —
+it extracts storage paths from URLs and deletes them.
+
+**Where to fix — XMUM Admin (`artifacts/xmum-admin/`):**
+
+**File: `src/lib/firebase.ts`**
+
+Rewrite the `deleteShop` function to also delete Storage files. Model it on the
+market app's `deleteShopCompletely` implementation. Here is the complete
+replacement:
+
+```ts
+export async function deleteShop(shopId: string) {
+  const { writeBatch } = await import("firebase/firestore");
+  const { ref: storageRef, deleteObject } = await import("firebase/storage");
+
+  const shopSnap = await getDoc(doc(db, "shops", shopId));
+  if (!shopSnap.exists()) throw new Error("Shop not found");
+
+  const relatedCollections = ["shopListings", "shopInquiries", "shopOrders", "shopReviews"];
+
+  // Fetch all related docs in parallel
+  const snaps = await Promise.all(
+    relatedCollections.map((col) =>
+      getDocs(query(collection(db, col), where("shopId", "==", shopId))).catch(() => null)
+    )
+  );
+
+  // Delete Storage files — listing photos
+  const storageJobs: Promise<void>[] = [];
+  const listingsSnap = snaps[0];
+  if (listingsSnap) {
+    for (const d of listingsSnap.docs) {
+      for (const url of (d.data().photos ?? []) as string[]) {
+        const path = storagePathFromUrl(url);
+        if (path) storageJobs.push(deleteObject(storageRef(storage, path)).catch(() => {}));
+      }
+    }
+  }
+
+  // Delete Storage files — shop banner and logo
+  const sd = shopSnap.data();
+  for (const url of [sd.bannerUrl, sd.logoUrl].filter(Boolean) as string[]) {
+    const path = storagePathFromUrl(url);
+    if (path) storageJobs.push(deleteObject(storageRef(storage, path)).catch(() => {}));
+  }
+  await Promise.allSettled(storageJobs);
+
+  // Batch-delete all Firestore documents (max 400 per batch)
+  const allDocs = snaps.flatMap((s) => s?.docs ?? []);
+  const BATCH_SIZE = 400;
+  for (let i = 0; i < allDocs.length; i += BATCH_SIZE) {
+    const batch = writeBatch(db);
+    for (const d of allDocs.slice(i, i + BATCH_SIZE)) batch.delete(d.ref);
+    await batch.commit();
+  }
+
+  // Delete the shop document last
+  await deleteDoc(doc(db, "shops", shopId));
+}
+```
+
+Then add the `storagePathFromUrl` helper to `src/lib/firebase.ts` (if not
+already present):
+
+```ts
+function storagePathFromUrl(url: string): string | null {
+  try {
+    const decodedUrl = decodeURIComponent(url);
+    const match = decodedUrl.match(/\/o\/(.+?)(\?|$)/);
+    return match ? match[1] : null;
+  } catch {
+    return null;
+  }
+}
+```
+
+Make sure the `storage` instance is imported/available in this file (it already
+is — `export const storage = getStorage(app)` exists).
+
+---
+
+### BUG 3 — Admin `getShops` maps `category` as a single string into `shopCategories` array, but market stores it as a single `category` string field
+
+**What is broken:**
+In `artifacts/xmum-admin/src/lib/firebase.ts`, `getShops` maps:
+```ts
+shopCategories: data.category ? [data.category] : (data.shopCategories ?? []),
+```
+
+This means the admin Shops table category filter works correctly. However the
+admin `AdminShop` type in `src/lib/types.ts` declares:
+```ts
+shopCategories?: string[];
+```
+
+But the market-side `Shop` type (`artifacts/xmum-market/src/lib/types.ts`)
+uses:
+```ts
+category: ShopCategory;  // single string, not an array
+```
+
+This is not a breaking bug today, but it causes incorrect category data in any
+admin export/CSV and will cause confusion as the codebase grows. The
+`shopCategories` array in the admin type should remain (the admin panel supports
+multi-category display), but the mapping in `getShops` is already correct.
+No code change needed for this item — just verify the existing mapping
+(`data.category ? [data.category] : (data.shopCategories ?? [])`) is present
+and intact in `getShops`.
+
+---
+
+### BUG 4 — Dashboard does not track or show suspended shop count
+
+**What is broken:**
+`artifacts/xmum-admin/src/pages/DashboardPage.tsx` shows a "Total Shops" stat
+card but has no awareness of how many shops are currently suspended.
+As an admin using the panel daily, there is no quick way to see if any shops are
+suspended without navigating to the Shops page.
+
+**Where to fix — XMUM Admin:**
+
+**File: `src/pages/DashboardPage.tsx`**
+
+1. Add `suspendedShops: number` to the `Stats` interface and `defaultStats`.
+
+2. Add a new `onSnapshot` listener for suspended shops inside the `useEffect`:
+
+```ts
+unsubs.push(onSnapshot(
+  query(collection(db, "shops"), where("isSuspended", "==", true)),
+  (snap) => setStats(p => ({ ...(p ?? defaultStats), suspendedShops: snap.size })),
+  err => console.error("[Dashboard] suspendedShops snapshot:", err)
+));
+```
+
+3. Add a new `StatCard` for suspended shops. Place it after the "Total Shops"
+   card. Use the `AlertTriangle` icon from lucide-react (already available as a
+   dependency) and `bg-orange-500` color:
+
+```tsx
+<StatCard
+  icon={AlertTriangle}
+  label="Suspended Shops"
+  value={stats.suspendedShops}
+  color="bg-orange-500"
+  href="/shops"
+/>
+```
+
+Import `AlertTriangle` at the top of the file alongside the other lucide-react
+imports.
+
+Update the grid from `lg:grid-cols-4` to still fit — if the total stat cards
+become 9, consider keeping `grid-cols-2 lg:grid-cols-4` and letting the last
+row be a partial row. This is fine as-is.
+
+---
+
+### BUG 5 — `getRecentShopListings` shows listings from suspended shops
+
+**What is broken:**
+`getRecentShopListings` in `artifacts/xmum-market/src/lib/shops.ts` fetches the
+most recent shop listings globally and filters only by `isActive`. It does not
+check whether the parent shop is suspended. This is the function used on the
+homepage/Campus Market page to display recently listed items — so suspended shop
+listings can still appear there.
+
+This is covered by the fix in BUG 1 above. Specifically, this function currently
+skips the `shopStatuses` parent-shop-check that `getAllShopListings` uses.
+As part of BUG 1's fix, add that same check to `getRecentShopListings`:
+
+After fetching and filtering listings by `isActive`, add:
+```ts
+const shopIds = [...new Set(listings.map((l) => l.shopId))];
+const shopStatuses: Record<string, boolean> = {};
+await Promise.all(
+  shopIds.map(async (id) => {
+    try {
+      const s = await getDoc(doc(db, "shops", id));
+      shopStatuses[id] = s.exists() && s.data()?.isActive !== false && s.data()?.isSuspended !== true;
+    } catch {
+      shopStatuses[id] = false;
+    }
+  })
+);
+return listings
+  .filter((l) => shopStatuses[l.shopId] !== false)
+  .slice(0, limitCount);
+```
+
+---
+
+## Summary of Files Modified
+
+### XMUM Market (`artifacts/xmum-market/`)
+| File | Change |
+|---|---|
+| `src/lib/types.ts` | Add `isSuspended?: boolean` to `Shop` interface |
+| `src/lib/shops.ts` | Add `isSuspended` check to all 5 shop-fetching functions + fix `getRecentShopListings` |
+| `src/pages/PostPage.tsx` | Show "shop unavailable" state when `shop.isSuspended === true` |
+| `src/components/ShopManagementPanel.tsx` | Show suspension warning banner for suspended shops |
+
+### XMUM Admin (`artifacts/xmum-admin/`)
+| File | Change |
+|---|---|
+| `src/lib/firebase.ts` | Rewrite `deleteShop` to also delete Storage files; add `storagePathFromUrl` helper |
+| `src/lib/types.ts` | (Already has `isSuspended?: boolean` in `AdminShop` — verify, no change needed) |
+| `src/pages/DashboardPage.tsx` | Add `suspendedShops` stat counter and StatCard |
+
+---
+
+## Important Constraints
+
+- Do NOT add any subscription, approval, or trial features in this pass. Those are planned for the next phase.
+- Do NOT change any Firestore security rules.
+- Do NOT modify any UI that isn't directly related to the bugs above.
+- Do NOT rename any existing functions, types, or collection names.
+- Preserve all existing error handling patterns (try/catch, `.catch(() => {})` for non-critical ops).
+- Both `.js` and `.tsx/.ts` versions of files exist in the admin app. Make all changes to the `.tsx`/`.ts` versions only. The `.js` files are legacy duplicates and should not be touched.

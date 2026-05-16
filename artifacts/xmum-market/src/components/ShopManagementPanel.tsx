@@ -706,6 +706,21 @@ export default function ShopManagementPanel({
 
   return (
     <div>
+      {shop.isSuspended && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800
+                        rounded-2xl p-4 mb-4 flex items-start gap-3">
+          <span className="text-red-500 text-lg">⚠️</span>
+          <div>
+            <p className="font-semibold text-red-700 dark:text-red-400 text-sm">
+              Your shop has been suspended
+            </p>
+            <p className="text-xs text-red-600 dark:text-red-500 mt-0.5">
+              Your shop and its listings are currently hidden from Campus Market.
+              Please contact an admin for assistance.
+            </p>
+          </div>
+        </div>
+      )}
       <div className="flex bg-gray-100 dark:bg-slate-800 rounded-xl p-1 mb-5 gap-1 overflow-x-auto scrollbar-hide">
         {TABS.map((t) => (
           <button

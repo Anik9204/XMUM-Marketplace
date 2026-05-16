@@ -29,6 +29,7 @@ export interface Shop {
   wechat?: string;
   createdAt: number;
   isActive: boolean;
+  isSuspended?: boolean;
   editorIds: string[]; // max 3 editor UIDs
   totalListings: number;
   totalInquiries: number;

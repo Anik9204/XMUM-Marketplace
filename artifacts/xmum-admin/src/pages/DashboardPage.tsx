@@ -4,7 +4,7 @@ import { Link } from "wouter";
 import { db } from "../lib/firebase";
 import {
   Users, Flag, Megaphone, ShoppingBag, TrendingUp,
-  GraduationCap, Store, Newspaper, Activity,
+  GraduationCap, Store, Newspaper, Activity, AlertTriangle,
 } from "lucide-react";
 
 interface Stats {
@@ -16,12 +16,13 @@ interface Stats {
   pendingVerifications: number;
   pendingShopAds: number;
   totalShops: number;
+  suspendedShops: number;
 }
 
 const defaultStats: Stats = {
   totalUsers: 0, totalListings: 0, pendingReports: 0,
   activeAds: 0, recentSignups: 0, pendingVerifications: 0,
-  pendingShopAds: 0, totalShops: 0,
+  pendingShopAds: 0, totalShops: 0, suspendedShops: 0,
 };
 
 interface ActivityItem {
@@ -117,6 +118,12 @@ export default function DashboardPage() {
       collection(db, "shops"),
       (snap) => setStats(p => ({ ...(p ?? defaultStats), totalShops: snap.size })),
       err => console.error("[Dashboard] shops snapshot:", err)
+    ));
+
+    unsubs.push(onSnapshot(
+      query(collection(db, "shops"), where("isSuspended", "==", true)),
+      (snap) => setStats(p => ({ ...(p ?? defaultStats), suspendedShops: snap.size })),
+      err => console.error("[Dashboard] suspendedShops snapshot:", err)
     ));
 
     return () => unsubs.forEach(u => u());
@@ -215,6 +222,7 @@ export default function DashboardPage() {
           <StatCard icon={GraduationCap} label="Pending Verifications" value={stats.pendingVerifications} color="bg-indigo-500" href="/verifications" />
           <StatCard icon={Newspaper}     label="Pending Shop Ads"      value={stats.pendingShopAds}       color="bg-amber-500"  href="/shop-ads" />
           <StatCard icon={Store}         label="Total Shops"           value={stats.totalShops}           color="bg-teal-500"   href="/shops" />
+          <StatCard icon={AlertTriangle} label="Suspended Shops"        value={stats.suspendedShops}       color="bg-orange-500" href="/shops" />
           <StatCard icon={Megaphone}     label="Active Platform Ads"   value={stats.activeAds}            color="bg-purple-500" href="/ads" />
           <StatCard icon={TrendingUp}    label="New Users (7d)"        value={stats.recentSignups}        color="bg-pink-500" />
         </div>

@@ -212,29 +212,60 @@ export async function getShopInquiries(shopId: string) {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
+function storagePathFromUrl(url: string): string | null {
+  try {
+    const decodedUrl = decodeURIComponent(url);
+    const match = decodedUrl.match(/\/o\/(.+?)(\?|$)/);
+    return match ? match[1] : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function deleteShop(shopId: string) {
+  const { writeBatch } = await import("firebase/firestore");
+  const { ref: storageRef, deleteObject } = await import("firebase/storage");
+
   const shopSnap = await getDoc(doc(db, "shops", shopId));
   if (!shopSnap.exists()) throw new Error("Shop not found");
 
-  // Cascade delete all related documents in parallel batches
-  const relatedCollections = [
-    "shopListings",
-    "shopInquiries",
-    "shopOrders",
-    "shopReviews",
-  ];
+  const relatedCollections = ["shopListings", "shopInquiries", "shopOrders", "shopReviews"];
 
-  await Promise.allSettled(
-    relatedCollections.map(async (col) => {
-      try {
-        const q = query(collection(db, col), where("shopId", "==", shopId));
-        const snap = await getDocs(q);
-        await Promise.allSettled(snap.docs.map((d) => deleteDoc(d.ref)));
-      } catch (err) {
-        console.warn(`[deleteShop] failed to clean ${col}:`, err);
-      }
-    })
+  // Fetch all related docs in parallel
+  const snaps = await Promise.all(
+    relatedCollections.map((col) =>
+      getDocs(query(collection(db, col), where("shopId", "==", shopId))).catch(() => null)
+    )
   );
+
+  // Delete Storage files — listing photos
+  const storageJobs: Promise<void>[] = [];
+  const listingsSnap = snaps[0];
+  if (listingsSnap) {
+    for (const d of listingsSnap.docs) {
+      for (const url of (d.data().photos ?? []) as string[]) {
+        const path = storagePathFromUrl(url);
+        if (path) storageJobs.push(deleteObject(storageRef(storage, path)).catch(() => {}));
+      }
+    }
+  }
+
+  // Delete Storage files — shop banner and logo
+  const sd = shopSnap.data();
+  for (const url of [sd.bannerUrl, sd.logoUrl].filter(Boolean) as string[]) {
+    const path = storagePathFromUrl(url);
+    if (path) storageJobs.push(deleteObject(storageRef(storage, path)).catch(() => {}));
+  }
+  await Promise.allSettled(storageJobs);
+
+  // Batch-delete all Firestore documents (max 400 per batch)
+  const allDocs = snaps.flatMap((s) => s?.docs ?? []);
+  const BATCH_SIZE = 400;
+  for (let i = 0; i < allDocs.length; i += BATCH_SIZE) {
+    const batch = writeBatch(db);
+    for (const d of allDocs.slice(i, i + BATCH_SIZE)) batch.delete(d.ref);
+    await batch.commit();
+  }
 
   // Delete the shop document last
   await deleteDoc(doc(db, "shops", shopId));
