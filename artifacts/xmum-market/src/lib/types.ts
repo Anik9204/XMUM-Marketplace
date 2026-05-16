@@ -30,6 +30,13 @@ export interface Shop {
   createdAt: number;
   isActive: boolean;
   isSuspended?: boolean;
+  approvalStatus?: "pending" | "approved" | "rejected";
+  approvedAt?: number;
+  subscriptionStatus?: "trial" | "active" | "grace" | "expired";
+  subscriptionStartDate?: number;
+  subscriptionExpiresAt?: number;
+  reminderSentAt?: number;
+  rejectionReason?: string;
   editorIds: string[]; // max 3 editor UIDs
   totalListings: number;
   totalInquiries: number;
@@ -248,7 +255,12 @@ export interface AppNotification {
     | "shop_ad_approved"
     | "shop_ad_rejected"
     | "shop_editor_added"
-    | "shop_editor_removed";
+    | "shop_editor_removed"
+    | "shop_approved"
+    | "shop_rejected"
+    | "shop_subscription_expiring"
+    | "shop_subscription_expired"
+    | "shop_subscription_renewed";
   title: string;
   body: string;
   createdAt: number;

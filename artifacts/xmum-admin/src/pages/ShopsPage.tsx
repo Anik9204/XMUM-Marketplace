@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { ExternalLink, Trash2, Search, PauseCircle, PlayCircle } from "lucide-react";
+import { ExternalLink, Trash2, Search, PauseCircle, PlayCircle, RefreshCw } from "lucide-react";
 import { updateDoc, doc } from "firebase/firestore";
-import { getShops, deleteShop, writeAuditLog, db } from "../lib/firebase";
+import { getShops, deleteShop, writeAuditLog, renewShopSubscription, db } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { AdminShop } from "../lib/types";
 
@@ -13,6 +13,8 @@ export default function ShopsPage() {
   const [categoryFilter, setCategoryFilter] = useState("");
   const [deleting, setDeleting] = useState<string | null>(null);
   const [suspending, setSuspending] = useState<string | null>(null);
+  const [renewing, setRenewing] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState("");
 
   async function load() {
     setLoading(true);
@@ -27,6 +29,41 @@ export default function ShopsPage() {
   }
 
   useEffect(() => { load(); }, []);
+
+  async function handleRenew(shop: AdminShop) {
+    if (!window.confirm(`Renew subscription for "${shop.shopName}"?\n\nThis will set a new 30-day subscription starting now.`)) return;
+    setRenewing(shop.id);
+    try {
+      await renewShopSubscription(shop.id, shop.ownerUid, shop.shopName, adminUser?.email ?? "");
+      setShops((prev) =>
+        prev.map((s) =>
+          s.id === shop.id
+            ? {
+                ...s,
+                subscriptionStatus: "active" as const,
+                subscriptionExpiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+                isSuspended: false,
+              }
+            : s
+        )
+      );
+      void writeAuditLog({
+        actorUid:    adminUser?.uid   ?? "",
+        actorEmail:  adminUser?.email ?? "",
+        action:      "shop_subscription_renewed",
+        label:       `Renewed subscription for "${shop.shopName}"`,
+        targetId:    shop.id,
+        targetType:  "shop",
+        targetLabel: shop.shopName,
+        createdAt:   Date.now(),
+      });
+    } catch (e) {
+      console.error("[ShopsPage] renew failed:", e);
+      alert("Failed to renew subscription. Check Firestore permissions.");
+    } finally {
+      setRenewing(null);
+    }
+  }
 
   async function handleDelete(shop: AdminShop) {
     if (!window.confirm(`Delete shop "${shop.shopName}"? This cannot be undone.`)) return;
@@ -101,7 +138,14 @@ export default function ShopsPage() {
     const matchesCategory =
       !categoryFilter ||
       (s.shopCategories ?? []).includes(categoryFilter);
-    return matchesSearch && matchesCategory;
+    const matchesStatus =
+      !statusFilter ||
+      (statusFilter === "suspended" && s.isSuspended) ||
+      (statusFilter === "grace"     && s.subscriptionStatus === "grace") ||
+      (statusFilter === "expired"   && s.subscriptionStatus === "expired") ||
+      (statusFilter === "trial"     && s.subscriptionStatus === "trial") ||
+      (statusFilter === "active"    && s.subscriptionStatus === "active" && !s.isSuspended);
+    return matchesSearch && matchesCategory && matchesStatus;
   });
 
   return (
@@ -145,6 +189,20 @@ export default function ShopsPage() {
             ))}
           </select>
         )}
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700
+                     rounded-xl px-3 py-2 text-sm text-slate-700 dark:text-slate-300
+                     min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">All Statuses</option>
+          <option value="trial">Trial</option>
+          <option value="active">Active</option>
+          <option value="grace">Grace Period</option>
+          <option value="expired">Expired</option>
+          <option value="suspended">Suspended</option>
+        </select>
       </div>
 
       {loading ? (
@@ -177,6 +235,7 @@ export default function ShopsPage() {
                   <th className="text-right px-4 py-3 font-medium">Inquiries</th>
                   <th className="text-right px-4 py-3 font-medium">Rating</th>
                   <th className="text-left px-4 py-3 font-medium">Created At</th>
+                  <th className="text-left px-4 py-3 font-medium">Subscription</th>
                   <th className="px-4 py-3 font-medium text-center">Actions</th>
                 </tr>
               </thead>
@@ -263,6 +322,49 @@ export default function ShopsPage() {
                         : "—"}
                     </td>
                     <td className="px-4 py-3">
+                      {(() => {
+                        const status = shop.subscriptionStatus;
+                        const expiresAt = shop.subscriptionExpiresAt;
+                        const expiryStr = expiresAt
+                          ? new Date(expiresAt).toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "numeric" })
+                          : null;
+                        if (!shop.approvalStatus || shop.approvalStatus === "pending") {
+                          return <span className="text-[10px] font-semibold bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-full">Pending</span>;
+                        }
+                        if (shop.approvalStatus === "rejected") {
+                          return <span className="text-[10px] font-semibold bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-2 py-0.5 rounded-full">Rejected</span>;
+                        }
+                        if (status === "trial") {
+                          return (
+                            <div>
+                              <span className="text-[10px] font-semibold bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 px-2 py-0.5 rounded-full">Trial</span>
+                              {expiryStr && <p className="text-[10px] text-slate-400 mt-0.5">Until {expiryStr}</p>}
+                            </div>
+                          );
+                        }
+                        if (status === "active") {
+                          return (
+                            <div>
+                              <span className="text-[10px] font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full">Active</span>
+                              {expiryStr && <p className="text-[10px] text-slate-400 mt-0.5">Until {expiryStr}</p>}
+                            </div>
+                          );
+                        }
+                        if (status === "grace") {
+                          return (
+                            <div>
+                              <span className="text-[10px] font-semibold bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 px-2 py-0.5 rounded-full">Grace</span>
+                              {expiryStr && <p className="text-[10px] text-slate-400 mt-0.5">Until {expiryStr}</p>}
+                            </div>
+                          );
+                        }
+                        if (status === "expired") {
+                          return <span className="text-[10px] font-semibold bg-slate-100 dark:bg-slate-700 text-slate-500 px-2 py-0.5 rounded-full">Expired</span>;
+                        }
+                        return <span className="text-slate-400 text-xs">—</span>;
+                      })()}
+                    </td>
+                    <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-1">
                         {shop.shopSlug && (
                           <a
@@ -295,6 +397,21 @@ export default function ShopsPage() {
                               ? <><PlayCircle  className="w-3 h-3" /> Unsuspend</>
                               : <><PauseCircle className="w-3 h-3" /> Suspend</>}
                         </button>
+                        {(shop.subscriptionStatus === "grace" || shop.subscriptionStatus === "expired") && (
+                          <button
+                            onClick={() => handleRenew(shop)}
+                            disabled={renewing === shop.id}
+                            title="Renew subscription"
+                            className="flex items-center gap-1 text-[11px] text-blue-600
+                                       dark:text-blue-400 border border-blue-200
+                                       dark:border-blue-800 rounded-xl px-2.5 py-1.5
+                                       hover:bg-blue-50 dark:hover:bg-blue-900/20
+                                       transition-colors min-h-[34px] disabled:opacity-50"
+                          >
+                            <RefreshCw className="w-3 h-3" />
+                            {renewing === shop.id ? "…" : "Renew"}
+                          </button>
+                        )}
                         <button
                           onClick={() => handleDelete(shop)}
                           disabled={deleting === shop.id}

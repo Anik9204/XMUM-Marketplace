@@ -98,6 +98,13 @@ export interface AdminShop {
   inquiryCount?: number;
   createdAt: number;
   isSuspended?: boolean;
+  approvalStatus?: "pending" | "approved" | "rejected";
+  approvedAt?: number;
+  subscriptionStatus?: "trial" | "active" | "grace" | "expired";
+  subscriptionStartDate?: number;
+  subscriptionExpiresAt?: number;
+  reminderSentAt?: number;
+  rejectionReason?: string;
 }
 
 export type ShopAdStatus = "pending" | "approved" | "rejected";

@@ -44,6 +44,8 @@ export default function CreateShopPage() {
   const [wechat, setWechat] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [createdShopId, setCreatedShopId] = useState("");
 
   useEffect(() => {
     if (!slugManual && name) {
@@ -85,6 +87,29 @@ export default function CreateShopPage() {
     );
   }
 
+  if (submitted) {
+    return (
+      <div className="max-w-lg mx-auto px-4 py-16 text-center">
+        <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mx-auto mb-4">
+          <span className="text-3xl">⏳</span>
+        </div>
+        <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-2">
+          Shop submitted for approval
+        </h2>
+        <p className="text-sm text-gray-500 dark:text-slate-400 mb-6 max-w-sm mx-auto">
+          Your shop has been submitted and is waiting for admin approval.
+          You'll receive a notification once it's reviewed — usually within 24 hours.
+        </p>
+        <button
+          onClick={() => navigate(`/shop-dashboard/${createdShopId}`)}
+          className="text-sm text-[#003366] dark:text-blue-400 underline underline-offset-2"
+        >
+          Go to your shop dashboard
+        </button>
+      </div>
+    );
+  }
+
   const handleSlugChange = (val: string) => {
     setSlugManual(true);
     setSlug(val.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 40));
@@ -112,7 +137,8 @@ export default function CreateShopPage() {
         whatsapp,
         wechat,
       });
-      navigate(`/shop-dashboard/${shopId}`);
+      setSubmitted(true);
+      setCreatedShopId(shopId);
     } catch (err: any) {
       setError(err.message ?? "Failed to create shop. Please try again.");
     } finally {

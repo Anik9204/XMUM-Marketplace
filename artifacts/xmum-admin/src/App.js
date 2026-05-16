@@ -14,6 +14,7 @@ import AnalyticsPage from "./pages/AnalyticsPage";
 import ShopsPage from "./pages/ShopsPage";
 import ShopAdsPage from "./pages/ShopAdsPage";
 import AuditLogPage from "./pages/AuditLogPage";
+import ShopApprovalsPage from "./pages/ShopApprovalsPage";
 import Layout from "./components/Layout";
 export default function App() {
     const { user, isEditor, loading } = useAuth();
@@ -23,5 +24,5 @@ export default function App() {
     if (!user || !isEditor) {
         return _jsx(LoginPage, {});
     }
-    return (_jsx(Layout, { children: _jsxs(Switch, { children: [_jsx(Route, { path: "/", component: DashboardPage }), _jsx(Route, { path: "/listings", component: ListingsPage }), _jsx(Route, { path: "/users", component: UsersPage }), _jsx(Route, { path: "/reports", component: ReportsPage }), _jsx(Route, { path: "/reviews", component: ReviewsPage }), _jsx(Route, { path: "/verifications", component: VerificationPage }), _jsx(Route, { path: "/rental-audit", component: RentalAuditPage }), _jsx(Route, { path: "/ads", component: AdsPage }), _jsx(Route, { path: "/analytics", component: AnalyticsPage }), _jsx(Route, { path: "/shops", component: ShopsPage }), _jsx(Route, { path: "/shop-ads", component: ShopAdsPage }), _jsx(Route, { path: "/audit-log", component: AuditLogPage }), _jsx(Route, { children: _jsx(Redirect, { to: "/" }) })] }) }));
+    return (_jsx(Layout, { children: _jsxs(Switch, { children: [_jsx(Route, { path: "/", component: DashboardPage }), _jsx(Route, { path: "/listings", component: ListingsPage }), _jsx(Route, { path: "/users", component: UsersPage }), _jsx(Route, { path: "/reports", component: ReportsPage }), _jsx(Route, { path: "/reviews", component: ReviewsPage }), _jsx(Route, { path: "/verifications", component: VerificationPage }), _jsx(Route, { path: "/rental-audit", component: RentalAuditPage }), _jsx(Route, { path: "/ads", component: AdsPage }), _jsx(Route, { path: "/analytics", component: AnalyticsPage }), _jsx(Route, { path: "/shops", component: ShopsPage }), _jsx(Route, { path: "/shop-ads", component: ShopAdsPage }), _jsx(Route, { path: "/audit-log", component: AuditLogPage }), _jsx(Route, { path: "/shop-approvals", component: ShopApprovalsPage }), _jsx(Route, { children: _jsx(Redirect, { to: "/" }) })] }) }));
 }

@@ -1,7 +1,7 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, Flag, Users, Megaphone, FileText, Star, GraduationCap, List, BarChart2, LogOut, Store, Newspaper, Moon, Sun, Menu, X, ShieldAlert, } from "lucide-react";
+import { LayoutDashboard, Flag, Users, Megaphone, FileText, Star, GraduationCap, List, BarChart2, LogOut, Store, Newspaper, Moon, Sun, Menu, X, ShieldAlert, ClipboardList, } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth, db } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
@@ -35,6 +35,7 @@ export default function Layout({ children }) {
         { href: "/ads", label: "Ads", icon: Megaphone },
         { href: "/analytics", label: "Analytics", icon: BarChart2 },
         { href: "/shops", label: "Shops", icon: Store },
+        { href: "/shop-approvals", label: "Shop Approvals", icon: ClipboardList },
         { href: "/shop-ads", label: "Shop Ads", icon: Newspaper },
         { href: "/audit-log", label: "Audit Log", icon: ShieldAlert },
     ];

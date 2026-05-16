@@ -243,3 +243,71 @@ export async function sendDailyDigestIfDue(uid: string, listings: Listing[]): Pr
     // Non-critical — silently ignore all errors
   }
 }
+
+export async function notifyShopApproved(
+  shopOwnerId: string,
+  shopName: string,
+  shopId: string,
+  subscriptionExpiresAt: number,
+): Promise<void> {
+  const expiryDate = new Date(subscriptionExpiresAt).toLocaleDateString("en-MY", {
+    day: "numeric", month: "long", year: "numeric",
+  });
+  await addNotification(shopOwnerId, {
+    type: "shop_approved",
+    title: "🎉 Your shop has been approved!",
+    body: `"${shopName}" is now live on Campus Market. Your subscription is active until ${expiryDate}.`,
+    shopId,
+  });
+}
+
+export async function notifyShopRejected(
+  shopOwnerId: string,
+  shopName: string,
+  shopId: string,
+  reason?: string,
+): Promise<void> {
+  await addNotification(shopOwnerId, {
+    type: "shop_rejected",
+    title: "Shop application not approved",
+    body: reason
+      ? `Your shop "${shopName}" was not approved: ${reason}`
+      : `Your shop "${shopName}" was not approved. Please contact an admin for more information.`,
+    shopId,
+  });
+}
+
+export async function notifySubscriptionExpiring(
+  shopOwnerId: string,
+  shopName: string,
+  shopId: string,
+  daysLeft: number,
+  subscriptionExpiresAt: number,
+): Promise<void> {
+  const expiryDate = new Date(subscriptionExpiresAt).toLocaleDateString("en-MY", {
+    day: "numeric", month: "long", year: "numeric",
+  });
+  await addNotification(shopOwnerId, {
+    type: "shop_subscription_expiring",
+    title: `⚠️ Shop subscription expiring in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`,
+    body: `Your shop "${shopName}" subscription expires on ${expiryDate}. Please contact an admin to renew and keep your shop active.`,
+    shopId,
+  });
+}
+
+export async function notifySubscriptionRenewed(
+  shopOwnerId: string,
+  shopName: string,
+  shopId: string,
+  newExpiresAt: number,
+): Promise<void> {
+  const expiryDate = new Date(newExpiresAt).toLocaleDateString("en-MY", {
+    day: "numeric", month: "long", year: "numeric",
+  });
+  await addNotification(shopOwnerId, {
+    type: "shop_subscription_renewed",
+    title: "✅ Shop subscription renewed",
+    body: `Your shop "${shopName}" subscription has been renewed and is active until ${expiryDate}.`,
+    shopId,
+  });
+}

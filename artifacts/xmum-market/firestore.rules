@@ -98,7 +98,9 @@ service cloud.firestore {
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 60
-        && request.resource.data.editorIds.size() <= 3;
+        && request.resource.data.editorIds.size() <= 3
+        && request.resource.data.isActive == false
+        && request.resource.data.approvalStatus == "pending";
       allow update: if isShopOwner(shopId) || isAdmin() || (
         isXmuEmail()
         && request.resource.data.diff(resource.data).affectedKeys()
@@ -228,6 +230,12 @@ service cloud.firestore {
         && request.auth.uid in
            get(/databases/$(database)/documents/conversations/$(convId)).data.participants;
       allow delete: if false;
+    }
+
+    // ── App Config (subscription settings — read by all, write by admin only) ─
+    match /appConfig/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
     // ── Admin Audit Logs ──────────────────────────────────────────────────────

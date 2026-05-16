@@ -1,0 +1,1393 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless I have explicitly told you to remove it.
+
+4. After every change, mentally verify: "Does this break anything
+   that was working before?" If yes, do not proceed — find a
+   different approach.
+
+5. If fixing Issue X requires changing a shared component used by
+   other pages, STOP and tell me what the impact will be before
+   making the change. Ask for permission first.
+
+6. Never change any CSS class, layout structure, z-index, or
+   responsive breakpoint unless it is directly part of the fix.
+
+7. Confirm the app builds with zero errors before finishing:
+   pnpm --filter @workspace/xmum-market run build
+
+
+# XMUM Admin × XMUM Market — Shop Approval & Subscription System Super Prompt
+
+> Paste this entire prompt into Replit AI. Do not skip any section.
+> Implement ALL changes exactly as described. Do not add unrequested features.
+> Read every file listed before making any edits.
+
+---
+
+## Overview
+
+This prompt implements the full shop approval and subscription system across both apps.
+The system works like this:
+
+- Every new shop starts with `approvalStatus: "pending"` and is invisible to the public.
+- An admin approves the shop → it becomes visible, subscription clock starts.
+- **Launch promotion:** all shops approved within the first 60 days from `launchDate` get a free trial until 60 days after `launchDate` (not 30 days from approval). After the trial window closes, normal 30-day subscriptions apply.
+- 30 days after subscription start, the shop enters `"grace"` status — hidden from public but data preserved.
+- During the 30-day grace period, admin can renew → shop reactivates immediately.
+- After the grace period expires, shop enters `"expired"` status permanently (data stays).
+- 7 days before expiry, both admin and shop owner are notified automatically via Firebase Cloud Functions (scheduled daily).
+- Shop owners can always see their subscription status in their Shop Management Panel.
+- Admins can see and manage all of this from the Shops page and Dashboard.
+
+---
+
+## Part 1 — Shared Data Model Changes
+
+### 1A — Firestore `appConfig/subscriptions` document (create manually or via admin)
+
+This document stores the global launch date. It is NOT created by code — it must be
+created manually in the Firebase console as a one-time setup step:
+
+**Collection:** `appConfig`
+**Document ID:** `subscriptions`
+**Fields:**
+```
+launchDate: <timestamp — set to your actual launch date in milliseconds>
+trialDays: 60
+subscriptionDays: 30
+graceDays: 30
+```
+
+Add a comment in the code wherever this config is read so future developers know.
+
+---
+
+### 1B — `Shop` type — XMUM Market (`artifacts/xmum-market/src/lib/types.ts`)
+
+Add these fields to the `Shop` interface:
+
+```ts
+export interface Shop {
+  // ... all existing fields unchanged ...
+  isSuspended?: boolean;           // already added by previous bug fix
+  approvalStatus?: "pending" | "approved" | "rejected";
+  approvedAt?: number;
+  subscriptionStatus?: "trial" | "active" | "grace" | "expired";
+  subscriptionStartDate?: number;
+  subscriptionExpiresAt?: number;
+  reminderSentAt?: number;         // tracks when 7-day reminder was last sent
+  rejectionReason?: string;        // optional note from admin on rejection
+}
+```
+
+---
+
+### 1C — `AdminShop` type — XMUM Admin (`artifacts/xmum-admin/src/lib/types.ts`)
+
+Add the same fields to `AdminShop`:
+
+```ts
+export interface AdminShop {
+  // ... all existing fields unchanged ...
+  approvalStatus?: "pending" | "approved" | "rejected";
+  approvedAt?: number;
+  subscriptionStatus?: "trial" | "active" | "grace" | "expired";
+  subscriptionStartDate?: number;
+  subscriptionExpiresAt?: number;
+  reminderSentAt?: number;
+  rejectionReason?: string;
+}
+```
+
+---
+
+### 1D — `AppNotification` type — XMUM Market (`artifacts/xmum-market/src/lib/types.ts`)
+
+Add new notification types to the `type` union in `AppNotification`:
+
+```ts
+type:
+  | "listing_deleted"
+  | "listing_sold"
+  | "welcome"
+  | "daily_digest"
+  | "new_message_digest"
+  | "new_message"
+  | "bump_available"
+  | "listing_expiring"
+  | "shop_inquiry_received"
+  | "shop_inquiry_confirmed"
+  | "shop_inquiry_completed"
+  | "shop_ad_approved"
+  | "shop_ad_rejected"
+  | "shop_editor_added"
+  | "shop_editor_removed"
+  | "shop_approved"           // ← new
+  | "shop_rejected"           // ← new
+  | "shop_subscription_expiring"  // ← new
+  | "shop_subscription_expired"   // ← new
+  | "shop_subscription_renewed";  // ← new
+```
+
+---
+
+## Part 2 — XMUM Market App Changes
+
+### 2A — `createShop` function (`artifacts/xmum-market/src/lib/shops.ts`)
+
+Change `createShop` so new shops start as pending instead of immediately active.
+
+Replace the current `addDoc` payload inside `createShop`:
+
+**Current:**
+```ts
+isActive: true,
+```
+
+**Replace with:**
+```ts
+isActive: false,
+approvalStatus: "pending",
+```
+
+Remove `isActive: true` entirely from the `createShop` payload. The shop is invisible
+until an admin approves it.
+
+---
+
+### 2B — New notification helpers (`artifacts/xmum-market/src/lib/notifications.ts`)
+
+Add these four new exported functions at the bottom of the file, after the existing helpers:
+
+```ts
+export async function notifyShopApproved(
+  shopOwnerId: string,
+  shopName: string,
+  shopId: string,
+  subscriptionExpiresAt: number,
+): Promise<void> {
+  const expiryDate = new Date(subscriptionExpiresAt).toLocaleDateString("en-MY", {
+    day: "numeric", month: "long", year: "numeric",
+  });
+  await addNotification(shopOwnerId, {
+    type: "shop_approved",
+    title: "🎉 Your shop has been approved!",
+    body: `"${shopName}" is now live on Campus Market. Your subscription is active until ${expiryDate}.`,
+    shopId,
+  });
+}
+
+export async function notifyShopRejected(
+  shopOwnerId: string,
+  shopName: string,
+  shopId: string,
+  reason?: string,
+): Promise<void> {
+  await addNotification(shopOwnerId, {
+    type: "shop_rejected",
+    title: "Shop application not approved",
+    body: reason
+      ? `Your shop "${shopName}" was not approved: ${reason}`
+      : `Your shop "${shopName}" was not approved. Please contact an admin for more information.`,
+    shopId,
+  });
+}
+
+export async function notifySubscriptionExpiring(
+  shopOwnerId: string,
+  shopName: string,
+  shopId: string,
+  daysLeft: number,
+  subscriptionExpiresAt: number,
+): Promise<void> {
+  const expiryDate = new Date(subscriptionExpiresAt).toLocaleDateString("en-MY", {
+    day: "numeric", month: "long", year: "numeric",
+  });
+  await addNotification(shopOwnerId, {
+    type: "shop_subscription_expiring",
+    title: `⚠️ Shop subscription expiring in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`,
+    body: `Your shop "${shopName}" subscription expires on ${expiryDate}. Please contact an admin to renew and keep your shop active.`,
+    shopId,
+  });
+}
+
+export async function notifySubscriptionRenewed(
+  shopOwnerId: string,
+  shopName: string,
+  shopId: string,
+  newExpiresAt: number,
+): Promise<void> {
+  const expiryDate = new Date(newExpiresAt).toLocaleDateString("en-MY", {
+    day: "numeric", month: "long", year: "numeric",
+  });
+  await addNotification(shopOwnerId, {
+    type: "shop_subscription_renewed",
+    title: "✅ Shop subscription renewed",
+    body: `Your shop "${shopName}" subscription has been renewed and is active until ${expiryDate}.`,
+    shopId,
+  });
+}
+```
+
+---
+
+### 2C — `CreateShopPage` success screen (`artifacts/xmum-market/src/pages/CreateShopPage.tsx`)
+
+After a successful shop creation, instead of navigating directly to the shop dashboard,
+show a "pending approval" confirmation screen.
+
+**In `handleSubmit`, replace:**
+```ts
+navigate(`/shop-dashboard/${shopId}`);
+```
+
+**With:**
+```ts
+setSubmitted(true);
+setCreatedShopId(shopId);
+```
+
+Add `submitted` and `createdShopId` state at the top of the component:
+```ts
+const [submitted, setSubmitted] = useState(false);
+const [createdShopId, setCreatedShopId] = useState("");
+```
+
+Add a conditional render before the main form return, after the `if (!user)` guard:
+```tsx
+if (submitted) {
+  return (
+    <div className="max-w-lg mx-auto px-4 py-16 text-center">
+      <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mx-auto mb-4">
+        <span className="text-3xl">⏳</span>
+      </div>
+      <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-2">
+        Shop submitted for approval
+      </h2>
+      <p className="text-sm text-gray-500 dark:text-slate-400 mb-6 max-w-sm mx-auto">
+        Your shop has been submitted and is waiting for admin approval.
+        You'll receive a notification once it's reviewed — usually within 24 hours.
+      </p>
+      <button
+        onClick={() => navigate(`/shop-dashboard/${createdShopId}`)}
+        className="text-sm text-[#003366] dark:text-blue-400 underline underline-offset-2"
+      >
+        Go to your shop dashboard
+      </button>
+    </div>
+  );
+}
+```
+
+---
+
+### 2D — Shop Management Panel subscription status banner (`artifacts/xmum-market/src/components/ShopManagementPanel.tsx`)
+
+Add a subscription status banner that shows below the existing suspension banner
+(which was added in the bug fix). This banner changes appearance based on `subscriptionStatus`.
+
+Find the top of the ShopManagementPanel's main JSX return (just after the suspension
+banner block) and add:
+
+```tsx
+{/* Subscription status banner */}
+{(() => {
+  const status = shop.subscriptionStatus;
+  const expiresAt = shop.subscriptionExpiresAt;
+  const expiryStr = expiresAt
+    ? new Date(expiresAt).toLocaleDateString("en-MY", { day: "numeric", month: "long", year: "numeric" })
+    : null;
+
+  if (!shop.approvalStatus || shop.approvalStatus === "pending") {
+    return (
+      <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800
+                      rounded-2xl p-4 mb-4 flex items-start gap-3">
+        <span className="text-amber-500 text-lg">⏳</span>
+        <div>
+          <p className="font-semibold text-amber-700 dark:text-amber-400 text-sm">
+            Pending admin approval
+          </p>
+          <p className="text-xs text-amber-600 dark:text-amber-500 mt-0.5">
+            Your shop is under review. You'll be notified once approved.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (shop.approvalStatus === "rejected") {
+    return (
+      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800
+                      rounded-2xl p-4 mb-4 flex items-start gap-3">
+        <span className="text-red-500 text-lg">❌</span>
+        <div>
+          <p className="font-semibold text-red-700 dark:text-red-400 text-sm">
+            Shop application not approved
+          </p>
+          <p className="text-xs text-red-600 dark:text-red-500 mt-0.5">
+            {shop.rejectionReason ?? "Please contact an admin for more information."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "trial") {
+    return (
+      <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800
+                      rounded-2xl p-4 mb-4 flex items-start gap-3">
+        <span className="text-green-500 text-lg">🎉</span>
+        <div>
+          <p className="font-semibold text-green-700 dark:text-green-400 text-sm">
+            Free trial active{expiryStr ? ` — until ${expiryStr}` : ""}
+          </p>
+          <p className="text-xs text-green-600 dark:text-green-500 mt-0.5">
+            Enjoy your complimentary trial period. Contact an admin before expiry to continue.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "active") {
+    return (
+      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800
+                      rounded-2xl p-4 mb-4 flex items-start gap-3">
+        <span className="text-blue-500 text-lg">✅</span>
+        <div>
+          <p className="font-semibold text-blue-700 dark:text-blue-400 text-sm">
+            Subscription active{expiryStr ? ` — renews by ${expiryStr}` : ""}
+          </p>
+          <p className="text-xs text-blue-600 dark:text-blue-500 mt-0.5">
+            Your shop is live. Contact an admin before the expiry date to renew.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "grace") {
+    return (
+      <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800
+                      rounded-2xl p-4 mb-4 flex items-start gap-3">
+        <span className="text-orange-500 text-lg">⚠️</span>
+        <div>
+          <p className="font-semibold text-orange-700 dark:text-orange-400 text-sm">
+            Subscription expired — grace period active
+          </p>
+          <p className="text-xs text-orange-600 dark:text-orange-500 mt-0.5">
+            Your shop is currently hidden from Campus Market. Contact an admin immediately to renew and restore your shop.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "expired") {
+    return (
+      <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700
+                      rounded-2xl p-4 mb-4 flex items-start gap-3">
+        <span className="text-slate-400 text-lg">🔒</span>
+        <div>
+          <p className="font-semibold text-slate-600 dark:text-slate-400 text-sm">
+            Subscription expired
+          </p>
+          <p className="text-xs text-slate-500 dark:text-slate-500 mt-0.5">
+            Your shop has been permanently deactivated. Contact an admin to discuss reactivation.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+})()}
+```
+
+---
+
+### 2E — Firestore security rules (`artifacts/xmum-market/firestore.rules`)
+
+Update the `shops` create rule to enforce that new shops cannot set `isActive: true`
+or `approvalStatus: "approved"` themselves:
+
+**Current create rule:**
+```
+allow create: if isXmuEmail()
+  && request.resource.data.ownerId == request.auth.uid
+  && request.resource.data.name is string
+  && request.resource.data.name.size() > 0
+  && request.resource.data.name.size() <= 60
+  && request.resource.data.editorIds.size() <= 3;
+```
+
+**Replace with:**
+```
+allow create: if isXmuEmail()
+  && request.resource.data.ownerId == request.auth.uid
+  && request.resource.data.name is string
+  && request.resource.data.name.size() > 0
+  && request.resource.data.name.size() <= 60
+  && request.resource.data.editorIds.size() <= 3
+  && request.resource.data.isActive == false
+  && request.resource.data.approvalStatus == "pending";
+```
+
+Also add a new `appConfig` rule to allow all authenticated users to read the
+subscriptions config document, and only admins to write it:
+
+```
+match /appConfig/{docId} {
+  allow read: if true;
+  allow write: if isAdmin();
+}
+```
+
+---
+
+## Part 3 — XMUM Admin App Changes
+
+### 3A — Admin `firebase.ts` — new shop approval/renewal functions (`artifacts/xmum-admin/src/lib/firebase.ts`)
+
+Add these new exported functions at the bottom of the file:
+
+```ts
+// ── Shop Approval & Subscription ──────────────────────────────────────────────
+
+async function getSubscriptionConfig(): Promise<{
+  launchDate: number;
+  trialDays: number;
+  subscriptionDays: number;
+  graceDays: number;
+}> {
+  try {
+    const snap = await getDoc(doc(db, "appConfig", "subscriptions"));
+    if (snap.exists()) {
+      const d = snap.data();
+      return {
+        launchDate:       d.launchDate       ?? 0,
+        trialDays:        d.trialDays        ?? 60,
+        subscriptionDays: d.subscriptionDays ?? 30,
+        graceDays:        d.graceDays        ?? 30,
+      };
+    }
+  } catch {}
+  // Safe fallback — 60-day trial, 30-day subscription
+  return { launchDate: 0, trialDays: 60, subscriptionDays: 30, graceDays: 30 };
+}
+
+export async function approveShop(
+  shopId: string,
+  shopOwnerId: string,
+  shopName: string,
+  reviewedBy: string,
+): Promise<void> {
+  const config = await getSubscriptionConfig();
+  const now = Date.now();
+
+  // During trial window: subscription expires at launchDate + trialDays
+  // After trial window: subscription expires 30 days from now
+  const trialEndDate = config.launchDate + config.trialDays * 24 * 60 * 60 * 1000;
+  const isInTrialWindow = config.launchDate > 0 && now < trialEndDate;
+
+  const subscriptionStatus = isInTrialWindow ? "trial" : "active";
+  const subscriptionStartDate = now;
+  const subscriptionExpiresAt = isInTrialWindow
+    ? trialEndDate
+    : now + config.subscriptionDays * 24 * 60 * 60 * 1000;
+
+  await updateDoc(doc(db, "shops", shopId), {
+    isActive:             true,
+    approvalStatus:       "approved",
+    approvedAt:           now,
+    subscriptionStatus,
+    subscriptionStartDate,
+    subscriptionExpiresAt,
+    reminderSentAt:       null,
+  });
+
+  // Notify shop owner
+  await sendNotification(shopOwnerId, {
+    type:   "shop_approved",
+    title:  "🎉 Your shop has been approved!",
+    body:   isInTrialWindow
+      ? `"${shopName}" is now live on Campus Market with a free trial until ${new Date(subscriptionExpiresAt).toLocaleDateString("en-MY", { day: "numeric", month: "long", year: "numeric" })}.`
+      : `"${shopName}" is now live on Campus Market. Your subscription is active until ${new Date(subscriptionExpiresAt).toLocaleDateString("en-MY", { day: "numeric", month: "long", year: "numeric" })}.`,
+    shopId,
+  });
+}
+
+export async function rejectShop(
+  shopId: string,
+  shopOwnerId: string,
+  shopName: string,
+  reviewedBy: string,
+  reason?: string,
+): Promise<void> {
+  await updateDoc(doc(db, "shops", shopId), {
+    isActive:       false,
+    approvalStatus: "rejected",
+    rejectionReason: reason ?? "",
+  });
+
+  await sendNotification(shopOwnerId, {
+    type:  "shop_rejected",
+    title: "Shop application not approved",
+    body:  reason
+      ? `Your shop "${shopName}" was not approved: ${reason}`
+      : `Your shop "${shopName}" was not approved. Please contact an admin for more information.`,
+    shopId,
+  });
+}
+
+export async function renewShopSubscription(
+  shopId: string,
+  shopOwnerId: string,
+  shopName: string,
+  renewedBy: string,
+): Promise<void> {
+  const config = await getSubscriptionConfig();
+  const now = Date.now();
+  const newExpiresAt = now + config.subscriptionDays * 24 * 60 * 60 * 1000;
+
+  await updateDoc(doc(db, "shops", shopId), {
+    isActive:             true,
+    subscriptionStatus:   "active",
+    subscriptionStartDate: now,
+    subscriptionExpiresAt: newExpiresAt,
+    reminderSentAt:        null,
+  });
+
+  await sendNotification(shopOwnerId, {
+    type:  "shop_subscription_renewed",
+    title: "✅ Shop subscription renewed",
+    body:  `Your shop "${shopName}" subscription has been renewed and is active until ${new Date(newExpiresAt).toLocaleDateString("en-MY", { day: "numeric", month: "long", year: "numeric" })}.`,
+    shopId,
+  });
+}
+
+export async function getPendingShops(limitCount = 100) {
+  const q = query(
+    collection(db, "shops"),
+    where("approvalStatus", "==", "pending"),
+    orderBy("createdAt", "asc"),
+    limit(limitCount),
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => {
+    const data = d.data();
+    return {
+      id: d.id,
+      shopName:       data.name      ?? data.shopName ?? "",
+      shopSlug:       data.slug      ?? data.shopSlug ?? "",
+      shopBio:        data.bio       ?? data.shopBio  ?? "",
+      shopCategories: data.category  ? [data.category] : (data.shopCategories ?? []),
+      shopBannerUrl:  data.bannerUrl ?? data.shopBannerUrl ?? "",
+      ownerEmail:     data.ownerEmail ?? "",
+      ownerUid:       data.ownerId    ?? data.ownerUid ?? "",
+      activeListingCount: data.totalListings ?? 0,
+      rating:         data.rating    ?? null,
+      totalReviews:   data.reviewCount ?? 0,
+      inquiryCount:   data.totalInquiries ?? 0,
+      createdAt:      data.createdAt ?? 0,
+      isSuspended:    data.isSuspended ?? false,
+      approvalStatus: data.approvalStatus ?? "pending",
+      approvedAt:     data.approvedAt ?? null,
+      subscriptionStatus:   data.subscriptionStatus   ?? null,
+      subscriptionExpiresAt: data.subscriptionExpiresAt ?? null,
+      rejectionReason: data.rejectionReason ?? "",
+    };
+  });
+}
+```
+
+Also update the existing `getShops` function to map the new fields. Inside the
+return object of the `.map()` in `getShops`, add:
+
+```ts
+approvalStatus:       data.approvalStatus       ?? null,
+approvedAt:           data.approvedAt           ?? null,
+subscriptionStatus:   data.subscriptionStatus   ?? null,
+subscriptionStartDate: data.subscriptionStartDate ?? null,
+subscriptionExpiresAt: data.subscriptionExpiresAt ?? null,
+reminderSentAt:        data.reminderSentAt        ?? null,
+rejectionReason:       data.rejectionReason       ?? "",
+```
+
+Make sure `where` and `serverTimestamp` are imported from `"firebase/firestore"` at
+the top of the file (add to the existing import if not present).
+
+---
+
+### 3B — New `ShopApprovalsPage` (`artifacts/xmum-admin/src/pages/ShopApprovalsPage.tsx`)
+
+Create this new file. It shows only pending shops with Approve and Reject actions.
+
+```tsx
+import { useEffect, useState } from "react";
+import { CheckCircle, XCircle, Search, ExternalLink } from "lucide-react";
+import { getPendingShops, approveShop, rejectShop, writeAuditLog } from "../lib/firebase";
+import { useAuth } from "../contexts/AuthContext";
+import { AdminShop } from "../lib/types";
+
+export default function ShopApprovalsPage() {
+  const { adminUser } = useAuth();
+  const [shops, setShops] = useState<AdminShop[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [processing, setProcessing] = useState<string | null>(null);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const data = await getPendingShops(100);
+      setShops(data as AdminShop[]);
+    } catch (e) {
+      console.error("[ShopApprovalsPage] load failed:", e);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  async function handleApprove(shop: AdminShop) {
+    if (!window.confirm(`Approve shop "${shop.shopName}"?\n\nThis will make it live on Campus Market.`)) return;
+    setProcessing(shop.id);
+    try {
+      await approveShop(shop.id, shop.ownerUid, shop.shopName, adminUser?.email ?? "");
+      setShops((prev) => prev.filter((s) => s.id !== shop.id));
+      void writeAuditLog({
+        actorUid:    adminUser?.uid   ?? "",
+        actorEmail:  adminUser?.email ?? "",
+        action:      "shop_approved",
+        label:       `Approved shop "${shop.shopName}"`,
+        targetId:    shop.id,
+        targetType:  "shop",
+        targetLabel: shop.shopName,
+        createdAt:   Date.now(),
+      });
+    } catch (e) {
+      console.error("[ShopApprovalsPage] approve failed:", e);
+      alert("Failed to approve shop. Check Firestore permissions.");
+    } finally {
+      setProcessing(null);
+    }
+  }
+
+  async function handleReject(shop: AdminShop) {
+    const reason = window.prompt(
+      `Reject shop "${shop.shopName}"?\n\nOptionally enter a reason (shown to the shop owner):`,
+      ""
+    );
+    if (reason === null) return; // cancelled
+    setProcessing(shop.id);
+    try {
+      await rejectShop(shop.id, shop.ownerUid, shop.shopName, adminUser?.email ?? "", reason || undefined);
+      setShops((prev) => prev.filter((s) => s.id !== shop.id));
+      void writeAuditLog({
+        actorUid:    adminUser?.uid   ?? "",
+        actorEmail:  adminUser?.email ?? "",
+        action:      "shop_rejected",
+        label:       `Rejected shop "${shop.shopName}"${reason ? `: ${reason}` : ""}`,
+        targetId:    shop.id,
+        targetType:  "shop",
+        targetLabel: shop.shopName,
+        createdAt:   Date.now(),
+      });
+    } catch (e) {
+      console.error("[ShopApprovalsPage] reject failed:", e);
+      alert("Failed to reject shop. Check Firestore permissions.");
+    } finally {
+      setProcessing(null);
+    }
+  }
+
+  const filtered = shops.filter((s) => {
+    const q = search.toLowerCase();
+    return !q || s.shopName?.toLowerCase().includes(q) || s.ownerEmail?.toLowerCase().includes(q);
+  });
+
+  return (
+    <div className="p-6">
+      <div className="flex items-center justify-between gap-3 mb-6">
+        <div>
+          <h1 className="text-xl font-bold text-slate-800 dark:text-slate-200">
+            Shop Approvals
+          </h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+            {loading ? "Loading…" : `${shops.length} pending shop${shops.length !== 1 ? "s" : ""} awaiting review`}
+          </p>
+        </div>
+        <button
+          onClick={load}
+          className="text-xs text-blue-600 dark:text-blue-400 border border-blue-200
+                     dark:border-blue-800 rounded-xl px-3 py-1.5 hover:bg-blue-50
+                     dark:hover:bg-blue-900/20 transition-colors"
+        >
+          Refresh
+        </button>
+      </div>
+
+      <div className="relative mb-5">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by shop name or owner email…"
+          className="w-full pl-9 bg-white dark:bg-slate-800 border border-gray-200
+                     dark:border-slate-700 rounded-xl px-3 py-2 text-sm
+                     text-slate-700 dark:text-slate-300 min-h-[40px]
+                     focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
+
+      {loading ? (
+        <div className="space-y-2">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="h-24 bg-white dark:bg-slate-800 rounded-2xl
+                                    animate-pulse border border-gray-100 dark:border-slate-700" />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center py-24 text-center">
+          <span className="text-5xl mb-3">✅</span>
+          <p className="font-semibold text-slate-700 dark:text-slate-300">No pending approvals</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+            {search ? "Try adjusting your search." : "All shops have been reviewed."}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map((shop) => (
+            <div
+              key={shop.id}
+              className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100
+                         dark:border-slate-700 p-4"
+            >
+              <div className="flex items-start gap-3">
+                {shop.shopBannerUrl && (
+                  <img
+                    src={shop.shopBannerUrl}
+                    alt={shop.shopName}
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                    className="w-12 h-12 rounded-xl object-cover flex-shrink-0 bg-slate-100"
+                  />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-semibold text-slate-800 dark:text-slate-200 text-sm">
+                      {shop.shopName}
+                    </p>
+                    {shop.shopSlug && (
+                      <span className="text-[10px] text-slate-400 font-mono">/{shop.shopSlug}</span>
+                    )}
+                    <span className="text-[10px] font-semibold bg-amber-100 dark:bg-amber-900/30
+                                     text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-full">
+                      Pending
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    {shop.ownerEmail}
+                  </p>
+                  {(shop.shopCategories ?? []).length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {(shop.shopCategories ?? []).map((c) => (
+                        <span key={c}
+                              className="text-[10px] px-1.5 py-0.5 rounded-full
+                                         bg-blue-50 dark:bg-blue-900/30
+                                         text-blue-600 dark:text-blue-400 font-medium">
+                          {c}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {shop.shopBio && (
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 line-clamp-2">
+                      {shop.shopBio}
+                    </p>
+                  )}
+                  <p className="text-[10px] text-slate-400 mt-1.5">
+                    Submitted {shop.createdAt
+                      ? new Date(shop.createdAt).toLocaleDateString("en-MY", {
+                          day: "numeric", month: "short", year: "numeric",
+                        })
+                      : "—"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-50
+                              dark:border-slate-700/50">
+                {shop.shopSlug && (
+                  <a
+                    href={`${import.meta.env.VITE_MAIN_APP_URL ?? ""}/shop/${shop.shopSlug}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-[11px] text-blue-600
+                               dark:text-blue-400 border border-blue-200
+                               dark:border-blue-800 rounded-xl px-2.5 py-1.5
+                               hover:bg-blue-50 dark:hover:bg-blue-900/20
+                               transition-colors min-h-[34px]"
+                  >
+                    <ExternalLink className="w-3 h-3" /> Preview
+                  </a>
+                )}
+                <button
+                  onClick={() => handleApprove(shop)}
+                  disabled={processing === shop.id}
+                  className="flex items-center gap-1 text-[11px] text-green-600
+                             dark:text-green-400 border border-green-200
+                             dark:border-green-800 rounded-xl px-3 py-1.5
+                             hover:bg-green-50 dark:hover:bg-green-900/20
+                             transition-colors min-h-[34px] disabled:opacity-50 font-medium"
+                >
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  {processing === shop.id ? "…" : "Approve"}
+                </button>
+                <button
+                  onClick={() => handleReject(shop)}
+                  disabled={processing === shop.id}
+                  className="flex items-center gap-1 text-[11px] text-red-500
+                             border border-red-200 dark:border-red-800 rounded-xl
+                             px-3 py-1.5 hover:bg-red-50 dark:hover:bg-red-900/20
+                             transition-colors min-h-[34px] disabled:opacity-50"
+                >
+                  <XCircle className="w-3.5 h-3.5" />
+                  {processing === shop.id ? "…" : "Reject"}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+---
+
+### 3C — Updated `ShopsPage` with subscription info and Renew button (`artifacts/xmum-admin/src/pages/ShopsPage.tsx`)
+
+Make the following changes to the existing ShopsPage:
+
+**1. Import `renewShopSubscription` and `RefreshCw` icon:**
+Add `renewShopSubscription` to the import from `"../lib/firebase"`.
+Add `RefreshCw` to the lucide-react import.
+
+**2. Add `renewing` state:**
+```ts
+const [renewing, setRenewing] = useState<string | null>(null);
+```
+
+**3. Add status filter state and filter logic:**
+```ts
+const [statusFilter, setStatusFilter] = useState("");
+```
+
+Add to the `filtered` array calculation:
+```ts
+const matchesStatus =
+  !statusFilter ||
+  (statusFilter === "suspended" && s.isSuspended) ||
+  (statusFilter === "grace"     && s.subscriptionStatus === "grace") ||
+  (statusFilter === "expired"   && s.subscriptionStatus === "expired") ||
+  (statusFilter === "trial"     && s.subscriptionStatus === "trial") ||
+  (statusFilter === "active"    && s.subscriptionStatus === "active" && !s.isSuspended);
+return matchesSearch && matchesCategory && matchesStatus;
+```
+
+**4. Add `handleRenew` function:**
+```ts
+async function handleRenew(shop: AdminShop) {
+  if (!window.confirm(`Renew subscription for "${shop.shopName}"?\n\nThis will set a new 30-day subscription starting now.`)) return;
+  setRenewing(shop.id);
+  try {
+    await renewShopSubscription(shop.id, shop.ownerUid, shop.shopName, adminUser?.email ?? "");
+    setShops((prev) =>
+      prev.map((s) =>
+        s.id === shop.id
+          ? {
+              ...s,
+              subscriptionStatus: "active",
+              subscriptionExpiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+              isSuspended: false,
+            }
+          : s
+      )
+    );
+    void writeAuditLog({
+      actorUid:    adminUser?.uid   ?? "",
+      actorEmail:  adminUser?.email ?? "",
+      action:      "shop_subscription_renewed",
+      label:       `Renewed subscription for "${shop.shopName}"`,
+      targetId:    shop.id,
+      targetType:  "shop",
+      targetLabel: shop.shopName,
+      createdAt:   Date.now(),
+    });
+  } catch (e) {
+    console.error("[ShopsPage] renew failed:", e);
+    alert("Failed to renew subscription. Check Firestore permissions.");
+  } finally {
+    setRenewing(null);
+  }
+}
+```
+
+**5. Add a status filter dropdown** next to the existing category filter:
+```tsx
+<select
+  value={statusFilter}
+  onChange={(e) => setStatusFilter(e.target.value)}
+  className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700
+             rounded-xl px-3 py-2 text-sm text-slate-700 dark:text-slate-300
+             min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+>
+  <option value="">All Statuses</option>
+  <option value="trial">Trial</option>
+  <option value="active">Active</option>
+  <option value="grace">Grace Period</option>
+  <option value="expired">Expired</option>
+  <option value="suspended">Suspended</option>
+</select>
+```
+
+**6. Add a subscription status badge column** to the table. After the "Created At" column header, add:
+```tsx
+<th className="text-left px-4 py-3 font-medium">Subscription</th>
+```
+
+And in each row after the "Created At" cell, add:
+```tsx
+<td className="px-4 py-3">
+  {(() => {
+    const status = shop.subscriptionStatus;
+    const expiresAt = shop.subscriptionExpiresAt;
+    const expiryStr = expiresAt
+      ? new Date(expiresAt).toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "numeric" })
+      : null;
+
+    if (!shop.approvalStatus || shop.approvalStatus === "pending") {
+      return <span className="text-[10px] font-semibold bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-full">Pending</span>;
+    }
+    if (shop.approvalStatus === "rejected") {
+      return <span className="text-[10px] font-semibold bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-2 py-0.5 rounded-full">Rejected</span>;
+    }
+    if (status === "trial") {
+      return (
+        <div>
+          <span className="text-[10px] font-semibold bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 px-2 py-0.5 rounded-full">Trial</span>
+          {expiryStr && <p className="text-[10px] text-slate-400 mt-0.5">Until {expiryStr}</p>}
+        </div>
+      );
+    }
+    if (status === "active") {
+      return (
+        <div>
+          <span className="text-[10px] font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full">Active</span>
+          {expiryStr && <p className="text-[10px] text-slate-400 mt-0.5">Until {expiryStr}</p>}
+        </div>
+      );
+    }
+    if (status === "grace") {
+      return (
+        <div>
+          <span className="text-[10px] font-semibold bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 px-2 py-0.5 rounded-full">Grace</span>
+          {expiryStr && <p className="text-[10px] text-slate-400 mt-0.5">Until {expiryStr}</p>}
+        </div>
+      );
+    }
+    if (status === "expired") {
+      return <span className="text-[10px] font-semibold bg-slate-100 dark:bg-slate-700 text-slate-500 px-2 py-0.5 rounded-full">Expired</span>;
+    }
+    return <span className="text-slate-400 text-xs">—</span>;
+  })()}
+</td>
+```
+
+**7. Add Renew button** to the actions cell, shown only when `subscriptionStatus` is `"grace"` or `"expired"`:
+```tsx
+{(shop.subscriptionStatus === "grace" || shop.subscriptionStatus === "expired") && (
+  <button
+    onClick={() => handleRenew(shop)}
+    disabled={renewing === shop.id}
+    title="Renew subscription"
+    className="flex items-center gap-1 text-[11px] text-blue-600
+               dark:text-blue-400 border border-blue-200
+               dark:border-blue-800 rounded-xl px-2.5 py-1.5
+               hover:bg-blue-50 dark:hover:bg-blue-900/20
+               transition-colors min-h-[34px] disabled:opacity-50"
+  >
+    <RefreshCw className="w-3 h-3" />
+    {renewing === shop.id ? "…" : "Renew"}
+  </button>
+)}
+```
+
+---
+
+### 3D — Updated `DashboardPage` — pending approvals stat (`artifacts/xmum-admin/src/pages/DashboardPage.tsx`)
+
+**1. Add `pendingShopApprovals: number` to the `Stats` interface and `defaultStats`.**
+
+**2. Add a new `onSnapshot` listener:**
+```ts
+unsubs.push(onSnapshot(
+  query(collection(db, "shops"), where("approvalStatus", "==", "pending")),
+  (snap) => setStats(p => ({ ...(p ?? defaultStats), pendingShopApprovals: snap.size })),
+  err => console.error("[Dashboard] pendingShopApprovals snapshot:", err)
+));
+```
+
+**3. Add a new stat card** using `ClipboardList` icon from lucide-react and `bg-amber-600` color, linking to `/shop-approvals`:
+```tsx
+<StatCard
+  icon={ClipboardList}
+  label="Pending Shop Approvals"
+  value={stats.pendingShopApprovals}
+  color="bg-amber-600"
+  href="/shop-approvals"
+/>
+```
+
+Import `ClipboardList` at the top alongside existing lucide-react imports.
+
+---
+
+### 3E — Register new route and nav item (`artifacts/xmum-admin/src/App.tsx` and `src/components/Layout.tsx`)
+
+**In `App.tsx`:**
+Add import:
+```ts
+import ShopApprovalsPage from "./pages/ShopApprovalsPage";
+```
+Add route inside the `<Switch>`:
+```tsx
+<Route path="/shop-approvals" component={ShopApprovalsPage} />
+```
+Place it before the catch-all redirect.
+
+**In `Layout.tsx`:**
+Add to the `NAV` array, after the `Shops` entry:
+```ts
+{ href: "/shop-approvals", label: "Shop Approvals", icon: ClipboardList },
+```
+Import `ClipboardList` from lucide-react at the top alongside existing imports.
+
+---
+
+## Part 4 — Firebase Cloud Functions (scheduled reminders + auto-expiry)
+
+### 4A — Setup
+
+In the Replit shell, from the project root:
+```bash
+cd artifacts
+mkdir -p functions
+cd functions
+npm init -y
+npm install firebase-admin firebase-functions
+```
+
+Create `artifacts/functions/tsconfig.json`:
+```json
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "noImplicitReturns": true,
+    "noUnusedLocals": false,
+    "outDir": "lib",
+    "sourceMap": true,
+    "strict": true,
+    "target": "es2017"
+  },
+  "compileOnSave": true,
+  "include": ["src"]
+}
+```
+
+Create `artifacts/functions/package.json` (replace the generated one):
+```json
+{
+  "name": "xmum-marketplace-functions",
+  "scripts": {
+    "build": "tsc",
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "deploy": "firebase deploy --only functions"
+  },
+  "engines": { "node": "18" },
+  "main": "lib/index.js",
+  "dependencies": {
+    "firebase-admin": "^12.0.0",
+    "firebase-functions": "^4.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "private": true
+}
+```
+
+Create `artifacts/functions/.firebaserc` pointing to the same Firebase project
+used by the market app (copy the project ID from
+`artifacts/xmum-market/.firebaserc`).
+
+---
+
+### 4B — Cloud Function source (`artifacts/functions/src/index.ts`)
+
+Create this file:
+
+```ts
+import * as functions from "firebase-functions";
+import * as admin from "firebase-admin";
+
+admin.initializeApp();
+const db = admin.firestore();
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+async function getConfig() {
+  try {
+    const snap = await db.collection("appConfig").doc("subscriptions").get();
+    if (snap.exists) {
+      const d = snap.data()!;
+      return {
+        launchDate:       d.launchDate       ?? 0,
+        trialDays:        d.trialDays        ?? 60,
+        subscriptionDays: d.subscriptionDays ?? 30,
+        graceDays:        d.graceDays        ?? 30,
+      };
+    }
+  } catch {}
+  return { launchDate: 0, trialDays: 60, subscriptionDays: 30, graceDays: 30 };
+}
+
+async function sendNotification(
+  uid: string,
+  data: { type: string; title: string; body: string; shopId: string }
+) {
+  try {
+    await db.collection("users").doc(uid).collection("notifications").add({
+      ...data,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      read: false,
+    });
+  } catch (err) {
+    console.warn("[sendNotification] failed:", err);
+  }
+}
+
+// ── Scheduled function — runs daily at 08:00 Malaysia time (UTC+8 = 00:00 UTC) ──
+
+export const shopSubscriptionDailyCheck = functions
+  .region("asia-southeast1")  // Singapore — closest to Malaysia
+  .pubsub.schedule("0 0 * * *")  // 00:00 UTC = 08:00 MYT
+  .timeZone("Asia/Kuala_Lumpur")
+  .onRun(async () => {
+    const now = Date.now();
+    const config = await getConfig();
+    const SEVEN_DAYS_MS  = 7  * 24 * 60 * 60 * 1000;
+    const GRACE_MS       = config.graceDays * 24 * 60 * 60 * 1000;
+
+    // Fetch all approved, non-expired shops
+    const shopsSnap = await db
+      .collection("shops")
+      .where("approvalStatus", "==", "approved")
+      .get();
+
+    const batch = db.batch();
+    const notificationJobs: Promise<void>[] = [];
+
+    for (const shopDoc of shopsSnap.docs) {
+      const shop = shopDoc.data();
+      const shopId      = shopDoc.id;
+      const ownerId     = shop.ownerId     ?? shop.ownerUid ?? "";
+      const shopName    = shop.name        ?? shop.shopName ?? "";
+      const expiresAt   = shop.subscriptionExpiresAt ?? 0;
+      const status      = shop.subscriptionStatus ?? "active";
+      const reminderSentAt = shop.reminderSentAt ?? 0;
+
+      if (!expiresAt || !ownerId) continue;
+
+      const msUntilExpiry = expiresAt - now;
+      const graceEnd = expiresAt + GRACE_MS;
+
+      // ── Case 1: Active/trial shop expiring within 7 days — send reminder ──
+      if (
+        (status === "active" || status === "trial") &&
+        msUntilExpiry > 0 &&
+        msUntilExpiry <= SEVEN_DAYS_MS &&
+        now - reminderSentAt > SEVEN_DAYS_MS  // don't double-send within 7 days
+      ) {
+        const daysLeft = Math.max(1, Math.ceil(msUntilExpiry / (24 * 60 * 60 * 1000)));
+        const expiryDateStr = new Date(expiresAt).toLocaleDateString("en-MY", {
+          day: "numeric", month: "long", year: "numeric",
+        });
+
+        // Notify shop owner
+        notificationJobs.push(sendNotification(ownerId, {
+          type:   "shop_subscription_expiring",
+          title:  `⚠️ Shop subscription expiring in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`,
+          body:   `Your shop "${shopName}" subscription expires on ${expiryDateStr}. Contact an admin to renew and keep your shop active.`,
+          shopId,
+        }));
+
+        // Mark reminder sent
+        batch.update(shopDoc.ref, { reminderSentAt: now });
+
+        // Also write an admin notification to a shared "adminNotifications" collection
+        // so admins can see it on their next login
+        notificationJobs.push((async () => {
+          try {
+            await db.collection("adminNotifications").add({
+              type:      "shop_expiring_soon",
+              title:     `Shop expiring soon: "${shopName}"`,
+              body:      `Shop "${shopName}" (owner: ${shop.ownerEmail ?? ""}) expires in ${daysLeft} day${daysLeft === 1 ? "" : "s"} on ${expiryDateStr}.`,
+              shopId,
+              shopName,
+              ownerEmail: shop.ownerEmail ?? "",
+              expiresAt,
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              read: false,
+            });
+          } catch {}
+        })());
+      }
+
+      // ── Case 2: Subscription just expired — move to grace ──
+      if ((status === "active" || status === "trial") && msUntilExpiry <= 0) {
+        batch.update(shopDoc.ref, {
+          isActive:           false,
+          subscriptionStatus: "grace",
+        });
+
+        notificationJobs.push(sendNotification(ownerId, {
+          type:   "shop_subscription_expired",
+          title:  "⚠️ Shop subscription has expired",
+          body:   `Your shop "${shopName}" subscription has expired and is now hidden from Campus Market. You have 30 days to contact an admin to renew.`,
+          shopId,
+        }));
+      }
+
+      // ── Case 3: Grace period expired — mark as permanently expired ──
+      if (status === "grace" && now > graceEnd) {
+        batch.update(shopDoc.ref, {
+          isActive:           false,
+          subscriptionStatus: "expired",
+        });
+      }
+    }
+
+    await batch.commit();
+    await Promise.allSettled(notificationJobs);
+
+    console.log(`[shopSubscriptionDailyCheck] processed ${shopsSnap.size} shops at ${new Date().toISOString()}`);
+    return null;
+  });
+```
+
+---
+
+### 4C — `firebase.json` update
+
+In `artifacts/xmum-market/` there should be a `firebase.json`. If not, create
+`artifacts/firebase.json` at the root of the artifacts folder. Add the functions
+configuration:
+
+```json
+{
+  "functions": {
+    "source": "functions",
+    "runtime": "nodejs18"
+  },
+  "firestore": {
+    "rules": "xmum-market/firestore.rules"
+  }
+}
+```
+
+If `firebase.json` already exists in `artifacts/xmum-market/`, add the
+`"functions"` key to it pointing to `"../functions"`.
+
+---
+
+## Part 5 — One-time Firebase Console Setup (manual steps — do NOT code these)
+
+After deployment, the following must be done manually in the Firebase console:
+
+1. **Create `appConfig/subscriptions` document** with:
+   - `launchDate`: set to your actual launch date in milliseconds (e.g. `Date.now()` on launch day)
+   - `trialDays`: `60`
+   - `subscriptionDays`: `30`
+   - `graceDays`: `30`
+
+2. **Enable Cloud Scheduler API** in Google Cloud Console for the Firebase project
+   (required for scheduled functions).
+
+3. **Deploy the Cloud Function** from the Replit shell:
+   ```bash
+   cd artifacts
+   npm install -g firebase-tools
+   firebase login
+   cd functions && npm run build && cd ..
+   firebase deploy --only functions
+   ```
+
+4. **Update existing approved shops** in Firestore that were created before this
+   system — set `approvalStatus: "approved"` and assign a `subscriptionStatus` and
+   `subscriptionExpiresAt` manually via the Firebase console or a one-time migration
+   script. Any shop without `approvalStatus` will show as "pending" in the new system.
+
+---
+
+## Summary of All Files Created or Modified
+
+### XMUM Market (`artifacts/xmum-market/`)
+| File | Change |
+|---|---|
+| `src/lib/types.ts` | Add subscription/approval fields to `Shop`; add 5 new notification types to `AppNotification` |
+| `src/lib/shops.ts` | Change `createShop` to set `isActive: false, approvalStatus: "pending"` |
+| `src/lib/notifications.ts` | Add 4 new notification helpers |
+| `src/pages/CreateShopPage.tsx` | Show pending approval screen after creation instead of navigating to dashboard |
+| `src/components/ShopManagementPanel.tsx` | Add comprehensive subscription status banner |
+| `firestore.rules` | Enforce `isActive: false` and `approvalStatus: "pending"` on shop create; add `appConfig` read rule |
+
+### XMUM Admin (`artifacts/xmum-admin/`)
+| File | Change |
+|---|---|
+| `src/lib/types.ts` | Add subscription/approval fields to `AdminShop` |
+| `src/lib/firebase.ts` | Add `approveShop`, `rejectShop`, `renewShopSubscription`, `getPendingShops`, `getSubscriptionConfig`; update `getShops` mapping |
+| `src/pages/ShopApprovalsPage.tsx` | New file — full approval queue UI |
+| `src/pages/ShopsPage.tsx` | Add status filter, subscription column, Renew button |
+| `src/pages/DashboardPage.tsx` | Add pending approvals stat card |
+| `src/App.tsx` | Register `/shop-approvals` route |
+| `src/components/Layout.tsx` | Add "Shop Approvals" nav item |
+
+### Cloud Functions (`artifacts/functions/`)
+| File | Description |
+|---|---|
+| `src/index.ts` | Daily scheduled function — reminders, grace, expiry |
+| `package.json` | Function dependencies |
+| `tsconfig.json` | TypeScript config |
+
+---
+
+## Important Constraints
+
+- Do NOT modify any `.js` legacy files in the admin app — `.tsx`/`.ts` only.
+- Do NOT change any existing function signatures already used across the codebase.
+- Do NOT remove the `isSuspended` checks added in the previous bug fix.
+- Preserve all existing try/catch and `.catch(() => {})` non-critical error handling patterns.
+- The Cloud Function must be deployed to `asia-southeast1` region (Singapore) for latency reasons.
+- Do NOT add any payment gateway or payment processing of any kind.

@@ -721,6 +721,118 @@ export default function ShopManagementPanel({
           </div>
         </div>
       )}
+      {/* Subscription status banner */}
+      {(() => {
+        const status = shop.subscriptionStatus;
+        const expiresAt = shop.subscriptionExpiresAt;
+        const expiryStr = expiresAt
+          ? new Date(expiresAt).toLocaleDateString("en-MY", { day: "numeric", month: "long", year: "numeric" })
+          : null;
+
+        if (!shop.approvalStatus || shop.approvalStatus === "pending") {
+          return (
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800
+                            rounded-2xl p-4 mb-4 flex items-start gap-3">
+              <span className="text-amber-500 text-lg">⏳</span>
+              <div>
+                <p className="font-semibold text-amber-700 dark:text-amber-400 text-sm">
+                  Pending admin approval
+                </p>
+                <p className="text-xs text-amber-600 dark:text-amber-500 mt-0.5">
+                  Your shop is under review. You'll be notified once approved.
+                </p>
+              </div>
+            </div>
+          );
+        }
+
+        if (shop.approvalStatus === "rejected") {
+          return (
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800
+                            rounded-2xl p-4 mb-4 flex items-start gap-3">
+              <span className="text-red-500 text-lg">❌</span>
+              <div>
+                <p className="font-semibold text-red-700 dark:text-red-400 text-sm">
+                  Shop application not approved
+                </p>
+                <p className="text-xs text-red-600 dark:text-red-500 mt-0.5">
+                  {shop.rejectionReason ?? "Please contact an admin for more information."}
+                </p>
+              </div>
+            </div>
+          );
+        }
+
+        if (status === "trial") {
+          return (
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800
+                            rounded-2xl p-4 mb-4 flex items-start gap-3">
+              <span className="text-green-500 text-lg">🎉</span>
+              <div>
+                <p className="font-semibold text-green-700 dark:text-green-400 text-sm">
+                  Free trial active{expiryStr ? ` — until ${expiryStr}` : ""}
+                </p>
+                <p className="text-xs text-green-600 dark:text-green-500 mt-0.5">
+                  Enjoy your complimentary trial period. Contact an admin before expiry to continue.
+                </p>
+              </div>
+            </div>
+          );
+        }
+
+        if (status === "active") {
+          return (
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800
+                            rounded-2xl p-4 mb-4 flex items-start gap-3">
+              <span className="text-blue-500 text-lg">✅</span>
+              <div>
+                <p className="font-semibold text-blue-700 dark:text-blue-400 text-sm">
+                  Subscription active{expiryStr ? ` — renews by ${expiryStr}` : ""}
+                </p>
+                <p className="text-xs text-blue-600 dark:text-blue-500 mt-0.5">
+                  Your shop is live. Contact an admin before the expiry date to renew.
+                </p>
+              </div>
+            </div>
+          );
+        }
+
+        if (status === "grace") {
+          return (
+            <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800
+                            rounded-2xl p-4 mb-4 flex items-start gap-3">
+              <span className="text-orange-500 text-lg">⚠️</span>
+              <div>
+                <p className="font-semibold text-orange-700 dark:text-orange-400 text-sm">
+                  Subscription expired — grace period active
+                </p>
+                <p className="text-xs text-orange-600 dark:text-orange-500 mt-0.5">
+                  Your shop is currently hidden from Campus Market. Contact an admin immediately to renew and restore your shop.
+                </p>
+              </div>
+            </div>
+          );
+        }
+
+        if (status === "expired") {
+          return (
+            <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700
+                            rounded-2xl p-4 mb-4 flex items-start gap-3">
+              <span className="text-slate-400 text-lg">🔒</span>
+              <div>
+                <p className="font-semibold text-slate-600 dark:text-slate-400 text-sm">
+                  Subscription expired
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-500 mt-0.5">
+                  Your shop has been permanently deactivated. Contact an admin to discuss reactivation.
+                </p>
+              </div>
+            </div>
+          );
+        }
+
+        return null;
+      })()}
       <div className="flex bg-gray-100 dark:bg-slate-800 rounded-xl p-1 mb-5 gap-1 overflow-x-auto scrollbar-hide">
         {TABS.map((t) => (
           <button
