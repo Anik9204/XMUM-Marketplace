@@ -1,7 +1,7 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, Flag, Users, Megaphone, FileText, Star, GraduationCap, List, BarChart2, LogOut, Store, Newspaper, Moon, Sun, Menu, X, ShieldAlert, ClipboardList, } from "lucide-react";
+import { LayoutDashboard, Flag, Users, Megaphone, FileText, Star, GraduationCap, List, BarChart2, LogOut, Store, Newspaper, Moon, Sun, Menu, X, ShieldAlert, ClipboardList, SlidersHorizontal, } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth, db } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
@@ -38,6 +38,7 @@ export default function Layout({ children }) {
         { href: "/shop-approvals", label: "Shop Approvals", icon: ClipboardList },
         { href: "/shop-ads", label: "Shop Ads", icon: Newspaper },
         { href: "/audit-log", label: "Audit Log", icon: ShieldAlert },
+        { href: "/subscription-config", label: "Subscription Config", icon: SlidersHorizontal },
     ];
     return (_jsxs("div", { className: "flex h-screen bg-slate-50 dark:bg-slate-900 overflow-hidden", children: [sidebarOpen && (_jsx("div", { className: "fixed inset-0 z-20 bg-black/40 lg:hidden", onClick: () => setSidebarOpen(false) })), _jsxs("aside", { className: `
         fixed inset-y-0 left-0 z-30 w-60 flex-shrink-0

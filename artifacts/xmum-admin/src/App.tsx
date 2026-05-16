@@ -13,7 +13,8 @@ import AnalyticsPage    from "./pages/AnalyticsPage";
 import ShopsPage        from "./pages/ShopsPage";
 import ShopAdsPage      from "./pages/ShopAdsPage";
 import AuditLogPage     from "./pages/AuditLogPage";
-import ShopApprovalsPage from "./pages/ShopApprovalsPage";
+import ShopApprovalsPage      from "./pages/ShopApprovalsPage";
+import SubscriptionConfigPage from "./pages/SubscriptionConfigPage";
 import Layout           from "./components/Layout";
 
 export default function App() {
@@ -46,7 +47,8 @@ export default function App() {
         <Route path="/shops"          component={ShopsPage} />
         <Route path="/shop-ads"       component={ShopAdsPage} />
         <Route path="/audit-log"      component={AuditLogPage} />
-        <Route path="/shop-approvals" component={ShopApprovalsPage} />
+        <Route path="/shop-approvals"      component={ShopApprovalsPage} />
+        <Route path="/subscription-config" component={SubscriptionConfigPage} />
         <Route>
           <Redirect to="/" />
         </Route>

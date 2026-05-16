@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, Flag, Users, Megaphone, FileText,
   Star, GraduationCap, List, BarChart2, LogOut,
-  Store, Newspaper, Moon, Sun, Menu, X, ShieldAlert, ClipboardList,
+  Store, Newspaper, Moon, Sun, Menu, X, ShieldAlert, ClipboardList, SlidersHorizontal,
 } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth, db } from "../lib/firebase";
@@ -44,7 +44,8 @@ export default function Layout({ children }: { children: ReactNode }) {
     { href: "/shops",         label: "Shops",         icon: Store },
     { href: "/shop-approvals", label: "Shop Approvals", icon: ClipboardList },
     { href: "/shop-ads",      label: "Shop Ads",      icon: Newspaper },
-    { href: "/audit-log",     label: "Audit Log",     icon: ShieldAlert },
+    { href: "/audit-log",          label: "Audit Log",        icon: ShieldAlert },
+    { href: "/subscription-config", label: "Subscription Config", icon: SlidersHorizontal },
   ];
 
   return (
