@@ -1,0 +1,209 @@
+You are a senior full-stack developer and DevSecOps engineer working on the
+XMUM Marketplace monorepo. You are adding TWO missing features to ONE file
+in the ADMIN app only. Never touch artifacts/xmum-market/.
+No changes to firestore.rules, firestore.indexes.json, or storage.rules.
+
+CRITICAL RULES — same as all previous prompts. Apply them here.
+
+═══════════════════════════════════════════════════
+CONTEXT
+═══════════════════════════════════════════════════
+
+RentalAuditPage currently fetches all rental T&C audit logs with getDocs
+and renders them in a read-only table. There is no way to search or
+export. This prompt adds:
+  1. A client-side search input (filters by userEmail or listingTitle)
+  2. A CSV export button (exports all currently-filtered rows)
+
+Read the entire RentalAuditPage.tsx before making any change. Confirm:
+there is no search state, no filtered const, no exportToCsv import, no
+Download button. The table maps over `logs` directly. That is the baseline.
+
+These are PURELY ADDITIVE changes — every existing line stays.
+
+═══════════════════════════════════════════════════
+STEP 1 — Add new imports
+File: artifacts/xmum-admin/src/pages/RentalAuditPage.tsx
+═══════════════════════════════════════════════════
+
+The current import block is:
+  import { useState, useEffect } from "react";
+  import { collection, getDocs, query, orderBy } from "firebase/firestore";
+  import { db } from "../lib/firebase";
+  import { FileText, Loader2 } from "lucide-react";
+
+Make two changes:
+
+1a — Add Download to the lucide-react import:
+  import { FileText, Loader2, Download } from "lucide-react";
+
+1b — Add the exportToCsv import after the db import line:
+  import { exportToCsv } from "../lib/exportCsv";
+
+Do NOT add useCallback, useMemo, or any other React import — useState is
+already imported and that is all we need.
+
+═══════════════════════════════════════════════════
+STEP 2 — Add search state inside the component
+File: artifacts/xmum-admin/src/pages/RentalAuditPage.tsx
+═══════════════════════════════════════════════════
+
+Find the existing state declarations inside RentalAuditPage():
+  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+Add the search state immediately after those three lines:
+  const [search, setSearch] = useState("");
+
+Do NOT change any of the three existing state declarations.
+
+═══════════════════════════════════════════════════
+STEP 3 — Add filtered const and handleExport function
+File: artifacts/xmum-admin/src/pages/RentalAuditPage.tsx
+═══════════════════════════════════════════════════
+
+After the useEffect (after its closing brace), and BEFORE the return (
+statement, add these two blocks:
+
+  const filtered = logs.filter((log) => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      log.userEmail?.toLowerCase().includes(q) ||
+      log.listingTitle?.toLowerCase().includes(q)
+    );
+  });
+
+  function handleExport() {
+    const timestamp = new Date().toISOString().slice(0, 10);
+    const headers = [
+      "Log ID", "User UID", "User Email", "Listing ID",
+      "Listing Title", "T&C Version", "Accepted At", "User Agent",
+    ];
+    const rows = filtered.map((log) => [
+      log.id,
+      log.userId,
+      log.userEmail,
+      log.listingId,
+      log.listingTitle,
+      log.tcVersion,
+      new Date(log.acceptedAt).toLocaleString("en-MY", {
+        year: "numeric", month: "short", day: "2-digit",
+        hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+      }),
+      log.userAgent,
+    ]);
+    exportToCsv(`rental_audit_${timestamp}.csv`, headers, rows);
+  }
+
+═══════════════════════════════════════════════════
+STEP 4 — Add search input and export button to the header
+File: artifacts/xmum-admin/src/pages/RentalAuditPage.tsx
+═══════════════════════════════════════════════════
+
+Find the header section in the JSX. It currently is:
+  <div className="mb-6 flex items-center gap-3">
+    <div className="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-950 flex items-center justify-center">
+      <FileText className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+    </div>
+    <div>
+      <h1 ...>Rental T&amp;C Audit Log</h1>
+      <p ...>Permanent, tamper-proof record...</p>
+    </div>
+    <div className="ml-auto bg-amber-50 ... font-medium">
+      {logs.length} record{logs.length !== 1 ? "s" : ""}
+    </div>
+  </div>
+
+This is a flex row. Add the search input and export button BETWEEN the
+title <div> and the record-count <div>. The updated header becomes:
+
+  <div className="mb-6 flex items-center gap-3 flex-wrap">
+    <div className="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-950 flex items-center justify-center flex-shrink-0">
+      <FileText className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+    </div>
+    <div>
+      <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Rental T&amp;C Audit Log</h1>
+      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+        Permanent, tamper-proof record of Rental Disclaimer acceptances. Never deleted.
+      </p>
+    </div>
+    <input
+      value={search}
+      onChange={(e) => setSearch(e.target.value)}
+      placeholder="Search by email or listing title…"
+      className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700
+                 rounded-xl px-3 py-2 text-sm min-h-[40px] w-56 flex-shrink-0
+                 focus:outline-none focus:ring-2 focus:ring-amber-400
+                 text-slate-700 dark:text-slate-300"
+    />
+    <button
+      onClick={handleExport}
+      disabled={filtered.length === 0}
+      className="flex items-center gap-2 text-sm font-medium text-slate-600
+                 dark:text-slate-300 border border-gray-200 dark:border-slate-700
+                 bg-white dark:bg-slate-800 rounded-xl px-4 min-h-[40px] flex-shrink-0
+                 hover:bg-slate-50 dark:hover:bg-slate-700/50
+                 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+    >
+      <Download className="w-4 h-4" />
+      Export CSV
+    </button>
+    <div className="ml-auto bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-1.5 text-xs text-amber-700 dark:text-amber-400 font-medium flex-shrink-0">
+      {filtered.length !== logs.length
+        ? `${filtered.length} of ${logs.length} record${logs.length !== 1 ? "s" : ""}`
+        : `${logs.length} record${logs.length !== 1 ? "s" : ""}`}
+    </div>
+  </div>
+
+Note the record count now shows "X of Y records" when a search is active,
+and "Y records" when no search is applied.
+
+═══════════════════════════════════════════════════
+STEP 5 — Update the table to use filtered instead of logs
+File: artifacts/xmum-admin/src/pages/RentalAuditPage.tsx
+═══════════════════════════════════════════════════
+
+There are currently THREE places in the JSX that reference logs directly
+for rendering/conditionals. Change each one:
+
+5a — Empty state check. Find:
+  {!loading && !error && logs.length === 0 && (
+
+Change to:
+  {!loading && !error && filtered.length === 0 && (
+
+5b — Table render condition. Find:
+  {!loading && !error && logs.length > 0 && (
+
+Change to:
+  {!loading && !error && filtered.length > 0 && (
+
+5c — Table row mapping. Find inside the <tbody>:
+  {logs.map((log) => (
+
+Change to:
+  {filtered.map((log) => (
+
+These are the ONLY three changes in the JSX. Do NOT change the empty
+state text, the table headers, the table row JSX structure, or anything
+else. The table columns, formatting, and cell content all remain identical.
+
+Note: logs.length is still used in the header section for the record count
+display (Step 4 above uses both filtered.length and logs.length) — do NOT
+change those references. Only change the three rendering references above.
+
+═══════════════════════════════════════════════════
+VERIFICATION
+═══════════════════════════════════════════════════
+
+1. Run: pnpm --filter xmum-admin run build — zero TypeScript errors.
+   noUnusedLocals is true in tsconfig — confirm filtered and handleExport
+   are both used in the JSX (they are, from Steps 4 and 5).
+2. Verify logic: typing an email in the search box should filter the
+   table rows client-side without a new Firestore query.
+3. Verify: the Export CSV button is disabled when filtered.length === 0
+   (no results to export, or no logs loaded yet).
+4. Verify: the exported CSV has 8 columns matching the headers array.
+5. Zero changes to artifacts/xmum-market/ or any rules files.

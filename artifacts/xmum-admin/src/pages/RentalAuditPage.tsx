@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { collection, getDocs, query, orderBy } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { FileText, Loader2 } from "lucide-react";
+import { exportToCsv } from "../lib/exportCsv";
+import { FileText, Loader2, Download } from "lucide-react";
 
 interface AuditLog {
   id: string;
@@ -30,6 +31,7 @@ export default function RentalAuditPage() {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     async function fetchLogs() {
@@ -51,10 +53,41 @@ export default function RentalAuditPage() {
     fetchLogs();
   }, []);
 
+  const filtered = logs.filter((log) => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      log.userEmail?.toLowerCase().includes(q) ||
+      log.listingTitle?.toLowerCase().includes(q)
+    );
+  });
+
+  function handleExport() {
+    const timestamp = new Date().toISOString().slice(0, 10);
+    const headers = [
+      "Log ID", "User UID", "User Email", "Listing ID",
+      "Listing Title", "T&C Version", "Accepted At", "User Agent",
+    ];
+    const rows = filtered.map((log) => [
+      log.id,
+      log.userId,
+      log.userEmail,
+      log.listingId,
+      log.listingTitle,
+      log.tcVersion,
+      new Date(log.acceptedAt).toLocaleString("en-MY", {
+        year: "numeric", month: "short", day: "2-digit",
+        hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+      }),
+      log.userAgent,
+    ]);
+    exportToCsv(`rental_audit_${timestamp}.csv`, headers, rows);
+  }
+
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      <div className="mb-6 flex items-center gap-3">
-        <div className="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-950 flex items-center justify-center">
+      <div className="mb-6 flex items-center gap-3 flex-wrap">
+        <div className="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-950 flex items-center justify-center flex-shrink-0">
           <FileText className="w-5 h-5 text-amber-600 dark:text-amber-400" />
         </div>
         <div>
@@ -63,8 +96,31 @@ export default function RentalAuditPage() {
             Permanent, tamper-proof record of Rental Disclaimer acceptances. Never deleted.
           </p>
         </div>
-        <div className="ml-auto bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-1.5 text-xs text-amber-700 dark:text-amber-400 font-medium">
-          {logs.length} record{logs.length !== 1 ? "s" : ""}
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by email or listing title…"
+          className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700
+                     rounded-xl px-3 py-2 text-sm min-h-[40px] w-56 flex-shrink-0
+                     focus:outline-none focus:ring-2 focus:ring-amber-400
+                     text-slate-700 dark:text-slate-300"
+        />
+        <button
+          onClick={handleExport}
+          disabled={filtered.length === 0}
+          className="flex items-center gap-2 text-sm font-medium text-slate-600
+                     dark:text-slate-300 border border-gray-200 dark:border-slate-700
+                     bg-white dark:bg-slate-800 rounded-xl px-4 min-h-[40px] flex-shrink-0
+                     hover:bg-slate-50 dark:hover:bg-slate-700/50
+                     disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        >
+          <Download className="w-4 h-4" />
+          Export CSV
+        </button>
+        <div className="ml-auto bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-1.5 text-xs text-amber-700 dark:text-amber-400 font-medium flex-shrink-0">
+          {filtered.length !== logs.length
+            ? `${filtered.length} of ${logs.length} record${logs.length !== 1 ? "s" : ""}`
+            : `${logs.length} record${logs.length !== 1 ? "s" : ""}`}
         </div>
       </div>
 
@@ -85,14 +141,14 @@ export default function RentalAuditPage() {
         </div>
       )}
 
-      {!loading && !error && logs.length === 0 && (
+      {!loading && !error && filtered.length === 0 && (
         <div className="text-center py-20 text-slate-400 dark:text-slate-500">
           <FileText className="w-10 h-10 mx-auto mb-3 opacity-30" />
           <p className="text-sm">No rental T&amp;C acceptances recorded yet.</p>
         </div>
       )}
 
-      {!loading && !error && logs.length > 0 && (
+      {!loading && !error && filtered.length > 0 && (
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -108,7 +164,7 @@ export default function RentalAuditPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
-                {logs.map((log) => (
+                {filtered.map((log) => (
                   <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors">
                     <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap font-mono">
                       {formatDate(log.acceptedAt)}
