@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { ExternalLink, Trash2, Search } from "lucide-react";
-import { getShops, deleteShop } from "../lib/firebase";
+import { getShops, deleteShop, writeAuditLog } from "../lib/firebase";
+import { useAuth } from "../contexts/AuthContext";
 import { AdminShop } from "../lib/types";
 
 export default function ShopsPage() {
+  const { adminUser } = useAuth();
   const [shops, setShops] = useState<AdminShop[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -30,6 +32,16 @@ export default function ShopsPage() {
     try {
       await deleteShop(shop.id);
       setShops((prev) => prev.filter((s) => s.id !== shop.id));
+      void writeAuditLog({
+        actorUid:    adminUser?.uid   ?? "",
+        actorEmail:  adminUser?.email ?? "",
+        action:      "shop_deleted",
+        label:       `Deleted shop "${shop.shopName}"`,
+        targetId:    shop.id,
+        targetType:  "shop",
+        targetLabel: shop.shopName,
+        createdAt:   Date.now(),
+      });
     } catch (e) {
       console.error("[ShopsPage] delete failed:", e);
       alert("Failed to delete shop. Check Firestore permissions.");

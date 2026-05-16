@@ -19,6 +19,15 @@ export const db = initializeFirestore(app, {
     experimentalAutoDetectLongPolling: true,
 });
 export const storage = getStorage(app);
+export async function writeAuditLog(entry) {
+    try {
+        await addDoc(collection(db, "adminAuditLogs"), entry);
+    }
+    catch (err) {
+        // Audit logging is non-critical — never let it break the main action
+        console.warn("[writeAuditLog] failed (non-critical):", err);
+    }
+}
 // ── Campus Market helpers ────────────────────────────────────────────────────
 export async function getShops(limitCount = 100) {
     const q = query(collection(db, "shops"), orderBy("createdAt", "desc"), limit(limitCount));

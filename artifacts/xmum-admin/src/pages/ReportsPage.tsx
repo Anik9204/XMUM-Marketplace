@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { collection, query, orderBy, updateDoc, doc, deleteDoc, addDoc, onSnapshot, getDoc } from "firebase/firestore";
 import { ref, deleteObject } from "firebase/storage";
-import { db, storage } from "../lib/firebase";
+import { db, storage, writeAuditLog } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { ListingReport, ReportStatus } from "../lib/types";
 import { ExternalLink, Trash2, CheckCircle, XCircle, X } from "lucide-react";
@@ -86,6 +86,16 @@ export default function ReportsPage() {
       if (selectedReport?.id === id) {
         setSelectedReport(prev => prev ? { ...prev, status } : null);
       }
+      void writeAuditLog({
+        actorUid:    adminUser?.uid   ?? "",
+        actorEmail:  adminUser?.email ?? "",
+        action:      `report_${status}`,
+        label:       `Report ${status}: "${report?.listingTitle ?? id}"`,
+        targetId:    id,
+        targetType:  "report",
+        targetLabel: report?.listingTitle ?? id,
+        createdAt:   Date.now(),
+      });
       // Lift the report hold when admin dismisses the report
       if (status === "dismissed" && report) {
         const isShopListing = !!(report as any).shopId;
@@ -130,6 +140,16 @@ export default function ReportsPage() {
         body: `Your listing "${report.listingTitle}" was removed by an admin due to a policy violation.`,
         createdAt: Date.now(),
         read: false,
+      });
+      void writeAuditLog({
+        actorUid:    adminUser?.uid   ?? "",
+        actorEmail:  adminUser?.email ?? "",
+        action:      "listing_deleted_via_report",
+        label:       `Deleted listing "${report.listingTitle}" (report actioned)`,
+        targetId:    report.listingId,
+        targetType:  "listing",
+        targetLabel: report.listingTitle,
+        createdAt:   Date.now(),
       });
       if (selectedReport?.id === report.id) setSelectedReport(null);
     } catch (e) {

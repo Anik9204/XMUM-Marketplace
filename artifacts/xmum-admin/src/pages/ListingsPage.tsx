@@ -5,7 +5,8 @@ import {
   QueryDocumentSnapshot,
 } from "firebase/firestore";
 import { ref, deleteObject } from "firebase/storage";
-import { db, storage } from "../lib/firebase";
+import { db, storage, writeAuditLog } from "../lib/firebase";
+import { useAuth } from "../contexts/AuthContext";
 import { AdminListing, ListingType } from "../lib/types";
 import { Trash2, Archive, Star, Download } from "lucide-react";
 import { exportToCsv } from "../lib/exportCsv";
@@ -36,6 +37,7 @@ function pathFromUrl(url: string): string | null {
 }
 
 export default function ListingsPage() {
+  const { adminUser } = useAuth();
   const [listings, setListings]   = useState<AdminListing[]>([]);
   const [loading, setLoading]     = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -99,6 +101,16 @@ export default function ListingsPage() {
         })
       );
       await deleteDoc(doc(db, "listings", listing.id));
+      void writeAuditLog({
+        actorUid:    adminUser?.uid   ?? "",
+        actorEmail:  adminUser?.email ?? "",
+        action:      "listing_deleted",
+        label:       `Deleted listing "${listing.title}"`,
+        targetId:    listing.id,
+        targetType:  "listing",
+        targetLabel: listing.title,
+        createdAt:   Date.now(),
+      });
     } catch (err) {
       console.error("[ListingsPage] delete failed:", err);
       alert("Failed to delete listing. Check Firestore permissions.");
@@ -112,6 +124,16 @@ export default function ListingsPage() {
       setListings((prev) =>
         prev.map((l) => l.id === listing.id ? { ...l, isArchived: true } : l)
       );
+      void writeAuditLog({
+        actorUid:    adminUser?.uid   ?? "",
+        actorEmail:  adminUser?.email ?? "",
+        action:      "listing_archived",
+        label:       `Archived listing "${listing.title}"`,
+        targetId:    listing.id,
+        targetType:  "listing",
+        targetLabel: listing.title,
+        createdAt:   Date.now(),
+      });
     } catch (err) {
       console.error("[ListingsPage] archive failed:", err);
       alert("Failed to archive listing.");
@@ -124,6 +146,16 @@ export default function ListingsPage() {
       setListings((prev) =>
         prev.map((l) => l.id === listing.id ? { ...l, isFeatured: true } : l)
       );
+      void writeAuditLog({
+        actorUid:    adminUser?.uid   ?? "",
+        actorEmail:  adminUser?.email ?? "",
+        action:      "listing_featured",
+        label:       `Featured listing "${listing.title}"`,
+        targetId:    listing.id,
+        targetType:  "listing",
+        targetLabel: listing.title,
+        createdAt:   Date.now(),
+      });
     } catch (err) {
       console.error("[ListingsPage] feature failed:", err);
       alert("Failed to feature listing.");

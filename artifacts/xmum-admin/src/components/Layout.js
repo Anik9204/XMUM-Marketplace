@@ -1,7 +1,7 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, Flag, Users, Megaphone, FileText, Star, GraduationCap, List, BarChart2, LogOut, Store, Newspaper, Moon, Sun, Menu, X, } from "lucide-react";
+import { LayoutDashboard, Flag, Users, Megaphone, FileText, Star, GraduationCap, List, BarChart2, LogOut, Store, Newspaper, Moon, Sun, Menu, X, ShieldAlert, } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth, db } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
@@ -9,7 +9,7 @@ import { useDarkMode } from "../contexts/DarkModeContext";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 export default function Layout({ children }) {
     const [location] = useLocation();
-    const { adminUser } = useAuth();
+    const { adminUser, isAdmin } = useAuth();
     const [pendingReports, setPendingReports] = useState(0);
     const [pendingVerifications, setPendingVerifications] = useState(0);
     const { dark, toggle } = useDarkMode();
@@ -36,6 +36,7 @@ export default function Layout({ children }) {
         { href: "/analytics", label: "Analytics", icon: BarChart2 },
         { href: "/shops", label: "Shops", icon: Store },
         { href: "/shop-ads", label: "Shop Ads", icon: Newspaper },
+        { href: "/audit-log", label: "Audit Log", icon: ShieldAlert },
     ];
     return (_jsxs("div", { className: "flex h-screen bg-slate-50 dark:bg-slate-900 overflow-hidden", children: [sidebarOpen && (_jsx("div", { className: "fixed inset-0 z-20 bg-black/40 lg:hidden", onClick: () => setSidebarOpen(false) })), _jsxs("aside", { className: `
         fixed inset-y-0 left-0 z-30 w-60 flex-shrink-0
@@ -44,6 +45,8 @@ export default function Layout({ children }) {
         lg:static lg:translate-x-0
         ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
       `, children: [_jsx("div", { className: "px-6 py-5 border-b border-gray-100 dark:border-slate-700", children: _jsxs("div", { className: "flex items-center gap-2", children: [_jsx("div", { className: "w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-sm flex-shrink-0", children: "X" }), _jsxs("div", { className: "flex-1 min-w-0", children: [_jsx("p", { className: "text-sm font-bold text-slate-800 dark:text-slate-200", children: "XMUM Admin" }), _jsx("p", { className: "text-[10px] text-slate-400 capitalize", children: adminUser?.role })] }), _jsx("button", { onClick: () => setSidebarOpen(false), className: "lg:hidden p-1.5 text-slate-400 hover:text-slate-700\n                         dark:hover:text-slate-200 rounded-lg transition-colors flex-shrink-0", children: _jsx(X, { className: "w-4 h-4" }) })] }) }), _jsx("nav", { className: "flex-1 px-3 py-4 space-y-1 overflow-y-auto", children: NAV.map(({ href, label, icon: Icon }) => {
+                            if (label === "Audit Log" && !isAdmin)
+                                return null;
                             const active = location === href;
                             return (_jsx(Link, { href: href, onClick: () => setSidebarOpen(false), children: _jsxs("a", { className: `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors min-h-[44px] ${active
                                         ? "bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400"

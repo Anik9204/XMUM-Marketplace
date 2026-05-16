@@ -229,5 +229,19 @@ service cloud.firestore {
            get(/databases/$(database)/documents/conversations/$(convId)).data.participants;
       allow delete: if false;
     }
+
+    // ── Admin Audit Logs ──────────────────────────────────────────────────────
+    match /adminAuditLogs/{logId} {
+      // Only admin-role users can read the audit trail
+      allow read: if isAdmin();
+      // Any editor or admin can write a log entry — but NO ONE can update
+      // or delete existing entries (tamper-evident)
+      allow create: if isEditorRole()
+        && request.resource.data.actorUid == request.auth.uid
+        && request.resource.data.createdAt is number
+        && request.resource.data.action is string
+        && request.resource.data.action.size() > 0;
+      allow update, delete: if false;
+    }
   }
 }

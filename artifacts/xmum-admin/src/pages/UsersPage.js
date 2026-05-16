@@ -1,7 +1,7 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useEffect, useState } from "react";
 import { collection, updateDoc, doc, orderBy, query, onSnapshot, getDocs, where } from "firebase/firestore";
-import { db } from "../lib/firebase";
+import { db, writeAuditLog } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { Ban, CheckCircle, CheckCircle2, X } from "lucide-react";
 function Toast({ message, type, onDone }) {
@@ -54,6 +54,25 @@ export default function UsersPage() {
             ]);
             setUsers(prev => prev.map(u => u.uid === uid ? { ...u, ...data } : u));
             setToast({ message: "Change saved.", type: "success" });
+            const targetUser = users.find((u) => u.uid === uid);
+            const auditAction = "role" in data
+                ? "user_role_changed"
+                : data.isBlacklisted ? "user_banned" : "user_unbanned";
+            const auditLabel = "role" in data
+                ? `Changed ${targetUser?.email ?? uid}'s role to "${data.role}"`
+                : data.isBlacklisted
+                    ? `Banned user ${targetUser?.email ?? uid}`
+                    : `Unbanned user ${targetUser?.email ?? uid}`;
+            void writeAuditLog({
+                actorUid: adminUser?.uid ?? "",
+                actorEmail: adminUser?.email ?? "",
+                action: auditAction,
+                label: auditLabel,
+                targetId: uid,
+                targetType: "user",
+                targetLabel: targetUser?.email ?? uid,
+                createdAt: Date.now(),
+            });
         }
         catch (e) {
             console.error("[UsersPage] updateUser failed:", e);

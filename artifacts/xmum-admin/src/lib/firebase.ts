@@ -28,6 +28,28 @@ export const db      = initializeFirestore(app, {
 });
 export const storage = getStorage(app);
 
+// ── Audit log ────────────────────────────────────────────────────────────────
+
+export interface AuditEntry {
+  actorUid: string;
+  actorEmail: string;
+  action: string;
+  label: string;
+  targetId: string;
+  targetType: "listing" | "user" | "shop" | "report" | "shopAd";
+  targetLabel: string;
+  createdAt: number;
+}
+
+export async function writeAuditLog(entry: AuditEntry): Promise<void> {
+  try {
+    await addDoc(collection(db, "adminAuditLogs"), entry);
+  } catch (err) {
+    // Audit logging is non-critical — never let it break the main action
+    console.warn("[writeAuditLog] failed (non-critical):", err);
+  }
+}
+
 // ── Campus Market helpers ────────────────────────────────────────────────────
 
 export async function getShops(limitCount = 100) {

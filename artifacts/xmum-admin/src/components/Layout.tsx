@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, Flag, Users, Megaphone, FileText,
   Star, GraduationCap, List, BarChart2, LogOut,
-  Store, Newspaper, Moon, Sun, Menu, X,
+  Store, Newspaper, Moon, Sun, Menu, X, ShieldAlert,
 } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth, db } from "../lib/firebase";
@@ -13,7 +13,7 @@ import { collection, query, where, onSnapshot } from "firebase/firestore";
 
 export default function Layout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
-  const { adminUser } = useAuth();
+  const { adminUser, isAdmin } = useAuth();
   const [pendingReports, setPendingReports]           = useState(0);
   const [pendingVerifications, setPendingVerifications] = useState(0);
   const { dark, toggle } = useDarkMode();
@@ -43,6 +43,7 @@ export default function Layout({ children }: { children: ReactNode }) {
     { href: "/analytics",     label: "Analytics",     icon: BarChart2 },
     { href: "/shops",         label: "Shops",         icon: Store },
     { href: "/shop-ads",      label: "Shop Ads",      icon: Newspaper },
+    { href: "/audit-log",     label: "Audit Log",     icon: ShieldAlert },
   ];
 
   return (
@@ -80,6 +81,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {NAV.map(({ href, label, icon: Icon }) => {
+            if (label === "Audit Log" && !isAdmin) return null;
             const active = location === href;
             return (
               <Link key={href} href={href} onClick={() => setSidebarOpen(false)}>

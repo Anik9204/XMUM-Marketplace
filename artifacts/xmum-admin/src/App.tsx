@@ -12,6 +12,7 @@ import ListingsPage     from "./pages/ListingsPage";
 import AnalyticsPage    from "./pages/AnalyticsPage";
 import ShopsPage        from "./pages/ShopsPage";
 import ShopAdsPage      from "./pages/ShopAdsPage";
+import AuditLogPage     from "./pages/AuditLogPage";
 import Layout           from "./components/Layout";
 
 export default function App() {
@@ -43,6 +44,7 @@ export default function App() {
         <Route path="/analytics"      component={AnalyticsPage} />
         <Route path="/shops"          component={ShopsPage} />
         <Route path="/shop-ads"       component={ShopAdsPage} />
+        <Route path="/audit-log"      component={AuditLogPage} />
         <Route>
           <Redirect to="/" />
         </Route>
