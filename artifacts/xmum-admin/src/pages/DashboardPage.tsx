@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { collection, query, where, onSnapshot, orderBy, limit, getDocs } from "firebase/firestore";
+import { Link } from "wouter";
 import { db } from "../lib/firebase";
-import { Users, Flag, Megaphone, ShoppingBag, TrendingUp } from "lucide-react";
+import {
+  Users, Flag, Megaphone, ShoppingBag, TrendingUp,
+  GraduationCap, Store, Newspaper, Activity,
+} from "lucide-react";
 
 interface Stats {
   totalUsers: number;
@@ -9,21 +13,33 @@ interface Stats {
   pendingReports: number;
   activeAds: number;
   recentSignups: number;
+  pendingVerifications: number;
+  pendingShopAds: number;
+  totalShops: number;
 }
 
 const defaultStats: Stats = {
-  totalUsers: 0,
-  totalListings: 0,
-  pendingReports: 0,
-  activeAds: 0,
-  recentSignups: 0,
+  totalUsers: 0, totalListings: 0, pendingReports: 0,
+  activeAds: 0, recentSignups: 0, pendingVerifications: 0,
+  pendingShopAds: 0, totalShops: 0,
 };
 
-function StatCard({ icon: Icon, label, value, color }:
-  { icon: any; label: string; value: number | string; color: string }) {
-  return (
+interface ActivityItem {
+  id: string;
+  type: "report" | "signup" | "shop_ad";
+  label: string;
+  sub: string;
+  time: number;
+  href: string;
+}
+
+function StatCard({ icon: Icon, label, value, color, href }: {
+  icon: any; label: string; value: number | string; color: string; href?: string;
+}) {
+  const inner = (
     <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 border
-                    border-gray-100 dark:border-slate-700">
+                    border-gray-100 dark:border-slate-700 hover:border-blue-200
+                    dark:hover:border-blue-700 transition-colors cursor-pointer">
       <div className={`w-10 h-10 ${color} rounded-xl flex items-center
                        justify-center mb-3`}>
         <Icon className="w-5 h-5 text-white" />
@@ -32,12 +48,15 @@ function StatCard({ icon: Icon, label, value, color }:
       <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{label}</p>
     </div>
   );
+  if (href) return <Link href={href}>{inner}</Link>;
+  return inner;
 }
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [pendingReports, setPendingReports] = useState(0);
+  const [activity, setActivity] = useState<ActivityItem[]>([]);
+  const [activityLoading, setActivityLoading] = useState(true);
 
   useEffect(() => {
     const unsubs: (() => void)[] = [];
@@ -73,9 +92,7 @@ export default function DashboardPage() {
     unsubs.push(onSnapshot(
       query(collection(db, "reports"), where("status", "==", "pending")),
       (snap) => {
-        const count = snap.size;
-        setPendingReports(count);
-        setStats(p => ({ ...(p ?? defaultStats), pendingReports: count }));
+        setStats(p => ({ ...(p ?? defaultStats), pendingReports: snap.size }));
         setLoading(false);
       },
       err => {
@@ -84,7 +101,86 @@ export default function DashboardPage() {
       }
     ));
 
+    unsubs.push(onSnapshot(
+      query(collection(db, "users"), where("verificationStatus", "==", "pending")),
+      (snap) => setStats(p => ({ ...(p ?? defaultStats), pendingVerifications: snap.size })),
+      err => console.error("[Dashboard] verifications snapshot:", err)
+    ));
+
+    unsubs.push(onSnapshot(
+      query(collection(db, "shopAds"), where("status", "==", "pending")),
+      (snap) => setStats(p => ({ ...(p ?? defaultStats), pendingShopAds: snap.size })),
+      err => console.error("[Dashboard] shopAds snapshot:", err)
+    ));
+
+    unsubs.push(onSnapshot(
+      collection(db, "shops"),
+      (snap) => setStats(p => ({ ...(p ?? defaultStats), totalShops: snap.size })),
+      err => console.error("[Dashboard] shops snapshot:", err)
+    ));
+
     return () => unsubs.forEach(u => u());
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    async function loadActivity() {
+      setActivityLoading(true);
+      try {
+        const [reportsSnap, signupsSnap, shopAdsSnap] = await Promise.all([
+          getDocs(query(collection(db, "reports"), orderBy("createdAt", "desc"), limit(5))),
+          getDocs(query(collection(db, "users"), orderBy("createdAt", "desc"), limit(5))),
+          getDocs(query(collection(db, "shopAds"), orderBy("submittedAt", "desc"), limit(5))),
+        ]);
+
+        const items: ActivityItem[] = [];
+
+        reportsSnap.docs.forEach(d => {
+          const data = d.data();
+          items.push({
+            id: d.id,
+            type: "report",
+            label: `Report: "${data.listingTitle ?? "listing"}"`,
+            sub: `by ${data.reportedByEmail ?? "unknown"} · ${data.status ?? "pending"}`,
+            time: data.createdAt ?? 0,
+            href: "/reports",
+          });
+        });
+
+        signupsSnap.docs.forEach(d => {
+          const data = d.data();
+          items.push({
+            id: d.id,
+            type: "signup",
+            label: `New user: ${data.displayName ?? data.email ?? "unknown"}`,
+            sub: data.email ?? "",
+            time: data.createdAt ?? 0,
+            href: "/users",
+          });
+        });
+
+        shopAdsSnap.docs.forEach(d => {
+          const data = d.data();
+          items.push({
+            id: d.id,
+            type: "shop_ad",
+            label: `Shop ad: "${data.shopName ?? "shop"}"`,
+            sub: `status: ${data.status ?? "pending"}`,
+            time: data.submittedAt ?? 0,
+            href: "/shop-ads",
+          });
+        });
+
+        items.sort((a, b) => b.time - a.time);
+        if (mounted) setActivity(items.slice(0, 10));
+      } catch (err) {
+        console.error("[Dashboard] activity load failed:", err);
+      } finally {
+        if (mounted) setActivityLoading(false);
+      }
+    }
+    loadActivity();
+    return () => { mounted = false; };
   }, []);
 
   return (
@@ -105,21 +201,70 @@ export default function DashboardPage() {
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[...Array(5)].map((_, i) => (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          {[...Array(8)].map((_, i) => (
             <div key={i} className="bg-white dark:bg-slate-800 rounded-2xl p-5 h-28
                                     animate-pulse border border-gray-100 dark:border-slate-700" />
           ))}
         </div>
       ) : stats ? (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard icon={Users}       label="Total Users"     value={stats.totalUsers}     color="bg-blue-500" />
-          <StatCard icon={ShoppingBag} label="Active Listings" value={stats.totalListings}  color="bg-green-500" />
-          <StatCard icon={Flag}        label="Pending Reports" value={pendingReports}        color="bg-red-500" />
-          <StatCard icon={Megaphone}   label="Active Ads"      value={stats.activeAds}      color="bg-amber-500" />
-          <StatCard icon={TrendingUp}  label="New Users (7d)"  value={stats.recentSignups}  color="bg-purple-500" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <StatCard icon={Users}         label="Total Users"           value={stats.totalUsers}           color="bg-blue-500"   href="/users" />
+          <StatCard icon={ShoppingBag}   label="Active Listings"       value={stats.totalListings}        color="bg-green-500"  href="/listings" />
+          <StatCard icon={Flag}          label="Pending Reports"       value={stats.pendingReports}       color="bg-red-500"    href="/reports" />
+          <StatCard icon={GraduationCap} label="Pending Verifications" value={stats.pendingVerifications} color="bg-indigo-500" href="/verifications" />
+          <StatCard icon={Newspaper}     label="Pending Shop Ads"      value={stats.pendingShopAds}       color="bg-amber-500"  href="/shop-ads" />
+          <StatCard icon={Store}         label="Total Shops"           value={stats.totalShops}           color="bg-teal-500"   href="/shops" />
+          <StatCard icon={Megaphone}     label="Active Platform Ads"   value={stats.activeAds}            color="bg-purple-500" href="/ads" />
+          <StatCard icon={TrendingUp}    label="New Users (7d)"        value={stats.recentSignups}        color="bg-pink-500" />
         </div>
       ) : null}
+
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100
+                      dark:border-slate-700 overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-100 dark:border-slate-700
+                        flex items-center gap-2">
+          <Activity className="w-4 h-4 text-slate-400" />
+          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+            Recent Activity
+          </h2>
+        </div>
+        {activityLoading ? (
+          <div className="space-y-px">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="h-14 bg-slate-50 dark:bg-slate-800/50 animate-pulse mx-4 my-2 rounded-xl" />
+            ))}
+          </div>
+        ) : activity.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-10">No recent activity.</p>
+        ) : (
+          <div className="divide-y divide-gray-50 dark:divide-slate-700/50">
+            {activity.map((item) => (
+              <Link key={item.id + item.time} href={item.href}>
+                <div className="flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50
+                                dark:hover:bg-slate-700/30 transition-colors cursor-pointer">
+                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                    item.type === "report"   ? "bg-red-400" :
+                    item.type === "signup"   ? "bg-green-400" :
+                                               "bg-amber-400"
+                  }`} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">
+                      {item.label}
+                    </p>
+                    <p className="text-xs text-slate-400 truncate">{item.sub}</p>
+                  </div>
+                  <span className="text-[11px] text-slate-400 flex-shrink-0">
+                    {new Date(item.time).toLocaleDateString("en-MY", {
+                      day: "numeric", month: "short",
+                    })}
+                  </span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

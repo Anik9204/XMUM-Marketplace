@@ -1,0 +1,300 @@
+You are a senior full-stack developer and DevSecOps engineer working on the
+XMUM Marketplace monorepo. You are improving the ADMIN app ONLY
+(artifacts/xmum-admin/src/pages/UsersPage.tsx).
+Never touch artifacts/xmum-market/. No firestore.rules changes.
+
+CRITICAL RULES — same as all previous prompts.
+
+═══════════════════════════════════════════════════
+IMPROVEMENT — Users page: role filter + user detail side drawer
+File: artifacts/xmum-admin/src/pages/UsersPage.tsx
+═══════════════════════════════════════════════════
+
+GOAL:
+Add two improvements to UsersPage:
+  1. Role filter dropdown (All / Admin / Editor / User / Banned)
+  2. A side drawer that slides in when a user row is clicked, showing
+     that user's listings count, join date, verification status,
+     report count against them, and quick action buttons
+
+THIS IS A SUBSTANTIAL EXPANSION of UsersPage.tsx. Read the entire current
+file before making any change. The existing ban toggle and role change
+functionality must remain exactly as-is.
+
+EXACT CHANGES:
+
+Step 1 — Add new imports to UsersPage.tsx.
+
+At the top, add to the existing import block:
+  import { getDocs, where } from "firebase/firestore";
+(check if getDocs/where are already imported — add only what's missing)
+
+Also add to the lucide-react import:
+  X, ExternalLink, ShoppingBag, FileText, GraduationCap
+(add only those not already imported)
+
+Step 2 — Add new state variables inside UsersPage().
+
+After the existing state declarations, add:
+
+  const [roleFilter, setRoleFilter] = useState<"all" | "admin" | "editor" | "user" | "banned">("all");
+  const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
+  const [drawerStats, setDrawerStats] = useState<{
+    listingCount: number;
+    reportCount: number;
+  } | null>(null);
+  const [drawerLoading, setDrawerLoading] = useState(false);
+
+Step 3 — Add a function to load drawer stats.
+
+After the handleBanToggle function, add:
+
+  async function openDrawer(u: AdminUser) {
+    setSelectedUser(u);
+    setDrawerStats(null);
+    setDrawerLoading(true);
+    try {
+      const [listingsSnap, reportsSnap] = await Promise.all([
+        getDocs(query(collection(db, "listings"),
+          where("userId", "==", u.uid),
+          where("isArchived", "==", false)
+        )),
+        getDocs(query(collection(db, "reports"),
+          where("listingUserId", "==", u.uid)
+        )),
+      ]);
+      setDrawerStats({
+        listingCount: listingsSnap.size,
+        reportCount: reportsSnap.size,
+      });
+    } catch (err) {
+      console.error("[UsersPage] drawer stats failed:", err);
+      setDrawerStats({ listingCount: 0, reportCount: 0 });
+    } finally {
+      setDrawerLoading(false);
+    }
+  }
+
+Step 4 — Update the filtered const to include role filtering.
+
+Find the existing `filtered` const:
+  const filtered = users.filter(u =>
+    u.email?.toLowerCase().includes(search.toLowerCase()) ||
+    u.displayName?.toLowerCase().includes(search.toLowerCase())
+  );
+
+Replace it with:
+  const filtered = users.filter(u => {
+    const matchesSearch = !search.trim() ||
+      u.email?.toLowerCase().includes(search.toLowerCase()) ||
+      u.displayName?.toLowerCase().includes(search.toLowerCase());
+    const matchesRole =
+      roleFilter === "all" ? true :
+      roleFilter === "banned" ? u.isBlacklisted :
+      u.role === roleFilter;
+    return matchesSearch && matchesRole;
+  });
+
+Step 5 — Add the role filter dropdown to the JSX.
+
+Find the search input in the JSX. After the closing tag of the search
+input's wrapper, add a role filter select. The search input is currently:
+  <input value={search} onChange={e => setSearch(e.target.value)} ...
+
+Add this select AFTER that input, inside the same wrapper div or as a
+sibling. Wrap both in a flex container if they aren't already:
+
+  <div className="flex flex-wrap gap-3 mb-5">
+    {/* keep the existing search input here */}
+    <select
+      value={roleFilter}
+      onChange={e => setRoleFilter(e.target.value as typeof roleFilter)}
+      className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700
+                 rounded-xl px-3 py-2.5 text-sm min-h-[44px] text-slate-700
+                 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+    >
+      <option value="all">All Users</option>
+      <option value="admin">Admin</option>
+      <option value="editor">Editor</option>
+      <option value="user">User</option>
+      <option value="banned">Banned</option>
+    </select>
+  </div>
+
+Make sure the search input keeps all its existing className — do NOT
+change its styling.
+
+Step 6 — Make each user row clickable to open the drawer.
+
+Find the <tr> element inside the users.map() render. Add an onClick to
+every <tr>:
+  onClick={() => openDrawer(u)}
+  className="... cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/20 transition-colors"
+
+Add cursor-pointer and the hover class to whatever className string the
+<tr> already has (do not remove any existing classes).
+
+Step 7 — Add the user detail drawer overlay to the JSX.
+
+Add this block BEFORE the closing </div> of the entire component return:
+
+  {selectedUser && (
+    <div className="fixed inset-0 z-50 flex justify-end">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/30 dark:bg-black/50"
+        onClick={() => setSelectedUser(null)}
+      />
+      {/* Drawer */}
+      <div className="relative w-full max-w-sm bg-white dark:bg-slate-800
+                      h-full overflow-y-auto shadow-2xl flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b
+                        border-gray-100 dark:border-slate-700">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-full bg-blue-100 dark:bg-blue-900/40
+                            flex items-center justify-center flex-shrink-0 text-blue-600
+                            dark:text-blue-400 font-bold text-sm">
+              {(selectedUser.displayName ?? selectedUser.email ?? "?")[0].toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">
+                {selectedUser.displayName ?? "—"}
+              </p>
+              <p className="text-xs text-slate-400 truncate">{selectedUser.email}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setSelectedUser(null)}
+            className="flex-shrink-0 p-2 text-slate-400 hover:text-slate-700
+                       dark:hover:text-slate-200 rounded-lg transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 px-5 py-5 space-y-5">
+
+          {/* Status badges */}
+          <div className="flex flex-wrap gap-2">
+            <span className={`text-xs font-medium capitalize px-2.5 py-1 rounded-full ${
+              selectedUser.role === "admin"
+                ? "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
+                : selectedUser.role === "editor"
+                ? "bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400"
+                : "bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400"
+            }`}>
+              {selectedUser.role ?? "user"}
+            </span>
+            {selectedUser.isBlacklisted && (
+              <span className="text-xs font-medium px-2.5 py-1 rounded-full
+                               bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400">
+                Banned
+              </span>
+            )}
+            {selectedUser.verificationStatus === "approved" && (
+              <span className="text-xs font-medium px-2.5 py-1 rounded-full
+                               bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400">
+                XMUM Verified
+              </span>
+            )}
+            {selectedUser.verificationStatus === "pending" && (
+              <span className="text-xs font-medium px-2.5 py-1 rounded-full
+                               bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400">
+                Verification Pending
+              </span>
+            )}
+          </div>
+
+          {/* Info rows */}
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-slate-500 dark:text-slate-400">UID</span>
+              <span className="font-mono text-xs text-slate-600 dark:text-slate-300
+                               truncate max-w-[180px]">{selectedUser.uid}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500 dark:text-slate-400">Joined</span>
+              <span className="text-slate-700 dark:text-slate-300">
+                {selectedUser.createdAt
+                  ? new Date(selectedUser.createdAt).toLocaleDateString("en-MY", {
+                      day: "numeric", month: "short", year: "numeric"
+                    })
+                  : "—"}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500 dark:text-slate-400">Email verified</span>
+              <span className={selectedUser.emailVerified
+                ? "text-green-600 dark:text-green-400"
+                : "text-red-500"}>
+                {selectedUser.emailVerified ? "Yes" : "No"}
+              </span>
+            </div>
+          </div>
+
+          {/* Live stats */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-3 text-center">
+              {drawerLoading ? (
+                <div className="h-6 bg-slate-200 dark:bg-slate-600 rounded animate-pulse mx-auto w-8 mb-1" />
+              ) : (
+                <p className="text-xl font-bold text-slate-800 dark:text-slate-200">
+                  {drawerStats?.listingCount ?? "—"}
+                </p>
+              )}
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Active Listings</p>
+            </div>
+            <div className="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-3 text-center">
+              {drawerLoading ? (
+                <div className="h-6 bg-slate-200 dark:bg-slate-600 rounded animate-pulse mx-auto w-8 mb-1" />
+              ) : (
+                <p className={`text-xl font-bold ${
+                  (drawerStats?.reportCount ?? 0) > 0
+                    ? "text-red-500"
+                    : "text-slate-800 dark:text-slate-200"
+                }`}>
+                  {drawerStats?.reportCount ?? "—"}
+                </p>
+              )}
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Reports Against</p>
+            </div>
+          </div>
+
+          {/* Quick actions */}
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+              Actions
+            </p>
+            {selectedUser.uid !== adminUser?.uid && (
+              <button
+                onClick={() => {
+                  handleBanToggle(selectedUser);
+                  setSelectedUser(null);
+                }}
+                className={`w-full flex items-center justify-center gap-2 text-sm font-medium
+                            rounded-xl min-h-[44px] border transition-colors
+                            ${selectedUser.isBlacklisted
+                              ? "border-green-200 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
+                              : "border-red-200 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"}`}
+              >
+                {selectedUser.isBlacklisted ? "Unban User" : "Ban User"}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )}
+
+═══════════════════════════════════════════════════
+VERIFICATION
+═══════════════════════════════════════════════════
+
+1. Run: pnpm --filter xmum-admin run build — zero errors.
+2. The existing ban toggle and role change select must still work
+   identically to before — test mentally: clicking Ban in the drawer
+   calls the existing handleBanToggle() with the selectedUser object.
+3. The role filter "Banned" must show only users where isBlacklisted === true.
+4. Zero changes outside artifacts/xmum-admin/.
