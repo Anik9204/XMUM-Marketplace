@@ -3,11 +3,12 @@ import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, Flag, Users, Megaphone, FileText,
   Star, GraduationCap, List, BarChart2, LogOut,
-  Store, Newspaper,
+  Store, Newspaper, Moon, Sun, Menu, X,
 } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth, db } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
+import { useDarkMode } from "../contexts/DarkModeContext";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 
 export default function Layout({ children }: { children: ReactNode }) {
@@ -15,6 +16,8 @@ export default function Layout({ children }: { children: ReactNode }) {
   const { adminUser } = useAuth();
   const [pendingReports, setPendingReports]           = useState(0);
   const [pendingVerifications, setPendingVerifications] = useState(0);
+  const { dark, toggle } = useDarkMode();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     const q = query(collection(db, "reports"), where("status", "==", "pending"));
@@ -43,15 +46,35 @@ export default function Layout({ children }: { children: ReactNode }) {
   ];
 
   return (
-    <div className="flex h-screen bg-slate-50 dark:bg-slate-900">
-      <aside className="w-60 flex-shrink-0 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 flex flex-col">
+    <div className="flex h-screen bg-slate-50 dark:bg-slate-900 overflow-hidden">
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-20 bg-black/40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      <aside className={`
+        fixed inset-y-0 left-0 z-30 w-60 flex-shrink-0
+        bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700
+        flex flex-col transition-transform duration-200
+        lg:static lg:translate-x-0
+        ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
+      `}>
         <div className="px-6 py-5 border-b border-gray-100 dark:border-slate-700">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">X</div>
-            <div>
+            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-sm flex-shrink-0">X</div>
+            <div className="flex-1 min-w-0">
               <p className="text-sm font-bold text-slate-800 dark:text-slate-200">XMUM Admin</p>
               <p className="text-[10px] text-slate-400 capitalize">{adminUser?.role}</p>
             </div>
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="lg:hidden p-1.5 text-slate-400 hover:text-slate-700
+                         dark:hover:text-slate-200 rounded-lg transition-colors flex-shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         </div>
 
@@ -59,7 +82,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           {NAV.map(({ href, label, icon: Icon }) => {
             const active = location === href;
             return (
-              <Link key={href} href={href}>
+              <Link key={href} href={href} onClick={() => setSidebarOpen(false)}>
                 <a className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors min-h-[44px] ${
                   active
                     ? "bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400"
@@ -94,6 +117,17 @@ export default function Layout({ children }: { children: ReactNode }) {
             <p className="text-[10px] text-slate-400 truncate">{adminUser?.email}</p>
           </div>
           <button
+            onClick={toggle}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm
+                       text-slate-600 dark:text-slate-400 hover:bg-slate-50
+                       dark:hover:bg-slate-700/50 transition-colors min-h-[44px] mb-1"
+          >
+            {dark
+              ? <Sun className="w-4 h-4 text-amber-400" />
+              : <Moon className="w-4 h-4" />}
+            {dark ? "Light Mode" : "Dark Mode"}
+          </button>
+          <button
             onClick={() => signOut(auth)}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors min-h-[44px]"
           >
@@ -103,8 +137,25 @@ export default function Layout({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-auto">
-        {children}
+      <main className="flex-1 overflow-auto flex flex-col min-w-0">
+        {/* Mobile top bar — only visible below lg breakpoint */}
+        <div className="lg:hidden flex items-center gap-3 px-4 py-3 bg-white
+                        dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700
+                        flex-shrink-0">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="p-2 text-slate-500 hover:text-slate-700 dark:hover:text-slate-200
+                       rounded-lg transition-colors"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
+            XMUM Admin
+          </p>
+        </div>
+        <div className="flex-1 overflow-auto">
+          {children}
+        </div>
       </main>
     </div>
   );

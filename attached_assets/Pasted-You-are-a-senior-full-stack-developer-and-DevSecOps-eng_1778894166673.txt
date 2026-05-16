@@ -1,0 +1,330 @@
+You are a senior full-stack developer and DevSecOps engineer working on the
+XMUM Marketplace monorepo. You are improving the ADMIN app ONLY.
+The ONLY files you may touch in this prompt are:
+  - artifacts/xmum-admin/src/contexts/DarkModeContext.tsx   (CREATE NEW)
+  - artifacts/xmum-admin/src/components/Layout.tsx          (EDIT)
+  - artifacts/xmum-admin/src/main.tsx                       (EDIT)
+  - artifacts/xmum-admin/src/index.css                      (EDIT)
+
+You must NEVER touch anything inside artifacts/xmum-market/.
+Zero changes to firestore.rules, firestore.indexes.json, or storage.rules.
+
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch unless instructed. Make surgical
+   edits only — change the minimum number of lines needed.
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless explicitly instructed below.
+4. After every change, mentally verify: "Does this break anything that
+   was working before?" If yes, find a different approach.
+5. If a shared component is affected, STOP and explain the impact first.
+6. Never change any CSS class, layout structure, z-index, or responsive
+   breakpoint unless it is directly part of the fix.
+7. Confirm zero build errors: pnpm --filter xmum-admin run build
+
+═══════════════════════════════════════════════════
+CONTEXT — Read before touching anything
+═══════════════════════════════════════════════════
+
+The admin panel's Tailwind config already has `darkMode: "class"` — every
+page already has full dark: variants on all elements. The only missing
+pieces are:
+  a) No context to hold and persist the dark/light preference
+  b) No toggle button in the UI
+  c) The `dark` class is never applied to <html> — so dark mode never
+     actually activates regardless of OS preference
+  d) The sidebar is a fixed w-60 that breaks on small laptop screens —
+     it needs a mobile hamburger that slides the sidebar in/out
+
+The main student app (xmum-market) already has an identical DarkModeContext
+at src/contexts/DarkModeContext.tsx using localStorage key "xmum-theme".
+We will create an IDENTICAL copy for the admin app using the same key so
+that if a user has dark mode on in the student app, the admin panel
+respects that same preference automatically.
+
+═══════════════════════════════════════════════════
+STEP 1 — Create DarkModeContext.tsx
+File: artifacts/xmum-admin/src/contexts/DarkModeContext.tsx  (NEW FILE)
+═══════════════════════════════════════════════════
+
+Create this file with the following exact contents:
+
+  import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+
+  interface DarkModeCtx {
+    dark: boolean;
+    toggle: () => void;
+  }
+
+  const Ctx = createContext<DarkModeCtx>({ dark: false, toggle: () => {} });
+
+  export function DarkModeProvider({ children }: { children: ReactNode }) {
+    const [dark, setDark] = useState<boolean>(() => {
+      try {
+        const stored = localStorage.getItem("xmum-theme");
+        if (stored === "dark")  return true;
+        if (stored === "light") return false;
+        const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        localStorage.setItem("xmum-theme", prefersDark ? "dark" : "light");
+        return prefersDark;
+      } catch {
+        return false;
+      }
+    });
+
+    useEffect(() => {
+      const root = document.documentElement;
+      if (dark) {
+        root.classList.add("dark");
+      } else {
+        root.classList.remove("dark");
+      }
+      try {
+        localStorage.setItem("xmum-theme", dark ? "dark" : "light");
+      } catch {}
+    }, [dark]);
+
+    const toggle = () => setDark((d) => !d);
+
+    return <Ctx.Provider value={{ dark, toggle }}>{children}</Ctx.Provider>;
+  }
+
+  export function useDarkMode() {
+    return useContext(Ctx);
+  }
+
+═══════════════════════════════════════════════════
+STEP 2 — Wrap the app with DarkModeProvider
+File: artifacts/xmum-admin/src/main.tsx
+═══════════════════════════════════════════════════
+
+The current main.tsx wraps the app with only AuthProvider:
+  <AuthProvider>
+    <App />
+  </AuthProvider>
+
+Add the DarkModeProvider import and wrap it OUTSIDE AuthProvider so the
+dark class is applied to <html> before anything renders:
+
+  import { DarkModeProvider } from "./contexts/DarkModeContext";
+
+Then change the render to:
+  <DarkModeProvider>
+    <AuthProvider>
+      <App />
+    </AuthProvider>
+  </DarkModeProvider>
+
+Do NOT remove React.StrictMode or any other existing wrapper.
+
+═══════════════════════════════════════════════════
+STEP 3 — Add toggle button + responsive sidebar to Layout.tsx
+File: artifacts/xmum-admin/src/components/Layout.tsx
+═══════════════════════════════════════════════════
+
+Read the entire current Layout.tsx before making any change. The current
+structure is:
+  <div className="flex h-screen bg-slate-50 dark:bg-slate-900">
+    <aside className="w-60 flex-shrink-0 ..."> ... </aside>
+    <main className="flex-1 overflow-auto"> {children} </main>
+  </div>
+
+The sidebar is always visible at w-60. We will make it slide in/out on
+small screens while keeping it always visible on lg+ screens.
+
+EXACT CHANGES TO Layout.tsx:
+
+3a — Add new imports at the top.
+
+Add to the existing lucide-react import:
+  Moon, Sun, Menu, X
+
+Add this import (after the existing imports):
+  import { useDarkMode } from "../contexts/DarkModeContext";
+
+3b — Add state and the useDarkMode hook inside the Layout component.
+
+After the existing `const [pendingVerifications, setPendingVerifications]`
+state declaration, add:
+
+  const { dark, toggle } = useDarkMode();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+3c — Update the outer wrapper div to allow overlay on mobile.
+
+The current outer div is:
+  <div className="flex h-screen bg-slate-50 dark:bg-slate-900">
+
+Change it to:
+  <div className="flex h-screen bg-slate-50 dark:bg-slate-900 overflow-hidden">
+
+3d — Add a mobile overlay backdrop.
+
+Immediately INSIDE the outer div, BEFORE the <aside>, add:
+
+  {sidebarOpen && (
+    <div
+      className="fixed inset-0 z-20 bg-black/40 lg:hidden"
+      onClick={() => setSidebarOpen(false)}
+    />
+  )}
+
+3e — Update the <aside> to be responsive.
+
+The current aside opening tag is:
+  <aside className="w-60 flex-shrink-0 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 flex flex-col">
+
+Replace it with:
+  <aside className={`
+    fixed inset-y-0 left-0 z-30 w-60 flex-shrink-0
+    bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700
+    flex flex-col transition-transform duration-200
+    lg:static lg:translate-x-0
+    ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
+  `}>
+
+Do NOT change anything inside the <aside> except for one addition in the
+bottom user section (Step 3g below).
+
+3f — Add the dark mode toggle button inside the sidebar footer.
+
+Find the sign-out button at the bottom of the sidebar. It currently is:
+  <button onClick={() => signOut(auth)} className="...">
+    <LogOut className="w-4 h-4" />
+    Sign out
+  </button>
+
+ADD the dark mode toggle button BEFORE the sign-out button:
+
+  <button
+    onClick={toggle}
+    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm
+               text-slate-600 dark:text-slate-400 hover:bg-slate-50
+               dark:hover:bg-slate-700/50 transition-colors min-h-[44px] mb-1"
+  >
+    {dark
+      ? <Sun className="w-4 h-4 text-amber-400" />
+      : <Moon className="w-4 h-4" />}
+    {dark ? "Light Mode" : "Dark Mode"}
+  </button>
+
+3g — Add a mobile top bar.
+
+Update the <main> element. Find:
+  <main className="flex-1 overflow-auto">
+
+Replace with:
+  <main className="flex-1 overflow-auto flex flex-col min-w-0">
+    {/* Mobile top bar — only visible below lg breakpoint */}
+    <div className="lg:hidden flex items-center gap-3 px-4 py-3 bg-white
+                    dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700
+                    flex-shrink-0">
+      <button
+        onClick={() => setSidebarOpen(true)}
+        className="p-2 text-slate-500 hover:text-slate-700 dark:hover:text-slate-200
+                   rounded-lg transition-colors"
+      >
+        <Menu className="w-5 h-5" />
+      </button>
+      <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
+        XMUM Admin
+      </p>
+    </div>
+    <div className="flex-1 overflow-auto">
+      {children}
+    </div>
+  </main>
+
+IMPORTANT: The original `{children}` is now inside the inner
+`<div className="flex-1 overflow-auto">`. Make sure children is not
+duplicated — remove it from the <main> line and place it only inside
+the inner div as shown above.
+
+Also add a close button inside the sidebar header (top section) so users
+on mobile can close the sidebar without clicking the backdrop.
+
+Find the sidebar header div (the one containing the "XMUM Admin" logo
+and role text). It currently is:
+  <div className="px-6 py-5 border-b border-gray-100 dark:border-slate-700">
+    <div className="flex items-center gap-2">
+      <div className="w-8 h-8 bg-blue-600 ...">X</div>
+      <div>
+        <p ...>XMUM Admin</p>
+        <p ...>{adminUser?.role}</p>
+      </div>
+    </div>
+  </div>
+
+Change the inner flex div to include a close button on mobile:
+  <div className="flex items-center gap-2">
+    <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-sm flex-shrink-0">X</div>
+    <div className="flex-1 min-w-0">
+      <p className="text-sm font-bold text-slate-800 dark:text-slate-200">XMUM Admin</p>
+      <p className="text-[10px] text-slate-400 capitalize">{adminUser?.role}</p>
+    </div>
+    <button
+      onClick={() => setSidebarOpen(false)}
+      className="lg:hidden p-1.5 text-slate-400 hover:text-slate-700
+                 dark:hover:text-slate-200 rounded-lg transition-colors flex-shrink-0"
+    >
+      <X className="w-4 h-4" />
+    </button>
+  </div>
+
+3h — Close sidebar when a nav link is clicked on mobile.
+
+Find the <Link> component inside NAV.map(). Its current onClick is absent.
+Add onClick to close the sidebar on mobile when navigating:
+
+  <Link key={href} href={href} onClick={() => setSidebarOpen(false)}>
+
+Just add the onClick prop — do not change anything else about the Link
+or the inner <a> element.
+
+═══════════════════════════════════════════════════
+STEP 4 — Fix index.css body background
+File: artifacts/xmum-admin/src/index.css
+═══════════════════════════════════════════════════
+
+The current index.css has:
+  body {
+    font-family: 'Inter', sans-serif;
+    background-color: #f8fafc;
+  }
+  .dark body {
+    background-color: #0f172a;
+  }
+
+The `.dark body` selector doesn't work in Tailwind's class-based dark mode
+because the `dark` class is on <html>, not <body>. The correct CSS selector
+is `:root.dark body` or just let Tailwind handle it. Since Layout.tsx
+already sets `bg-slate-50 dark:bg-slate-900` on the wrapper div which
+covers the full screen, the body background is irrelevant in practice.
+But to be clean, change the broken selector:
+
+FROM:
+  .dark body {
+    background-color: #0f172a;
+  }
+
+TO:
+  html.dark body {
+    background-color: #0f172a;
+  }
+
+That is the only change to index.css.
+
+═══════════════════════════════════════════════════
+VERIFICATION
+═══════════════════════════════════════════════════
+
+1. Run: pnpm --filter xmum-admin run build — zero errors.
+2. Verify DarkModeProvider is the outermost wrapper in main.tsx.
+3. Verify the dark mode toggle button appears in the sidebar footer,
+   above the Sign Out button.
+4. Verify at viewport < 1024px the sidebar is hidden by default and
+   appears when the hamburger (☰) button in the top bar is tapped.
+5. Verify at viewport >= 1024px (lg) the sidebar is always visible and
+   the mobile top bar is hidden.
+6. Zero changes to artifacts/xmum-market/ or any rules files.
