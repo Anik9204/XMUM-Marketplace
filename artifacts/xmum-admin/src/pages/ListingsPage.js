@@ -1,6 +1,6 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useEffect, useState, useRef } from "react";
-import { collection, query, orderBy, limit, getDocs, startAfter, deleteDoc, updateDoc, doc, } from "firebase/firestore";
+import { collection, query, orderBy, limit, getDocs, where, startAfter, deleteDoc, updateDoc, doc, } from "firebase/firestore";
 import { ref, deleteObject } from "firebase/storage";
 import { db, storage } from "../lib/firebase";
 import { Trash2, Archive, Star, Download } from "lucide-react";
@@ -33,13 +33,25 @@ export default function ListingsPage() {
     const [statusFilter, setStatusFilter] = useState("all");
     const [search, setSearch] = useState("");
     const cursorRef = useRef(null);
-    async function fetchPage(reset = false) {
+    async function fetchPage(reset = false, type = typeFilter, status = statusFilter) {
         if (reset)
             setLoading(true);
         else
             setLoadingMore(true);
         try {
             const constraints = [orderBy("createdAt", "desc"), limit(PAGE_SIZE + 1)];
+            if (type !== "all") {
+                constraints.unshift(where("type", "==", type));
+            }
+            if (status === "active") {
+                constraints.unshift(where("isArchived", "==", false));
+            }
+            else if (status === "archived") {
+                constraints.unshift(where("isArchived", "==", true));
+            }
+            else if (status === "sold") {
+                constraints.unshift(where("status", "==", "sold"));
+            }
             if (!reset && cursorRef.current)
                 constraints.push(startAfter(cursorRef.current));
             const snap = await getDocs(query(collection(db, "listings"), ...constraints));
@@ -63,8 +75,8 @@ export default function ListingsPage() {
     }
     useEffect(() => {
         cursorRef.current = null;
-        fetchPage(true);
-    }, []);
+        fetchPage(true, typeFilter, statusFilter);
+    }, [typeFilter, statusFilter]);
     async function handleDelete(listing) {
         if (!window.confirm(`Delete "${listing.title}"? This cannot be undone.`))
             return;
@@ -108,14 +120,6 @@ export default function ListingsPage() {
         }
     }
     const filtered = listings.filter((l) => {
-        if (typeFilter !== "all" && l.type !== typeFilter)
-            return false;
-        if (statusFilter === "archived" && !l.isArchived)
-            return false;
-        if (statusFilter === "active" && (l.isArchived || l.status === "sold"))
-            return false;
-        if (statusFilter === "sold" && l.status !== "sold")
-            return false;
         if (search.trim()) {
             const q = search.toLowerCase();
             if (!l.title.toLowerCase().includes(q))
@@ -162,5 +166,5 @@ export default function ListingsPage() {
                                         px-2 py-0.5 rounded-full flex-shrink-0 ${statusColor}`, children: statusLabel })] }), _jsxs("div", { className: "flex items-center gap-2 text-[11px] text-slate-400 flex-wrap", children: [_jsx("span", { children: listing.category }), listing.price !== undefined && (_jsxs("span", { children: ["\u00B7  ", listing.price === 0 ? "Free" : `RM ${listing.price.toFixed(2)}`] })), listing.viewCount !== undefined && (_jsxs("span", { children: ["\u00B7 ", listing.viewCount, " views"] })), _jsxs("span", { children: ["\u00B7 ", listing.userEmail] }), _jsxs("span", { children: ["\u00B7 ", new Date(listing.createdAt).toLocaleDateString("en-MY", {
                                                                 day: "numeric", month: "short", year: "numeric",
                                                             })] })] })] }), _jsxs("div", { className: "flex items-center gap-1 flex-shrink-0", children: [!listing.isArchived && (_jsxs("button", { onClick: () => handleArchive(listing), title: "Archive", className: "flex items-center gap-1 text-[11px] text-amber-600\n                                   border border-amber-200 dark:border-amber-800 rounded-xl\n                                   px-2.5 py-1.5 hover:bg-amber-50 dark:hover:bg-amber-900/20\n                                   transition-colors min-h-[34px]", children: [_jsx(Archive, { className: "w-3 h-3" }), " Archive"] })), !listing.isFeatured && (_jsxs("button", { onClick: () => handleFeature(listing), title: "Feature", className: "flex items-center gap-1 text-[11px] text-[#003366]\n                                   dark:text-blue-400 border border-blue-200 dark:border-blue-800\n                                   rounded-xl px-2.5 py-1.5 hover:bg-blue-50 dark:hover:bg-blue-900/20\n                                   transition-colors min-h-[34px]", children: [_jsx(Star, { className: "w-3 h-3" }), " Feature"] })), _jsxs("button", { onClick: () => handleDelete(listing), title: "Delete", className: "flex items-center gap-1 text-[11px] text-red-500\n                                 border border-red-200 dark:border-red-800 rounded-xl\n                                 px-2.5 py-1.5 hover:bg-red-50 dark:hover:bg-red-900/20\n                                 transition-colors min-h-[34px]", children: [_jsx(Trash2, { className: "w-3 h-3" }), " Delete"] })] })] }, listing.id));
-                        }) }), hasMore && (_jsx("div", { className: "flex justify-center mt-6", children: _jsx("button", { onClick: () => fetchPage(false), disabled: loadingMore, className: "bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700\n                           text-slate-600 dark:text-slate-300 text-sm font-medium rounded-xl\n                           px-6 min-h-[44px] hover:bg-slate-50 dark:hover:bg-slate-700/50\n                           disabled:opacity-50 transition-colors", children: loadingMore ? "Loading…" : "Load More" }) }))] }))] }));
+                        }) }), hasMore && (_jsx("div", { className: "flex justify-center mt-6", children: _jsx("button", { onClick: () => fetchPage(false, typeFilter, statusFilter), disabled: loadingMore, className: "bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700\n                           text-slate-600 dark:text-slate-300 text-sm font-medium rounded-xl\n                           px-6 min-h-[44px] hover:bg-slate-50 dark:hover:bg-slate-700/50\n                           disabled:opacity-50 transition-colors", children: loadingMore ? "Loading…" : "Load More" }) }))] }))] }));
 }

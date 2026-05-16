@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import {
-  collection, query, orderBy, limit, getDocs,
+  collection, query, orderBy, limit, getDocs, where,
   startAfter, deleteDoc, updateDoc, doc,
   QueryDocumentSnapshot,
 } from "firebase/firestore";
@@ -45,12 +45,22 @@ export default function ListingsPage() {
   const [search, setSearch]       = useState("");
   const cursorRef = useRef<QueryDocumentSnapshot | null>(null);
 
-  async function fetchPage(reset = false) {
+  async function fetchPage(reset = false, type = typeFilter, status = statusFilter) {
     if (reset) setLoading(true);
     else setLoadingMore(true);
 
     try {
       const constraints: any[] = [orderBy("createdAt", "desc"), limit(PAGE_SIZE + 1)];
+      if (type !== "all") {
+        constraints.unshift(where("type", "==", type));
+      }
+      if (status === "active") {
+        constraints.unshift(where("isArchived", "==", false));
+      } else if (status === "archived") {
+        constraints.unshift(where("isArchived", "==", true));
+      } else if (status === "sold") {
+        constraints.unshift(where("status", "==", "sold"));
+      }
       if (!reset && cursorRef.current) constraints.push(startAfter(cursorRef.current));
 
       const snap = await getDocs(query(collection(db, "listings"), ...constraints));
@@ -72,8 +82,8 @@ export default function ListingsPage() {
 
   useEffect(() => {
     cursorRef.current = null;
-    fetchPage(true);
-  }, []);
+    fetchPage(true, typeFilter, statusFilter);
+  }, [typeFilter, statusFilter]);
 
   async function handleDelete(listing: AdminListing) {
     if (!window.confirm(`Delete "${listing.title}"? This cannot be undone.`)) return;
@@ -121,10 +131,6 @@ export default function ListingsPage() {
   }
 
   const filtered = listings.filter((l) => {
-    if (typeFilter !== "all" && l.type !== typeFilter) return false;
-    if (statusFilter === "archived" && !l.isArchived) return false;
-    if (statusFilter === "active"   && (l.isArchived || l.status === "sold")) return false;
-    if (statusFilter === "sold"     && l.status !== "sold") return false;
     if (search.trim()) {
       const q = search.toLowerCase();
       if (!l.title.toLowerCase().includes(q)) return false;
@@ -342,7 +348,7 @@ export default function ListingsPage() {
           {hasMore && (
             <div className="flex justify-center mt-6">
               <button
-                onClick={() => fetchPage(false)}
+                onClick={() => fetchPage(false, typeFilter, statusFilter)}
                 disabled={loadingMore}
                 className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700
                            text-slate-600 dark:text-slate-300 text-sm font-medium rounded-xl

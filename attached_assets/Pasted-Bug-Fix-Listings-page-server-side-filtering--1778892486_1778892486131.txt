@@ -1,0 +1,129 @@
+Bug Fix: Listings page server-side filtering
+════════════════════════════════════════════════════════
+You are a senior full-stack developer and DevSecOps engineer working on the
+XMUM Marketplace monorepo. You are making ONE surgical fix to the ADMIN app
+ONLY (artifacts/xmum-admin/src/pages/ListingsPage.tsx).
+You must NEVER touch anything inside artifacts/xmum-market/.
+Zero changes to firestore.rules, firestore.indexes.json, or storage.rules.
+
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+(same rules as Phase 1 Prompt 1 — apply them here too)
+
+═══════════════════════════════════════════════════
+BUG — Listings filters are client-side only (wrong data shown)
+File: artifacts/xmum-admin/src/pages/ListingsPage.tsx
+═══════════════════════════════════════════════════
+
+DIAGNOSIS:
+The current fetchPage() function always queries ALL listings ordered by
+createdAt desc with a limit of 20, regardless of what typeFilter or
+statusFilter the admin has selected. The filtering only runs as a JS
+.filter() on the already-fetched 20 documents. This means:
+
+- If 50 listings exist and only 3 are of type "rental", but none of
+  those 3 happen to be in the most recent 20 loaded, the filter will
+  incorrectly show 0 results.
+- The admin cannot reliably see all listings of a given type/status.
+
+FIX:
+Refactor fetchPage() to include typeFilter and statusFilter as Firestore
+where() constraints when they are not "all". Also wire the filter dropdowns
+to reset the page and re-fetch when changed.
+
+HERE ARE THE EXACT CHANGES:
+
+Step 1 — Add typeFilter and statusFilter as dependencies of fetchPage.
+
+Currently fetchPage() reads from no outer state — it uses no parameters
+for filters. Change it to accept the current filter values as parameters.
+
+Replace the fetchPage function signature and body as follows. Read the
+current body carefully first, then make these precise changes:
+
+a) Change the function signature from:
+     async function fetchPage(reset = false) {
+   to:
+     async function fetchPage(reset = false, type = typeFilter, status = statusFilter) {
+
+b) Inside fetchPage, find the constraints array:
+     const constraints: any[] = [orderBy("createdAt", "desc"), limit(PAGE_SIZE + 1)];
+
+   After that line, add the conditional where() clauses:
+
+     if (type !== "all") {
+       constraints.unshift(where("type", "==", type));
+     }
+     if (status === "active") {
+       constraints.unshift(where("isArchived", "==", false));
+     } else if (status === "archived") {
+       constraints.unshift(where("isArchived", "==", true));
+     } else if (status === "sold") {
+       constraints.unshift(where("status", "==", "sold"));
+     }
+
+   IMPORTANT: The constraints array is spread into the query() call.
+   Firestore requires that where() clauses come BEFORE orderBy() and
+   limit() in the array. Use unshift() as shown above, not push().
+
+c) NOTE on Firestore indexes: Adding where("type") + orderBy("createdAt")
+   together may require a composite index. The existing
+   firestore.indexes.json in xmum-market already has:
+     listings: type ASC, isArchived ASC, status ASC, sortKey ASC
+     listings: type ASC, isArchived ASC, createdAt DESC
+   These cover the type + createdAt combination. The isArchived and status
+   single-field queries with createdAt should work with existing single-
+   field indexes. If a query fails with "failed-precondition", it means
+   a composite index is missing — catch that error and fall back to
+   loading without that filter, showing a console.warn. Do not throw.
+
+Step 2 — Reset pagination and re-fetch when filters change.
+
+Find the existing useEffect that calls fetchPage(true):
+  useEffect(() => {
+    cursorRef.current = null;
+    fetchPage(true);
+  }, []);
+
+Change its dependency array from [] to [typeFilter, statusFilter]:
+  useEffect(() => {
+    cursorRef.current = null;
+    fetchPage(true, typeFilter, statusFilter);
+  }, [typeFilter, statusFilter]);
+
+This means every time the admin changes a filter dropdown, the list resets
+and re-fetches from Firestore with the correct server-side filter.
+
+Step 3 — Keep the client-side .filter() for search only.
+
+The existing `filtered` const does client-side filtering. After your
+changes, the Firestore query already handles type and status. Update the
+`filtered` const to REMOVE the type and status conditions, keeping only
+the search filter:
+
+  const filtered = listings.filter((l) => {
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      if (!l.title.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+
+Step 4 — Update the "Load More" button's onClick to pass current filters:
+
+Find the Load More button's onClick:
+  onClick={() => fetchPage(false)}
+Change it to:
+  onClick={() => fetchPage(false, typeFilter, statusFilter)}
+
+═══════════════════════════════════════════════════
+VERIFICATION
+═══════════════════════════════════════════════════
+
+1. Run: pnpm --filter xmum-admin run build
+   — Must complete with zero TypeScript errors.
+
+2. Manually verify logic: selecting "Rental" from the type dropdown should
+   reset the list and only show rental listings from Firestore. Selecting
+   "All Types" should show all listings again.
+
+3. Confirm zero changes to any file outside artifacts/xmum-admin/.
