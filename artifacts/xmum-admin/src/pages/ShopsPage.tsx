@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { ExternalLink, Trash2, Search } from "lucide-react";
-import { getShops, deleteShop, writeAuditLog } from "../lib/firebase";
+import { ExternalLink, Trash2, Search, PauseCircle, PlayCircle } from "lucide-react";
+import { updateDoc, doc } from "firebase/firestore";
+import { getShops, deleteShop, writeAuditLog, db } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { AdminShop } from "../lib/types";
 
@@ -11,6 +12,7 @@ export default function ShopsPage() {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [suspending, setSuspending] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -47,6 +49,42 @@ export default function ShopsPage() {
       alert("Failed to delete shop. Check Firestore permissions.");
     } finally {
       setDeleting(null);
+    }
+  }
+
+  async function handleSuspendToggle(shop: AdminShop) {
+    const action = shop.isSuspended ? "unsuspend" : "suspend";
+    if (!window.confirm(
+      `${action === "suspend" ? "Suspend" : "Unsuspend"} shop "${shop.shopName}"?\n` +
+      (action === "suspend"
+        ? "The shop will be hidden from Campus Market."
+        : "The shop will become visible again.")
+    )) return;
+    setSuspending(shop.id);
+    try {
+      await updateDoc(doc(db, "shops", shop.id), {
+        isSuspended: !shop.isSuspended,
+      });
+      setShops((prev) =>
+        prev.map((s) =>
+          s.id === shop.id ? { ...s, isSuspended: !s.isSuspended } : s
+        )
+      );
+      void writeAuditLog({
+        actorUid:    adminUser?.uid   ?? "",
+        actorEmail:  adminUser?.email ?? "",
+        action:      shop.isSuspended ? "shop_unsuspended" : "shop_suspended",
+        label:       `${shop.isSuspended ? "Unsuspended" : "Suspended"} shop "${shop.shopName}"`,
+        targetId:    shop.id,
+        targetType:  "shop",
+        targetLabel: shop.shopName,
+        createdAt:   Date.now(),
+      });
+    } catch (e) {
+      console.error("[ShopsPage] suspend failed:", e);
+      alert("Failed to update shop. Check Firestore permissions.");
+    } finally {
+      setSuspending(null);
     }
   }
 
@@ -157,9 +195,18 @@ export default function ShopsPage() {
                           />
                         )}
                         <div>
-                          <p className="font-semibold text-slate-800 dark:text-slate-200">
-                            {shop.shopName || "—"}
-                          </p>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className="font-semibold text-slate-800 dark:text-slate-200">
+                              {shop.shopName || "—"}
+                            </p>
+                            {shop.isSuspended && (
+                              <span className="text-[10px] font-semibold bg-red-100 dark:bg-red-900/30
+                                               text-red-600 dark:text-red-400 px-2 py-0.5 rounded-full
+                                               flex-shrink-0">
+                                Suspended
+                              </span>
+                            )}
+                          </div>
                           {shop.shopSlug && (
                             <p className="text-[10px] text-slate-400">/{shop.shopSlug}</p>
                           )}
@@ -232,6 +279,22 @@ export default function ShopsPage() {
                             <ExternalLink className="w-3 h-3" /> View
                           </a>
                         )}
+                        <button
+                          onClick={() => handleSuspendToggle(shop)}
+                          disabled={suspending === shop.id}
+                          title={shop.isSuspended ? "Unsuspend shop" : "Suspend shop"}
+                          className={`flex items-center gap-1 text-[11px] rounded-xl px-2.5 py-1.5
+                                      border transition-colors min-h-[34px] disabled:opacity-50
+                                      ${shop.isSuspended
+                                        ? "border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20"
+                                        : "border-amber-200 dark:border-amber-800 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20"}`}
+                        >
+                          {suspending === shop.id
+                            ? "…"
+                            : shop.isSuspended
+                              ? <><PlayCircle  className="w-3 h-3" /> Unsuspend</>
+                              : <><PauseCircle className="w-3 h-3" /> Suspend</>}
+                        </button>
                         <button
                           onClick={() => handleDelete(shop)}
                           disabled={deleting === shop.id}

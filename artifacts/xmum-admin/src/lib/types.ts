@@ -97,6 +97,7 @@ export interface AdminShop {
   totalReviews?: number;
   inquiryCount?: number;
   createdAt: number;
+  isSuspended?: boolean;
 }
 
 export type ShopAdStatus = "pending" | "approved" | "rejected";
