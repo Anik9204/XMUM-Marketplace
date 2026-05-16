@@ -105,17 +105,22 @@ export interface ShopAd {
   id: string;
   shopId: string;
   shopName: string;
-  tagline: string;
+  shopOwnerId: string;
   imageUrl: string;
-  startsAt: number;
-  endsAt: number;
+  tagline: string;
+  ctaLabel: string;
+  ctaUrl: string;
   pricePerDay: number;
+  startDate: number;
+  endDate: number;
   status: ShopAdStatus;
-  submittedBy: string;
-  submittedAt: number;
-  reviewedBy?: string;
-  reviewedAt?: number;
   adminNote?: string;
+  impressions: number;
+  clicks: number;
+  submittedBy?: string;
+  submittedAt: number;
+  reviewedAt?: number;
+  reviewedBy?: string;
 }
 
 export interface AdminReview {

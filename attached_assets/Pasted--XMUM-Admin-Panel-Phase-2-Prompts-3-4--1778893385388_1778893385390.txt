@@ -1,0 +1,926 @@
+# XMUM Admin Panel — Phase 2, Prompts 3 & 4
+
+---
+
+# ════════════════════════════════════════════════════════
+# PHASE 2 — PROMPT 3 of 4
+# ShopAdsPage: real-time listener + notification on approve/reject
+# ════════════════════════════════════════════════════════
+
+```
+You are a senior full-stack developer and DevSecOps engineer working on the
+XMUM Marketplace monorepo. You are improving the ADMIN app ONLY.
+The ONLY files you are allowed to touch in this prompt are:
+  - artifacts/xmum-admin/src/lib/firebase.ts
+  - artifacts/xmum-admin/src/pages/ShopAdsPage.tsx
+
+You must NEVER touch anything inside artifacts/xmum-market/.
+Zero changes to firestore.rules, firestore.indexes.json, or storage.rules.
+
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed.
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless explicitly instructed below.
+4. After every change, mentally verify: "Does this break anything that
+   was working before?" If yes, find a different approach.
+5. If fixing Issue X requires changing a shared component used by other
+   pages, STOP and tell me the impact before proceeding.
+6. Never change any CSS class, layout structure, z-index, or responsive
+   breakpoint unless it is directly part of the fix.
+7. Confirm zero build errors before finishing:
+   pnpm --filter xmum-admin run build
+
+═══════════════════════════════════════════════════
+CONTEXT — Read this before making any change
+═══════════════════════════════════════════════════
+
+ShopAdsPage currently uses getDocs() (one-shot fetch) via two helper
+functions: getPendingShopAds() and getAllShopAds() in firebase.ts. This
+means the list goes stale the moment a new ad is submitted — the admin
+has to manually reload the page to see new submissions.
+
+Additionally, when an admin approves or rejects a shop ad, the shop owner
+receives NO in-app notification. The main app (xmum-market) has two
+notification helper functions already defined:
+  - notifyShopAdApproved(shopOwnerId, shopName, shopId)
+  - notifyShopAdRejected(shopOwnerId, shopName, adminNote, shopId)
+
+These write to: users/{shopOwnerId}/notifications (a Firestore subcollection).
+The Firestore rules allow any isXmuEmail() user to create notifications for
+any other user. The admin is an @xmu.edu.my verified user, so this write
+will succeed. The notification document structure is:
+  { type, title, body, shopId, createdAt: serverTimestamp(), read: false }
+
+The ShopAd documents in Firestore have these fields (confirmed from main
+app types.ts):
+  id, shopId, shopName, shopOwnerId, imageUrl, tagline, ctaLabel, ctaUrl,
+  pricePerDay, startDate, endDate, status, adminNote, impressions, clicks,
+  submittedAt, reviewedAt, reviewedBy
+
+IMPORTANT field name discrepancy: The admin types.ts ShopAd interface uses
+`startsAt` and `endsAt`, but the main app types.ts uses `startDate` and
+`endDate`. The actual Firestore documents use `startDate` and `endDate`
+(written by the main app). Fix the admin ShopAd interface to match the
+real field names, and update the JSX accordingly. Also add the missing
+`shopOwnerId` and `ctaLabel` fields to the admin interface.
+
+═══════════════════════════════════════════════════
+CHANGE 1 — Fix the admin ShopAd interface
+File: artifacts/xmum-admin/src/lib/types.ts
+═══════════════════════════════════════════════════
+
+Find the ShopAd interface (around line 104). Replace it entirely with:
+
+  export interface ShopAd {
+    id: string;
+    shopId: string;
+    shopName: string;
+    shopOwnerId: string;
+    imageUrl: string;
+    tagline: string;
+    ctaLabel: string;
+    ctaUrl: string;
+    pricePerDay: number;
+    startDate: number;
+    endDate: number;
+    status: ShopAdStatus;
+    adminNote?: string;
+    impressions: number;
+    clicks: number;
+    submittedBy?: string;
+    submittedAt: number;
+    reviewedAt?: number;
+    reviewedBy?: string;
+  }
+
+═══════════════════════════════════════════════════
+CHANGE 2 — Replace getDocs helpers with onSnapshot in firebase.ts
+File: artifacts/xmum-admin/src/lib/firebase.ts
+═══════════════════════════════════════════════════
+
+Step 2a — Add missing Firestore imports.
+
+At the top of firebase.ts, the current import from "firebase/firestore" is:
+  collection, query, orderBy, limit, getDocs,
+  where, doc, updateDoc, deleteDoc, getDoc
+
+Add to that import (only what is not already there):
+  onSnapshot, addDoc, serverTimestamp
+
+Step 2b — Add two new onSnapshot subscription functions.
+
+After the existing getAllShopAds() function, add these two NEW exported
+functions. Do NOT delete getPendingShopAds() or getAllShopAds() — they
+may be used elsewhere and removing them would break the build. Just add
+these new ones after them:
+
+  export function subscribePendingShopAds(
+    callback: (ads: ShopAd[]) => void,
+    onError?: (err: Error) => void,
+  ): () => void {
+    const q = query(
+      collection(db, "shopAds"),
+      where("status", "==", "pending"),
+      orderBy("submittedAt", "desc"),
+    );
+    return onSnapshot(
+      q,
+      (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() } as ShopAd))),
+      (err) => {
+        console.error("[subscribePendingShopAds] error:", err);
+        onError?.(err);
+      },
+    );
+  }
+
+  export function subscribeAllShopAds(
+    callback: (ads: ShopAd[]) => void,
+    onError?: (err: Error) => void,
+  ): () => void {
+    const q = query(
+      collection(db, "shopAds"),
+      orderBy("submittedAt", "desc"),
+    );
+    return onSnapshot(
+      q,
+      (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() } as ShopAd))),
+      (err) => {
+        console.error("[subscribeAllShopAds] error:", err);
+        onError?.(err);
+      },
+    );
+  }
+
+  export type { ShopAd };
+
+Make sure to add the ShopAd import at the top of firebase.ts. It comes
+from "./types" — check if it is already imported. If not, add:
+  import { ShopAd } from "./types";
+
+Step 2c — Add the notification helper functions to firebase.ts.
+
+After the subscribeAllShopAds function, add:
+
+  async function sendNotification(
+    uid: string,
+    data: { type: string; title: string; body: string; shopId: string },
+  ): Promise<void> {
+    try {
+      await addDoc(collection(db, "users", uid, "notifications"), {
+        ...data,
+        createdAt: serverTimestamp(),
+        read: false,
+      });
+    } catch (err) {
+      // Notifications are non-critical — log and continue
+      console.warn("[sendNotification] failed (non-critical):", err);
+    }
+  }
+
+  export async function notifyShopAdApproved(
+    shopOwnerId: string,
+    shopName: string,
+    shopId: string,
+  ): Promise<void> {
+    await sendNotification(shopOwnerId, {
+      type: "shop_ad_approved",
+      title: "Shop ad approved",
+      body: `Your ad for "${shopName}" has been approved and will be displayed in Campus Market.`,
+      shopId,
+    });
+  }
+
+  export async function notifyShopAdRejected(
+    shopOwnerId: string,
+    shopName: string,
+    adminNote: string,
+    shopId: string,
+  ): Promise<void> {
+    await sendNotification(shopOwnerId, {
+      type: "shop_ad_rejected",
+      title: "Shop ad rejected",
+      body: adminNote
+        ? `Your ad for "${shopName}" was rejected: ${adminNote}`
+        : `Your ad for "${shopName}" was not approved. Please review and resubmit.`,
+      shopId,
+    });
+  }
+
+═══════════════════════════════════════════════════
+CHANGE 3 — Update ShopAdsPage to use real-time listeners + notifications
+File: artifacts/xmum-admin/src/pages/ShopAdsPage.tsx
+═══════════════════════════════════════════════════
+
+Step 3a — Update the import from "../lib/firebase".
+
+The current import is:
+  import {
+    getPendingShopAds, getAllShopAds,
+    approveShopAd, rejectShopAd,
+  } from "../lib/firebase";
+
+Replace it with:
+  import {
+    subscribePendingShopAds, subscribeAllShopAds,
+    approveShopAd, rejectShopAd,
+    notifyShopAdApproved, notifyShopAdRejected,
+  } from "../lib/firebase";
+
+Step 3b — Replace the load() function and useEffect with onSnapshot.
+
+The current implementation has:
+  async function load() { ... }
+  useEffect(() => { load(); }, []);
+
+Remove the entire load() function. Replace it and the useEffect with:
+
+  useEffect(() => {
+    setLoading(true);
+    let pendingLoaded = false;
+    let allLoaded = false;
+
+    const checkDone = () => {
+      if (pendingLoaded && allLoaded) setLoading(false);
+    };
+
+    const unsubPending = subscribePendingShopAds(
+      (ads) => { setPending(ads); pendingLoaded = true; checkDone(); },
+      () => { pendingLoaded = true; checkDone(); },
+    );
+
+    const unsubAll = subscribeAllShopAds(
+      (ads) => { setAll(ads); allLoaded = true; checkDone(); },
+      () => { allLoaded = true; checkDone(); },
+    );
+
+    return () => { unsubPending(); unsubAll(); };
+  }, []);
+
+Step 3c — Update handleApprove to send a notification.
+
+The current handleApprove is:
+  async function handleApprove(ad: ShopAd) {
+    if (!adminUser) return;
+    setActing(ad.id);
+    try {
+      await approveShopAd(ad.id, adminUser.email);
+      await load();
+    } catch (e) {
+      console.error("[ShopAdsPage] approve failed:", e);
+      alert("Failed to approve ad.");
+    } finally {
+      setActing(null);
+    }
+  }
+
+Replace it with (surgical change — only remove the `await load()` line
+and add the notification call):
+  async function handleApprove(ad: ShopAd) {
+    if (!adminUser) return;
+    setActing(ad.id);
+    try {
+      await approveShopAd(ad.id, adminUser.email ?? "admin");
+      if (ad.shopOwnerId) {
+        await notifyShopAdApproved(ad.shopOwnerId, ad.shopName, ad.shopId);
+      }
+    } catch (e) {
+      console.error("[ShopAdsPage] approve failed:", e);
+      alert("Failed to approve ad.");
+    } finally {
+      setActing(null);
+    }
+  }
+
+Note: Remove the `await load()` call because onSnapshot now handles
+updates automatically. The list will update in real-time.
+
+Step 3d — Update confirmReject to send a notification.
+
+The current confirmReject is:
+  async function confirmReject() {
+    if (!rejectId || !adminUser) return;
+    setActing(rejectId);
+    try {
+      await rejectShopAd(rejectId, adminUser.email, rejectNote.trim());
+      setRejectId(null);
+      await load();
+    } catch (e) {
+      console.error("[ShopAdsPage] reject failed:", e);
+      alert("Failed to reject ad.");
+    } finally {
+      setActing(null);
+    }
+  }
+
+Replace it with:
+  async function confirmReject() {
+    if (!rejectId || !adminUser) return;
+    setActing(rejectId);
+    const adBeingRejected = [...pending, ...all].find(a => a.id === rejectId);
+    try {
+      await rejectShopAd(rejectId, adminUser.email ?? "admin", rejectNote.trim());
+      if (adBeingRejected?.shopOwnerId) {
+        await notifyShopAdRejected(
+          adBeingRejected.shopOwnerId,
+          adBeingRejected.shopName,
+          rejectNote.trim(),
+          adBeingRejected.shopId,
+        );
+      }
+      setRejectId(null);
+    } catch (e) {
+      console.error("[ShopAdsPage] reject failed:", e);
+      alert("Failed to reject ad.");
+    } finally {
+      setActing(null);
+    }
+  }
+
+Note: Remove `await load()` — real-time listener handles the update.
+
+Step 3e — Fix the date field names in the JSX.
+
+In the JSX, the date display currently reads `ad.startsAt` and `ad.endsAt`.
+The real Firestore field names are `startDate` and `endDate` (confirmed
+from the main app's ShopAd type and the updated admin ShopAd interface).
+
+Find these two lines in ShopAdsPage.tsx JSX:
+  {ad.startsAt
+    ? new Date(ad.startsAt).toLocaleDateString(...)
+    : "—"}
+  {ad.endsAt
+    ? new Date(ad.endsAt).toLocaleDateString(...)
+    : "—"}
+
+Change `ad.startsAt` to `ad.startDate` and `ad.endsAt` to `ad.endDate`
+in both the condition and the new Date() call.
+
+═══════════════════════════════════════════════════
+VERIFICATION
+═══════════════════════════════════════════════════
+
+1. Run: pnpm --filter xmum-admin run build — zero TypeScript errors.
+2. Confirm: no getDocs or load() calls remain in ShopAdsPage.tsx.
+3. Confirm: getPendingShopAds() and getAllShopAds() still exist in
+   firebase.ts (do not remove them — they may be used elsewhere).
+4. Confirm: the notification functions match the structure that the main
+   app's notifications subcollection expects:
+   users/{uid}/notifications → { type, title, body, shopId, createdAt, read }
+5. Zero changes to artifacts/xmum-market/ or any rules files.
+```
+
+---
+
+# ════════════════════════════════════════════════════════
+# PHASE 2 — PROMPT 4 of 4
+# AnalyticsPage: date range picker + sign-up trend + shop metrics
+# ════════════════════════════════════════════════════════
+
+```
+You are a senior full-stack developer and DevSecOps engineer working on the
+XMUM Marketplace monorepo. You are improving ONLY this one file:
+  artifacts/xmum-admin/src/pages/AnalyticsPage.tsx
+
+Never touch anything inside artifacts/xmum-market/, firebase.ts,
+firestore.rules, firestore.indexes.json, or storage.rules.
+
+CRITICAL RULES — same as all previous prompts. Apply them here.
+
+═══════════════════════════════════════════════════
+CONTEXT — Read this fully before making any change
+═══════════════════════════════════════════════════
+
+The current AnalyticsPage has three problems:
+
+PROBLEM 1 — Fixed 30-day window with no way to change it.
+The admin cannot see 7-day or 90-day trends. There is no date range
+control. Everything is hardcoded to 30 days.
+
+PROBLEM 2 — totalReviews queries the wrong collection.
+It queries `reviews` (the old user-to-user review collection).
+Campus Market shop reviews live in `shopReviews`. The count is wrong.
+
+PROBLEM 3 — Missing metrics that are critical for this type of platform:
+  - User sign-up trend over time (currently only total user count shown)
+  - Total shops count and shop growth
+  - Report resolution rate (how many reports are resolved vs still pending)
+  These are the metrics an admin needs to understand platform health.
+
+THE FIX IS A FULL REWRITE OF AnalyticsPage.tsx ONLY.
+The new page must be a clean implementation that:
+  - Keeps all three existing chart types (bar, pie, line) with same styling
+  - Adds a date range selector (7d / 30d / 90d) at the top
+  - Fixes the reviews count to use `shopReviews`
+  - Adds a sign-ups per day line chart
+  - Adds 3 new stat cards: Total Shops, Total Shop Reviews, Reports Resolved
+  - Re-fetches data whenever the date range changes
+
+═══════════════════════════════════════════════════
+FULL REWRITE OF AnalyticsPage.tsx
+═══════════════════════════════════════════════════
+
+Replace the entire contents of AnalyticsPage.tsx with the following.
+Read every line carefully — do not omit or compress any section:
+
+---
+
+import { useEffect, useState, useCallback } from "react";
+import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
+import { db } from "../lib/firebase";
+import {
+  BarChart, Bar, PieChart, Pie, LineChart, Line,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, Cell,
+  ResponsiveContainer,
+} from "recharts";
+import {
+  Users, List, Flag, Star, Store, CheckCircle, Loader2,
+} from "lucide-react";
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+interface DayEntry    { date: string; count: number }
+interface SignupEntry { date: string; signups: number }
+interface ViewEntry   { date: string; views: number }
+interface TypeEntry   { name: string; value: number }
+
+interface Stats {
+  totalUsers: number;
+  totalListings: number;
+  pendingReports: number;
+  resolvedReports: number;
+  totalShopReviews: number;
+  totalShops: number;
+}
+
+type Range = 7 | 30 | 90;
+
+// ── Constants ────────────────────────────────────────────────────────────────
+
+const TYPE_COLORS: Record<string, string> = {
+  "buy-sell":   "#003366",
+  "lost-found": "#0D9488",
+  "jobs":       "#7C3AED",
+  "assistance": "#EA580C",
+  "rental":     "#D97706",
+};
+
+const TYPE_LABELS: Record<string, string> = {
+  "buy-sell":   "Buy & Sell",
+  "lost-found": "Lost & Found",
+  "jobs":       "Jobs",
+  "assistance": "Assistance",
+  "rental":     "Rental",
+};
+
+const TOOLTIP_STYLE = {
+  fontSize: 12, borderRadius: 12, border: "none",
+  boxShadow: "0 2px 12px rgba(0,0,0,0.1)",
+};
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function dateKey(ms: number, range: Range): string {
+  if (range === 90) {
+    // Group by week for 90-day view to keep chart readable
+    const d = new Date(ms);
+    const weekStart = new Date(d);
+    weekStart.setDate(d.getDate() - d.getDay());
+    return weekStart.toLocaleDateString("en-MY", { day: "numeric", month: "short" });
+  }
+  return new Date(ms).toLocaleDateString("en-MY", { day: "numeric", month: "short" });
+}
+
+function buildDayRange(range: Range): string[] {
+  const keys: string[] = [];
+  const seen = new Set<string>();
+  for (let i = range - 1; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
+    const ms = d.getTime();
+    const k = dateKey(ms, range);
+    if (!seen.has(k)) {
+      seen.add(k);
+      keys.push(k);
+    }
+  }
+  return keys;
+}
+
+// ── Sub-components ───────────────────────────────────────────────────────────
+
+function StatCard({ icon: Icon, label, value, sub, color }: {
+  icon: any; label: string; value: number | string;
+  sub?: string; color: string;
+}) {
+  return (
+    <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 border
+                    border-gray-100 dark:border-slate-700">
+      <div className={`w-10 h-10 ${color} rounded-xl flex items-center
+                       justify-center mb-3`}>
+        <Icon className="w-5 h-5 text-white" />
+      </div>
+      <p className="text-2xl font-bold text-slate-800 dark:text-slate-200">{value}</p>
+      <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{label}</p>
+      {sub && (
+        <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{sub}</p>
+      )}
+    </div>
+  );
+}
+
+function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 border
+                    border-gray-100 dark:border-slate-700">
+      <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-4">
+        {title}
+      </h2>
+      {children}
+    </div>
+  );
+}
+
+// ── Main Component ───────────────────────────────────────────────────────────
+
+export default function AnalyticsPage() {
+  const [range, setRange] = useState<Range>(30);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [listingsPerDay, setListingsPerDay]   = useState<DayEntry[]>([]);
+  const [signupsPerDay, setSignupsPerDay]     = useState<SignupEntry[]>([]);
+  const [typeDistribution, setTypeDistribution] = useState<TypeEntry[]>([]);
+  const [viewsPerDay, setViewsPerDay]         = useState<ViewEntry[]>([]);
+
+  const load = useCallback(async (selectedRange: Range) => {
+    setLoading(true);
+    try {
+      const since = Date.now() - selectedRange * 24 * 60 * 60 * 1000;
+
+      const [
+        listingsSnap,
+        usersSnap,
+        pendingReportsSnap,
+        resolvedReportsSnap,
+        shopReviewsSnap,
+        shopsSnap,
+        recentUsersSnap,
+      ] = await Promise.all([
+        getDocs(query(
+          collection(db, "listings"),
+          where("createdAt", ">=", since),
+        )),
+        getDocs(collection(db, "users")),
+        getDocs(query(collection(db, "reports"), where("status", "==", "pending"))),
+        getDocs(query(
+          collection(db, "reports"),
+          where("status", "in", ["resolved", "dismissed", "actioned"]),
+        )),
+        getDocs(collection(db, "shopReviews")),
+        getDocs(collection(db, "shops")),
+        getDocs(query(
+          collection(db, "users"),
+          where("createdAt", ">=", since),
+        )),
+      ]);
+
+      // ── Stats cards ──
+      setStats({
+        totalUsers:       usersSnap.size,
+        totalListings:    listingsSnap.size,
+        pendingReports:   pendingReportsSnap.size,
+        resolvedReports:  resolvedReportsSnap.size,
+        totalShopReviews: shopReviewsSnap.size,
+        totalShops:       shopsSnap.size,
+      });
+
+      // ── Build time-series buckets ──
+      const days = buildDayRange(selectedRange);
+      const countMap:  Record<string, number> = {};
+      const viewMap:   Record<string, number> = {};
+      const signupMap: Record<string, number> = {};
+      const typeMap:   Record<string, number> = {};
+      days.forEach((d) => { countMap[d] = 0; viewMap[d] = 0; signupMap[d] = 0; });
+
+      listingsSnap.docs.forEach((d) => {
+        const data = d.data();
+        const k = dateKey(data.createdAt as number, selectedRange);
+        if (k in countMap) countMap[k]++;
+        if (k in viewMap)  viewMap[k]  += (data.viewCount ?? 0) as number;
+        const type = (data.type ?? "other") as string;
+        typeMap[type] = (typeMap[type] ?? 0) + 1;
+      });
+
+      recentUsersSnap.docs.forEach((d) => {
+        const data = d.data();
+        const k = dateKey(data.createdAt as number, selectedRange);
+        if (k in signupMap) signupMap[k]++;
+      });
+
+      setListingsPerDay(days.map((date) => ({ date, count: countMap[date] ?? 0 })));
+      setViewsPerDay(days.map((date)    => ({ date, views:  viewMap[date]   ?? 0 })));
+      setSignupsPerDay(days.map((date)  => ({ date, signups: signupMap[date] ?? 0 })));
+      setTypeDistribution(
+        Object.entries(typeMap).map(([name, value]) => ({ name, value }))
+      );
+    } catch (err) {
+      console.error("[AnalyticsPage] load failed:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load(range);
+  }, [range, load]);
+
+  const resolutionRate = stats
+    ? stats.resolvedReports + stats.pendingReports > 0
+      ? Math.round(
+          (stats.resolvedReports / (stats.resolvedReports + stats.pendingReports)) * 100
+        )
+      : 0
+    : 0;
+
+  return (
+    <div className="p-6 space-y-6">
+
+      {/* Header + range selector */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-xl font-bold text-slate-800 dark:text-slate-200">
+            Analytics
+          </h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+            Platform overview — last {range} days
+          </p>
+        </div>
+        <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl p-1">
+          {([7, 30, 90] as Range[]).map((r) => (
+            <button
+              key={r}
+              onClick={() => setRange(r)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors min-h-[36px]
+                ${range === r
+                  ? "bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 shadow-sm"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
+                }`}
+            >
+              {r}d
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Loading state */}
+      {loading ? (
+        <div className="flex items-center justify-center h-48">
+          <Loader2 className="w-7 h-7 animate-spin text-slate-400" />
+        </div>
+      ) : (
+        <>
+          {/* Stat cards — 3 columns on mobile, 6 on desktop */}
+          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+            <StatCard
+              icon={Users}
+              label="Total Users"
+              value={stats?.totalUsers ?? 0}
+              color="bg-blue-500"
+            />
+            <StatCard
+              icon={List}
+              label={`Listings (${range}d)`}
+              value={stats?.totalListings ?? 0}
+              color="bg-green-500"
+            />
+            <StatCard
+              icon={Store}
+              label="Total Shops"
+              value={stats?.totalShops ?? 0}
+              color="bg-teal-500"
+            />
+            <StatCard
+              icon={Star}
+              label="Shop Reviews"
+              value={stats?.totalShopReviews ?? 0}
+              color="bg-amber-500"
+            />
+            <StatCard
+              icon={Flag}
+              label="Pending Reports"
+              value={stats?.pendingReports ?? 0}
+              color="bg-red-500"
+            />
+            <StatCard
+              icon={CheckCircle}
+              label="Report Resolution"
+              value={`${resolutionRate}%`}
+              sub={`${stats?.resolvedReports ?? 0} resolved`}
+              color="bg-purple-500"
+            />
+          </div>
+
+          {/* Chart 1 — Listings Posted Per Day */}
+          <ChartCard title={`Listings Posted (Last ${range} Days)`}>
+            {listingsPerDay.every((d) => d.count === 0) ? (
+              <p className="text-sm text-slate-400 text-center py-8">
+                No listings in this period.
+              </p>
+            ) : (
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart
+                  data={listingsPerDay}
+                  margin={{ top: 0, right: 4, left: -20, bottom: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 10, fill: "#94a3b8" }}
+                    interval={range === 7 ? 0 : range === 30 ? 4 : 1}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    allowDecimals={false}
+                    tick={{ fontSize: 10, fill: "#94a3b8" }}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} />
+                  <Bar dataKey="count" name="Listings" fill="#003366" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </ChartCard>
+
+          {/* Chart 2 — User Sign-ups Per Day (NEW) */}
+          <ChartCard title={`New User Sign-ups (Last ${range} Days)`}>
+            {signupsPerDay.every((d) => d.signups === 0) ? (
+              <p className="text-sm text-slate-400 text-center py-8">
+                No sign-ups in this period.
+              </p>
+            ) : (
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart
+                  data={signupsPerDay}
+                  margin={{ top: 0, right: 4, left: -20, bottom: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 10, fill: "#94a3b8" }}
+                    interval={range === 7 ? 0 : range === 30 ? 4 : 1}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    allowDecimals={false}
+                    tick={{ fontSize: 10, fill: "#94a3b8" }}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} />
+                  <Bar
+                    dataKey="signups"
+                    name="Sign-ups"
+                    fill="#0D9488"
+                    radius={[4, 4, 0, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </ChartCard>
+
+          {/* Chart 3 — Listing Type Distribution */}
+          <ChartCard title="Listings by Type">
+            {typeDistribution.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-8">No data yet.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie
+                    data={typeDistribution}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={80}
+                    label={({ name, percent }: { name?: string; percent?: number }) =>
+                      name
+                        ? `${TYPE_LABELS[name] ?? name} ${((percent ?? 0) * 100).toFixed(0)}%`
+                        : ""
+                    }
+                    labelLine={false}
+                  >
+                    {typeDistribution.map((entry, i) => (
+                      <Cell
+                        key={i}
+                        fill={TYPE_COLORS[entry.name] ?? `hsl(${i * 60},60%,50%)`}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    formatter={(v, n) => [v, TYPE_LABELS[n as string] ?? n]}
+                    contentStyle={TOOLTIP_STYLE}
+                  />
+                  <Legend
+                    formatter={(v) => TYPE_LABELS[v] ?? v}
+                    iconType="circle"
+                    iconSize={8}
+                    wrapperStyle={{ fontSize: 12 }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </ChartCard>
+
+          {/* Chart 4 — Views Per Day */}
+          <ChartCard title={`Total Listing Views (Last ${range} Days)`}>
+            {viewsPerDay.every((d) => d.views === 0) ? (
+              <p className="text-sm text-slate-400 text-center py-8">
+                No view data in this period.
+              </p>
+            ) : (
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart
+                  data={viewsPerDay}
+                  margin={{ top: 0, right: 4, left: -20, bottom: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 10, fill: "#94a3b8" }}
+                    interval={range === 7 ? 0 : range === 30 ? 4 : 1}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    allowDecimals={false}
+                    tick={{ fontSize: 10, fill: "#94a3b8" }}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} />
+                  <Line
+                    type="monotone"
+                    dataKey="views"
+                    name="Views"
+                    stroke="#0055CC"
+                    strokeWidth={2}
+                    dot={false}
+                    activeDot={{ r: 4 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </ChartCard>
+        </>
+      )}
+    </div>
+  );
+}
+
+---
+
+That is the complete file. Paste it exactly as written — no omissions.
+
+═══════════════════════════════════════════════════
+IMPORTANT NOTES FOR REPLIT
+═══════════════════════════════════════════════════
+
+1. The `where("status", "in", ["resolved", "dismissed", "actioned"])` query
+   for resolved reports requires a composite index on the `reports`
+   collection. If this fails at runtime with "failed-precondition", catch
+   the error gracefully and set resolvedReports to 0 with a console.warn.
+   Do NOT let this error break the page load. Wrap only that specific
+   getDocs call in its own try/catch inside the Promise.all by splitting
+   it out separately if needed.
+
+2. The `useCallback` import must be added to the React import line.
+   Find: `import { useEffect, useState } from "react";`
+   Change to: `import { useEffect, useState, useCallback } from "react";`
+   This is already included in the rewrite above — just confirm it is
+   present when you paste the file.
+
+3. The `orderBy` import is included in the firebase/firestore import above
+   but is not used in any query in this file. Remove it from the import
+   to avoid a TypeScript "unused import" warning if your tsconfig flags it.
+   Check tsconfig.json — if "noUnusedLocals" is true, remove `orderBy`.
+
+═══════════════════════════════════════════════════
+VERIFICATION
+═══════════════════════════════════════════════════
+
+1. Run: pnpm --filter xmum-admin run build — zero TypeScript errors.
+2. Confirm: switching between 7d / 30d / 90d re-fetches data and updates
+   all charts and the page subtitle text.
+3. Confirm: the "Shop Reviews" stat card now shows the count from
+   `shopReviews` collection, NOT the old `reviews` collection.
+4. Confirm: "Report Resolution %" stat card shows a percentage with a
+   sub-label showing the raw resolved count.
+5. Confirm: "New User Sign-ups" chart is the second chart, between the
+   Listings bar chart and the Type pie chart.
+6. Zero changes to any file outside artifacts/xmum-admin/src/pages/AnalyticsPage.tsx.
+   (Exception: the useCallback import change is only in AnalyticsPage.tsx itself.)
+```

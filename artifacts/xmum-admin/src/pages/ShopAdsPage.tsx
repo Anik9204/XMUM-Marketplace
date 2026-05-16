@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { CheckCircle, XCircle, ExternalLink, Loader2 } from "lucide-react";
 import {
-  getPendingShopAds, getAllShopAds,
+  subscribePendingShopAds, subscribeAllShopAds,
   approveShopAd, rejectShopAd,
+  notifyShopAdApproved, notifyShopAdRejected,
 } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { ShopAd, ShopAdStatus } from "../lib/types";
@@ -25,27 +26,36 @@ export default function ShopAdsPage() {
   const [rejectId, setRejectId]     = useState<string | null>(null);
   const [rejectNote, setRejectNote] = useState("");
 
-  async function load() {
+  useEffect(() => {
     setLoading(true);
-    try {
-      const [p, a] = await Promise.all([getPendingShopAds(), getAllShopAds()]);
-      setPending(p as ShopAd[]);
-      setAll(a as ShopAd[]);
-    } catch (e) {
-      console.error("[ShopAdsPage] load failed:", e);
-    } finally {
-      setLoading(false);
-    }
-  }
+    let pendingLoaded = false;
+    let allLoaded = false;
 
-  useEffect(() => { load(); }, []);
+    const checkDone = () => {
+      if (pendingLoaded && allLoaded) setLoading(false);
+    };
+
+    const unsubPending = subscribePendingShopAds(
+      (ads) => { setPending(ads); pendingLoaded = true; checkDone(); },
+      () => { pendingLoaded = true; checkDone(); },
+    );
+
+    const unsubAll = subscribeAllShopAds(
+      (ads) => { setAll(ads); allLoaded = true; checkDone(); },
+      () => { allLoaded = true; checkDone(); },
+    );
+
+    return () => { unsubPending(); unsubAll(); };
+  }, []);
 
   async function handleApprove(ad: ShopAd) {
     if (!adminUser) return;
     setActing(ad.id);
     try {
-      await approveShopAd(ad.id, adminUser.email);
-      await load();
+      await approveShopAd(ad.id, adminUser.email ?? "admin");
+      if (ad.shopOwnerId) {
+        await notifyShopAdApproved(ad.shopOwnerId, ad.shopName, ad.shopId);
+      }
     } catch (e) {
       console.error("[ShopAdsPage] approve failed:", e);
       alert("Failed to approve ad.");
@@ -62,10 +72,18 @@ export default function ShopAdsPage() {
   async function confirmReject() {
     if (!rejectId || !adminUser) return;
     setActing(rejectId);
+    const adBeingRejected = [...pending, ...all].find(a => a.id === rejectId);
     try {
-      await rejectShopAd(rejectId, adminUser.email, rejectNote.trim());
+      await rejectShopAd(rejectId, adminUser.email ?? "admin", rejectNote.trim());
+      if (adBeingRejected?.shopOwnerId) {
+        await notifyShopAdRejected(
+          adBeingRejected.shopOwnerId,
+          adBeingRejected.shopName,
+          rejectNote.trim(),
+          adBeingRejected.shopId,
+        );
+      }
       setRejectId(null);
-      await load();
     } catch (e) {
       console.error("[ShopAdsPage] reject failed:", e);
       alert("Failed to reject ad.");
@@ -205,12 +223,12 @@ export default function ShopAdsPage() {
 
                 <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-slate-400 mb-2">
                   <span>
-                    {ad.startsAt
-                      ? new Date(ad.startsAt).toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "numeric" })
+                    {ad.startDate
+                      ? new Date(ad.startDate).toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "numeric" })
                       : "—"}
                     {" → "}
-                    {ad.endsAt
-                      ? new Date(ad.endsAt).toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "numeric" })
+                    {ad.endDate
+                      ? new Date(ad.endDate).toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "numeric" })
                       : "—"}
                   </span>
                   {ad.pricePerDay != null && (

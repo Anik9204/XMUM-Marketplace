@@ -4,7 +4,9 @@ import {
   initializeFirestore,
   collection, query, orderBy, limit, getDocs,
   where, doc, updateDoc, deleteDoc, getDoc,
+  onSnapshot, addDoc, serverTimestamp,
 } from "firebase/firestore";
+import { ShopAd } from "./types";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
@@ -74,6 +76,87 @@ export async function getAllShopAds() {
   );
   const snap = await getDocs(q);
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+export function subscribePendingShopAds(
+  callback: (ads: ShopAd[]) => void,
+  onError?: (err: Error) => void,
+): () => void {
+  const q = query(
+    collection(db, "shopAds"),
+    where("status", "==", "pending"),
+    orderBy("submittedAt", "desc"),
+  );
+  return onSnapshot(
+    q,
+    (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() } as ShopAd))),
+    (err) => {
+      console.error("[subscribePendingShopAds] error:", err);
+      onError?.(err);
+    },
+  );
+}
+
+export function subscribeAllShopAds(
+  callback: (ads: ShopAd[]) => void,
+  onError?: (err: Error) => void,
+): () => void {
+  const q = query(
+    collection(db, "shopAds"),
+    orderBy("submittedAt", "desc"),
+  );
+  return onSnapshot(
+    q,
+    (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() } as ShopAd))),
+    (err) => {
+      console.error("[subscribeAllShopAds] error:", err);
+      onError?.(err);
+    },
+  );
+}
+
+async function sendNotification(
+  uid: string,
+  data: { type: string; title: string; body: string; shopId: string },
+): Promise<void> {
+  try {
+    await addDoc(collection(db, "users", uid, "notifications"), {
+      ...data,
+      createdAt: serverTimestamp(),
+      read: false,
+    });
+  } catch (err) {
+    console.warn("[sendNotification] failed (non-critical):", err);
+  }
+}
+
+export async function notifyShopAdApproved(
+  shopOwnerId: string,
+  shopName: string,
+  shopId: string,
+): Promise<void> {
+  await sendNotification(shopOwnerId, {
+    type: "shop_ad_approved",
+    title: "Shop ad approved",
+    body: `Your ad for "${shopName}" has been approved and will be displayed in Campus Market.`,
+    shopId,
+  });
+}
+
+export async function notifyShopAdRejected(
+  shopOwnerId: string,
+  shopName: string,
+  adminNote: string,
+  shopId: string,
+): Promise<void> {
+  await sendNotification(shopOwnerId, {
+    type: "shop_ad_rejected",
+    title: "Shop ad rejected",
+    body: adminNote
+      ? `Your ad for "${shopName}" was rejected: ${adminNote}`
+      : `Your ad for "${shopName}" was not approved. Please review and resubmit.`,
+    shopId,
+  });
 }
 
 export async function approveShopAd(adId: string, reviewedBy: string) {
