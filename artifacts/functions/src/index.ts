@@ -16,131 +16,207 @@ async function getConfig() {
         trialDays:        d.trialDays        ?? 60,
         subscriptionDays: d.subscriptionDays ?? 30,
         graceDays:        d.graceDays        ?? 30,
+        reminderDays:     d.reminderDays     ?? 7,
       };
     }
   } catch {}
-  return { launchDate: 0, trialDays: 60, subscriptionDays: 30, graceDays: 30 };
+  return { launchDate: 0, trialDays: 60, subscriptionDays: 30, graceDays: 30, reminderDays: 7 };
 }
 
 async function sendNotification(
   uid: string,
-  data: { type: string; title: string; body: string; shopId: string }
+  data: {
+    type:     string;
+    title:    string;
+    body:     string;
+    shopId:   string;
+    shopName: string;
+  }
 ) {
   try {
     await db.collection("users").doc(uid).collection("notifications").add({
-      ...data,
+      title:     data.title,
+      body:      data.body,
+      type:      data.type,
+      shopId:    data.shopId,
+      shopName:  data.shopName,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      read: false,
+      isRead:    false,
     });
   } catch (err) {
-    console.warn("[sendNotification] failed:", err);
+    console.warn(`[sendNotification] failed for uid=${uid}:`, err);
   }
 }
 
-// ── Scheduled function — runs daily at 08:00 Malaysia time (UTC+8 = 00:00 UTC) ──
+async function getAdminUids(): Promise<string[]> {
+  try {
+    const snap = await db.collection("users").where("role", "==", "admin").get();
+    return snap.docs.map((d) => d.id);
+  } catch (err) {
+    console.warn("[getAdminUids] failed:", err);
+    return [];
+  }
+}
 
-export const shopSubscriptionDailyCheck = functions
-  .region("asia-southeast1")  // Singapore — closest to Malaysia
-  .pubsub.schedule("0 0 * * *")  // 00:00 UTC = 08:00 MYT
+function fmtDate(ms: number): string {
+  return new Date(ms).toLocaleDateString("en-MY", {
+    day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Kuala_Lumpur",
+  });
+}
+
+// ── Scheduled function — runs daily at 08:00 Malaysia time ───────────────────
+
+export const dailySubscriptionCheck = functions
+  .region("asia-southeast1")
+  .pubsub.schedule("0 8 * * *")
   .timeZone("Asia/Kuala_Lumpur")
   .onRun(async () => {
-    const now = Date.now();
-    const config = await getConfig();
-    const SEVEN_DAYS_MS  = 7  * 24 * 60 * 60 * 1000;
-    const GRACE_MS       = config.graceDays * 24 * 60 * 60 * 1000;
+    try {
+      const now    = Date.now();
+      const config = await getConfig();
+      const GRACE_MS      = config.graceDays   * 24 * 60 * 60 * 1000;
+      const REMINDER_MS   = config.reminderDays * 24 * 60 * 60 * 1000;
 
-    // Fetch all approved, non-expired shops
-    const shopsSnap = await db
-      .collection("shops")
-      .where("approvalStatus", "==", "approved")
-      .get();
+      const shopsSnap = await db
+        .collection("shops")
+        .where("approvalStatus", "==", "approved")
+        .get();
 
-    const batch = db.batch();
-    const notificationJobs: Promise<void>[] = [];
+      const adminUids = await getAdminUids();
 
-    for (const shopDoc of shopsSnap.docs) {
-      const shop = shopDoc.data();
-      const shopId      = shopDoc.id;
-      const ownerId     = shop.ownerId     ?? shop.ownerUid ?? "";
-      const shopName    = shop.name        ?? shop.shopName ?? "";
-      const expiresAt   = shop.subscriptionExpiresAt ?? 0;
-      const status      = shop.subscriptionStatus ?? "active";
-      const reminderSentAt = shop.reminderSentAt ?? 0;
+      const batchWrites = db.batch();
+      const notificationJobs: Promise<void>[] = [];
 
-      if (!expiresAt || !ownerId) continue;
+      let countExpired  = 0;
+      let countGrace    = 0;
+      let countReminder = 0;
 
-      const msUntilExpiry = expiresAt - now;
-      const graceEnd = expiresAt + GRACE_MS;
+      for (const shopDoc of shopsSnap.docs) {
+        try {
+          const shop       = shopDoc.data();
+          const shopId     = shopDoc.id;
+          const ownerId    = shop.ownerId    ?? shop.ownerUid  ?? "";
+          const shopName   = shop.name       ?? shop.shopName  ?? "";
+          const ownerEmail = shop.ownerEmail ?? "";
+          const expiresAt  = shop.subscriptionExpiresAt ?? 0;
+          const status     = shop.subscriptionStatus    ?? "active";
+          const reminderSentAt = shop.reminderSentAt    ?? null;
 
-      // ── Case 1: Active/trial shop expiring within 7 days — send reminder ──
-      if (
-        (status === "active" || status === "trial") &&
-        msUntilExpiry > 0 &&
-        msUntilExpiry <= SEVEN_DAYS_MS &&
-        now - reminderSentAt > SEVEN_DAYS_MS  // don't double-send within 7 days
-      ) {
-        const daysLeft = Math.max(1, Math.ceil(msUntilExpiry / (24 * 60 * 60 * 1000)));
-        const expiryDateStr = new Date(expiresAt).toLocaleDateString("en-MY", {
-          day: "numeric", month: "long", year: "numeric",
-        });
+          if (!expiresAt || !ownerId) continue;
 
-        // Notify shop owner
-        notificationJobs.push(sendNotification(ownerId, {
-          type:   "shop_subscription_expiring",
-          title:  `⚠️ Shop subscription expiring in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`,
-          body:   `Your shop "${shopName}" subscription expires on ${expiryDateStr}. Contact an admin to renew and keep your shop active.`,
-          shopId,
-        }));
+          const msUntilExpiry  = expiresAt - now;
+          const graceEnd       = expiresAt + GRACE_MS;
+          const daysUntilExpiry = msUntilExpiry / (24 * 60 * 60 * 1000);
+          const graceEndsMs    = graceEnd;
+          const daysLeftInGrace = Math.max(0, Math.ceil((graceEndsMs - now) / (24 * 60 * 60 * 1000)));
 
-        // Mark reminder sent
-        batch.update(shopDoc.ref, { reminderSentAt: now });
+          const isPastGrace = status === "grace" && now > graceEnd;
+          const isInGrace   = (status === "active" || status === "trial") && msUntilExpiry <= 0
+                            || (status === "grace");
+          const needsReminder =
+            (status === "active" || status === "trial") &&
+            daysUntilExpiry > 0 &&
+            daysUntilExpiry <= config.reminderDays &&
+            !reminderSentAt;
 
-        // Also write an admin notification to a shared "adminNotifications" collection
-        // so admins can see it on their next login
-        notificationJobs.push((async () => {
-          try {
-            await db.collection("adminNotifications").add({
-              type:      "shop_expiring_soon",
-              title:     `Shop expiring soon: "${shopName}"`,
-              body:      `Shop "${shopName}" (owner: ${shop.ownerEmail ?? ""}) expires in ${daysLeft} day${daysLeft === 1 ? "" : "s"} on ${expiryDateStr}.`,
+          // STEP: isPastGrace — permanently expire
+          if (isPastGrace) {
+            batchWrites.update(shopDoc.ref, {
+              subscriptionStatus: "expired",
+              isActive:           false,
+            });
+            countExpired++;
+            continue;
+          }
+
+          // STEP: Just expired, move to grace
+          if (
+            (status === "active" || status === "trial") &&
+            msUntilExpiry <= 0
+          ) {
+            batchWrites.update(shopDoc.ref, {
+              subscriptionStatus: "grace",
+              isActive:           false,
+            });
+            countGrace++;
+
+            const graceExpiryStr = fmtDate(graceEnd);
+
+            // Notify shop owner
+            notificationJobs.push(sendNotification(ownerId, {
+              type:     "subscription_grace",
+              title:    "⚠️ Your shop has been hidden",
+              body:     `Your subscription for "${shopName}" has expired. Your shop is now hidden from the marketplace. You have ${daysLeftInGrace} day${daysLeftInGrace === 1 ? "" : "s"} remaining to contact the admin and renew your subscription before your data is removed.`,
               shopId,
               shopName,
-              ownerEmail: shop.ownerEmail ?? "",
-              expiresAt,
-              createdAt: admin.firestore.FieldValue.serverTimestamp(),
-              read: false,
-            });
-          } catch {}
-        })());
+            }));
+
+            // Notify all admins
+            for (const adminUid of adminUids) {
+              notificationJobs.push(sendNotification(adminUid, {
+                type:     "subscription_grace",
+                title:    `🔔 Shop Subscription Expired: ${shopName}`,
+                body:     `The shop "${shopName}" owned by ${ownerEmail} has expired and entered the grace period (until ${graceExpiryStr}). Please follow up with the owner for renewal.`,
+                shopId,
+                shopName,
+              }));
+            }
+            continue;
+          }
+
+          // STEP: Already in grace — notify admins (only once, when status transitions)
+          if (status === "grace" && !isPastGrace) {
+            // Grace already notified when it transitioned above; nothing to do here
+          }
+
+          // STEP: Send renewal reminder
+          if (needsReminder) {
+            const daysLeft     = Math.max(1, Math.ceil(daysUntilExpiry));
+            const expiryDateStr = fmtDate(expiresAt);
+
+            batchWrites.update(shopDoc.ref, { reminderSentAt: now });
+            countReminder++;
+
+            // Notify shop owner
+            notificationJobs.push(sendNotification(ownerId, {
+              type:     "subscription_reminder",
+              title:    `⏰ Your subscription expires in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`,
+              body:     `Your shop "${shopName}" subscription will expire on ${expiryDateStr}. Please contact the admin to renew your subscription before your shop is hidden from the marketplace.`,
+              shopId,
+              shopName,
+            }));
+
+            // Notify all admins
+            for (const adminUid of adminUids) {
+              notificationJobs.push(sendNotification(adminUid, {
+                type:     "subscription_reminder",
+                title:    `🔔 Renewal Reminder: ${shopName}`,
+                body:     `The shop "${shopName}" subscription expires in ${daysLeft} day${daysLeft === 1 ? "" : "s"} on ${expiryDateStr}. Owner: ${ownerEmail}. Please follow up.`,
+                shopId,
+                shopName,
+              }));
+            }
+          }
+
+        } catch (shopErr) {
+          console.error(`[dailySubscriptionCheck] error processing shop ${shopDoc.id}:`, shopErr);
+          // continue processing remaining shops
+        }
       }
 
-      // ── Case 2: Subscription just expired — move to grace ──
-      if ((status === "active" || status === "trial") && msUntilExpiry <= 0) {
-        batch.update(shopDoc.ref, {
-          isActive:           false,
-          subscriptionStatus: "grace",
-        });
+      await batchWrites.commit();
+      await Promise.allSettled(notificationJobs);
 
-        notificationJobs.push(sendNotification(ownerId, {
-          type:   "shop_subscription_expired",
-          title:  "⚠️ Shop subscription has expired",
-          body:   `Your shop "${shopName}" subscription has expired and is now hidden from Campus Market. You have 30 days to contact an admin to renew.`,
-          shopId,
-        }));
-      }
-
-      // ── Case 3: Grace period expired — mark as permanently expired ──
-      if (status === "grace" && now > graceEnd) {
-        batch.update(shopDoc.ref, {
-          isActive:           false,
-          subscriptionStatus: "expired",
-        });
-      }
+      console.log(
+        `[dailySubscriptionCheck] complete. ` +
+        `Processed: ${shopsSnap.size} shops. ` +
+        `Expired: ${countExpired}. ` +
+        `In grace: ${countGrace}. ` +
+        `Reminders sent: ${countReminder}.`
+      );
+    } catch (err) {
+      console.error("[dailySubscriptionCheck] fatal error:", err);
     }
 
-    await batch.commit();
-    await Promise.allSettled(notificationJobs);
-
-    console.log(`[shopSubscriptionDailyCheck] processed ${shopsSnap.size} shops at ${new Date().toISOString()}`);
     return null;
   });

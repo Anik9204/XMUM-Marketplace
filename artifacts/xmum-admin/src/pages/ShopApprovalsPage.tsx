@@ -1,8 +1,20 @@
 import { useEffect, useState } from "react";
-import { CheckCircle, XCircle, Search, ExternalLink } from "lucide-react";
-import { getPendingShops, approveShop, rejectShop, writeAuditLog } from "../lib/firebase";
+import { CheckCircle, XCircle, Search, ExternalLink, X } from "lucide-react";
+import { getPendingShops, approveShop, rejectShop, writeAuditLog, ApprovalResult } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { AdminShop } from "../lib/types";
+
+interface ApprovalModal {
+  shopName: string;
+  subscriptionType: "trial" | "active";
+  expiresAt: number;
+}
+
+function fmtMY(ms: number): string {
+  return new Date(ms).toLocaleDateString("en-MY", {
+    day: "2-digit", month: "short", year: "numeric",
+  });
+}
 
 export default function ShopApprovalsPage() {
   const { adminUser } = useAuth();
@@ -10,6 +22,7 @@ export default function ShopApprovalsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [processing, setProcessing] = useState<string | null>(null);
+  const [approvalModal, setApprovalModal] = useState<ApprovalModal | null>(null);
 
   async function load() {
     setLoading(true);
@@ -29,8 +42,13 @@ export default function ShopApprovalsPage() {
     if (!window.confirm(`Approve shop "${shop.shopName}"?\n\nThis will make it live on Campus Market.`)) return;
     setProcessing(shop.id);
     try {
-      await approveShop(shop.id, shop.ownerUid, shop.shopName, adminUser?.email ?? "");
+      const result: ApprovalResult = await approveShop(shop.id, shop.ownerUid, shop.shopName, adminUser?.email ?? "");
       setShops((prev) => prev.filter((s) => s.id !== shop.id));
+      setApprovalModal({
+        shopName:         shop.shopName,
+        subscriptionType: result.subscriptionType,
+        expiresAt:        result.expiresAt,
+      });
       void writeAuditLog({
         actorUid:    adminUser?.uid   ?? "",
         actorEmail:  adminUser?.email ?? "",
@@ -54,7 +72,7 @@ export default function ShopApprovalsPage() {
       `Reject shop "${shop.shopName}"?\n\nOptionally enter a reason (shown to the shop owner):`,
       ""
     );
-    if (reason === null) return; // cancelled
+    if (reason === null) return;
     setProcessing(shop.id);
     try {
       await rejectShop(shop.id, shop.ownerUid, shop.shopName, adminUser?.email ?? "", reason || undefined);
@@ -84,6 +102,67 @@ export default function ShopApprovalsPage() {
 
   return (
     <div className="p-6">
+      {/* Approval result modal */}
+      {approvalModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-5 h-5 text-green-500" />
+                <h2 className="text-base font-bold text-slate-800 dark:text-slate-200">
+                  Shop Approved
+                </h2>
+              </div>
+              <button
+                onClick={() => setApprovalModal(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200
+                           rounded-lg transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-3 space-y-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 dark:text-slate-400">Shop</span>
+                  <span className="font-semibold text-slate-800 dark:text-slate-200">
+                    {approvalModal.shopName}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 dark:text-slate-400">Subscription</span>
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full
+                    ${approvalModal.subscriptionType === "trial"
+                      ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                      : "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"}`}>
+                    {approvalModal.subscriptionType === "trial" ? "Trial" : "Standard"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 dark:text-slate-400">Expires</span>
+                  <span className="font-semibold text-slate-800 dark:text-slate-200">
+                    {fmtMY(approvalModal.expiresAt)}
+                  </span>
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
+                The shop owner has been notified.
+              </p>
+            </div>
+
+            <button
+              onClick={() => setApprovalModal(null)}
+              className="mt-4 w-full bg-[#003366] hover:bg-[#002244] text-white rounded-xl
+                         py-2.5 text-sm font-semibold transition-colors"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between gap-3 mb-6">
         <div>
           <h1 className="text-xl font-bold text-slate-800 dark:text-slate-200">

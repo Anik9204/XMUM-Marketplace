@@ -208,7 +208,7 @@ export async function approveShop(shopId, shopOwnerId, shopName, _reviewedBy) {
     const config = await getSubscriptionConfig();
     const now = Date.now();
     // During trial window: subscription expires at launchDate + trialDays
-    // After trial window: subscription expires 30 days from now
+    // After trial window: subscription expires subscriptionDays from now
     const trialEndDate = config.launchDate + config.trialDays * 24 * 60 * 60 * 1000;
     const isInTrialWindow = config.launchDate > 0 && now < trialEndDate;
     const subscriptionStatus = isInTrialWindow ? "trial" : "active";
@@ -234,6 +234,7 @@ export async function approveShop(shopId, shopOwnerId, shopName, _reviewedBy) {
             : `"${shopName}" is now live on Campus Market. Your subscription is active until ${new Date(subscriptionExpiresAt).toLocaleDateString("en-MY", { day: "numeric", month: "long", year: "numeric" })}.`,
         shopId,
     });
+    return { subscriptionType: subscriptionStatus, expiresAt: subscriptionExpiresAt };
 }
 export async function rejectShop(shopId, shopOwnerId, shopName, _reviewedBy, reason) {
     await updateDoc(doc(db, "shops", shopId), {

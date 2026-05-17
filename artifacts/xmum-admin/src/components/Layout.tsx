@@ -1,23 +1,55 @@
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, Flag, Users, Megaphone, FileText,
   Star, GraduationCap, List, BarChart2, LogOut,
   Store, Newspaper, Moon, Sun, Menu, X, ShieldAlert, ClipboardList, SlidersHorizontal,
+  Bell,
 } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth, db } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { useDarkMode } from "../contexts/DarkModeContext";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
+import {
+  collection, query, where, onSnapshot, orderBy, limit,
+  updateDoc, doc, writeBatch,
+} from "firebase/firestore";
+
+interface AdminNotification {
+  id: string;
+  title: string;
+  body: string;
+  type: string;
+  shopId?: string;
+  shopName?: string;
+  createdAt: { seconds: number } | null;
+  isRead: boolean;
+}
+
+function timeAgo(n: AdminNotification): string {
+  if (!n.createdAt) return "";
+  const diff = Date.now() - n.createdAt.seconds * 1000;
+  const mins  = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days  = Math.floor(diff / 86400000);
+  if (mins  < 1)  return "just now";
+  if (mins  < 60) return `${mins}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  return `${days}d ago`;
+}
 
 export default function Layout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const { adminUser, isAdmin } = useAuth();
-  const [pendingReports, setPendingReports]           = useState(0);
+  const [pendingReports, setPendingReports]             = useState(0);
   const [pendingVerifications, setPendingVerifications] = useState(0);
   const { dark, toggle } = useDarkMode();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Notification bell state
+  const [notifications, setNotifications] = useState<AdminNotification[]>([]);
+  const [bellOpen, setBellOpen]           = useState(false);
+  const bellRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const q = query(collection(db, "reports"), where("status", "==", "pending"));
@@ -30,6 +62,67 @@ export default function Layout({ children }: { children: ReactNode }) {
     const unsub = onSnapshot(q, (snap) => setPendingVerifications(snap.size), () => {});
     return unsub;
   }, []);
+
+  // Real-time notifications listener for the current admin user
+  useEffect(() => {
+    if (!adminUser?.uid) return;
+    const q = query(
+      collection(db, "users", adminUser.uid, "notifications"),
+      orderBy("createdAt", "desc"),
+      limit(20),
+    );
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        setNotifications(
+          snap.docs.map((d) => ({
+            id: d.id,
+            title:     d.data().title    ?? "",
+            body:      d.data().body     ?? "",
+            type:      d.data().type     ?? "",
+            shopId:    d.data().shopId,
+            shopName:  d.data().shopName,
+            createdAt: d.data().createdAt ?? null,
+            isRead:    d.data().isRead    ?? d.data().read ?? false,
+          }))
+        );
+      },
+      () => {},
+    );
+    return unsub;
+  }, [adminUser?.uid]);
+
+  // Close bell dropdown on outside click
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (bellRef.current && !bellRef.current.contains(e.target as Node)) {
+        setBellOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
+
+  async function markAllRead() {
+    if (!adminUser?.uid) return;
+    const unread = notifications.filter((n) => !n.isRead);
+    if (unread.length === 0) return;
+    const batch = writeBatch(db);
+    for (const n of unread) {
+      batch.update(doc(db, "users", adminUser.uid, "notifications", n.id), { isRead: true });
+    }
+    await batch.commit().catch(() => {});
+  }
+
+  async function markRead(n: AdminNotification) {
+    if (!adminUser?.uid || n.isRead) return;
+    await updateDoc(
+      doc(db, "users", adminUser.uid, "notifications", n.id),
+      { isRead: true }
+    ).catch(() => {});
+  }
 
   const NAV = [
     { href: "/",              label: "Dashboard",     icon: LayoutDashboard },
@@ -47,6 +140,79 @@ export default function Layout({ children }: { children: ReactNode }) {
     { href: "/audit-log",          label: "Audit Log",        icon: ShieldAlert },
     { href: "/subscription-config", label: "Subscription Config", icon: SlidersHorizontal },
   ];
+
+  // Notification bell button — reused in both mobile bar and sidebar
+  const NotificationBell = () => (
+    <div className="relative" ref={bellRef}>
+      <button
+        onClick={() => setBellOpen((v) => !v)}
+        className="relative p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400
+                   dark:hover:text-slate-200 rounded-lg transition-colors"
+        title="Notifications"
+      >
+        <Bell className="w-5 h-5" />
+        {unreadCount > 0 && (
+          <span className="absolute top-1 right-1 bg-red-500 text-white text-[9px] font-bold
+                           rounded-full min-w-[16px] h-[16px] flex items-center justify-center px-0.5">
+            {unreadCount > 99 ? "99+" : unreadCount}
+          </span>
+        )}
+      </button>
+
+      {bellOpen && (
+        <div className="absolute right-0 top-full mt-2 z-50 w-80 bg-white dark:bg-slate-800
+                        border border-gray-100 dark:border-slate-700 rounded-2xl shadow-2xl
+                        overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b
+                          border-gray-100 dark:border-slate-700">
+            <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Notifications</p>
+            {unreadCount > 0 && (
+              <button
+                onClick={markAllRead}
+                className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                Mark all as read
+              </button>
+            )}
+          </div>
+
+          <div className="max-h-80 overflow-y-auto divide-y divide-gray-50 dark:divide-slate-700/50">
+            {notifications.length === 0 ? (
+              <div className="px-4 py-8 text-center text-sm text-slate-400">
+                No notifications yet.
+              </div>
+            ) : (
+              notifications.map((n) => (
+                <button
+                  key={n.id}
+                  onClick={() => markRead(n)}
+                  className={`w-full text-left px-4 py-3 transition-colors hover:bg-slate-50
+                              dark:hover:bg-slate-700/40
+                              ${!n.isRead ? "bg-blue-50/60 dark:bg-blue-950/30" : ""}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className={`text-xs font-semibold text-slate-800 dark:text-slate-200 leading-snug
+                                  ${!n.isRead ? "text-blue-900 dark:text-blue-200" : ""}`}>
+                      {n.title}
+                    </p>
+                    {!n.isRead && (
+                      <span className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-0.5" />
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2 text-left">
+                    {n.body}
+                  </p>
+                  {n.createdAt && (
+                    <p className="text-[10px] text-slate-400 mt-1">{timeAgo(n)}</p>
+                  )}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="flex h-screen bg-slate-50 dark:bg-slate-900 overflow-hidden">
@@ -142,21 +308,24 @@ export default function Layout({ children }: { children: ReactNode }) {
       </aside>
 
       <main className="flex-1 overflow-auto flex flex-col min-w-0">
-        {/* Mobile top bar — only visible below lg breakpoint */}
-        <div className="lg:hidden flex items-center gap-3 px-4 py-3 bg-white
+        {/* Top bar — mobile hamburger + notification bell */}
+        <div className="flex items-center gap-3 px-4 py-3 bg-white
                         dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700
                         flex-shrink-0">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="p-2 text-slate-500 hover:text-slate-700 dark:hover:text-slate-200
+            className="lg:hidden p-2 text-slate-500 hover:text-slate-700 dark:hover:text-slate-200
                        rounded-lg transition-colors"
           >
             <Menu className="w-5 h-5" />
           </button>
-          <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
+          <p className="text-sm font-bold text-slate-800 dark:text-slate-200 lg:hidden">
             XMUM Admin
           </p>
+          <div className="flex-1" />
+          <NotificationBell />
         </div>
+
         <div className="flex-1 overflow-auto">
           {children}
         </div>

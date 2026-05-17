@@ -303,17 +303,22 @@ async function getSubscriptionConfig(): Promise<{
   return { launchDate: 0, trialDays: 60, subscriptionDays: 30, graceDays: 30 };
 }
 
+export interface ApprovalResult {
+  subscriptionType: "trial" | "active";
+  expiresAt: number;
+}
+
 export async function approveShop(
   shopId: string,
   shopOwnerId: string,
   shopName: string,
   _reviewedBy: string,
-): Promise<void> {
+): Promise<ApprovalResult> {
   const config = await getSubscriptionConfig();
   const now = Date.now();
 
   // During trial window: subscription expires at launchDate + trialDays
-  // After trial window: subscription expires 30 days from now
+  // After trial window: subscription expires subscriptionDays from now
   const trialEndDate = config.launchDate + config.trialDays * 24 * 60 * 60 * 1000;
   const isInTrialWindow = config.launchDate > 0 && now < trialEndDate;
 
@@ -342,6 +347,8 @@ export async function approveShop(
       : `"${shopName}" is now live on Campus Market. Your subscription is active until ${new Date(subscriptionExpiresAt).toLocaleDateString("en-MY", { day: "numeric", month: "long", year: "numeric" })}.`,
     shopId,
   });
+
+  return { subscriptionType: subscriptionStatus, expiresAt: subscriptionExpiresAt };
 }
 
 export async function rejectShop(

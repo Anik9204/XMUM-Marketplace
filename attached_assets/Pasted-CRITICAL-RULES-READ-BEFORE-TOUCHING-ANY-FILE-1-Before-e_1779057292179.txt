@@ -1,0 +1,337 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless I have explicitly told you to remove it.
+
+4. After every change, mentally verify: "Does this break anything
+   that was working before?" If yes, do not proceed — find a
+   different approach.
+
+5. If fixing Issue X requires changing a shared component used by
+   other pages, STOP and tell me what the impact will be before
+   making the change. Ask for permission first.
+
+6. Never change any CSS class, layout structure, z-index, or
+   responsive breakpoint unless it is directly part of the fix.
+
+7. Confirm the app builds with zero errors before finishing:
+   pnpm --filter @workspace/xmum-market run build
+
+
+I am working on the XMUM Marketplace project which has two apps:
+1. XMUM Market (the student-facing marketplace app)
+2. XMUM Admin (the admin panel for managing the marketplace)
+
+Both apps share the same Firebase project (Firestore, Auth, etc).
+
+Please carefully read and understand the entire codebase first before making any changes. Then implement ALL of the following fixes and features exactly as described. Do not break any existing working features.
+
+═══════════════════════════════════════════
+PROBLEM 1 — FIX: Subscription Config Save Fails
+═══════════════════════════════════════════
+
+FILE: src/pages/SubscriptionConfigPage.tsx
+
+The form currently throws "Missing or insufficient permissions" when saving.
+
+The cause: The Firestore security rule for appConfig only allows writes 
+from users with role "admin". The page does not check the user's role 
+before attempting to save — it just fails silently at the Firestore write.
+
+FIX — Do TWO things:
+
+1. At the top of the SubscriptionConfigPage component, import and use 
+   the useAuth hook:
+   
+   const { isAdmin } = useAuth();
+
+2. Before rendering the form, check if isAdmin is false. If the user 
+   is NOT an admin, do not show the form at all. Instead render a 
+   locked state UI:
+   - A lock icon
+   - Heading: "Admin Access Required"
+   - Message: "Only admins can modify subscription settings. 
+     Contact the system administrator."
+   - This prevents editors from seeing a form they cannot submit.
+
+3. If the user IS an admin, render the form as normal.
+
+Do not change the form fields or the save logic — only add this role guard.
+
+═══════════════════════════════════════════
+PROBLEM 2 — FIX: Subscription Config Form Fields
+═══════════════════════════════════════════
+
+FILE: src/pages/SubscriptionConfigPage.tsx
+
+Make sure the Subscription Config form includes ALL of these fields 
+and saves ALL of them to the Firestore document appConfig/subscriptions:
+
+- subscriptionDays (number) — how many days each subscription lasts 
+  (default: 30)
+- graceDays (number) — grace period in days after expiry before shop 
+  data is deleted (default: 30)
+- trialDays (number) — how many days the free trial lasts from launch 
+  date (default: 60)
+- launchDate (Firestore Timestamp or null) — the official app launch 
+  date. If set, any shop approved before launchDate + trialDays will 
+  be given a "trial" subscription expiring on that date instead of 
+  a standard subscription.
+- reminderDays (number) — how many days before expiry to send the 
+  renewal reminder notification (default: 7)
+- isTrialActive (boolean, read-only display) — automatically calculated: 
+  true if today is before launchDate + trialDays. Show this as a 
+  status badge on the page, not an editable field.
+
+When saving, write all of the above to appConfig/subscriptions in 
+Firestore using setDoc with merge: true.
+
+When loading the page, read the current values from appConfig/subscriptions 
+and pre-fill the form fields.
+
+Show a success toast on save. Show an error toast if save fails.
+
+═══════════════════════════════════════════
+PROBLEM 3 — MISSING: Automated Subscription Lifecycle (Cloud Function)
+═══════════════════════════════════════════
+
+This is the most important missing piece. Right now, shops NEVER 
+automatically expire or get hidden even when their subscription date 
+passes. Nothing watches the clock. We need a Firebase Cloud Function 
+that runs automatically every day.
+
+LOCATION: Create this in the Firebase Functions folder. If a functions 
+folder does not exist yet, create it properly with package.json, 
+tsconfig.json, and src/index.ts using Firebase Admin SDK and 
+firebase-functions v2.
+
+CREATE a scheduled Cloud Function called "dailySubscriptionCheck" 
+that runs every day at 8:00 AM Malaysia time (Asia/Kuala_Lumpur).
+
+The function must do the following steps IN ORDER:
+
+STEP 1 — Read config
+  Read the document appConfig/subscriptions from Firestore.
+  Extract: subscriptionDays, graceDays, reminderDays (default 7 if missing).
+
+STEP 2 — Get all approved shops
+  Query the "shops" collection where approvalStatus == "approved".
+  These are the only shops that have active subscriptions.
+
+STEP 3 — For each shop, check its subscription state:
+
+  Get the shop's subscriptionExpiresAt (Firestore Timestamp).
+  Get the current time.
+
+  Calculate:
+    - isExpired = subscriptionExpiresAt < now
+    - isInGrace = subscriptionExpiresAt < now AND 
+                  subscriptionExpiresAt + (graceDays * 86400000ms) > now
+    - isPastGrace = subscriptionExpiresAt + (graceDays * 86400000ms) < now
+    - daysUntilExpiry = (subscriptionExpiresAt - now) / 86400000
+    - needsReminder = daysUntilExpiry <= reminderDays 
+                      AND daysUntilExpiry > 0 
+                      AND shop.reminderSentAt == null
+
+  Then take the appropriate action:
+
+  IF isPastGrace:
+    - Update shop: { subscriptionStatus: "expired", isActive: false }
+    - Do NOT send any more notifications (already sent during grace)
+
+  ELSE IF isInGrace AND shop.subscriptionStatus != "grace":
+    - Update shop: { subscriptionStatus: "grace", isActive: false }
+    - Send notification to shop owner (see notification format below)
+      Title: "⚠️ Your shop has been hidden"
+      Body: "Your subscription for [shopName] has expired. 
+             Your shop is now hidden from the marketplace. 
+             You have [X] days remaining to contact the admin 
+             and renew your subscription before your data is removed."
+    - Send notification to ALL admin users (query users where role == "admin")
+      Title: "🔔 Shop Subscription Expired: [shopName]"
+      Body: "The shop [shopName] owned by [ownerEmail] has expired 
+             and entered the grace period. Please follow up with 
+             the owner for renewal."
+
+  ELSE IF needsReminder:
+    - Update shop: { reminderSentAt: now }
+    - Send notification to shop owner:
+      Title: "⏰ Your subscription expires in [X] days"
+      Body: "Your shop [shopName] subscription will expire on [date]. 
+             Please contact the admin to renew your subscription 
+             before your shop is hidden from the marketplace."
+    - Send notification to ALL admin users:
+      Title: "🔔 Renewal Reminder: [shopName]"
+      Body: "The shop [shopName] subscription expires in [X] days 
+             on [date]. Owner: [ownerEmail]. Please follow up."
+
+NOTIFICATION FORMAT:
+Write notifications to Firestore at:
+  users/{userId}/notifications/{auto-id}
+  
+Each notification document should contain:
+  {
+    title: string,
+    body: string,
+    type: "subscription_expired" | "subscription_reminder" | "subscription_grace",
+    shopId: string,
+    shopName: string,
+    createdAt: Firestore Timestamp,
+    isRead: false
+  }
+
+To find the admin users to notify: query the "users" collection 
+where role == "admin" and send a notification to each one found.
+
+STEP 4 — Log a summary
+  After processing all shops, log:
+  "Daily subscription check complete. 
+   Processed: X shops. 
+   Expired: X. 
+   In grace: X. 
+   Reminders sent: X."
+
+ERROR HANDLING:
+  Wrap the entire function in a try/catch.
+  If a single shop fails to update, log the error and continue 
+  processing the remaining shops — do not crash the entire function.
+
+═══════════════════════════════════════════
+PROBLEM 4 — FIX: ShopsPage — Renew Button Uses Hardcoded "30 Days"
+═══════════════════════════════════════════
+
+FILE: src/pages/ShopsPage.tsx
+
+Currently the Renew button shows a confirm dialog that says "30 days" 
+hardcoded. Fix this:
+
+1. When ShopsPage loads, fetch the appConfig/subscriptions document 
+   from Firestore and store subscriptionDays in component state 
+   (default to 30 if not found).
+
+2. In the confirm dialog for renewal, replace the hardcoded "30 days" 
+   with the actual subscriptionDays value from config:
+   Example: "This will renew the shop subscription for [subscriptionDays] days."
+
+3. In the renewShopSubscription function (in firebase.ts or wherever 
+   it lives), make sure it uses the subscriptionDays from the config 
+   document rather than any hardcoded number. Read subscriptionDays 
+   from appConfig/subscriptions at the time of renewal and calculate:
+   newExpiresAt = Date.now() + (subscriptionDays * 24 * 60 * 60 * 1000)
+
+═══════════════════════════════════════════
+PROBLEM 5 — MISSING: Show Subscription Result After Approval
+═══════════════════════════════════════════
+
+FILE: src/pages/ShopApprovalsPage.tsx (or wherever shop approval happens)
+
+After the admin approves a shop, immediately show a confirmation 
+modal or toast that includes:
+
+  - Shop name
+  - Whether they got a "Trial" or "Standard" subscription
+  - Exact subscription expiry date (formatted as: DD MMM YYYY)
+  - Message: "The shop owner has been notified."
+
+This helps the admin confirm the subscription was set correctly 
+without needing to go to the Shops page to check.
+
+═══════════════════════════════════════════
+PROBLEM 6 — MISSING: Subscription Status Badges on ShopsPage
+═══════════════════════════════════════════
+
+FILE: src/pages/ShopsPage.tsx
+
+Each shop row/card currently shows basic info. Add a clear 
+subscription status badge next to each shop showing:
+
+  - 🟢 "Trial Active" — subscriptionStatus == "trial" and not expired
+  - 🟢 "Active" — subscriptionStatus == "active" and not expired
+  - 🟡 "Expiring Soon" — active but expires within reminderDays days
+  - 🔴 "Grace Period" — subscriptionStatus == "grace" 
+                         (show days remaining in grace: "Grace: X days left")
+  - ⚫ "Expired" — subscriptionStatus == "expired"
+
+Also show the actual expiry date below the badge in small text:
+  "Expires: 15 Jun 2025" or "Expired: 10 May 2025"
+
+Calculate these states on the frontend using the subscriptionExpiresAt 
+timestamp and graceDays from the config (fetch config once on page load).
+
+═══════════════════════════════════════════
+PROBLEM 7 — MISSING: Manual Admin Actions on Expired/Grace Shops
+═══════════════════════════════════════════
+
+FILE: src/pages/ShopsPage.tsx
+
+Add a dropdown or action buttons for each shop (only visible to admins) 
+that allow:
+
+1. "Renew Subscription" — already exists, but make it work with 
+   dynamic subscriptionDays as described in Problem 4.
+
+2. "Extend Grace Period" (admin only) — opens a small modal where 
+   the admin can type a number of extra days to add to the grace period 
+   for this specific shop. Updates the shop document:
+   { gracePeriodExtendedBy: X, gracePeriodExtendedAt: now }
+   And adds the extra days to the calculated grace end date on the frontend.
+
+3. "Force Expire Now" (admin only) — immediately sets the shop to:
+   { subscriptionStatus: "grace", isActive: false, 
+     subscriptionExpiresAt: now }
+   Ask for confirmation before doing this.
+
+4. "Permanently Deactivate" (admin only) — sets:
+   { subscriptionStatus: "expired", isActive: false, 
+     approvalStatus: "deactivated" }
+   This removes the shop from all lists except an archived view.
+   Requires a typed confirmation: admin must type "DEACTIVATE" to confirm.
+
+═══════════════════════════════════════════
+PROBLEM 8 — MISSING: Notifications Bell in Admin Panel
+═══════════════════════════════════════════
+
+The Cloud Function will write notifications to 
+users/{adminId}/notifications. The admin panel needs to display them.
+
+Add a notification bell icon to the admin panel top navbar:
+
+1. Listen in real-time (onSnapshot) to the current admin user's 
+   users/{adminId}/notifications subcollection, ordered by 
+   createdAt descending, limited to 20.
+
+2. Show a red badge count on the bell for unread notifications 
+   (where isRead == false).
+
+3. Clicking the bell opens a dropdown panel showing:
+   - Each notification with its title, body, and time (e.g., "2 hours ago")
+   - Unread notifications highlighted with a light background
+   - A "Mark all as read" button at the top
+   - Clicking any notification marks it as read 
+     (update isRead: true in Firestore)
+
+4. If there are no notifications, show: "No notifications yet."
+
+═══════════════════════════════════════════
+IMPORTANT RULES — PLEASE FOLLOW STRICTLY
+═══════════════════════════════════════════
+
+1. Do NOT change any existing Firestore security rules.
+2. Do NOT break any existing working features (shop listing, 
+   user management, listings management, etc.)
+3. Do NOT change how the XMUM Market app works — only the admin 
+   app and the Cloud Functions.
+4. Use the existing design system, color scheme, and component 
+   patterns already in the codebase. Match the existing UI style.
+5. Use TypeScript throughout. No plain JavaScript files.
+6. Handle all loading states and error states in the UI.
+7. All dates displayed to the admin must be in Malaysia time 
+   (Asia/Kuala_Lumpur) and formatted as: DD MMM YYYY (e.g., 15 Jun 2025)
+8. After completing all changes, show me a summary of every file 
+   that was created or modified.

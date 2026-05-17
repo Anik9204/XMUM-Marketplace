@@ -1,12 +1,27 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, Flag, Users, Megaphone, FileText, Star, GraduationCap, List, BarChart2, LogOut, Store, Newspaper, Moon, Sun, Menu, X, ShieldAlert, ClipboardList, SlidersHorizontal, } from "lucide-react";
+import { LayoutDashboard, Flag, Users, Megaphone, FileText, Star, GraduationCap, List, BarChart2, LogOut, Store, Newspaper, Moon, Sun, Menu, X, ShieldAlert, ClipboardList, SlidersHorizontal, Bell, } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth, db } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { useDarkMode } from "../contexts/DarkModeContext";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { collection, query, where, onSnapshot, orderBy, limit, updateDoc, doc, writeBatch, } from "firebase/firestore";
+function timeAgo(n) {
+    if (!n.createdAt)
+        return "";
+    const diff = Date.now() - n.createdAt.seconds * 1000;
+    const mins = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+    if (mins < 1)
+        return "just now";
+    if (mins < 60)
+        return `${mins}m ago`;
+    if (hours < 24)
+        return `${hours}h ago`;
+    return `${days}d ago`;
+}
 export default function Layout({ children }) {
     const [location] = useLocation();
     const { adminUser, isAdmin } = useAuth();
@@ -14,6 +29,10 @@ export default function Layout({ children }) {
     const [pendingVerifications, setPendingVerifications] = useState(0);
     const { dark, toggle } = useDarkMode();
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    // Notification bell state
+    const [notifications, setNotifications] = useState([]);
+    const [bellOpen, setBellOpen] = useState(false);
+    const bellRef = useRef(null);
     useEffect(() => {
         const q = query(collection(db, "reports"), where("status", "==", "pending"));
         const unsub = onSnapshot(q, (snap) => setPendingReports(snap.size), () => { });
@@ -24,6 +43,53 @@ export default function Layout({ children }) {
         const unsub = onSnapshot(q, (snap) => setPendingVerifications(snap.size), () => { });
         return unsub;
     }, []);
+    // Real-time notifications listener for the current admin user
+    useEffect(() => {
+        if (!adminUser?.uid)
+            return;
+        const q = query(collection(db, "users", adminUser.uid, "notifications"), orderBy("createdAt", "desc"), limit(20));
+        const unsub = onSnapshot(q, (snap) => {
+            setNotifications(snap.docs.map((d) => ({
+                id: d.id,
+                title: d.data().title ?? "",
+                body: d.data().body ?? "",
+                type: d.data().type ?? "",
+                shopId: d.data().shopId,
+                shopName: d.data().shopName,
+                createdAt: d.data().createdAt ?? null,
+                isRead: d.data().isRead ?? d.data().read ?? false,
+            })));
+        }, () => { });
+        return unsub;
+    }, [adminUser?.uid]);
+    // Close bell dropdown on outside click
+    useEffect(() => {
+        function handler(e) {
+            if (bellRef.current && !bellRef.current.contains(e.target)) {
+                setBellOpen(false);
+            }
+        }
+        document.addEventListener("mousedown", handler);
+        return () => document.removeEventListener("mousedown", handler);
+    }, []);
+    const unreadCount = notifications.filter((n) => !n.isRead).length;
+    async function markAllRead() {
+        if (!adminUser?.uid)
+            return;
+        const unread = notifications.filter((n) => !n.isRead);
+        if (unread.length === 0)
+            return;
+        const batch = writeBatch(db);
+        for (const n of unread) {
+            batch.update(doc(db, "users", adminUser.uid, "notifications", n.id), { isRead: true });
+        }
+        await batch.commit().catch(() => { });
+    }
+    async function markRead(n) {
+        if (!adminUser?.uid || n.isRead)
+            return;
+        await updateDoc(doc(db, "users", adminUser.uid, "notifications", n.id), { isRead: true }).catch(() => { });
+    }
     const NAV = [
         { href: "/", label: "Dashboard", icon: LayoutDashboard },
         { href: "/listings", label: "Listings", icon: List },
@@ -40,6 +106,11 @@ export default function Layout({ children }) {
         { href: "/audit-log", label: "Audit Log", icon: ShieldAlert },
         { href: "/subscription-config", label: "Subscription Config", icon: SlidersHorizontal },
     ];
+    // Notification bell button — reused in both mobile bar and sidebar
+    const NotificationBell = () => (_jsxs("div", { className: "relative", ref: bellRef, children: [_jsxs("button", { onClick: () => setBellOpen((v) => !v), className: "relative p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400\n                   dark:hover:text-slate-200 rounded-lg transition-colors", title: "Notifications", children: [_jsx(Bell, { className: "w-5 h-5" }), unreadCount > 0 && (_jsx("span", { className: "absolute top-1 right-1 bg-red-500 text-white text-[9px] font-bold\n                           rounded-full min-w-[16px] h-[16px] flex items-center justify-center px-0.5", children: unreadCount > 99 ? "99+" : unreadCount }))] }), bellOpen && (_jsxs("div", { className: "absolute right-0 top-full mt-2 z-50 w-80 bg-white dark:bg-slate-800\n                        border border-gray-100 dark:border-slate-700 rounded-2xl shadow-2xl\n                        overflow-hidden", children: [_jsxs("div", { className: "flex items-center justify-between px-4 py-3 border-b\n                          border-gray-100 dark:border-slate-700", children: [_jsx("p", { className: "text-sm font-bold text-slate-800 dark:text-slate-200", children: "Notifications" }), unreadCount > 0 && (_jsx("button", { onClick: markAllRead, className: "text-[11px] text-blue-600 dark:text-blue-400 hover:underline", children: "Mark all as read" }))] }), _jsx("div", { className: "max-h-80 overflow-y-auto divide-y divide-gray-50 dark:divide-slate-700/50", children: notifications.length === 0 ? (_jsx("div", { className: "px-4 py-8 text-center text-sm text-slate-400", children: "No notifications yet." })) : (notifications.map((n) => (_jsxs("button", { onClick: () => markRead(n), className: `w-full text-left px-4 py-3 transition-colors hover:bg-slate-50
+                              dark:hover:bg-slate-700/40
+                              ${!n.isRead ? "bg-blue-50/60 dark:bg-blue-950/30" : ""}`, children: [_jsxs("div", { className: "flex items-start justify-between gap-2", children: [_jsx("p", { className: `text-xs font-semibold text-slate-800 dark:text-slate-200 leading-snug
+                                  ${!n.isRead ? "text-blue-900 dark:text-blue-200" : ""}`, children: n.title }), !n.isRead && (_jsx("span", { className: "w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-0.5" }))] }), _jsx("p", { className: "text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2 text-left", children: n.body }), n.createdAt && (_jsx("p", { className: "text-[10px] text-slate-400 mt-1", children: timeAgo(n) }))] }, n.id)))) })] }))] }));
     return (_jsxs("div", { className: "flex h-screen bg-slate-50 dark:bg-slate-900 overflow-hidden", children: [sidebarOpen && (_jsx("div", { className: "fixed inset-0 z-20 bg-black/40 lg:hidden", onClick: () => setSidebarOpen(false) })), _jsxs("aside", { className: `
         fixed inset-y-0 left-0 z-30 w-60 flex-shrink-0
         bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700
@@ -55,5 +126,5 @@ export default function Layout({ children }) {
                                         : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50"}`, children: [_jsx(Icon, { className: "w-4 h-4 shrink-0" }), _jsx("span", { className: "flex-1", children: label }), label === "Reports" && pendingReports > 0 && (_jsx("span", { className: "ml-auto bg-red-500 text-white text-[9px] font-bold\n                                     rounded-full min-w-[18px] h-[18px] flex items-center\n                                     justify-center px-1", children: pendingReports > 99 ? "99+" : pendingReports })), label === "Verifications" && pendingVerifications > 0 && (_jsx("span", { className: "ml-auto bg-red-500 text-white text-[9px] font-bold\n                                     rounded-full min-w-[18px] h-[18px] flex items-center\n                                     justify-center px-1", children: pendingVerifications > 99 ? "99+" : pendingVerifications }))] }) }, href));
                         }) }), _jsxs("div", { className: "px-3 py-4 border-t border-gray-100 dark:border-slate-700", children: [_jsxs("div", { className: "px-3 py-2 mb-2", children: [_jsx("p", { className: "text-xs font-medium text-slate-700 dark:text-slate-300 truncate", children: adminUser?.displayName }), _jsx("p", { className: "text-[10px] text-slate-400 truncate", children: adminUser?.email })] }), _jsxs("button", { onClick: toggle, className: "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm\n                       text-slate-600 dark:text-slate-400 hover:bg-slate-50\n                       dark:hover:bg-slate-700/50 transition-colors min-h-[44px] mb-1", children: [dark
                                         ? _jsx(Sun, { className: "w-4 h-4 text-amber-400" })
-                                        : _jsx(Moon, { className: "w-4 h-4" }), dark ? "Light Mode" : "Dark Mode"] }), _jsxs("button", { onClick: () => signOut(auth), className: "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors min-h-[44px]", children: [_jsx(LogOut, { className: "w-4 h-4" }), "Sign out"] })] })] }), _jsxs("main", { className: "flex-1 overflow-auto flex flex-col min-w-0", children: [_jsxs("div", { className: "lg:hidden flex items-center gap-3 px-4 py-3 bg-white\n                        dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700\n                        flex-shrink-0", children: [_jsx("button", { onClick: () => setSidebarOpen(true), className: "p-2 text-slate-500 hover:text-slate-700 dark:hover:text-slate-200\n                       rounded-lg transition-colors", children: _jsx(Menu, { className: "w-5 h-5" }) }), _jsx("p", { className: "text-sm font-bold text-slate-800 dark:text-slate-200", children: "XMUM Admin" })] }), _jsx("div", { className: "flex-1 overflow-auto", children: children })] })] }));
+                                        : _jsx(Moon, { className: "w-4 h-4" }), dark ? "Light Mode" : "Dark Mode"] }), _jsxs("button", { onClick: () => signOut(auth), className: "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors min-h-[44px]", children: [_jsx(LogOut, { className: "w-4 h-4" }), "Sign out"] })] })] }), _jsxs("main", { className: "flex-1 overflow-auto flex flex-col min-w-0", children: [_jsxs("div", { className: "flex items-center gap-3 px-4 py-3 bg-white\n                        dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700\n                        flex-shrink-0", children: [_jsx("button", { onClick: () => setSidebarOpen(true), className: "lg:hidden p-2 text-slate-500 hover:text-slate-700 dark:hover:text-slate-200\n                       rounded-lg transition-colors", children: _jsx(Menu, { className: "w-5 h-5" }) }), _jsx("p", { className: "text-sm font-bold text-slate-800 dark:text-slate-200 lg:hidden", children: "XMUM Admin" }), _jsx("div", { className: "flex-1" }), _jsx(NotificationBell, {})] }), _jsx("div", { className: "flex-1 overflow-auto", children: children })] })] }));
 }
