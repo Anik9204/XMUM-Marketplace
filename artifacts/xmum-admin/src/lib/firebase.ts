@@ -1,4 +1,4 @@
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import {
   initializeFirestore,
@@ -19,7 +19,7 @@ const firebaseConfig = {
   measurementId:     import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
-const app = initializeApp(firebaseConfig);
+const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 export const auth    = getAuth(app);
 // experimentalAutoDetectLongPolling bypasses Replit's WebSocket proxy block.
 // This MUST use initializeFirestore — do not change to getFirestore().

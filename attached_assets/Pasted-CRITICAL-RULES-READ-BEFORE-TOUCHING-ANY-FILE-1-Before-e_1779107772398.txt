@@ -1,0 +1,48 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything
+   that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages,
+   STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint
+   unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing:
+   pnpm --filter xmum-admin run build
+
+TASK: Fix the Firebase singleton guard in XMUM Admin's firebase.ts
+      so that Vite HMR in development does not throw
+      "Firebase App named '[DEFAULT]' already exists".
+
+File to change: artifacts/xmum-admin/src/lib/firebase.ts
+
+Current line (find it exactly):
+  const app = initializeApp(firebaseConfig);
+
+Replace with:
+  import { getApps, getApp } from "firebase/app";
+  const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+
+BUT — the import line for initializeApp already exists at the top of the file.
+Do this instead as TWO separate surgical edits:
+
+Edit 1 — update the existing import line at the top of the file.
+Find:
+  import { initializeApp } from "firebase/app";
+Replace with:
+  import { initializeApp, getApps, getApp } from "firebase/app";
+
+Edit 2 — update the app initialization line.
+Find:
+  const app = initializeApp(firebaseConfig);
+Replace with:
+  const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+
+Do NOT move, reorder, or change any other line in this file.
+
+After the change, run: pnpm --filter xmum-admin run build
+Report the full build output.
