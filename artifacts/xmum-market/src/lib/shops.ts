@@ -176,7 +176,7 @@ export async function getFeaturedShops(limitCount = 8): Promise<Shop[]> {
     const snap = await getDocs(q);
     const active = snap.docs
       .map((d) => ({ id: d.id, ...d.data() } as Shop))
-      .filter((s) => s.isActive !== false && s.isSuspended !== true);
+      .filter((s) => s.isActive !== false && s.isSuspended !== true && s.subscriptionStatus !== "expired");
 
     // Sort: shops with ratings first, then by createdAt
     active.sort((a, b) => {
@@ -208,7 +208,7 @@ export async function getRecentShopListings(limitCount = 6): Promise<ShopListing
       shopIds.map(async (id) => {
         try {
           const s = await getDoc(doc(db, "shops", id));
-          shopStatuses[id] = s.exists() && s.data()?.isActive !== false && s.data()?.isSuspended !== true;
+          shopStatuses[id] = s.exists() && s.data()?.isActive !== false && s.data()?.isSuspended !== true && s.data()?.subscriptionStatus !== "expired";
         } catch {
           shopStatuses[id] = false;
         }
@@ -239,7 +239,7 @@ export async function getAllShopListings(limitCount = 40): Promise<ShopListing[]
     shopIds.map(async (id) => {
       try {
         const s = await getDoc(doc(db, "shops", id));
-        shopStatuses[id] = s.exists() && s.data()?.isActive !== false && s.data()?.isSuspended !== true;
+        shopStatuses[id] = s.exists() && s.data()?.isActive !== false && s.data()?.isSuspended !== true && s.data()?.subscriptionStatus !== "expired";
       } catch {
         shopStatuses[id] = false;
       }
@@ -268,7 +268,7 @@ export async function getShopListingsByCategory(category: string, limitCount = 4
     shopIds.map(async (id) => {
       try {
         const s = await getDoc(doc(db, "shops", id));
-        shopStatuses[id] = s.exists() && s.data()?.isActive !== false && s.data()?.isSuspended !== true;
+        shopStatuses[id] = s.exists() && s.data()?.isActive !== false && s.data()?.isSuspended !== true && s.data()?.subscriptionStatus !== "expired";
       } catch {
         shopStatuses[id] = false;
       }
@@ -800,6 +800,6 @@ export async function getAllShops(limitCount = 50): Promise<Shop[]> {
   const snap = await getDocs(q);
   return snap.docs
     .map((d) => ({ id: d.id, ...d.data() } as Shop))
-    .filter((s) => s.isActive !== false && s.isSuspended !== true)
+    .filter((s) => s.isActive !== false && s.isSuspended !== true && s.subscriptionStatus !== "expired")
     .slice(0, limitCount);
 }

@@ -1,0 +1,74 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything
+   that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages,
+   STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint
+   unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing:
+   pnpm --filter xmum-admin run build
+
+This part has TWO independent fixes.
+
+--- FIX A: Subscription expired status not enforced in market ---
+
+File: artifacts/xmum-market/src/lib/shops.ts
+
+The shop filtering logic currently only checks isActive and isSuspended.
+A shop with subscriptionStatus === "expired" but isActive === true stays
+visible. We need to also hide expired shops.
+
+Search for every line in this file that contains this filter pattern:
+  s.isActive !== false && s.isSuspended !== true
+
+There should be approximately 4 occurrences (lines ~179, ~203, ~211, ~242,
+~271, ~803 — the exact lines may differ slightly).
+
+For EACH occurrence, extend the condition by adding one more check:
+  Old: s.isActive !== false && s.isSuspended !== true
+  New: s.isActive !== false && s.isSuspended !== true && s.subscriptionStatus !== "expired"
+
+Also find all occurrences of the shopStatuses pattern:
+  s.exists() && s.data()?.isActive !== false && s.data()?.isSuspended !== true
+Replace with:
+  s.exists() && s.data()?.isActive !== false && s.data()?.isSuspended !== true && s.data()?.subscriptionStatus !== "expired"
+
+Do NOT change anything else in this file. Do NOT touch listings filters.
+
+--- FIX B: Add security headers to XMUM Admin vercel.json ---
+
+File: artifacts/xmum-admin/vercel.json
+
+The headers array currently only has cache-control entries. Add security
+headers for the root catch-all source "/(.*)" at the END of the headers
+array (after the existing entries).
+
+Find the closing ] of the headers array and add a new entry before it:
+
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; frame-ancestors 'none';"
+        }
+      ]
+    }
+
+IMPORTANT: The CSP must include 'unsafe-inline' and 'unsafe-eval' for
+script-src because Vite bundles inline scripts. Do NOT use a stricter CSP
+— it will break the app.
+
+After both fixes:
+1. Run: pnpm --filter xmum-admin run build
+2. Run: pnpm --filter xmum-market run build  (to confirm shops.ts change is clean)
+Report both build outputs.
