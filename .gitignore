@@ -49,3 +49,5 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+artifacts/xmum-market/pnpm-lock.yaml

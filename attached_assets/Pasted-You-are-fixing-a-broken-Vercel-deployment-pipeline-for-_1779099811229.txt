@@ -1,0 +1,54 @@
+You are fixing a broken Vercel deployment pipeline for this pnpm monorepo. Apply ALL of the following fixes in one session, then commit and push cleanly. Do NOT use git commit --amend and do NOT use git push --force under any circumstances.
+
+─── FIX 1: pnpm-workspace.yaml ───
+Find the line:
+  esbuild: "0.27.3"
+Change it to:
+  esbuild: "^0.27.3"
+(The bare version string breaks pnpm install on Vercel. It must be a valid semver range.)
+
+─── FIX 2: artifacts/xmum-admin/package.json ───
+Replace all dependency version values that conflict with the workspace catalog.
+Change every package that exists in the catalog to use "catalog:" as its version.
+Specifically update: react, react-dom, lucide-react, clsx, tailwind-merge, wouter, @types/react, @types/react-dom, @vitejs/plugin-react, tailwindcss, vite
+These must all read "catalog:" instead of pinned versions like "^18.3.1" or "^5.4.21".
+Keep firebase and recharts with their current pinned versions since they are not in the catalog.
+Also change typescript in devDependencies to "~5.9.2" to match the root workspace.
+
+─── FIX 3: artifacts/xmum-admin/vercel.json ───
+Replace the entire file contents with:
+{
+  "buildCommand": "pnpm --filter xmum-admin run build",
+  "outputDirectory": "artifacts/xmum-admin/dist",
+  "installCommand": "pnpm install",
+  "framework": null,
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
+  "headers": [
+    { "source": "/assets/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] },
+    { "source": "/(.*).js", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] },
+    { "source": "/(.*).css", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] },
+    { "source": "/", "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }] },
+    { "source": "/index.html", "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }] }
+  ]
+}
+
+─── FIX 4: Remove nested lockfile ───
+Delete the file artifacts/xmum-market/pnpm-lock.yaml if it exists.
+Then add this line to the root .gitignore (if not already present):
+  artifacts/xmum-market/pnpm-lock.yaml
+
+─── FIX 5: Reinstall and commit cleanly ───
+Run: pnpm install
+Then stage all changes: git add -A
+Then commit with this message: "fix: resolve Vercel deployment failures (lockfile, catalog versions, admin vercel config, esbuild override)"
+Then push normally: git push origin main
+No --force. No --amend. A clean, normal push only.
+
+─── VERIFICATION ───
+After pushing, confirm:
+1. git log --oneline -3 shows the new commit at the top
+2. git config user.email returns sktanvir2307@gmail.com
+3. No pnpm-lock.yaml exists inside artifacts/xmum-market/
+4. artifacts/xmum-admin/vercel.json contains "buildCommand"
+
+Do not change any source code (.tsx, .ts, .css files). Only touch the 4 config files listed above, the .gitignore, and run the install + commit + push.
