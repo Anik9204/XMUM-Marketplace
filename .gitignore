@@ -5,6 +5,8 @@ dist
 tmp
 out-tsc
 *.tsbuildinfo
+artifacts/xmum-admin/src/**/*.js
+artifacts/xmum-admin/src/**/*.js.map
 .expo
 .expo-shared
 
