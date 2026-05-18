@@ -1,7 +1,7 @@
 {
-  "buildCommand": "pnpm --filter xmum-admin run build",
+  "buildCommand": "cd ../.. && pnpm --filter xmum-admin run build",
   "outputDirectory": "artifacts/xmum-admin/dist",
-  "installCommand": "pnpm install",
+  "installCommand": "cd ../.. && pnpm install",
   "framework": null,
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
   "headers": [
