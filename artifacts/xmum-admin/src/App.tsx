@@ -6,7 +6,6 @@ import ReportsPage      from "./pages/ReportsPage";
 import UsersPage        from "./pages/UsersPage";
 import AdsPage          from "./pages/AdsPage";
 import RentalAuditPage  from "./pages/RentalAuditPage";
-import VerificationPage from "./pages/VerificationPage";
 import ReviewsPage      from "./pages/ReviewsPage";
 import ListingsPage     from "./pages/ListingsPage";
 import AnalyticsPage    from "./pages/AnalyticsPage";
@@ -40,7 +39,6 @@ export default function App() {
         <Route path="/users"          component={UsersPage} />
         <Route path="/reports"        component={ReportsPage} />
         <Route path="/reviews"        component={ReviewsPage} />
-        <Route path="/verifications"  component={VerificationPage} />
         <Route path="/rental-audit"   component={RentalAuditPage} />
         <Route path="/ads"            component={AdsPage} />
         <Route path="/analytics"      component={AnalyticsPage} />

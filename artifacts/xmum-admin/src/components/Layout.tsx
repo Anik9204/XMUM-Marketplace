@@ -2,7 +2,7 @@ import { ReactNode, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, Flag, Users, Megaphone, FileText,
-  Star, GraduationCap, List, BarChart2, LogOut,
+  Star, List, BarChart2, LogOut,
   Store, Newspaper, Moon, Sun, Menu, X, ShieldAlert, ClipboardList, SlidersHorizontal,
   Bell,
 } from "lucide-react";
@@ -41,8 +41,8 @@ function timeAgo(n: AdminNotification): string {
 export default function Layout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const { adminUser, isAdmin } = useAuth();
-  const [pendingReports, setPendingReports]             = useState(0);
-  const [pendingVerifications, setPendingVerifications] = useState(0);
+  const [pendingReports, setPendingReports]               = useState(0);
+  const [pendingShopApprovals, setPendingShopApprovals]   = useState(0);
   const { dark, toggle } = useDarkMode();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -58,8 +58,15 @@ export default function Layout({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const q = query(collection(db, "users"), where("verificationStatus", "==", "pending"));
-    const unsub = onSnapshot(q, (snap) => setPendingVerifications(snap.size), () => {});
+    const q = query(
+      collection(db, "shops"),
+      where("approvalStatus", "==", "pending")
+    );
+    const unsub = onSnapshot(
+      q,
+      (snap) => setPendingShopApprovals(snap.size),
+      () => {}
+    );
     return unsub;
   }, []);
 
@@ -130,7 +137,6 @@ export default function Layout({ children }: { children: ReactNode }) {
     { href: "/users",         label: "Users",         icon: Users },
     { href: "/reports",       label: "Reports",       icon: Flag },
     { href: "/reviews",       label: "Reviews",       icon: Star },
-    { href: "/verifications", label: "Verifications", icon: GraduationCap },
     { href: "/rental-audit",  label: "Rental Audit",  icon: FileText },
     { href: "/ads",           label: "Ads",           icon: Megaphone },
     { href: "/analytics",     label: "Analytics",     icon: BarChart2 },
@@ -268,11 +274,11 @@ export default function Layout({ children }: { children: ReactNode }) {
                       {pendingReports > 99 ? "99+" : pendingReports}
                     </span>
                   )}
-                  {label === "Verifications" && pendingVerifications > 0 && (
+                  {label === "Shop Approvals" && pendingShopApprovals > 0 && (
                     <span className="ml-auto bg-red-500 text-white text-[9px] font-bold
                                      rounded-full min-w-[18px] h-[18px] flex items-center
                                      justify-center px-1">
-                      {pendingVerifications > 99 ? "99+" : pendingVerifications}
+                      {pendingShopApprovals > 99 ? "99+" : pendingShopApprovals}
                     </span>
                   )}
                 </a>

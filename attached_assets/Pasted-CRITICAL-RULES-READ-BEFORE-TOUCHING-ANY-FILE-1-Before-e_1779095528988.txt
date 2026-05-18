@@ -1,0 +1,230 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports 
+   or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only.
+3. Do NOT remove any existing function, prop, import, or JSX 
+   element unless explicitly told to.
+4. After every change, verify: does this break anything working 
+   before? If yes, find a different approach.
+5. If a fix requires changing a shared component used by other 
+   pages, STOP and tell me the impact first.
+6. Never change CSS classes, layout, z-index, or breakpoints 
+   unless directly part of the fix.
+7. Confirm build passes with zero errors:
+   pnpm --filter @workspace/xmum-admin run build
+
+═══════════════════════════════════════════
+CHANGE 1 — Set VITE_MAIN_APP_URL in admin app env
+═══════════════════════════════════════════
+
+FILE: artifacts/xmum-admin/.env
+
+Find the line:
+  VITE_MAIN_APP_URL=
+
+Change it to:
+  VITE_MAIN_APP_URL=https://xmum-marketplace-xmum-market.vercel.app
+
+This is the production URL of the XMUM Market app. This single 
+change will fix ALL existing View buttons in ShopsPage, 
+ShopApprovalsPage, ReportsPage, and VerificationPage — they 
+all already use VITE_MAIN_APP_URL correctly. No code changes 
+needed in those files.
+
+Also update the Vercel environment variable:
+In Vercel dashboard for the xmum-admin project, go to 
+Settings → Environment Variables, find VITE_MAIN_APP_URL 
+and set it to:
+  https://xmum-marketplace-xmum-market.vercel.app
+
+═══════════════════════════════════════════
+CHANGE 2 — Add View buttons to ListingsPage
+═══════════════════════════════════════════
+
+FILE: artifacts/xmum-admin/src/pages/ListingsPage.tsx
+
+The listings table currently has no "View" button to open 
+the listing in the market app. 
+
+Find where each listing row is rendered (look for the 
+listing title, type, status display). Add a small 
+external link button to each row that opens the listing 
+in the market app.
+
+Add this import at the top if ExternalLink is not 
+already imported from lucide-react:
+  import { ..., ExternalLink } from "lucide-react";
+
+Add this constant near the top of the component 
+(after imports):
+  const MAIN_APP_URL = import.meta.env.VITE_MAIN_APP_URL ?? "";
+
+In each listing row, add a View button as the LAST 
+action button (after any existing Delete or action buttons):
+  
+    href={`${MAIN_APP_URL}/listing/${listing.id}`}
+    target="_blank"
+    rel="noreferrer"
+    className="flex items-center gap-1 text-xs text-blue-600 
+               dark:text-blue-400 border border-blue-200 
+               dark:border-blue-800 rounded-lg px-2.5 py-1.5 
+               hover:bg-blue-50 dark:hover:bg-blue-900/20 
+               transition-colors min-h-[32px]"
+    title="View in marketplace"
+  >
+    <ExternalLink className="w-3 h-3" /> View
+  </a>
+
+Do NOT change anything else in the file.
+
+═══════════════════════════════════════════
+CHANGE 3 — Add View buttons to UsersPage
+═══════════════════════════════════════════
+
+FILE: artifacts/xmum-admin/src/pages/UsersPage.tsx
+
+The users table has no "View" button to open the user's 
+public seller profile in the market app.
+
+Add this constant near the top of the component:
+  const MAIN_APP_URL = import.meta.env.VITE_MAIN_APP_URL ?? "";
+
+Add this import if ExternalLink is not already imported:
+  import { ..., ExternalLink } from "lucide-react";
+
+In each user row, add a View Profile button as the LAST 
+action (after existing role/blacklist buttons):
+  
+    href={`${MAIN_APP_URL}/seller/${user.uid}`}
+    target="_blank"
+    rel="noreferrer"
+    className="flex items-center gap-1 text-xs text-blue-600 
+               dark:text-blue-400 border border-blue-200 
+               dark:border-blue-800 rounded-lg px-2.5 py-1.5 
+               hover:bg-blue-50 dark:hover:bg-blue-900/20 
+               transition-colors min-h-[32px]"
+    title="View public profile"
+  >
+    <ExternalLink className="w-3 h-3" /> Profile
+  </a>
+
+Do NOT change anything else in the file.
+
+═══════════════════════════════════════════
+CHANGE 4 — Add red badge to Shop Approvals nav item
+═══════════════════════════════════════════
+
+FILE: artifacts/xmum-admin/src/components/Layout.tsx
+
+Currently the sidebar has red badges for "Reports" 
+(pendingReports) and "Verifications" (pendingVerifications) 
+but NOT for "Shop Approvals".
+
+STEP 1: Add a new state variable after the existing ones:
+  const [pendingShopApprovals, setPendingShopApprovals] = useState(0);
+
+STEP 2: Add a new useEffect to listen for pending shops 
+in real-time. Add it right after the existing 
+pendingVerifications useEffect:
+
+  useEffect(() => {
+    const q = query(
+      collection(db, "shops"),
+      where("approvalStatus", "==", "pending")
+    );
+    const unsub = onSnapshot(
+      q, 
+      (snap) => setPendingShopApprovals(snap.size), 
+      () => {}
+    );
+    return unsub;
+  }, []);
+
+STEP 3: In the NAV rendering section, find the existing 
+badge for "Verifications":
+  {label === "Verifications" && pendingVerifications > 0 && (
+    <span ...>{pendingVerifications}</span>
+  )}
+
+Add the Shop Approvals badge right after it:
+  {label === "Shop Approvals" && pendingShopApprovals > 0 && (
+    <span className="ml-auto bg-red-500 text-white text-[9px] 
+                     font-bold rounded-full min-w-[18px] h-[18px] 
+                     flex items-center justify-center px-1">
+      {pendingShopApprovals > 99 ? "99+" : pendingShopApprovals}
+    </span>
+  )}
+
+Do NOT change any other nav item or badge. Do NOT change 
+any other part of Layout.tsx.
+
+═══════════════════════════════════════════
+CHANGE 5 — Remove Verifications tab
+═══════════════════════════════════════════
+
+The Verifications tab (VerificationPage.tsx) handles 
+student ID verification for shops. This feature was 
+never implemented in the XMUM Market app — there is no 
+student ID upload flow, no verificationStatus field 
+being written by the market app, and no UI for users 
+to submit verification requests. It is a dead page.
+
+Do exactly these surgical deletions:
+
+STEP 1 — Remove from Layout.tsx NAV array:
+Find this line in the NAV array:
+  { href: "/verifications", label: "Verifications", icon: GraduationCap },
+Delete only this line. Do not touch any other NAV entry.
+
+STEP 2 — Remove the Verifications badge from Layout.tsx:
+Find and delete only these lines:
+  {label === "Verifications" && pendingVerifications > 0 && (
+    <span className="ml-auto bg-red-500 ...">
+      {pendingVerifications > 99 ? "99+" : pendingVerifications}
+    </span>
+  )}
+
+STEP 3 — Remove the pendingVerifications state and 
+its useEffect from Layout.tsx:
+Delete:
+  const [pendingVerifications, setPendingVerifications] = useState(0);
+And delete:
+  useEffect(() => {
+    const q = query(collection(db, "users"), 
+      where("verificationStatus", "==", "pending"));
+    const unsub = onSnapshot(q, 
+      (snap) => setPendingVerifications(snap.size), () => {});
+    return unsub;
+  }, []);
+
+STEP 4 — Remove the GraduationCap icon import from 
+Layout.tsx if it is no longer used after Step 1.
+Check if GraduationCap appears anywhere else in 
+Layout.tsx first. If it only appeared in the NAV 
+array, remove it from the import line.
+
+STEP 5 — Remove the route from App.tsx:
+FILE: artifacts/xmum-admin/src/App.tsx
+Find and delete only the route line for verifications.
+It will look something like:
+  <Route path="/verifications" component={VerificationPage} />
+Also remove the VerificationPage import at the top 
+of App.tsx.
+
+STEP 6 — Do NOT delete VerificationPage.tsx itself yet. 
+Just orphan it by removing its route and nav link. 
+This way if something breaks we can restore easily.
+
+═══════════════════════════════════════════
+AFTER ALL CHANGES
+═══════════════════════════════════════════
+
+1. Show me every line added or removed in each file.
+2. Confirm the admin app build passes:
+   pnpm --filter @workspace/xmum-admin run build
+3. Remind me to:
+   a) Set VITE_MAIN_APP_URL in Vercel environment 
+      variables for the admin project and redeploy
+   b) The market app needs no changes at all
+4. Do NOT touch any files in artifacts/xmum-market.
+5. Do NOT change any other admin page not listed above.

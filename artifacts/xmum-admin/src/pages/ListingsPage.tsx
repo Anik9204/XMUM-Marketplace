@@ -8,10 +8,11 @@ import { ref, deleteObject } from "firebase/storage";
 import { db, storage, writeAuditLog } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { AdminListing, ListingType } from "../lib/types";
-import { Trash2, Archive, Star, Download } from "lucide-react";
+import { Trash2, Archive, Star, Download, ExternalLink } from "lucide-react";
 import { exportToCsv } from "../lib/exportCsv";
 
 const PAGE_SIZE = 20;
+const MAIN_APP_URL = import.meta.env.VITE_MAIN_APP_URL ?? "";
 
 const TYPE_LABELS: Record<ListingType, string> = {
   "buy-sell":   "Buy & Sell",
@@ -371,6 +372,19 @@ export default function ListingsPage() {
                     >
                       <Trash2 className="w-3 h-3" /> Delete
                     </button>
+                    <a
+                      href={`${MAIN_APP_URL}/listing/${listing.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1 text-xs text-blue-600
+                                 dark:text-blue-400 border border-blue-200
+                                 dark:border-blue-800 rounded-lg px-2.5 py-1.5
+                                 hover:bg-blue-50 dark:hover:bg-blue-900/20
+                                 transition-colors min-h-[32px]"
+                      title="View in marketplace"
+                    >
+                      <ExternalLink className="w-3 h-3" /> View
+                    </a>
                   </div>
                 </div>
               );

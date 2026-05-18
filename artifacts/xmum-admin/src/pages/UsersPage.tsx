@@ -3,7 +3,7 @@ import { collection, updateDoc, doc, orderBy, query, onSnapshot, getDocs, where 
 import { db, writeAuditLog } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { AdminUser, UserRole } from "../lib/types";
-import { Ban, CheckCircle, CheckCircle2, X } from "lucide-react";
+import { Ban, CheckCircle, CheckCircle2, X, ExternalLink } from "lucide-react";
 
 function Toast({ message, type, onDone }: { message: string; type: "success" | "error"; onDone: () => void }) {
   useEffect(() => {
@@ -21,6 +21,8 @@ function Toast({ message, type, onDone }: { message: string; type: "success" | "
     </div>
   );
 }
+
+const MAIN_APP_URL = import.meta.env.VITE_MAIN_APP_URL ?? "";
 
 export default function UsersPage() {
   const { adminUser, isAdmin } = useAuth();
@@ -255,19 +257,35 @@ export default function UsersPage() {
                         : "—"}
                     </td>
                     <td className="px-4 py-3">
-                      {u.uid !== adminUser?.uid && (
-                        <button
-                          onClick={e => { e.stopPropagation(); handleBanToggle(u); }}
-                          className={`flex items-center gap-1.5 text-xs rounded-xl px-3 py-1.5
-                                      border min-h-[36px] transition-colors
-                                      ${u.isBlacklisted
-                                        ? "border-green-200 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
-                                        : "border-red-200 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"}`}>
-                          {u.isBlacklisted
-                            ? <><CheckCircle className="w-3 h-3" /> Unban</>
-                            : <><Ban className="w-3 h-3" /> Ban</>}
-                        </button>
-                      )}
+                      <div className="flex items-center gap-1.5">
+                        {u.uid !== adminUser?.uid && (
+                          <button
+                            onClick={e => { e.stopPropagation(); handleBanToggle(u); }}
+                            className={`flex items-center gap-1.5 text-xs rounded-xl px-3 py-1.5
+                                        border min-h-[36px] transition-colors
+                                        ${u.isBlacklisted
+                                          ? "border-green-200 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
+                                          : "border-red-200 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"}`}>
+                            {u.isBlacklisted
+                              ? <><CheckCircle className="w-3 h-3" /> Unban</>
+                              : <><Ban className="w-3 h-3" /> Ban</>}
+                          </button>
+                        )}
+                        <a
+                          href={`${MAIN_APP_URL}/seller/${u.uid}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={e => e.stopPropagation()}
+                          className="flex items-center gap-1 text-xs text-blue-600
+                                     dark:text-blue-400 border border-blue-200
+                                     dark:border-blue-800 rounded-lg px-2.5 py-1.5
+                                     hover:bg-blue-50 dark:hover:bg-blue-900/20
+                                     transition-colors min-h-[32px]"
+                          title="View public profile"
+                        >
+                          <ExternalLink className="w-3 h-3" /> Profile
+                        </a>
+                      </div>
                     </td>
                   </tr>
                 ))}
