@@ -1,0 +1,63 @@
+~/.../artifacts/xmum-market$ firebase login --no-localhost
+i  Firebase optionally collects CLI and Emulator Suite usage and error reporting information to help improve our products. Data is collected in accordance with Google's privacy policy (https://policies.google.com/privacy) and is not used to identify you.
+
+✔ Allow Firebase to collect CLI and Emulator Suite usage and error reporting information? Yes
+i  To change your data collection preference at any time, run `firebase logout` and log in again.
+
+To sign in to the Firebase CLI:
+
+1. Take note of your session ID:
+
+   EB59E
+
+2. Visit the URL below on any device and follow the instructions to get your code:
+
+   https://auth.firebase.tools/login?code_challenge=M02fEW_4s94WGaom7fkDvRtvh7VsmEbr9zORfZFWZFs&session=eb59ec7a-e7d5-47c1-9466-ebafd0a84a35&attest=03kw6AJj-JDCXIPLklyQbenyaZXekBYsNpSHjzM1jrk
+
+3. Paste or enter the authorization code below once you have it:
+
+✔ Enter authorization code: y
+Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+
+Error: Unable to authenticate using the provided code. Please try again.
+
+Having trouble? Try firebase [command] --help
+~/.../artifacts/xmum-market$ firebase login --no-localhost
+i  Firebase optionally collects CLI and Emulator Suite usage and error reporting information to help improve our products. Data is collected in accordance with Google's privacy policy (https://policies.google.com/privacy) and is not used to identify you.
+
+✔ Allow Firebase to collect CLI and Emulator Suite usage and error reporting information? Yes
+i  To change your data collection preference at any time, run `firebase logout` and log in again.
+
+To sign in to the Firebase CLI:
+
+1. Take note of your session ID:
+
+   D527E
+
+2. Visit the URL below on any device and follow the instructions to get your code:
+
+   https://auth.firebase.tools/login?code_challenge=npXEXYN4-_47SE7Z54RH1QcdBFRPtbXhjlrcoGRc-sk&session=d527e615-dcf0-4496-a26d-e1e918996ad7&attest=dF2urLyG7WB5iJ4C9aWP9uoR3OUkQJMVs9C7tKX0XiI
+
+3. Paste or enter the authorization code below once you have it:
+
+✔ Enter authorization code: 4/0AeoWuM_a7YXqTbmPgi-zwuudJWMBlaj6b4pQWgCN9bKNl8jhvyhbhzzTjmiUYa4ObikuUg
+
+✔  Success! Logged in as forwechat001@gmail.com
+~/.../artifacts/xmum-market$ firebase deploy --only storage
+
+=== Deploying to 'xmum--market'...
+
+i  deploying storage
+i  storage: ensuring required API firebasestorage.googleapis.com is enabled...
+✔  storage: required API firebasestorage.googleapis.com is enabled
+i  firebase.storage: checking storage.rules for compilation errors...
+✔  firebase.storage: rules file storage.rules compiled successfully
+i  storage: uploading rules storage.rules...
+✔  storage: released rules storage.rules to firebase.storage
+
+✔  Deploy complete!
+
+Project Console: https://console.firebase.google.com/project/xmum--market/overview
+~/.../artifacts/xmum-market$ 
