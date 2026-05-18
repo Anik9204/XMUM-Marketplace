@@ -1,0 +1,119 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything
+   that was working before?" If yes, do not proceed — find a
+   different approach.
+5. If fixing Issue X requires changing a shared component used by
+   other pages, STOP and tell me what the impact will be before
+   making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or
+   responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing:
+   pnpm --filter @workspace/xmum-market run build
+
+═══════════════════════════════════════════
+ISSUE: emailVerified is always false in Firestore users documents
+═══════════════════════════════════════════
+
+BACKGROUND:
+Every user in the Firestore "users" collection has a field 
+"emailVerified: false" even though many users have already verified 
+their email through Firebase Auth. 
+
+The root cause is that the app saves emailVerified at signup time 
+from user.emailVerified (which is always false at the moment of 
+account creation, before the user clicks the verification link). 
+After the user clicks the verification link, Firebase Auth updates 
+the token — but nothing ever writes that updated value back to 
+the Firestore users document. So it stays false forever.
+
+This needs to be fixed in the XMUM Market app 
+(artifacts/xmum-market), NOT the admin app.
+
+═══════════════════════════════════════════
+THE FIX — TWO SURGICAL CHANGES ONLY
+═══════════════════════════════════════════
+
+CHANGE 1 — Update emailVerified in Firestore on every login
+
+FILE: Find the file in artifacts/xmum-market/src that handles 
+Firebase Auth state changes — this is likely AuthContext.tsx or 
+a similar auth context/provider file. Look for the 
+onAuthStateChanged listener.
+
+Inside the onAuthStateChanged callback, after the user object 
+is confirmed to be non-null and their Firestore profile has been 
+loaded, add ONE extra step:
+
+  If user.emailVerified is true AND the stored Firestore 
+  emailVerified field is false, update the Firestore users 
+  document for that user to set emailVerified: true.
+
+Use updateDoc with { emailVerified: true } — do NOT overwrite 
+the entire document.
+
+Wrap this in a try/catch — it is non-critical and must never 
+crash the auth flow or block the user from logging in.
+
+Only run this update when needed (emailVerified is true in Auth 
+but false in Firestore) to avoid unnecessary Firestore writes 
+on every page load.
+
+IMPORTANT: Do NOT change anything else in the auth flow. Do NOT 
+change how the user profile is loaded, how state is set, how 
+loading works, or any other part of the onAuthStateChanged logic. 
+Only add this one conditional updateDoc call.
+
+CHANGE 2 — Reload the Firebase Auth user token after email 
+verification
+
+FILE: Find the file in artifacts/xmum-market/src that handles 
+email verification — this could be an EmailVerification page, 
+a callback/redirect handler, or wherever the app detects that 
+the user has just verified their email.
+
+If such a page or handler exists, add a call to 
+user.reload() after verification is confirmed. This forces 
+Firebase Auth to refresh the token so user.emailVerified 
+becomes true immediately without requiring the user to 
+sign out and back in.
+
+After calling user.reload(), also update the Firestore document:
+  updateDoc(doc(db, "users", user.uid), { emailVerified: true })
+
+Wrap in try/catch — non-critical.
+
+If no email verification handler page exists, skip Change 2 
+and only apply Change 1.
+
+═══════════════════════════════════════════
+WHAT NOT TO DO
+═══════════════════════════════════════════
+
+- Do NOT change the Firestore security rules
+- Do NOT change anything in the admin app (artifacts/xmum-admin)
+- Do NOT change how users sign up or how the initial profile 
+  is created
+- Do NOT add any new pages, routes, or components
+- Do NOT change any UI — this is a background data sync fix only
+- Do NOT batch-update all existing users in the database — 
+  the fix should only update a user's own document when they 
+  log in and their token shows emailVerified: true
+
+═══════════════════════════════════════════
+VERIFICATION STEPS
+═══════════════════════════════════════════
+
+After making the changes:
+
+1. Show me exactly which lines you added in each file
+2. Show me the full updated function (onAuthStateChanged callback) 
+   so I can verify nothing was accidentally removed
+3. Confirm the build passes:
+   pnpm --filter @workspace/xmum-market run build
+4. Do not touch any other file

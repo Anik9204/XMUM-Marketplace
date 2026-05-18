@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { User } from "firebase/auth";
-import { onSnapshot, doc } from "firebase/firestore";
+import { onSnapshot, doc, updateDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { onAuthChange } from "@/lib/auth";
 import { UserProfile } from "@/lib/types";
@@ -56,6 +56,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           (snap) => {
             setUserProfile(snap.exists() ? (snap.data() as UserProfile) : null);
             if (firstSnap) { firstSnap = false; setLoading(false); }
+            // Change 1: sync emailVerified from Auth → Firestore when it lags behind
+            if (u.emailVerified && snap.exists() && !snap.data().emailVerified) {
+              updateDoc(doc(db, "users", u.uid), { emailVerified: true }).catch(() => {});
+            }
           },
           () => {
             setUserProfile(null);
@@ -86,6 +90,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (auth.currentUser?.emailVerified) {
           // Mutated in-place — nudge React to re-read the object
           setTick((t) => t + 1);
+          // Change 2: sync emailVerified to Firestore as soon as reload() confirms it
+          const uid = auth.currentUser.uid;
+          updateDoc(doc(db, "users", uid), { emailVerified: true }).catch(() => {});
         }
       } catch {
         // Network hiccups are fine — wait for next poll
