@@ -48,7 +48,8 @@ service cloud.firestore {
     match /users/{userId} {
       // Only signed-in users may read profiles (not anonymous public)
       allow read: if isSignedIn();
-      allow create: if isOwner(userId) && isXmuEmail();
+      allow create: if isOwner(userId) && isSignedIn()
+        && request.auth.token.email.matches('.*@xmu\\.edu\\.my$');
       allow update: if isOwner(userId) || isAdmin();
       allow delete: if isOwner(userId) || isAdmin();
 

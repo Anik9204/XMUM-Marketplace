@@ -141,6 +141,7 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
       if (mode === "forgot" && (code === "auth/user-not-found" || code.includes("user-not-found"))) {
         setError(t.emailNotRegistered);
       } else if (code === "only_xmu_email" || code.includes("only_xmu")) setError(t.onlyXmuEmail);
+      else if (code === "profile_create_failed") setError("Account created but profile setup failed. Please contact support.");
       else if (code.includes("wrong-password") || code.includes("invalid-credential")) setError("Invalid email or password.");
       else if (code.includes("user-not-found")) setError("No account found with this email.");
       else if (code.includes("email-already-in-use")) setError("An account already exists with this email. Please sign in.");

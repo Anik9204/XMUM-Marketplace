@@ -31,29 +31,29 @@ export async function signUp(
   const cred = await createUserWithEmailAndPassword(auth, email, password);
   await sendEmailVerification(cred.user);
 
-  // Non-blocking: write user profile to Firestore in the background.
-  // If Firestore isn't set up yet this must NOT block or throw — the auth
-  // flow has already succeeded and the verification email has been sent.
-  setDoc(doc(db, "users", cred.user.uid), {
-    uid: cred.user.uid,
-    email: cred.user.email ?? "",
-    displayName: email.split("@")[0],
-    fullName: fullName.trim(),
-    avatarUrl: "",
-    whatsapp: whatsapp?.trim() ?? "",
-    wechat: wechat?.trim() ?? "",
-    emailVerified: false,
-    isVerified: false,
-    rating: 0,
-    isBlacklisted: false,
-    isFeatured: false,
-    showEmail: true,
-    showWhatsApp: true,
-    showWeChat: true,
-    createdAt: Date.now(),
-  } satisfies UserProfile).catch((err) => {
-    console.warn("[signUp] Firestore user profile write failed (non-fatal):", err?.code, err?.message);
-  });
+  try {
+    await setDoc(doc(db, "users", cred.user.uid), {
+      uid: cred.user.uid,
+      email: cred.user.email ?? "",
+      displayName: email.split("@")[0],
+      fullName: fullName.trim(),
+      avatarUrl: "",
+      whatsapp: whatsapp?.trim() ?? "",
+      wechat: wechat?.trim() ?? "",
+      emailVerified: false,
+      isVerified: false,
+      rating: 0,
+      isBlacklisted: false,
+      isFeatured: false,
+      showEmail: true,
+      showWhatsApp: true,
+      showWeChat: true,
+      createdAt: Date.now(),
+    } satisfies UserProfile);
+  } catch (err: any) {
+    console.error("[signUp] Firestore user profile write failed:", err?.code, err?.message);
+    throw new Error("profile_create_failed");
+  }
 
   return cred.user;
 }

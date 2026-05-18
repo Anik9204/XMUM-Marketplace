@@ -1,0 +1,127 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything
+   that was working before?" If yes, do not proceed — find a
+   different approach.
+5. If fixing Issue X requires changing a shared component used by
+   other pages, STOP and tell me what the impact will be before
+   making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or
+   responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing:
+   pnpm --filter @workspace/xmum-market run build
+
+═══════════════════════════════════════════
+ISSUE: New users are not being saved to Firestore users collection
+═══════════════════════════════════════════
+
+BACKGROUND:
+In artifacts/xmum-market/src/lib/auth.ts, the signUp() function 
+creates the Firebase Auth account and then calls setDoc() to write 
+the user profile to Firestore. This setDoc() is fire-and-forget 
+with a .catch() that silently swallows errors.
+
+The write is failing because of a Firestore security rule conflict:
+  allow create: if isOwner(userId) && isXmuEmail();
+
+The isXmuEmail() function inside the Firestore rules requires 
+email_verified == true on the auth token. But at signup, the user's 
+email is not verified yet — they haven't clicked the link. So 
+Firestore rejects the write silently and no users document is 
+ever created.
+
+This means new users cannot delete their posts, delete their 
+account, or do anything that requires their Firestore profile 
+to exist.
+
+═══════════════════════════════════════════
+THE FIX — TWO CHANGES
+═══════════════════════════════════════════
+
+CHANGE 1 — Fix the Firestore security rule for users create
+
+FILE: artifacts/xmum-market/firestore.rules
+
+Find this rule:
+  match /users/{userId} {
+    allow create: if isOwner(userId) && isXmuEmail();
+
+Change it to:
+  match /users/{userId} {
+    allow create: if isOwner(userId) && isSignedIn()
+      && request.auth.token.email.matches('.*@xmu\\.edu\\.my$');
+
+EXPLANATION: Remove the email_verified requirement from the 
+create rule ONLY. We still require the user to be signed in 
+and have an @xmu.edu.my email. We just no longer require 
+email_verified at the moment of document creation, because 
+the document must be created at signup — before verification 
+happens. All other rules (update, delete, and all other 
+collections) remain completely unchanged.
+
+Do NOT change any other rule in the file.
+
+CHANGE 2 — Make the Firestore write in signUp() await and 
+throw properly so failures are visible
+
+FILE: artifacts/xmum-market/src/lib/auth.ts
+
+Find the signUp() function. Currently the setDoc() call is 
+fire-and-forget:
+
+  setDoc(doc(db, "users", cred.user.uid), { ... }).catch((err) => {
+    console.warn("[signUp] Firestore user profile write failed (non-fatal):", ...);
+  });
+
+Change it so the setDoc() is awaited and throws on failure:
+
+  try {
+    await setDoc(doc(db, "users", cred.user.uid), { ... });
+  } catch (err: any) {
+    console.error("[signUp] Firestore user profile write failed:", err?.code, err?.message);
+    throw new Error("profile_create_failed");
+  }
+
+Keep ALL the same fields inside the setDoc — do not add or 
+remove any fields. Only change how the call is made 
+(awaited + throws instead of fire-and-forget).
+
+IMPORTANT: The signUp() function already returns cred.user at 
+the end. Make sure it still returns cred.user after the 
+try/catch. Do not change the return statement.
+
+CHANGE 3 — Handle the new error in the signup UI
+
+FILE: Find the signup page or component in 
+artifacts/xmum-market/src that calls the signUp() function. 
+It is likely SignUpPage.tsx or a similar file.
+
+Find where signUp() is called and where errors are caught. 
+Add handling for the new "profile_create_failed" error code:
+
+  if (err.message === "profile_create_failed") {
+    setError("Account created but profile setup failed. 
+              Please contact support.");
+  }
+
+This should be added alongside the existing error handling 
+cases — do NOT replace them.
+
+═══════════════════════════════════════════
+AFTER MAKING ALL CHANGES
+═══════════════════════════════════════════
+
+1. Show me the exact lines changed in each file
+2. Show me the full updated users match block from 
+   firestore.rules so I can verify nothing else changed
+3. Show me the full updated signUp() function from auth.ts
+4. Confirm build passes:
+   pnpm --filter @workspace/xmum-market run build
+5. Remind me to deploy the updated firestore.rules to Firebase 
+   Console after this — paste the updated rules into Firebase 
+   Console → Firestore → Rules → Publish
