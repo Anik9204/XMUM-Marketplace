@@ -4,7 +4,7 @@ import { Link } from "wouter";
 import { db } from "../lib/firebase";
 import {
   Users, Flag, Megaphone, ShoppingBag, TrendingUp,
-  GraduationCap, Store, Newspaper, Activity, AlertTriangle, ClipboardList,
+  Store, Newspaper, Activity, AlertTriangle, ClipboardList,
 } from "lucide-react";
 
 interface Stats {
@@ -13,7 +13,6 @@ interface Stats {
   pendingReports: number;
   activeAds: number;
   recentSignups: number;
-  pendingVerifications: number;
   pendingShopAds: number;
   totalShops: number;
   suspendedShops: number;
@@ -22,7 +21,7 @@ interface Stats {
 
 const defaultStats: Stats = {
   totalUsers: 0, totalListings: 0, pendingReports: 0,
-  activeAds: 0, recentSignups: 0, pendingVerifications: 0,
+  activeAds: 0, recentSignups: 0,
   pendingShopAds: 0, totalShops: 0, suspendedShops: 0, pendingShopApprovals: 0,
 };
 
@@ -101,12 +100,6 @@ export default function DashboardPage() {
         console.error("[Dashboard] reports snapshot:", err);
         setLoading(false);
       }
-    ));
-
-    unsubs.push(onSnapshot(
-      query(collection(db, "users"), where("verificationStatus", "==", "pending")),
-      (snap) => setStats(p => ({ ...(p ?? defaultStats), pendingVerifications: snap.size })),
-      err => console.error("[Dashboard] verifications snapshot:", err)
     ));
 
     unsubs.push(onSnapshot(
@@ -226,7 +219,6 @@ export default function DashboardPage() {
           <StatCard icon={Users}         label="Total Users"           value={stats.totalUsers}           color="bg-blue-500"   href="/users" />
           <StatCard icon={ShoppingBag}   label="Active Listings"       value={stats.totalListings}        color="bg-green-500"  href="/listings" />
           <StatCard icon={Flag}          label="Pending Reports"       value={stats.pendingReports}       color="bg-red-500"    href="/reports" />
-          <StatCard icon={GraduationCap} label="Pending Verifications" value={stats.pendingVerifications} color="bg-indigo-500" href="/verifications" />
           <StatCard icon={Newspaper}     label="Pending Shop Ads"      value={stats.pendingShopAds}       color="bg-amber-500"  href="/shop-ads" />
           <StatCard icon={Store}         label="Total Shops"           value={stats.totalShops}           color="bg-teal-500"   href="/shops" />
           <StatCard icon={AlertTriangle} label="Suspended Shops"        value={stats.suspendedShops}       color="bg-orange-500" href="/shops" />

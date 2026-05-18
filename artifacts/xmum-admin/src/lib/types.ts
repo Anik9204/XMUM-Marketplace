@@ -15,15 +15,8 @@ export interface AdminUser {
   isFeatured: boolean;
   createdAt: number;
   emailVerified: boolean;
-  isVerified?: boolean;
   verificationStatus?: VerificationStatus;
-  verificationSubmittedAt?: number;
-  verificationReviewedAt?: number;
-  verificationRejectionReason?: string;
-  shopName?: string;
   shopSlug?: string;
-  shopBio?: string;
-  shopCategories?: string[];
   shopBannerUrl?: string;
   activeListingCount?: number;
   rating?: number;

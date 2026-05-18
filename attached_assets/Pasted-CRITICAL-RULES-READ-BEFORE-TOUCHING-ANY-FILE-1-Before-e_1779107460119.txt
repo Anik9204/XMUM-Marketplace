@@ -1,0 +1,56 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything
+   that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages,
+   STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint
+   unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing:
+   pnpm --filter xmum-admin run build
+
+TASK: Remove the Verifications feature from XMUM Admin surgically.
+
+Files to change:
+
+1. artifacts/xmum-admin/src/App.tsx
+   - Remove the import line: import VerificationPage from "./pages/VerificationPage";
+     (it is not imported right now, so skip this if it doesn't exist — do NOT add it)
+   - No other changes needed in this file.
+
+2. artifacts/xmum-admin/src/pages/DashboardPage.tsx
+   - Find the StatCard that has href="/verifications" and label="Pending Verifications".
+   - Remove that entire <StatCard ... /> element (the single JSX line or block).
+   - Also find and remove the onSnapshot listener that queries:
+     where("verificationStatus", "==", "pending")
+     This includes: the query(...) call, the onSnapshot(...) call, and the
+     corresponding unsubscribe variable. Remove them and their cleanup in the
+     return () => { ... } block.
+   - Also remove pendingVerifications from the stats state type/interface and
+     from the defaultStats initializer object.
+   - Also remove the GraduationCap import from lucide-react if it is only used
+     by that stat card. Check first — if GraduationCap is used anywhere else in
+     the file, leave the import alone.
+   - Do NOT touch any other stat card, listener, or state field.
+
+3. artifacts/xmum-admin/src/pages/VerificationPage.tsx
+   - Delete this file entirely.
+
+4. artifacts/xmum-admin/src/lib/types.ts
+   - Find the AdminUser type/interface.
+   - Remove these fields if they exist:
+       verificationStatus, isVerified, verificationSubmittedAt,
+       verificationReviewedAt, verificationRejectionReason,
+       shopName, shopBio, shopCategories
+   - Before removing each field, search the entire xmum-admin/src folder to
+     confirm the field is not used anywhere else. If any field IS used elsewhere,
+     leave it and tell me.
+   - Do NOT remove any other fields.
+
+After all changes, run: pnpm --filter xmum-admin run build
+Report the full build output. If there are errors, fix them before finishing.
