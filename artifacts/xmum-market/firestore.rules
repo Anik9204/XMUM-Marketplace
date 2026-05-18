@@ -57,7 +57,9 @@ service cloud.firestore {
         allow read: if isOwner(userId);
         // Any signed-in user can create notifications for another user
         // (e.g. when sending a message or an inquiry).
-        allow create: if isXmuEmail();
+        allow create: if isOwner(userId)
+                      || isEditorRole()
+                      || (isXmuEmail() && request.resource.data.type in ["message", "inquiry"]);
         allow update: if isOwner(userId);
         allow delete: if isOwner(userId);
       }

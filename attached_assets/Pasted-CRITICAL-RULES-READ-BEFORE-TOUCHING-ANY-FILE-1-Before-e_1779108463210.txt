@@ -1,0 +1,58 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything
+   that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages,
+   STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint
+   unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing:
+   pnpm --filter xmum-admin run build
+
+TASK: Tighten the Firestore rule that allows any @xmu.edu.my user to write
+      a notification into ANY other user's notification subcollection.
+      The new rule must allow:
+        - The owner themselves to create their own notifications (self-notify).
+        - Any editor or admin role to create notifications for any user
+          (this is how the admin app sends approval/rejection notifications).
+        - Regular XMU users writing to other users' notifications ONLY
+          when it is a messaging-type notification (type == "message" or
+          type == "inquiry") — to support the existing messaging feature.
+      It must BLOCK a regular XMU user from spamming arbitrary notifications
+      into another user's inbox.
+
+File to change: artifacts/xmum-market/firestore.rules
+
+Step 1 — Verify that these helper functions already exist in the rules file:
+  isEditorRole() — returns true if the caller's role is "editor" or "admin"
+  isXmuEmail()   — returns true if the caller has a verified @xmu.edu.my email
+
+Step 2 — Find the notifications block inside match /users/{userId}/:
+  match /notifications/{notifId} {
+    allow read: if isOwner(userId);
+    allow create: if isXmuEmail();
+    allow update: if isOwner(userId);
+    allow delete: if isOwner(userId);
+  }
+
+Step 3 — Replace ONLY the allow create line:
+  Old:
+    allow create: if isXmuEmail();
+  New:
+    allow create: if isOwner(userId)
+                  || isEditorRole()
+                  || (isXmuEmail() && request.resource.data.type in ["message", "inquiry"]);
+
+Do NOT change the read, update, or delete lines.
+Do NOT change any other rule block.
+
+After making the change:
+1. Read through the full updated notifications block and confirm it looks correct.
+2. Deploy:
+   firebase deploy --only firestore:rules
+   (If the firebase CLI is not available, save the file and tell me.)
