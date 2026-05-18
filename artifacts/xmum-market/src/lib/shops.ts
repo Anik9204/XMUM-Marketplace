@@ -300,6 +300,18 @@ export async function deleteShopListing(listingId: string, shopId: string): Prom
     await updateDoc(doc(db, "shopListings", listingId), { isActive: false });
     throw Object.assign(new Error("report-hold"), { code: "report-hold" });
   }
+  // Delete photos from Storage before deactivating the document
+  const listingSnap = await getDoc(doc(db, "shopListings", listingId));
+  const photos: string[] = listingSnap.data()?.photos ?? [];
+  if (photos.length > 0) {
+    await Promise.allSettled(
+      photos.map((url) => {
+        const path = storagePathFromUrl(url);
+        if (!path) return Promise.resolve();
+        return deleteObject(ref(storage, path)).catch(() => {});
+      })
+    );
+  }
   await updateDoc(doc(db, "shopListings", listingId), { isActive: false });
   await updateDoc(doc(db, "shops", shopId), { totalListings: increment(-1) });
 }

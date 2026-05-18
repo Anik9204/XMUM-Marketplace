@@ -18,6 +18,7 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage
 import { db, storage, auth } from "./firebase";
 import { UserProfile } from "./types";
 import { userHasHeldListings } from "./reportHold";
+import { deleteShopCompletely } from "./shops";
 
 // Extract the Firebase Storage path from a full https:// download URL.
 // ref(storage, fullUrl) only accepts gs:// or storage paths — passing a
@@ -159,6 +160,21 @@ export async function deleteAccount(password: string): Promise<void> {
       })
     );
     console.log("[deleteAccount] Step 4 Complete");
+
+    // ── Step 4b: Delete owned shops and all their Storage media ───────────────
+    console.log("[deleteAccount] Step 4b: Deleting owned shops and shop media...");
+    const shopsSnap = await getDocs(
+      query(collection(db, "shops"), where("ownerId", "==", uid))
+    );
+    for (const shopDoc of shopsSnap.docs) {
+      try {
+        await deleteShopCompletely(shopDoc.id);
+      } catch (err) {
+        console.error(`[deleteAccount] Step 4b: failed to delete shop ${shopDoc.id}:`, err);
+        // Continue to next shop — never abort the whole deletion for one shop
+      }
+    }
+    console.log("[deleteAccount] Step 4b Complete");
 
     // ── Step 5: Delete avatar from Storage ────────────────────────────────────
     console.log("[deleteAccount] Step 5: Deleting avatar from Storage...");

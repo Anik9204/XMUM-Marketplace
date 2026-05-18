@@ -1,0 +1,189 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or 
+   uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX 
+   element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything
+   that was working before?" If yes, do not proceed — find a
+   different approach.
+5. If fixing Issue X requires changing a shared component used by
+   other pages, STOP and tell me what the impact will be before
+   making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or
+   responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing:
+   pnpm --filter @workspace/xmum-market run build
+
+═══════════════════════════════════════════
+ISSUE: Orphaned Storage files after deletion
+═══════════════════════════════════════════
+
+When users or admins delete content, Firebase Storage files 
+are being left behind because the deletion functions don't 
+clean up all associated photos. This will drain storage over 
+time. There are exactly 3 gaps to fix. Do not touch anything 
+else.
+
+════════════════════════════
+GAP 1 — deleteShopListing() does not delete photos
+════════════════════════════
+
+FILE: artifacts/xmum-market/src/lib/shops.ts
+FUNCTION: deleteShopListing()
+
+Current behaviour: sets isActive: false on the listing 
+document. Never touches Storage at all.
+
+Required fix: Before setting isActive: false, read the 
+shopListing document to get its photos array. Then delete 
+each photo from Firebase Storage. Only THEN set 
+isActive: false on the Firestore document.
+
+The function already has access to storage and deleteObject 
+via imports at the top of the file — do NOT add new imports 
+unless something is genuinely missing.
+
+The storagePathFromUrl() helper function already exists at 
+the bottom of shops.ts — use it. Do NOT write a new one.
+
+Use Promise.allSettled() for photo deletions so a single 
+failed photo delete never blocks the whole operation.
+
+If the listing has an active report hold (held === true), 
+the existing behaviour is correct — do NOT delete photos 
+in that case (evidence must be preserved). Keep that 
+logic exactly as-is.
+
+The exact change is:
+
+1. After the report-hold check passes (held === false), 
+   fetch the shopListing document:
+   const listingSnap = await getDoc(
+     doc(db, "shopListings", listingId)
+   );
+
+2. Extract photos:
+   const photos: string[] = 
+     listingSnap.data()?.photos ?? [];
+
+3. Delete photos from storage:
+   if (photos.length > 0) {
+     await Promise.allSettled(
+       photos.map((url) => {
+         const path = storagePathFromUrl(url);
+         if (!path) return Promise.resolve();
+         return deleteObject(
+           ref(storage, path)
+         ).catch(() => {});
+       })
+     );
+   }
+
+4. Then continue with the existing 
+   updateDoc({ isActive: false }) calls as before.
+
+IMPORTANT: getDoc is already imported in shops.ts. 
+Verify this before adding it to imports.
+
+════════════════════════════
+GAP 2 — deleteAccount() does not clean up shop media
+════════════════════════════
+
+FILE: artifacts/xmum-market/src/lib/userProfile.ts
+FUNCTION: deleteAccount()
+
+Current behaviour: Deletes regular listing photos and 
+avatar. But if the user owns any shops, their shop logos, 
+shop banners, and shop listing photos are NEVER deleted 
+from Storage. The shop documents themselves are also 
+never deleted.
+
+Required fix: Add a new step between the existing 
+Step 4 (listing photos) and Step 5 (avatar). 
+Call it Step 4b.
+
+Step 4b must:
+1. Query all shops where ownerId == uid:
+   const shopsSnap = await getDocs(
+     query(
+       collection(db, "shops"), 
+       where("ownerId", "==", uid)
+     )
+   );
+
+2. For each shop found, call the existing 
+   deleteShopCompletely(shopId) function from shops.ts.
+   This function already handles shop listing photos, 
+   banners, logos, and all Firestore sub-collections 
+   correctly.
+
+3. Wrap each call in try/catch — if one shop fails to 
+   delete, log the error and continue to the next shop. 
+   Never let a single shop failure abort the entire 
+   account deletion.
+
+Import deleteShopCompletely from "./shops" at the top 
+of userProfile.ts — check if it is already imported 
+before adding it.
+
+The step must be logged like the existing steps:
+  console.log("[deleteAccount] Step 4b: 
+    Deleting owned shops and shop media...");
+  // ... do the work ...
+  console.log("[deleteAccount] Step 4b Complete");
+
+Do NOT change any other step in deleteAccount(). 
+Do NOT change step numbering of existing steps.
+
+════════════════════════════
+GAP 3 — Admin shop listing deletion does not delete photos
+════════════════════════════
+
+FILE: artifacts/xmum-admin/src/lib/firebase.ts
+(or wherever the admin app's shop listing delete 
+function lives — search for deleteShopListing or 
+similar in the admin src folder)
+
+The admin app likely has its own function to delete 
+shop listings. Check if it deletes Storage photos.
+
+If it does NOT delete Storage photos:
+Apply the same fix as Gap 1 — read the listing 
+document first, delete photos from Storage using 
+Promise.allSettled(), then delete or deactivate 
+the Firestore document.
+
+If it already deletes photos correctly: 
+leave it completely unchanged and just confirm 
+this in your summary.
+
+════════════════════════════
+AFTER ALL CHANGES
+════════════════════════════
+
+1. Show me the exact lines added or changed in each 
+   file — nothing more, nothing less.
+
+2. Show me the full updated deleteShopListing() 
+   function from shops.ts.
+
+3. Show me the full updated deleteAccount() function 
+   from userProfile.ts, specifically the area around 
+   the new Step 4b.
+
+4. Tell me what you found in the admin app for Gap 3 
+   and what you did or did not change.
+
+5. Confirm the build passes with zero errors:
+   pnpm --filter @workspace/xmum-market run build
+
+6. Do NOT touch any other file. Do NOT change any UI. 
+   Do NOT change any other function in any file.
+
+ADDITIONAL NOTE:
+The Firebase Storage rules have already been updated separately 
+to allow delete operations. Do NOT touch firestore.rules or 
+any storage rules files. The code fixes in this prompt are 
+all that is needed on the code side.
