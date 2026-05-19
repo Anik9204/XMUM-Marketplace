@@ -1,0 +1,73 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+
+---
+
+Fix two bugs:
+
+## Bug 1 — "Missing or insufficient permissions" when deleting account
+
+FILE: artifacts/xmum-market/firestore.rules
+
+ROOT CAUSE: The listings delete rule requires `isXmuEmail()` which checks `email_verified == true`. When a user tries to delete their account, their auth token may have `email_verified = false` (token not yet refreshed), causing the listings delete to fail with permissions error even though the password re-auth succeeded.
+
+FIX: In the listings delete rule, change the condition so the owner can delete their own listing during account deletion even if token is not yet showing email_verified. The safest fix is to allow delete if the user is signed in AND owns the listing AND it is not report-held (drop the isXmuEmail requirement for delete-own):
+
+Find this exact block in firestore.rules:
+      allow delete: if ((isXmuEmail() && resource.data.userId == request.auth.uid && resource.data.isReportHeld != true)
+        || isEditorRole());
+
+Replace with:
+      allow delete: if ((isSignedIn() && resource.data.userId == request.auth.uid && resource.data.isReportHeld != true)
+        || isEditorRole());
+
+That's the only change to firestore.rules.
+
+After editing firestore.rules, deploy the updated rules to Firebase by running:
+firebase deploy --only firestore:rules --project xmum--market
+(from inside artifacts/xmum-market/)
+
+---
+
+## Bug 2 — "An error occurred. Please try again." on forgot password
+
+FILE: artifacts/xmum-market/src/lib/auth.ts
+
+ROOT CAUSE: The `resetPasswordWithCheck` function does a Firestore query (`getDocs`) on the users collection to verify the email exists. But the Firestore rule for users is `allow read: if isSignedIn()` — and on the forgot password screen the user is NOT signed in. So the Firestore read fails with a permissions error before Firebase Auth even gets to send the reset email.
+
+FIX: Remove the Firestore pre-check entirely. Firebase Auth's `sendPasswordResetEmail` is safe to call directly — it silently succeeds even for non-existent addresses (email enumeration protection is on by default), so no information is leaked. Simply call it directly.
+
+In artifacts/xmum-market/src/lib/auth.ts, replace the entire `resetPasswordWithCheck` function:
+
+Find:
+export async function resetPasswordWithCheck(email: string): Promise<void> {
+  const normalised = email.toLowerCase().trim();
+  const q = query(
+    collection(db, "users"),
+    where("email", "==", normalised),
+    limit(1)
+  );
+  const snap = await getDocs(q);
+  if (snap.empty) {
+    const err = new Error("No account found with this email address.");
+    (err as any).code = "auth/user-not-found";
+    throw err;
+  }
+  await sendPasswordResetEmail(auth, normalised);
+}
+
+Replace with:
+export async function resetPasswordWithCheck(email: string): Promise<void> {
+  const normalised = email.toLowerCase().trim();
+  await sendPasswordResetEmail(auth, normalised);
+}
+
+Then remove the now-unused imports from auth.ts if they are only used by the removed code: `collection`, `query`, `where`, `getDocs`, `limit`. Check carefully — only remove an import if it is NOT used anywhere else in the file.
+
+Build to confirm zero errors: pnpm --filter xmum-market run build

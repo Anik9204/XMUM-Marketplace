@@ -7,7 +7,7 @@ import {
   onAuthStateChanged,
   User,
 } from "firebase/auth";
-import { doc, setDoc, getDoc, collection, query, where, getDocs, limit } from "firebase/firestore";
+import { doc, setDoc, getDoc } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import { UserProfile } from "./types";
 
@@ -71,24 +71,8 @@ export async function resetPassword(email: string): Promise<void> {
   await sendPasswordResetEmail(auth, email);
 }
 
-// Checks that an @xmu.edu.my account with this email actually exists in
-// Firestore before calling sendPasswordResetEmail. Firebase's email
-// enumeration protection (enabled by default on projects created after
-// Sep 2023) makes sendPasswordResetEmail silently succeed for ANY address,
-// so we guard with our own Firestore lookup first.
 export async function resetPasswordWithCheck(email: string): Promise<void> {
   const normalised = email.toLowerCase().trim();
-  const q = query(
-    collection(db, "users"),
-    where("email", "==", normalised),
-    limit(1)
-  );
-  const snap = await getDocs(q);
-  if (snap.empty) {
-    const err = new Error("No account found with this email address.");
-    (err as any).code = "auth/user-not-found";
-    throw err;
-  }
   await sendPasswordResetEmail(auth, normalised);
 }
 
