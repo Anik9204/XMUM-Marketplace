@@ -1,0 +1,81 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything
+   that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages,
+   STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint
+   unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing:
+   pnpm --filter xmum-market run build
+
+TASK: On desktop, the "Campus Market Picks" carousel shows 3 very large cards.
+All 6 listings must be visible at once on desktop in a single row of 6 smaller
+cards. Mobile (< 640px) must stay exactly as-is at 3 columns.
+
+TWO surgical changes, both in artifacts/xmum-market/src/pages/HomePage.tsx.
+
+--- CHANGE 1: Make the carousel grid responsive ---
+
+Find this exact line (inside the animated carousel grid div, around line 643):
+  className="grid grid-cols-3 gap-2.5"
+
+Replace with:
+  className="grid grid-cols-3 sm:grid-cols-6 gap-2.5"
+
+That is the only change to the className. Do not touch gap, do not touch
+any other class on that element.
+
+--- CHANGE 2: Fix the minHeight CSS variables for desktop ---
+
+The current <style> block has these minHeight breakpoint values:
+  :root { --shop-carousel-min-h: 280px; }
+  @media (min-width: 640px)  { :root { --shop-carousel-min-h: 380px; } }
+  @media (min-width: 768px)  { :root { --shop-carousel-min-h: 460px; } }
+  @media (min-width: 1024px) { :root { --shop-carousel-min-h: 640px; } }
+
+At 6 columns the cards are ~1/6 of container width. On a 1024px container the
+card width ≈ 157px, image height (aspect-[4/3]) ≈ 118px, text below ≈ 48px,
+total per card ≈ 166px — all in ONE row. So the minHeight for sm+ should be
+~180px, not 380–640px.
+
+Replace the three @media blocks (leave :root mobile value 280px untouched)
+with these new values:
+
+  @media (min-width: 640px)  { :root { --shop-carousel-min-h: 180px; } }
+  @media (min-width: 768px)  { :root { --shop-carousel-min-h: 180px; } }
+  @media (min-width: 1024px) { :root { --shop-carousel-min-h: 180px; } }
+
+The exact lines to find and replace are:
+  OLD:
+    @media (min-width: 640px) {
+      :root { --shop-carousel-min-h: 380px; }
+    }
+    @media (min-width: 768px) {
+      :root { --shop-carousel-min-h: 460px; }
+    }
+    @media (min-width: 1024px) {
+      :root { --shop-carousel-min-h: 640px; }
+    }
+  NEW:
+    @media (min-width: 640px) {
+      :root { --shop-carousel-min-h: 180px; }
+    }
+    @media (min-width: 768px) {
+      :root { --shop-carousel-min-h: 180px; }
+    }
+    @media (min-width: 1024px) {
+      :root { --shop-carousel-min-h: 180px; }
+    }
+
+Do NOT change the :root { --shop-carousel-min-h: 280px; } mobile base value.
+Do NOT change any other part of the style block.
+Do NOT touch any other section of HomePage.tsx.
+
+After both changes, run: pnpm --filter xmum-market run build
+Report the full build output.

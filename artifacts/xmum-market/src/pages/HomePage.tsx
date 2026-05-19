@@ -409,13 +409,13 @@ export default function HomePage() {
         }
         :root { --shop-carousel-min-h: 280px; }
         @media (min-width: 640px) {
-          :root { --shop-carousel-min-h: 380px; }
+          :root { --shop-carousel-min-h: 180px; }
         }
         @media (min-width: 768px) {
-          :root { --shop-carousel-min-h: 460px; }
+          :root { --shop-carousel-min-h: 180px; }
         }
         @media (min-width: 1024px) {
-          :root { --shop-carousel-min-h: 640px; }
+          :root { --shop-carousel-min-h: 180px; }
         }
       `}</style>
       <div key={activeTab} className="relative overflow-hidden bg-gradient-to-br from-[#003366] via-[#004488] to-[#0055CC] text-white px-4 pt-8 pb-10">
@@ -640,7 +640,7 @@ export default function HomePage() {
                 >
                   <div
                     key={shopListingPage}
-                    className="grid grid-cols-3 gap-2.5"
+                    className="grid grid-cols-3 sm:grid-cols-6 gap-2.5"
                     style={{ animation: "shopSlideIn 0.35s cubic-bezier(0.25,0.46,0.45,0.94) both", minHeight: "var(--shop-carousel-min-h, 280px)" }}
                   >
                     {pageListings.map((listing) => (
