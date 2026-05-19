@@ -1,0 +1,70 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless explicitly told to remove it in this prompt.
+4. After every change, mentally verify: "Does this break anything
+   that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages,
+   STOP and tell me what the impact will be before making the change.
+6. Never change any CSS class, layout structure, z-index, or responsive
+   breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing:
+   pnpm --filter xmum-admin run build
+
+
+
+## PART 5 — ADDITIONAL BUGS AND IMPROVEMENTS FOUND IN AUDIT
+ 
+### 5A — DashboardPage: Remove stale `Shop Reviews` stat card
+ 
+In `DashboardPage.tsx`, there is currently no "Shop Reviews" stat card (the dashboard only has 9 stat cards — confirmed). No action needed here; only AnalyticsPage had it and that is handled in Part 1.
+ 
+### 5B — AnalyticsPage: `Star` import cleanup
+ 
+When you remove `Star` from AnalyticsPage in step 1D, also verify whether `CheckCircle` is still used elsewhere in the file (it is — for the "Report Resolution" stat card). Do not remove `CheckCircle`.
+ 
+### 5C — AuthContext type safety — add `isAdmin` null guard
+ 
+In `artifacts/xmum-admin/src/contexts/AuthContext.tsx`, verify the `isAdmin` exported value correctly guards against `adminUser` being null. If `isAdmin` is defined as `adminUser?.role === "admin"`, this is correct and returns `false` (not undefined) when `adminUser` is null. No change needed if this is the case. Read the file to confirm.
+ 
+### 5D — Layout.tsx: `Star` and `Reviews` removal
+ 
+Covered by Part 1C above. After removing `Star` from the import, check that no other item in the `NAV` array uses `Star`. Confirm there is no other use of `Star` anywhere in `Layout.tsx`.
+ 
+### 5E — Missing `.env` variable guard for `VITE_MAIN_APP_URL` in admin
+ 
+The admin `.env.example` should document `VITE_MAIN_APP_URL`. Ensure it is listed there. Edit `artifacts/xmum-admin/.env.example` and add if not present:
+```
+VITE_MAIN_APP_URL=https://your-market-app.vercel.app
+```
+ 
+### 5F — ShopApprovalsPage: load should refetch on approve/reject
+ 
+Currently `load()` is only called on mount. After approving or rejecting a shop, the shop is removed from local state. This is fine. No change needed.
+ 
+### 5G — RentalAuditPage: `writeAuditLog` import
+ 
+In the new `RentalAuditPage.tsx`, `writeAuditLog` is imported from `../lib/firebase`. Confirm `writeAuditLog` is exported from `firebase.ts` (it is — confirmed). Also confirm `useAuth` is imported for the `isAdmin` check.
+ 
+---
+ 
+## BUILD VERIFICATION
+ 
+After all changes, run:
+```
+pnpm --filter xmum-admin run build
+pnpm --filter xmum-market run build
+```
+ 
+Both must succeed with zero TypeScript errors.
+ 
+Common things to double-check before building:
+- No duplicate imports of `addDoc`, `collection`, etc. in `listings.ts`
+- `Star` icon is fully removed from `Layout.tsx` and `AnalyticsPage.tsx`
+- `AdminReview` type is removed from `types.ts` and nothing else references it
+- `ReviewsPage` is not imported anywhere in `App.tsx` or `Layout.tsx`
+- `writePlatformActivity` is properly imported in `ShopApprovalsPage.tsx` and `UsersPage.tsx`
+- `logPlatformActivity` is exported from `listings.ts`
