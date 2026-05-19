@@ -1,0 +1,53 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+
+---
+
+Fix: "Missing or insufficient permissions" when user tries to delete their account.
+
+ROOT CAUSE: In `artifacts/xmum-market/src/lib/userProfile.ts`, the `deleteAccount` function calls `userHasHeldListings(uid)` at Step 1b. That function (in `reportHold.ts`) queries the `reports` collection. But the Firestore rule for `reports` is `allow read: if isEditorRole()` — regular users cannot read reports. This throws a permissions error immediately at Step 1b, before any deletion happens.
+
+FIX: Instead of querying the `reports` collection (which regular users can't read), query the `listings` collection directly for listings where `userId == uid AND isReportHeld == true`. Regular users CAN read listings (rule is `allow read: if true`).
+
+FILE: artifacts/xmum-market/src/lib/userProfile.ts
+
+Find this exact code in the deleteAccount function:
+
+    // ── Step 1b: Check for listings under active report holds ───────────────────
+    console.log("[deleteAccount] Step 1b: Checking for report-held listings...");
+    const hasHeld = await userHasHeldListings(uid);
+    if (hasHeld) {
+      throw Object.assign(
+        new Error("You have listings that are currently under admin review due to reports. Please resolve these before deleting your account. Contact admin at cys2209204@xmu.edu.my"),
+        { code: "report-hold-account" }
+      );
+    }
+    console.log("[deleteAccount] Step 1b Complete — no held listings");
+
+Replace with:
+
+    // ── Step 1b: Check for listings under active report holds ───────────────────
+    // Query listings directly (reports collection is not readable by regular users)
+    console.log("[deleteAccount] Step 1b: Checking for report-held listings...");
+    const heldSnap = await getDocs(
+      query(collection(db, "listings"), where("userId", "==", uid), where("isReportHeld", "==", true), limit(1))
+    );
+    if (!heldSnap.empty) {
+      throw Object.assign(
+        new Error("You have listings that are currently under admin review due to reports. Please resolve these before deleting your account. Contact admin at cys2209204@xmu.edu.my"),
+        { code: "report-hold-account" }
+      );
+    }
+    console.log("[deleteAccount] Step 1b Complete — no held listings");
+
+Then check the imports at the top of userProfile.ts — make sure `limit` is already imported from "firebase/firestore". If it is not, add it to the existing firebase/firestore import line. Do NOT add a duplicate import line.
+
+The import `userHasHeldListings` from `"./reportHold"` may now be unused in userProfile.ts — check if it is used anywhere else in the file. If it is only used in the block we just replaced, remove it from the import.
+
+Build to confirm zero errors: pnpm --filter xmum-market run build

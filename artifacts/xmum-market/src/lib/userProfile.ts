@@ -7,6 +7,7 @@ import {
   getDocs,
   query,
   where,
+  limit,
 } from "firebase/firestore";
 import {
   updatePassword as fbUpdatePassword,
@@ -17,7 +18,6 @@ import {
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { db, storage, auth } from "./firebase";
 import { UserProfile } from "./types";
-import { userHasHeldListings } from "./reportHold";
 import { deleteShopCompletely } from "./shops";
 
 // Extract the Firebase Storage path from a full https:// download URL.
@@ -109,9 +109,12 @@ export async function deleteAccount(password: string): Promise<void> {
     const uid = user.uid;
 
     // ── Step 1b: Check for listings under active report holds ───────────────────
+    // Query listings directly (reports collection is not readable by regular users)
     console.log("[deleteAccount] Step 1b: Checking for report-held listings...");
-    const hasHeld = await userHasHeldListings(uid);
-    if (hasHeld) {
+    const heldSnap = await getDocs(
+      query(collection(db, "listings"), where("userId", "==", uid), where("isReportHeld", "==", true), limit(1))
+    );
+    if (!heldSnap.empty) {
       throw Object.assign(
         new Error("You have listings that are currently under admin review due to reports. Please resolve these before deleting your account. Contact admin at cys2209204@xmu.edu.my"),
         { code: "report-hold-account" }
