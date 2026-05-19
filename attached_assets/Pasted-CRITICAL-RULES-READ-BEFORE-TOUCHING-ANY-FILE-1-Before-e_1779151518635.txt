@@ -1,0 +1,85 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything
+   that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages,
+   STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint
+   unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing:
+   pnpm --filter xmum-market run build
+
+TASK: Replace the favicon assets and update the HTML + manifest for XMUM Market.
+
+--- STEP 1: Upload the new favicon files ---
+
+I am uploading a zip that contains these files:
+  favicon.svg
+  favicon.ico
+  favicon-96x96.png
+  apple-touch-icon.png
+  web-app-manifest-192x192.png
+  web-app-manifest-512x512.png
+
+Extract all 6 files and place them directly into:
+  artifacts/xmum-market/public/
+
+This will REPLACE the existing favicon.svg in that folder. That is intentional.
+Do NOT place them in any subfolder.
+
+--- STEP 2: Update index.html ---
+
+File: artifacts/xmum-market/index.html
+
+Find this existing line:
+  <link rel="apple-touch-icon" href="/icon-192.png" />
+Replace with:
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+
+Find this existing block (the Favicon comment section):
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+Replace with:
+  <!-- Favicon -->
+  <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+Do NOT change anything else in index.html.
+
+--- STEP 3: Update manifest.json ---
+
+File: artifacts/xmum-market/public/manifest.json
+
+Find the "icons" array which is currently empty:
+  "icons": []
+Replace it with:
+  "icons": [
+    {
+      "src": "/web-app-manifest-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/web-app-manifest-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+
+Keep ALL other fields in manifest.json exactly as they are
+(name, short_name, description, start_url, display, background_color,
+theme_color, orientation). Do NOT replace the whole file.
+
+--- STEP 4: Verify ---
+
+1. Confirm all 6 new files exist in artifacts/xmum-market/public/
+2. Run: pnpm --filter xmum-market run build
+3. Report the full build output. Fix any errors before finishing.
