@@ -515,7 +515,7 @@ export default function PostPage() {
     if (type === "buy-sell" && priceCents <= 0) { setError("Please enter a price."); setLoading(false); return; }
 
     if (!checkRateLimit(`post_daily_${user.uid}`, 6, 24 * 60 * 60 * 1000)) {
-      setError("You've posted too many listings in the last hour. Please wait before posting again.");
+      setError("You've reached the daily posting limit (6 listings per 24 hours). Please try again tomorrow.");
       setLoading(false);
       return;
     }
