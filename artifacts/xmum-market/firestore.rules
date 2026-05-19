@@ -121,7 +121,7 @@ service cloud.firestore {
         || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['inquiryCount'])
         || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount'])
       );
-      allow delete: if isXmuEmail() && isShopMember(resource.data.shopId);
+      allow delete: if isSignedIn() && isShopMember(resource.data.shopId);
     }
 
     // ── Shop Inquiries ─────────────────────────────────────────────────────────
