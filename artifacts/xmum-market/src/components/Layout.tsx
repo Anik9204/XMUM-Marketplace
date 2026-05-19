@@ -23,6 +23,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [showBackOnline, setShowBackOnline] = useState(false);
 
+  function getPostHref(): string {
+    const tab = sessionStorage.getItem("xmum_home_active_tab");
+    if (tab && tab !== "buy-sell") return `/post?type=${tab}`;
+    return "/post";
+  }
+
   useEffect(() => {
     const onOnline = () => {
       setIsOnline(true);
@@ -127,7 +133,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   </span>
                 )}
               </Link>
-              <Link href="/post" className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${location === "/post" ? "text-white bg-white/20" : "text-white/70 hover:text-white hover:bg-white/10"}`}>{t.post}</Link>
+              <Link href={getPostHref()} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${location === "/post" ? "text-white bg-white/20" : "text-white/70 hover:text-white hover:bg-white/10"}`}>{t.post}</Link>
               {user ? (
                 <div className="relative">
                   <button
@@ -233,7 +239,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Floating Action Button — Home and Search only, authenticated, mobile only */}
       {user && (location === "/" || location === "/search") && (
-        <Link href="/post">
+        <Link href={getPostHref()}>
           <button className="fixed bottom-[76px] right-4 z-[45] w-14 h-14 bg-[#003366] dark:bg-blue-600 text-white rounded-2xl shadow-[0_4px_20px_rgb(0,51,102,0.4)] dark:shadow-[0_4px_20px_rgb(37,99,235,0.4)] flex items-center justify-center transition-all duration-200 hover:scale-110 hover:brightness-110 active:scale-95 md:hidden">
             <Plus className="w-6 h-6" />
           </button>

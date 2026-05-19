@@ -167,6 +167,14 @@ export default function HomePage() {
   const { user, userProfile } = useAuth();
   const [, navigate] = useLocation();
   const [activeTab, setActiveTab] = useState<ListingType>("buy-sell");
+  useEffect(() => {
+    sessionStorage.setItem("xmum_home_active_tab", activeTab);
+  }, [activeTab]);
+  useEffect(() => {
+    return () => {
+      sessionStorage.removeItem("xmum_home_active_tab");
+    };
+  }, []);
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -290,6 +298,7 @@ export default function HomePage() {
 
   const handleTabChange = (tab: ListingType) => {
     setActiveTab(tab);
+    sessionStorage.setItem("xmum_home_active_tab", tab);
     const el = chipRowRef.current;
     if (el) {
       el.scrollLeft = 0;

@@ -1,0 +1,142 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything
+   that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages,
+   STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint
+   unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing:
+   pnpm --filter xmum-market run build
+
+TASK: When the user presses the Post button (desktop nav link or mobile FAB),
+they should land on the PostPage pre-selected to the same tab they were
+browsing on the HomePage. e.g. if they were on "lost-found" tab, pressing
+Post opens the form already on "Lost & Found".
+
+IMPORTANT NOTES before you start:
+- PostPage already supports a ?type= URL query param. Line ~316 in PostPage.tsx:
+    const params = new URLSearchParams(window.location.search);
+    const urlType = params.get("type") as ListingType | null;
+  This already sets the form tab from the URL. Do NOT touch PostPage.tsx at all.
+- The rental tab is special: PostPage shows the RentalTcModal consent first
+  if the user switches to rental and hasn't accepted yet. This MUST still happen.
+  Passing ?type=rental in the URL will pre-select rental, but since the existing
+  URL param useEffect (line ~316) calls setType directly (not handleTypeChange),
+  it bypasses the TC modal. We need to fix this carefully.
+
+--- STEP 1: Fix PostPage.tsx for rental TC consent when arriving via URL ---
+
+File: artifacts/xmum-market/src/pages/PostPage.tsx
+
+Find the useEffect that reads the ?type= URL param (around line 316):
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlType = params.get("type") as ListingType | null;
+    const validTypes: ListingType[] = ["buy-sell", "lost-found", "jobs", "assistance", "rental"];
+    if (urlType && validTypes.includes(urlType)) {
+      setType(urlType);
+      setCategory(defaultCategoryForType(urlType));
+    }
+  }, []);
+
+Replace it with this version that shows TC modal if rental is requested but not yet accepted:
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlType = params.get("type") as ListingType | null;
+    const validTypes: ListingType[] = ["buy-sell", "lost-found", "jobs", "assistance", "rental"];
+    if (urlType && validTypes.includes(urlType)) {
+      if (urlType === "rental" && !tcAccepted) {
+        setShowTcModal(true);
+      } else {
+        setType(urlType);
+        setCategory(defaultCategoryForType(urlType));
+      }
+    }
+  }, []);
+
+Do NOT change anything else in PostPage.tsx.
+
+--- STEP 2: Add shared activeTab state to HomePage so the FAB and nav link can read it ---
+
+The Layout component does NOT receive any props about the active tab — it only
+knows the URL location. We need a lightweight way to share the active tab from
+HomePage to the Layout's post buttons WITHOUT passing props through Layout
+(since Layout wraps all pages and we don't want to add complexity).
+
+The cleanest approach: store the active homepage tab in sessionStorage when
+it changes, and read it in Layout when building the /post href.
+
+File: artifacts/xmum-market/src/pages/HomePage.tsx
+
+Find the handleTabChange function:
+  const handleTabChange = (tab: ListingType) => {
+    setActiveTab(tab);
+    ...
+  };
+
+Add one line inside it, right after setActiveTab(tab):
+  sessionStorage.setItem("xmum_home_active_tab", tab);
+
+Also, when the component mounts, set the initial value. Find the state declaration:
+  const [activeTab, setActiveTab] = useState<ListingType>("buy-sell");
+
+After that line, add a useEffect (place it near the top with the other useEffects):
+  useEffect(() => {
+    sessionStorage.setItem("xmum_home_active_tab", activeTab);
+  }, [activeTab]);
+
+Also, add a useEffect that clears the stored tab when the user navigates AWAY
+from HomePage — so that if they go to a different page and then press Post,
+it goes to /post with no ?type= param (default form). Find the return in the
+component or add near the other cleanup useEffects:
+  useEffect(() => {
+    return () => {
+      sessionStorage.removeItem("xmum_home_active_tab");
+    };
+  }, []);
+
+Do NOT change any JSX, any other state, or any other logic in HomePage.tsx.
+
+--- STEP 3: Update Layout.tsx to build tab-aware /post hrefs ---
+
+File: artifacts/xmum-market/src/components/Layout.tsx
+
+We need a helper that reads the stored tab and builds the correct href.
+This helper must be defined INSIDE the Layout component function body
+(not as a module-level function) so it can be called reactively.
+
+Find the Layout component function declaration line:
+  export default function Layout({ children }: { children: React.ReactNode }) {
+
+After the existing useState/useEffect declarations (but before the JSX return),
+add this helper function:
+  function getPostHref(): string {
+    const tab = sessionStorage.getItem("xmum_home_active_tab");
+    if (tab && tab !== "buy-sell") return `/post?type=${tab}`;
+    return "/post";
+  }
+
+Now find the desktop nav post link (line ~130):
+  <Link href="/post" className={...}>{t.post}</Link>
+
+Replace only the href value:
+  <Link href={getPostHref()} className={...}>{t.post}</Link>
+
+Now find the mobile FAB (around line 236):
+  <Link href="/post">
+    <button className="fixed bottom-[76px] ...">
+
+Replace only the href value:
+  <Link href={getPostHref()}>
+    <button className="fixed bottom-[76px] ...">
+
+Do NOT change any className, any other link, or any other part of Layout.tsx.
+
+After all changes, run: pnpm --filter xmum-market run build
+Report the full build output. Fix any errors before finishing.

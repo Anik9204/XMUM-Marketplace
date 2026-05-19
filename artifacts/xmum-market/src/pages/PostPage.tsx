@@ -317,8 +317,12 @@ export default function PostPage() {
     const urlType = params.get("type") as ListingType | null;
     const validTypes: ListingType[] = ["buy-sell", "lost-found", "jobs", "assistance", "rental"];
     if (urlType && validTypes.includes(urlType)) {
-      setType(urlType);
-      setCategory(defaultCategoryForType(urlType));
+      if (urlType === "rental" && !tcAccepted) {
+        setShowTcModal(true);
+      } else {
+        setType(urlType);
+        setCategory(defaultCategoryForType(urlType));
+      }
     }
   }, []);
 
