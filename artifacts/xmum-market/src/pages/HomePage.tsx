@@ -407,6 +407,10 @@ export default function HomePage() {
           from { opacity: 0; transform: translateX(28px); }
           to   { opacity: 1; transform: translateX(0); }
         }
+        :root { --shop-carousel-min-h: 280px; }
+        @media (min-width: 640px) {
+          :root { --shop-carousel-min-h: 340px; }
+        }
       `}</style>
       <div key={activeTab} className="relative overflow-hidden bg-gradient-to-br from-[#003366] via-[#004488] to-[#0055CC] text-white px-4 pt-8 pb-10">
         <div
@@ -631,7 +635,7 @@ export default function HomePage() {
                   <div
                     key={shopListingPage}
                     className="grid grid-cols-3 gap-2.5"
-                    style={{ animation: "shopSlideIn 0.35s cubic-bezier(0.25,0.46,0.45,0.94) both" }}
+                    style={{ animation: "shopSlideIn 0.35s cubic-bezier(0.25,0.46,0.45,0.94) both", minHeight: "var(--shop-carousel-min-h, 280px)" }}
                   >
                     {pageListings.map((listing) => (
                       <ShopListingMiniCard key={listing.id} listing={listing} />

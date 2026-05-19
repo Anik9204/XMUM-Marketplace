@@ -1,0 +1,94 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything
+   that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages,
+   STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint
+   unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing:
+   pnpm --filter xmum-market run build
+
+TASK: Fix the "Student Listings" section jumping up and down when the
+"Campus Market Picks" carousel slides between pages with fewer than 6 items.
+
+ROOT CAUSE: When the second (or later) carousel page has fewer than 6 listings,
+the 3-column grid shrinks to 1 or 2 rows instead of 2, making the whole
+carousel section shorter and causing the content below to jump up.
+
+FIX: Give the carousel grid container a fixed minimum height equal to exactly
+2 rows of ShopListingMiniCard. Each card has an aspect-[4/3] image plus ~52px
+of text content below it. The grid has gap-2.5 (10px). We will set a
+`minHeight` on the grid wrapper so it never collapses below 2-row height
+regardless of how many cards are in the current page.
+
+File to change: artifacts/xmum-market/src/pages/HomePage.tsx
+
+Find the overflow-hidden wrapper div of the carousel (the one with onTouchStart
+and onTouchEnd handlers):
+
+  <div
+    className="overflow-hidden"
+    onTouchStart={(e) => { shopTouchStartX.current = e.touches[0].clientX; }}
+    onTouchEnd={(e) => {
+      ...
+    }}
+  >
+    <div
+      key={shopListingPage}
+      className="grid grid-cols-3 gap-2.5"
+      style={{
+        animation: "shopSlideIn 0.35s cubic-bezier(0.25,0.46,0.45,0.94) both",
+      }}
+    >
+
+Change ONLY the inner grid div's style — add a minHeight to it.
+The inner grid div currently has:
+  style={{
+    animation: "shopSlideIn 0.35s cubic-bezier(0.25,0.46,0.45,0.94) both",
+  }}
+
+Replace with:
+  style={{
+    animation: "shopSlideIn 0.35s cubic-bezier(0.25,0.46,0.45,0.94) both",
+    minHeight: "var(--shop-carousel-min-h, 280px)",
+  }}
+
+Then, also add a CSS variable definition to the <style> tag that already
+exists at the top of the JSX return (the one with shopSlideIn keyframe).
+Find:
+  <style>{`
+    @keyframes shopSlideIn {
+      from { opacity: 0; transform: translateX(28px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+  `}</style>
+
+Replace with:
+  <style>{`
+    @keyframes shopSlideIn {
+      from { opacity: 0; transform: translateX(28px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    :root {
+      --shop-carousel-min-h: 280px;
+    }
+    @media (min-width: 640px) {
+      :root { --shop-carousel-min-h: 340px; }
+    }
+  `}</style>
+
+The 280px value locks in exactly 2 rows of cards at mobile widths:
+each card image (~75px at 1/3 column width) + text (~48px) + gap (10px) × 2 rows ≈ 266px,
+plus a small buffer = 280px. This prevents any collapse on partial pages.
+
+Do NOT touch anything else in HomePage.tsx — not the grid className,
+not the card components, not any other section.
+
+After the change, run: pnpm --filter xmum-market run build
+Report the full build output.
