@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, Fragment } from "react";
 import { Link, useLocation } from "wouter";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { getListingsPage, getTabCounts } from "@/lib/listings";
+import { getListingsPage, getAllListingsPage, getTabCounts } from "@/lib/listings";
 import { getActiveAds } from "@/lib/ads";
 import { getFeaturedShops, getRecentShopListings } from "@/lib/shops";
 import { Listing, ListingType, SponsoredAd, Shop, ShopListing } from "@/lib/types";
@@ -59,7 +59,10 @@ const CATEGORY_ICONS: Record<string, string> = {
   bicycle: "🚲",
 };
 
-const TAB_ICONS: Record<ListingType, string> = {
+type HomeTab = "all" | ListingType;
+
+const TAB_ICONS: Record<HomeTab, string> = {
+  "all": "✨",
   "buy-sell": "🛍️",
   "lost-found": "🔍",
   "jobs": "💼",
@@ -68,9 +71,10 @@ const TAB_ICONS: Record<ListingType, string> = {
   "shop-listing": "🏪",
 };
 
-const ALL_TABS: ListingType[] = ["buy-sell", "lost-found", "jobs", "assistance", "rental"];
+const ALL_TABS: HomeTab[] = ["all", "buy-sell", "lost-found", "jobs", "assistance", "rental"];
 
-function getCategoriesForTab(tab: ListingType): string[] {
+function getCategoriesForTab(tab: HomeTab): string[] {
+  if (tab === "all") return [];
   if (tab === "buy-sell") return BUY_SELL_CATEGORIES;
   if (tab === "lost-found") return LOST_FOUND_CATEGORIES;
   if (tab === "jobs") return JOBS_CATEGORIES;
@@ -166,7 +170,7 @@ export default function HomePage() {
   const { t, lang } = useLang();
   const { user, userProfile } = useAuth();
   const [, navigate] = useLocation();
-  const [activeTab, setActiveTab] = useState<ListingType>("buy-sell");
+  const [activeTab, setActiveTab] = useState<HomeTab>("all");
   useEffect(() => {
     sessionStorage.setItem("xmum_home_active_tab", activeTab);
   }, [activeTab]);
@@ -183,7 +187,7 @@ export default function HomePage() {
   const [showAuth, setShowAuth] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [ads, setAds] = useState<SponsoredAd[]>([]);
-  const [tabCounts, setTabCounts] = useState<Partial<Record<ListingType, number>>>({});
+  const [tabCounts, setTabCounts] = useState<Partial<Record<HomeTab, number>>>({});
   const [searchQuery, setSearchQuery] = useState("");
   const [featuredShops, setFeaturedShops] = useState<Shop[]>([]);
   const [recentShopListings, setRecentShopListings] = useState<ShopListing[]>([]);
@@ -200,7 +204,8 @@ export default function HomePage() {
   const shopInteractTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shopTouchStartX = useRef<number | null>(null);
 
-  const tabLabel = (tab: ListingType) => {
+  const tabLabel = (tab: HomeTab) => {
+    if (tab === "all") return "All";
     if (tab === "buy-sell") return t.buySell;
     if (tab === "lost-found") return t.lostFound;
     if (tab === "jobs") return t.jobs;
@@ -208,13 +213,15 @@ export default function HomePage() {
     return t.assistance;
   };
 
-  const loadFirst = useCallback(async (tab: ListingType) => {
+  const loadFirst = useCallback(async (tab: HomeTab) => {
     setLoading(true);
     setListings([]);
     setCursor(null);
     setHasMore(false);
     try {
-      const result = await getListingsPage(tab, null);
+      const result = tab === "all"
+        ? await getAllListingsPage(null)
+        : await getListingsPage(tab, null);
       setListings(result.listings);
       setCursor(result.cursor);
       setHasMore(result.hasMore);
@@ -252,6 +259,7 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
+    if (activeTab === "all") return;
     pageLoadTsRef.current = Date.now();
     setNewItemsBuffer([]);
 
@@ -283,7 +291,9 @@ export default function HomePage() {
     if (loadingMore || !hasMore) return;
     setLoadingMore(true);
     try {
-      const result = await getListingsPage(activeTab, cursor);
+      const result = activeTab === "all"
+        ? await getAllListingsPage(cursor)
+        : await getListingsPage(activeTab, cursor);
       setListings((prev) => [...prev, ...result.listings]);
       setCursor(result.cursor);
       setHasMore(result.hasMore);
@@ -301,7 +311,7 @@ export default function HomePage() {
     setShowRightShadow(el.scrollLeft < el.scrollWidth - el.clientWidth - 8);
   };
 
-  const handleTabChange = (tab: ListingType) => {
+  const handleTabChange = (tab: HomeTab) => {
     setActiveTab(tab);
     sessionStorage.setItem("xmum_home_active_tab", tab);
     window.dispatchEvent(new CustomEvent("xmum_home_tab", { detail: tab }));
@@ -500,38 +510,40 @@ export default function HomePage() {
         </div>
 
         {/* Category chips with scroll shadow gradients */}
-        <div className="relative border-b border-[#E2E8F0] dark:border-slate-700">
-          {showLeftShadow && (
-            <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-10 z-10 bg-gradient-to-r from-white dark:from-[#1E293B] to-transparent" />
-          )}
-          {showRightShadow && (
-            <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-10 z-10 bg-gradient-to-l from-white dark:from-[#1E293B] to-transparent" />
-          )}
-          <div
-            ref={chipRowRef}
-            className="max-w-5xl mx-auto flex gap-2 overflow-x-auto scrollbar-hide px-4 pt-1 pb-2"
-          >
-            {["all", ...getCategoriesForTab(activeTab)].map((cat) => (
-              <button
-                key={cat}
-                onClick={() => {
-                  setCategoryFilter(cat);
-                  setTimeout(() => {
-                    const el = listingsRef.current;
-                    if (el) {
-                      const top = el.getBoundingClientRect().top + window.scrollY - 130;
-                      window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
-                    }
-                  }, 50);
-                }}
-                className={`chip flex-shrink-0 ${categoryFilter === cat ? "chip-active" : ""}`}
-              >
-                <span>{CATEGORY_ICONS[cat] ?? "📦"}</span>
-                <span>{cat === "all" ? (lang === "en" ? "All" : "全部") : t.categories[cat as keyof typeof t.categories]}</span>
-              </button>
-            ))}
+        {activeTab !== "all" && (
+          <div className="relative border-b border-[#E2E8F0] dark:border-slate-700">
+            {showLeftShadow && (
+              <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-10 z-10 bg-gradient-to-r from-white dark:from-[#1E293B] to-transparent" />
+            )}
+            {showRightShadow && (
+              <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-10 z-10 bg-gradient-to-l from-white dark:from-[#1E293B] to-transparent" />
+            )}
+            <div
+              ref={chipRowRef}
+              className="max-w-5xl mx-auto flex gap-2 overflow-x-auto scrollbar-hide px-4 pt-1 pb-2"
+            >
+              {["all", ...getCategoriesForTab(activeTab)].map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => {
+                    setCategoryFilter(cat);
+                    setTimeout(() => {
+                      const el = listingsRef.current;
+                      if (el) {
+                        const top = el.getBoundingClientRect().top + window.scrollY - 130;
+                        window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+                      }
+                    }, 50);
+                  }}
+                  className={`chip flex-shrink-0 ${categoryFilter === cat ? "chip-active" : ""}`}
+                >
+                  <span>{CATEGORY_ICONS[cat] ?? "📦"}</span>
+                  <span>{cat === "all" ? (lang === "en" ? "All" : "全部") : t.categories[cat as keyof typeof t.categories]}</span>
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
       {/* ── End sticky group ── */}
 

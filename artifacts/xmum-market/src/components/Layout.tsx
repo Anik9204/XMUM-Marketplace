@@ -25,7 +25,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [postTabHint, setPostTabHint] = useState("");
 
   function getPostHref(): string {
-    if (postTabHint && postTabHint !== "buy-sell") return `/post?type=${postTabHint}`;
+    const validPostTabs = ["buy-sell", "lost-found", "jobs", "assistance", "rental"];
+    if (postTabHint && validPostTabs.includes(postTabHint) && postTabHint !== "buy-sell") return `/post?type=${postTabHint}`;
     return "/post";
   }
 

@@ -1,0 +1,278 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything
+   that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages,
+   STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint
+   unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing:
+   pnpm --filter xmum-market run build
+
+TASK: Add an "All" tab to the left of "Buy & Sell" on the HomePage that shows
+all listing types combined, ordered by most recent. Make it the default
+selected tab when the user opens the app.
+
+IMPORTANT CONSTRAINTS:
+- ListingType in types.ts is a union used throughout the app. Do NOT add "all"
+  to it — that would break PostPage, listings.ts, and many other places.
+- Instead, introduce a separate HomeTab type local to HomePage.tsx only.
+- The existing getListingsPage function requires a ListingType — we need a
+  new function in listings.ts that fetches all types without a type filter.
+- The onSnapshot real-time listener uses where("type", "==", activeTab) —
+  this must be skipped when activeTab is "all".
+- TAB_ICONS, tabLabel, getCategoriesForTab all use ListingType — guard these.
+
+--- STEP 1: Add getAllListingsPage to listings.ts ---
+
+File: artifacts/xmum-market/src/lib/listings.ts
+
+Add this new exported function AFTER the existing getListingsPage function:
+
+  export async function getAllListingsPage(
+    cursor?: QueryDocumentSnapshot | null
+  ): Promise<{ listings: Listing[]; cursor: QueryDocumentSnapshot | null; hasMore: boolean }> {
+    try {
+      const constraints = [
+        where("isArchived", "==", false),
+        where("status", "==", "active"),
+        orderBy("sortKey", "desc"),
+        ...(cursor ? [startAfter(cursor)] : []),
+        limit(PAGE_SIZE + 1),
+      ];
+      const snap = await getDocs(query(collection(db, "listings"), ...constraints));
+      const hasMore = snap.docs.length > PAGE_SIZE;
+      const pageDocs = snap.docs.slice(0, PAGE_SIZE);
+      const listings = pageDocs.map(mapDoc);
+      const nextCursor = pageDocs.length > 0 ? pageDocs[pageDocs.length - 1] : null;
+      return { listings, cursor: nextCursor, hasMore };
+    } catch (err: any) {
+      if (err?.code === "failed-precondition" || err?.message?.includes("index")) {
+        console.warn("[listings] getAllListingsPage index not ready — fallback");
+        const fallbackSnap = await getDocs(
+          query(collection(db, "listings"), orderBy("createdAt", "desc"), limit(PAGE_SIZE * 4))
+        );
+        const allDocs = fallbackSnap.docs.map(mapDoc);
+        const filtered = allDocs.filter((l) => l.isArchived === false && l.status === "active");
+        const page = filtered.slice(0, PAGE_SIZE);
+        return { listings: page, cursor: null, hasMore: filtered.length > PAGE_SIZE };
+      }
+      throw err;
+    }
+  }
+
+NOTE: This query (isArchived + status + sortKey without a type filter) may
+need a Firestore composite index. If you see an index error in the console
+after deployment, the fallback will handle it automatically. The index can
+be created in Firebase Console: Collection=listings, Fields=isArchived ASC,
+status ASC, sortKey DESC.
+
+Do NOT change any other function in listings.ts.
+
+--- STEP 2: Update HomePage.tsx ---
+
+File: artifacts/xmum-market/src/pages/HomePage.tsx
+
+CHANGE 1 — Import getAllListingsPage.
+Find the import line that imports getListingsPage:
+  import { getListingsPage, ... } from "@/lib/listings";
+Add getAllListingsPage to that same import. Do not change anything else
+on the import line.
+
+CHANGE 2 — Add HomeTab type.
+Find the line at the top of the file (after imports) where ListingType is used.
+Add this type definition before the component function or at the top of the file,
+after the import block:
+  type HomeTab = "all" | ListingType;
+
+CHANGE 3 — Change activeTab default to "all".
+Find:
+  const [activeTab, setActiveTab] = useState<ListingType>("buy-sell");
+Replace with:
+  const [activeTab, setActiveTab] = useState<HomeTab>("all");
+
+CHANGE 4 — Update loadFirst to handle "all" tab.
+Find the loadFirst function:
+  const loadFirst = useCallback(async (tab: ListingType) => {
+    ...
+    const result = await getListingsPage(tab, null);
+    ...
+  }, []);
+
+Replace with:
+  const loadFirst = useCallback(async (tab: HomeTab) => {
+    setLoading(true);
+    setListings([]);
+    setCursor(null);
+    setHasMore(false);
+    try {
+      const result = tab === "all"
+        ? await getAllListingsPage(null)
+        : await getListingsPage(tab, null);
+      setListings(result.listings);
+      setCursor(result.cursor);
+      setHasMore(result.hasMore);
+    } catch (err: any) {
+      const code: string = err?.code ?? err?.message ?? "";
+      const isOffline = code.includes("unavailable") || code.includes("offline");
+      if (!isOffline) console.error("[HomePage] Failed to load listings:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+CHANGE 5 — Update handleLoadMore to handle "all" tab.
+Find the handleLoadMore function and its getListingsPage call:
+  const result = await getListingsPage(activeTab, cursor);
+Replace with:
+  const result = activeTab === "all"
+    ? await getAllListingsPage(cursor)
+    : await getListingsPage(activeTab, cursor);
+
+CHANGE 6 — Update the onSnapshot listener to skip "all" tab.
+Find the useEffect that contains:
+  const q = query(
+    collection(db, "listings"),
+    where("type", "==", activeTab),
+    ...
+  );
+  const unsub = onSnapshot(q, ...);
+  return () => unsub();
+
+Wrap the entire content of that useEffect with an early return for "all":
+  useEffect(() => {
+    if (activeTab === "all") return;  // ← add this line at the top
+    pageLoadTsRef.current = Date.now();
+    setNewItemsBuffer([]);
+    const q = query(
+      collection(db, "listings"),
+      where("type", "==", activeTab),
+      ...
+    );
+    const unsub = onSnapshot(q, ...);
+    return () => unsub();
+  }, [activeTab, categoryFilter]);
+
+CHANGE 7 — Update tabCounts listener (the one with where("type", "==", activeTab)).
+Find any other useEffect that references activeTab and passes it to a Firestore
+where() call. If found, add the same guard: if (activeTab === "all") return;
+at the top of that effect.
+
+CHANGE 8 — Update ALL_TABS and TAB_ICONS to include "all".
+Find:
+  const TAB_ICONS: Record<ListingType, string> = {
+    "buy-sell": "🛍️",
+    ...
+  };
+
+Change it to use HomeTab:
+  const TAB_ICONS: Record<HomeTab, string> = {
+    "all": "✨",
+    "buy-sell": "🛍️",
+    "lost-found": "🔍",
+    "jobs": "💼",
+    "assistance": "🤝",
+    "rental": "🚗",
+    "shop-listing": "🏪",
+  };
+
+Find:
+  const ALL_TABS: ListingType[] = ["buy-sell", "lost-found", "jobs", "assistance", "rental"];
+Replace with:
+  const ALL_TABS: HomeTab[] = ["all", "buy-sell", "lost-found", "jobs", "assistance", "rental"];
+
+CHANGE 9 — Update tabLabel to handle "all".
+Find the tabLabel function:
+  const tabLabel = (tab: ListingType) => {
+    if (tab === "buy-sell") return t.buySell;
+    ...
+  };
+Replace with:
+  const tabLabel = (tab: HomeTab) => {
+    if (tab === "all") return "All";
+    if (tab === "buy-sell") return t.buySell;
+    if (tab === "lost-found") return t.lostFound;
+    if (tab === "jobs") return t.jobs;
+    if (tab === "rental") return t.rental;
+    return t.assistance;
+  };
+
+CHANGE 10 — Update getCategoriesForTab to handle "all".
+Find:
+  function getCategoriesForTab(tab: ListingType): string[] {
+    if (tab === "buy-sell") return BUY_SELL_CATEGORIES;
+    ...
+  }
+Change the function signature to:
+  function getCategoriesForTab(tab: HomeTab): string[] {
+    if (tab === "all") return [];
+    if (tab === "buy-sell") return BUY_SELL_CATEGORIES;
+    ...rest unchanged...
+  }
+
+CHANGE 11 — Hide the category chips row when "all" tab is active.
+The category chips row is only meaningful per-type. When "all" is active,
+there are no categories. Find the category chips section:
+  <div className="relative border-b border-[#E2E8F0] dark:border-slate-700">
+    ...
+    {["all", ...getCategoriesForTab(activeTab)].map((cat) => (
+    ...
+  </div>
+
+Wrap this entire section with a conditional:
+  {activeTab !== "all" && (
+    <div className="relative border-b ...">
+      ...existing category chips...
+    </div>
+  )}
+
+CHANGE 12 — Update handleTabChange type.
+Find:
+  const handleTabChange = (tab: ListingType) => {
+Change to:
+  const handleTabChange = (tab: HomeTab) => {
+
+CHANGE 13 — Update tabCounts type.
+Find:
+  const [tabCounts, setTabCounts] = useState<Partial<Record<ListingType, number>>>({});
+Change to:
+  const [tabCounts, setTabCounts] = useState<Partial<Record<HomeTab, number>>>({});
+
+CHANGE 14 — Guard the empty state TAB_ICONS usage.
+Find:
+  <div className="text-5xl mb-4">{TAB_ICONS[activeTab]}</div>
+This now works fine since TAB_ICONS includes "all". No change needed here.
+
+CHANGE 15 — Guard sessionStorage writes.
+Find:
+  sessionStorage.setItem("xmum_home_active_tab", activeTab);
+This writes "all" to sessionStorage. In Layout.tsx the getPostHref() function
+reads this and does:
+  if (tab && tab !== "buy-sell") return `/post?type=${tab}`;
+This would produce /post?type=all which is wrong. Fix getPostHref in Layout.tsx:
+
+File: artifacts/xmum-market/src/components/Layout.tsx
+Find the getPostHref function:
+  function getPostHref(): string {
+    const tab = sessionStorage.getItem("xmum_home_active_tab");
+    if (tab && tab !== "buy-sell") return `/post?type=${tab}`;
+    return "/post";
+  }
+Replace with:
+  function getPostHref(): string {
+    const tab = sessionStorage.getItem("xmum_home_active_tab");
+    const validPostTabs = ["buy-sell", "lost-found", "jobs", "assistance", "rental"];
+    if (tab && validPostTabs.includes(tab) && tab !== "buy-sell") return `/post?type=${tab}`;
+    return "/post";
+  }
+
+After ALL changes, run: pnpm --filter xmum-market run build
+Report the full build output. Fix any TypeScript errors before finishing.
+There may be TypeScript errors where ListingType is expected but HomeTab
+is passed — fix each one by updating the type annotation to HomeTab,
+but ONLY in HomePage.tsx and Layout.tsx. Do not change types.ts.

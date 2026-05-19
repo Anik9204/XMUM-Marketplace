@@ -282,6 +282,38 @@ export async function getListingsPage(
   }
 }
 
+export async function getAllListingsPage(
+  cursor?: QueryDocumentSnapshot | null
+): Promise<{ listings: Listing[]; cursor: QueryDocumentSnapshot | null; hasMore: boolean }> {
+  try {
+    const constraints = [
+      where("isArchived", "==", false),
+      where("status", "==", "active"),
+      orderBy("sortKey", "desc"),
+      ...(cursor ? [startAfter(cursor)] : []),
+      limit(PAGE_SIZE + 1),
+    ];
+    const snap = await getDocs(query(collection(db, "listings"), ...constraints));
+    const hasMore = snap.docs.length > PAGE_SIZE;
+    const pageDocs = snap.docs.slice(0, PAGE_SIZE);
+    const listings = pageDocs.map(mapDoc);
+    const nextCursor = pageDocs.length > 0 ? pageDocs[pageDocs.length - 1] : null;
+    return { listings, cursor: nextCursor, hasMore };
+  } catch (err: any) {
+    if (err?.code === "failed-precondition" || err?.message?.includes("index")) {
+      console.warn("[listings] getAllListingsPage index not ready — fallback");
+      const fallbackSnap = await getDocs(
+        query(collection(db, "listings"), orderBy("createdAt", "desc"), limit(PAGE_SIZE * 4))
+      );
+      const allDocs = fallbackSnap.docs.map(mapDoc);
+      const filtered = allDocs.filter((l) => l.isArchived === false && l.status === "active");
+      const page = filtered.slice(0, PAGE_SIZE);
+      return { listings: page, cursor: null, hasMore: filtered.length > PAGE_SIZE };
+    }
+    throw err;
+  }
+}
+
 export async function getListings(type: ListingType): Promise<Listing[]> {
   try {
     const q = query(
