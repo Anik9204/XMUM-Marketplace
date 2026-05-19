@@ -34,14 +34,14 @@ function PriceLabel({ listing }: { listing: ShopListing }) {
 function ShopBio({ bio }: { bio?: string }) {
   const [bioExpanded, setBioExpanded] = useState(false);
   if (!bio) return null;
-  const bioWords = bio.trim().split(/\s+/);
-  const shouldTruncate = bioWords.length > 60;
+  const TRUNCATE_CHARS = 300;
+  const shouldTruncate = bio.trim().length > TRUNCATE_CHARS;
   const displayBio = shouldTruncate && !bioExpanded
-    ? bioWords.slice(0, 60).join(" ") + "…"
-    : bio;
+    ? bio.trim().slice(0, TRUNCATE_CHARS) + "…"
+    : bio.trim();
   return (
     <div className="text-sm text-gray-600 dark:text-slate-300 mt-4 leading-relaxed border-t border-gray-100 dark:border-slate-700 pt-4">
-      <p>{displayBio}</p>
+      <p className="whitespace-pre-wrap">{displayBio}</p>
       {shouldTruncate && (
         <button
           onClick={() => setBioExpanded((v) => !v)}
