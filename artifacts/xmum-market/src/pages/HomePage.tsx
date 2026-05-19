@@ -409,7 +409,13 @@ export default function HomePage() {
         }
         :root { --shop-carousel-min-h: 280px; }
         @media (min-width: 640px) {
-          :root { --shop-carousel-min-h: 340px; }
+          :root { --shop-carousel-min-h: 380px; }
+        }
+        @media (min-width: 768px) {
+          :root { --shop-carousel-min-h: 460px; }
+        }
+        @media (min-width: 1024px) {
+          :root { --shop-carousel-min-h: 640px; }
         }
       `}</style>
       <div key={activeTab} className="relative overflow-hidden bg-gradient-to-br from-[#003366] via-[#004488] to-[#0055CC] text-white px-4 pt-8 pb-10">
