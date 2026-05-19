@@ -1,0 +1,225 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything
+   that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages,
+   STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive
+   breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing:
+   pnpm --filter xmum-market run build
+
+TASK: When a shop owner/editor taps "Edit Listing" on a shop listing detail
+page, they get navigated to /shop/:slug?editListing=<listingId>. The URL param
+IS being set correctly. The problem is two bugs in ShopManagementPanel and
+ShopPublicPage that prevent it from working:
+
+BUG 1 — Race condition: listings aren't loaded yet when editingListingId is set.
+BUG 2 — No auto-scroll: page loads at top and the management panel is far below.
+
+Files to change:
+  artifacts/xmum-market/src/components/ShopManagementPanel.tsx
+  artifacts/xmum-market/src/pages/ShopPublicPage.tsx
+
+═══════════════════════════════════════════════════
+FIX 1 — Race condition in ShopManagementPanel.tsx
+═══════════════════════════════════════════════════
+
+Root cause: The useEffect that reads ?editListing= runs on mount and sets
+editingListingId immediately. But the listings load useEffect also runs on
+mount (tab starts as "listings"). These two effects race — if listings finish
+loading AFTER editingListingId is set, then when listings render they check
+editingId === l.id and it works. But if the listings useEffect hasn't resolved
+yet when the URL param effect fires, editingListingId is set but listings is
+still [], so nothing opens. The fix: after listings load, if editingListingId
+is set but not yet visible (i.e. the listing is in the array), keep it set —
+this already works. The real problem is the reverse: the URL param effect runs
+and sets editingListingId BEFORE listings have loaded, and then the listings
+load fine and render with the correct editingId already set. This SHOULD work.
+
+Test first by reading the code again carefully. The actual bug is more subtle:
+tab defaults to "listings" and the listings useEffect depends on [tab, shopId].
+On mount it fires, starts loading. The URL param useEffect ALSO fires on mount,
+sets setTab("listings") (no-op since already "listings") and setEditingListingId.
+
+So after listings load, editingListingId IS set. The listings.map renders each
+listing and checks editingId === l.id — this should match. BUT: look at the
+ListingsTab component. It receives editingId as a prop. Check if the prop is
+actually being passed down and used correctly in the render. Also check that
+setEditingId is not resetting editingListingId during the loading phase.
+
+Actually the most likely bug: the listings useEffect also calls
+setLoadingListings(true) then getShopListings().then(setListings). During the
+loading phase, listings = []. Then when listings arrive, a re-render happens
+and editingId is already set — the matching listing SHOULD open its edit form.
+
+The real issue: ShopPublicPage calls window.scrollTo({ top: 0 }) on mount
+which is fine, but we need to scroll DOWN to the management panel AFTER
+listings load and the edit form opens. Without scrolling, the edit form IS
+open but the user can't see it because they're at the top of the page.
+
+So FIX 1 is actually: ensure that after listings load with a pending
+editingListingId, we scroll to the management panel div.
+
+CHANGE 1A — Add a ref to track the pending editId and scroll after load.
+
+In ShopManagementPanel, add a new ref after the existing useRef declarations:
+  const pendingEditIdRef = useRef<string | null>(null);
+
+CHANGE 1B — Store the editId in the ref (not just state) in the URL param effect.
+Find the useEffect that reads the URL param:
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const editId = params.get("editListing");
+    if (editId) {
+      setTab("listings");
+      setEditingListingId(editId);
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState(null, "", cleanUrl);
+    }
+  }, [shopId]);
+
+Replace with:
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const editId = params.get("editListing");
+    if (editId) {
+      pendingEditIdRef.current = editId;
+      setTab("listings");
+      setEditingListingId(editId);
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState(null, "", cleanUrl);
+    }
+  }, [shopId]);
+
+CHANGE 1C — After listings load, if there's a pending editId, scroll to
+the editing row. Find the listings load useEffect:
+  useEffect(() => {
+    if (tab === "listings") {
+      setLoadingListings(true);
+      getShopListings(shopId).then(setListings).finally(() => setLoadingListings(false));
+    }
+  }, [tab, shopId]);
+
+Replace with:
+  useEffect(() => {
+    if (tab === "listings") {
+      setLoadingListings(true);
+      getShopListings(shopId).then((loadedListings) => {
+        setListings(loadedListings);
+        if (pendingEditIdRef.current) {
+          const targetId = pendingEditIdRef.current;
+          pendingEditIdRef.current = null;
+          // After the DOM updates, scroll to the editing row
+          setTimeout(() => {
+            const el = document.getElementById(`shop-listing-row-${targetId}`);
+            if (el) {
+              el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+          }, 150);
+        }
+      }).finally(() => setLoadingListings(false));
+    }
+  }, [tab, shopId]);
+
+═══════════════════════════════════════════════════
+FIX 2 — Add id attributes to listing rows in ListingsTab
+═══════════════════════════════════════════════════
+
+The scrollIntoView above targets document.getElementById(`shop-listing-row-${targetId}`).
+We need to add that id to the wrapper element of each listing row in ListingsTab.
+
+File: artifacts/xmum-market/src/components/ShopManagementPanel.tsx
+
+Find the listings.map inside ListingsTab (around line 461):
+  {listings.map((l) =>
+    editingId === l.id ? (
+      <EditShopListingForm key={l.id} listing={l} shopId={shopId} shop={shop}
+        onCancel={() => setEditingId(null)}
+        onSaved={() => { setEditingId(null); onRefresh(); }} />
+    ) : (
+      <ListingRow key={l.id} listing={l} shopId={shopId}
+        onRefresh={onRefresh}
+        onEdit={() => { setShowAdd(false); setEditingId(l.id); }} />
+    )
+  )}
+
+This is inside a <div className="space-y-3"> wrapper. We need to wrap each
+mapped item in a div with the id. Replace the listings.map with:
+  {listings.map((l) => (
+    <div key={l.id} id={`shop-listing-row-${l.id}`}>
+      {editingId === l.id ? (
+        <EditShopListingForm listing={l} shopId={shopId} shop={shop}
+          onCancel={() => setEditingId(null)}
+          onSaved={() => { setEditingId(null); onRefresh(); }} />
+      ) : (
+        <ListingRow listing={l} shopId={shopId}
+          onRefresh={onRefresh}
+          onEdit={() => { setShowAdd(false); setEditingId(l.id); }} />
+      )}
+    </div>
+  ))}
+
+Note: the key prop moves to the outer div, so remove key from
+EditShopListingForm and ListingRow (they no longer need it since the
+outer div has the key). Do NOT change any className.
+
+═══════════════════════════════════════════════════
+FIX 3 — Auto-scroll to management panel in ShopPublicPage.tsx
+═══════════════════════════════════════════════════
+
+ShopPublicPage calls window.scrollTo({ top: 0 }) on mount. When arriving
+with ?editListing=, we need to scroll to the management panel instead.
+We also need to NOT call scrollTo({ top: 0 }) when an editListing param
+is present, otherwise it fights the scroll.
+
+File: artifacts/xmum-market/src/pages/ShopPublicPage.tsx
+
+STEP 3A — Add a ref to the management panel wrapper div.
+First, make sure useRef is imported. Find the import line:
+  import { useState, useEffect } from "react";
+Add useRef if not already there:
+  import { useState, useEffect, useRef } from "react";
+
+STEP 3B — Add the ref declaration in the component.
+Find the existing state declarations near the top of ShopPublicPage:
+  const [shop, setShop] = useState<Shop | null>(null);
+Add after it:
+  const managementPanelRef = useRef<HTMLDivElement>(null);
+
+STEP 3C — Attach the ref to the management panel wrapper div.
+Find:
+  <div className="px-4 mt-8">
+    <div className="border-t-2 border-dashed border-gray-200 ...">
+
+Change the outer div to:
+  <div className="px-4 mt-8" ref={managementPanelRef}>
+
+STEP 3D — Update the scroll-to-top useEffect to skip scrolling if
+editListing param is present, and instead scroll to the panel.
+Find:
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, [slug]);
+
+Replace with:
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const hasEditParam = params.has("editListing");
+    if (hasEditParam) {
+      // Delay scroll to let the page and panel render first
+      setTimeout(() => {
+        managementPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 400);
+    } else {
+      window.scrollTo({ top: 0, behavior: "instant" });
+    }
+  }, [slug]);
+
+After all changes, run: pnpm --filter xmum-market run build
+Report the full build output. Fix any TypeScript errors before finishing.

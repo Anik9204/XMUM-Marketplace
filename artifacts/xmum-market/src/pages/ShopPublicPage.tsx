@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRoute, useLocation, Link } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -61,12 +61,21 @@ export default function ShopPublicPage() {
   const slug = params?.slug ?? "";
 
   const [shop, setShop] = useState<Shop | null>(null);
+  const managementPanelRef = useRef<HTMLDivElement>(null);
   const [listings, setListings] = useState<ShopListing[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAuth, setShowAuth] = useState(false);
 
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: "instant" });
+    const params = new URLSearchParams(window.location.search);
+    const hasEditParam = params.has("editListing");
+    if (hasEditParam) {
+      setTimeout(() => {
+        managementPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 400);
+    } else {
+      window.scrollTo({ top: 0, behavior: "instant" });
+    }
   }, [slug]);
 
   useEffect(() => {
@@ -268,7 +277,7 @@ export default function ShopPublicPage() {
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
 
       {canManage && (
-        <div className="px-4 mt-8">
+        <div className="px-4 mt-8" ref={managementPanelRef}>
           <div className="border-t-2 border-dashed border-gray-200 dark:border-slate-700 pt-6 mb-5">
             <div className="flex items-center gap-2 mb-1">
               <Settings2 size={16} className="text-[#003366] dark:text-blue-400" />

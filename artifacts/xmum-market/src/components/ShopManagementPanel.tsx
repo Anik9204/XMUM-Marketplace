@@ -458,13 +458,15 @@ function ListingsTab({ shopId, shop, listings, loading, showAdd, setShowAdd,
         <div className="text-center py-12 text-gray-400 dark:text-slate-500"><Package size={36} className="mx-auto mb-2 opacity-40" /><p className="text-sm">No listings yet. Add your first one!</p></div>
       ) : (
         <div className="space-y-3">
-          {listings.map((l) =>
-            editingId === l.id ? (
-              <EditShopListingForm key={l.id} listing={l} shopId={shopId} shop={shop} onCancel={() => setEditingId(null)} onSaved={() => { setEditingId(null); onRefresh(); }} />
-            ) : (
-              <ListingRow key={l.id} listing={l} shopId={shopId} onRefresh={onRefresh} onEdit={() => { setShowAdd(false); setEditingId(l.id); }} />
-            )
-          )}
+          {listings.map((l) => (
+            <div key={l.id} id={`shop-listing-row-${l.id}`}>
+              {editingId === l.id ? (
+                <EditShopListingForm listing={l} shopId={shopId} shop={shop} onCancel={() => setEditingId(null)} onSaved={() => { setEditingId(null); onRefresh(); }} />
+              ) : (
+                <ListingRow listing={l} shopId={shopId} onRefresh={onRefresh} onEdit={() => { setShowAdd(false); setEditingId(l.id); }} />
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -844,6 +846,7 @@ export default function ShopManagementPanel({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const bannerInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const pendingEditIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     setShop(initialShop);
@@ -858,7 +861,19 @@ export default function ShopManagementPanel({
   useEffect(() => {
     if (tab === "listings") {
       setLoadingListings(true);
-      getShopListings(shopId).then(setListings).finally(() => setLoadingListings(false));
+      getShopListings(shopId).then((loadedListings) => {
+        setListings(loadedListings);
+        if (pendingEditIdRef.current) {
+          const targetId = pendingEditIdRef.current;
+          pendingEditIdRef.current = null;
+          setTimeout(() => {
+            const el = document.getElementById(`shop-listing-row-${targetId}`);
+            if (el) {
+              el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+          }, 150);
+        }
+      }).finally(() => setLoadingListings(false));
     }
   }, [tab, shopId]);
 
@@ -866,6 +881,7 @@ export default function ShopManagementPanel({
     const params = new URLSearchParams(window.location.search);
     const editId = params.get("editListing");
     if (editId) {
+      pendingEditIdRef.current = editId;
       setTab("listings");
       setEditingListingId(editId);
       const cleanUrl = window.location.pathname;
