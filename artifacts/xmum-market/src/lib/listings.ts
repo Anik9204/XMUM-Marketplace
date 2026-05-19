@@ -49,7 +49,7 @@ import { listingHasActiveReport } from "./reportHold";
 //    (admin query)
 // ──────────────────────────────────────────────────────────────────
 
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 30;
 
 const CACHE_TTL_MS = 60_000;
 

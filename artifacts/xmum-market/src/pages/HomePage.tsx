@@ -194,6 +194,11 @@ export default function HomePage() {
   const [showRightShadow, setShowRightShadow] = useState(true);
   const [newItemsBuffer, setNewItemsBuffer] = useState<Listing[]>([]);
   const pageLoadTsRef = useRef<number>(Date.now());
+  const [shopListingPage, setShopListingPage] = useState(0);
+  const shopCarouselRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const shopUserInteractedRef = useRef(false);
+  const shopInteractTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const shopTouchStartX = useRef<number | null>(null);
 
   const tabLabel = (tab: ListingType) => {
     if (tab === "buy-sell") return t.buySell;
@@ -239,7 +244,7 @@ export default function HomePage() {
     setLoadingShops(true);
     Promise.all([
       getFeaturedShops(8),
-      getRecentShopListings(6),
+      getRecentShopListings(18),
     ]).then(([shops, listings]) => {
       setFeaturedShops(shops);
       setRecentShopListings(listings);
@@ -300,6 +305,7 @@ export default function HomePage() {
     setActiveTab(tab);
     sessionStorage.setItem("xmum_home_active_tab", tab);
     window.dispatchEvent(new CustomEvent("xmum_home_tab", { detail: tab }));
+    setShopListingPage(0);
     const el = chipRowRef.current;
     if (el) {
       el.scrollLeft = 0;
@@ -323,6 +329,33 @@ export default function HomePage() {
     el.addEventListener("scroll", handleChipScroll, { passive: true });
     return () => el.removeEventListener("scroll", handleChipScroll);
   }, [activeTab]);
+
+  const SHOP_PAGE_SIZE = 6;
+
+  useEffect(() => {
+    const totalPages = Math.ceil(recentShopListings.length / SHOP_PAGE_SIZE);
+    if (totalPages <= 1) return;
+    const start = () => {
+      shopCarouselRef.current = setInterval(() => {
+        if (!shopUserInteractedRef.current) {
+          setShopListingPage((p) => (p + 1) % totalPages);
+        }
+      }, 4000);
+    };
+    start();
+    return () => {
+      if (shopCarouselRef.current) clearInterval(shopCarouselRef.current);
+    };
+  }, [recentShopListings.length]);
+
+  const handleShopPageChange = (newPage: number) => {
+    setShopListingPage(newPage);
+    shopUserInteractedRef.current = true;
+    if (shopInteractTimerRef.current) clearTimeout(shopInteractTimerRef.current);
+    shopInteractTimerRef.current = setTimeout(() => {
+      shopUserInteractedRef.current = false;
+    }, 8000);
+  };
 
   const handleSearchKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && searchQuery.trim()) {
@@ -369,6 +402,10 @@ export default function HomePage() {
         @keyframes heroShimmer {
           0%   { background-position: 200% center; }
           100% { background-position: -200% center; }
+        }
+        @keyframes shopSlideIn {
+          from { opacity: 0; transform: translateX(28px); }
+          to   { opacity: 1; transform: translateX(0); }
         }
       `}</style>
       <div key={activeTab} className="relative overflow-hidden bg-gradient-to-br from-[#003366] via-[#004488] to-[#0055CC] text-white px-4 pt-8 pb-10">
@@ -558,25 +595,68 @@ export default function HomePage() {
             </div>
           ) : null}
 
-          {/* "New from Shops" listings grid */}
-          {recentShopListings.length > 0 && (
-            <div className="mt-4">
-              <div className="flex items-center justify-between mb-2">
-                <p className="section-header text-sm">🛍️ Campus Market Picks</p>
-                <Link
-                  href="/campus-market"
-                  className="text-[11px] font-semibold text-[#003366] dark:text-blue-400 hover:underline"
+          {/* "New from Shops" listings carousel */}
+          {recentShopListings.length > 0 && (() => {
+            const SHOP_PAGE_SIZE = 6;
+            const totalPages = Math.ceil(recentShopListings.length / SHOP_PAGE_SIZE);
+            const pageListings = recentShopListings.slice(
+              shopListingPage * SHOP_PAGE_SIZE,
+              shopListingPage * SHOP_PAGE_SIZE + SHOP_PAGE_SIZE
+            );
+            return (
+              <div className="mt-4">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="section-header text-sm">🛍️ Campus Market Picks</p>
+                  <Link
+                    href="/campus-market"
+                    className="text-[11px] font-semibold text-[#003366] dark:text-blue-400 hover:underline"
+                  >
+                    Browse all →
+                  </Link>
+                </div>
+                <div
+                  className="overflow-hidden"
+                  onTouchStart={(e) => { shopTouchStartX.current = e.touches[0].clientX; }}
+                  onTouchEnd={(e) => {
+                    if (shopTouchStartX.current === null) return;
+                    const dx = e.changedTouches[0].clientX - shopTouchStartX.current;
+                    shopTouchStartX.current = null;
+                    if (Math.abs(dx) < 40) return;
+                    const next = dx < 0
+                      ? (shopListingPage + 1) % totalPages
+                      : (shopListingPage - 1 + totalPages) % totalPages;
+                    handleShopPageChange(next);
+                  }}
                 >
-                  Browse all →
-                </Link>
+                  <div
+                    key={shopListingPage}
+                    className="grid grid-cols-3 gap-2.5"
+                    style={{ animation: "shopSlideIn 0.35s cubic-bezier(0.25,0.46,0.45,0.94) both" }}
+                  >
+                    {pageListings.map((listing) => (
+                      <ShopListingMiniCard key={listing.id} listing={listing} />
+                    ))}
+                  </div>
+                </div>
+                {totalPages > 1 && (
+                  <div className="flex justify-center gap-1.5 mt-3">
+                    {Array.from({ length: totalPages }).map((_, i) => (
+                      <button
+                        key={i}
+                        onClick={() => handleShopPageChange(i)}
+                        className={`rounded-full transition-all duration-300 ${
+                          i === shopListingPage
+                            ? "w-4 h-1.5 bg-[#003366] dark:bg-blue-400"
+                            : "w-1.5 h-1.5 bg-gray-300 dark:bg-slate-600"
+                        }`}
+                        aria-label={`Page ${i + 1}`}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
-              <div className="grid grid-cols-3 gap-2.5">
-                {recentShopListings.map((listing) => (
-                  <ShopListingMiniCard key={listing.id} listing={listing} />
-                ))}
-              </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Divider before main listings */}
           <div className="border-t border-[#E2E8F0] dark:border-slate-700 mt-5" />

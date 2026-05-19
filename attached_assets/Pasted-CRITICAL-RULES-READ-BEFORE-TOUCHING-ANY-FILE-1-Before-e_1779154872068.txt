@@ -1,0 +1,221 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything
+   that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages,
+   STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint
+   unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing:
+   pnpm --filter xmum-market run build
+
+This part has TWO independent fixes.
+
+--- FIX A: Increase homepage listing page size from 12 to 30 ---
+
+File: artifacts/xmum-market/src/lib/listings.ts
+
+Find this line (around line 52):
+  const PAGE_SIZE = 12;
+
+Change it to:
+  const PAGE_SIZE = 30;
+
+That is the only change needed. PAGE_SIZE is used consistently throughout
+getListingsPage for all three branches (direct query, fallback, category filter).
+Do NOT touch anything else in listings.ts.
+
+--- FIX B: Auto-sliding carousel for "Campus Market Picks" shop listings ---
+
+Context: In HomePage.tsx, the "Campus Market Picks" section currently fetches 6
+shop listings with getRecentShopListings(6) and renders them in a static 3-column
+grid. We want to:
+  - Fetch MORE listings (18) so we have multiple "pages" of 6 to rotate through.
+  - Display 6 at a time in an auto-sliding carousel that advances every 4 seconds.
+  - After all pages are shown, loop back to the first page (infinite loop).
+  - Allow the user to swipe left/right (touch) or use dot indicators to
+    navigate between pages manually.
+  - Manually navigating pauses the auto-slide for 8 seconds, then resumes.
+
+FILE CHANGES NEEDED:
+
+--- shops.ts: Fetch more listings ---
+
+File: artifacts/xmum-market/src/lib/shops.ts
+
+Find the call in HomePage.tsx that fetches shop listings:
+(Note: do NOT change shops.ts itself for the limit — the caller passes the limit.
+The function signature is: getRecentShopListings(limitCount = 6))
+We will change the CALLER in HomePage.tsx instead.
+
+--- HomePage.tsx: Change the fetch and add the carousel ---
+
+File: artifacts/xmum-market/src/pages/HomePage.tsx
+
+CHANGE 1 — Fetch 18 listings instead of 6.
+Find:
+  getRecentShopListings(6),
+Replace with:
+  getRecentShopListings(18),
+
+CHANGE 2 — Add carousel state variables.
+After the existing state declarations (near the other useState calls), add:
+  const [shopListingPage, setShopListingPage] = useState(0);
+  const shopCarouselRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const shopUserInteractedRef = useRef(false);
+  const shopInteractTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const shopTouchStartX = useRef<number | null>(null);
+
+CHANGE 3 — Add carousel auto-advance useEffect.
+Add this useEffect after the existing useEffects (before the handleLoadMore function):
+
+  const SHOP_PAGE_SIZE = 6;
+
+  useEffect(() => {
+    const totalPages = Math.ceil(recentShopListings.length / SHOP_PAGE_SIZE);
+    if (totalPages <= 1) return;
+
+    const start = () => {
+      shopCarouselRef.current = setInterval(() => {
+        if (!shopUserInteractedRef.current) {
+          setShopListingPage((p) => (p + 1) % totalPages);
+        }
+      }, 4000);
+    };
+
+    start();
+    return () => {
+      if (shopCarouselRef.current) clearInterval(shopCarouselRef.current);
+    };
+  }, [recentShopListings.length]);
+
+  const handleShopPageChange = (newPage: number) => {
+    setShopListingPage(newPage);
+    shopUserInteractedRef.current = true;
+    if (shopInteractTimerRef.current) clearTimeout(shopInteractTimerRef.current);
+    shopInteractTimerRef.current = setTimeout(() => {
+      shopUserInteractedRef.current = false;
+    }, 8000);
+  };
+
+CHANGE 4 — Replace the static grid JSX with the carousel.
+Find this block inside the "Campus Market Picks" section:
+  {recentShopListings.length > 0 && (
+    <div className="mt-4">
+      <div className="flex items-center justify-between mb-2">
+        <p className="section-header text-sm">🛍️ Campus Market Picks</p>
+        <Link
+          href="/campus-market"
+          className="text-[11px] font-semibold text-[#003366] dark:text-blue-400 hover:underline"
+        >
+          Browse all →
+        </Link>
+      </div>
+      <div className="grid grid-cols-3 gap-2.5">
+        {recentShopListings.map((listing) => (
+          <ShopListingMiniCard key={listing.id} listing={listing} />
+        ))}
+      </div>
+    </div>
+  )}
+
+Replace it with:
+  {recentShopListings.length > 0 && (() => {
+    const SHOP_PAGE_SIZE = 6;
+    const totalPages = Math.ceil(recentShopListings.length / SHOP_PAGE_SIZE);
+    const pageListings = recentShopListings.slice(
+      shopListingPage * SHOP_PAGE_SIZE,
+      shopListingPage * SHOP_PAGE_SIZE + SHOP_PAGE_SIZE
+    );
+    return (
+      <div className="mt-4">
+        <div className="flex items-center justify-between mb-2">
+          <p className="section-header text-sm">🛍️ Campus Market Picks</p>
+          <Link
+            href="/campus-market"
+            className="text-[11px] font-semibold text-[#003366] dark:text-blue-400 hover:underline"
+          >
+            Browse all →
+          </Link>
+        </div>
+        {/* Carousel grid with slide transition */}
+        <div
+          className="overflow-hidden"
+          onTouchStart={(e) => { shopTouchStartX.current = e.touches[0].clientX; }}
+          onTouchEnd={(e) => {
+            if (shopTouchStartX.current === null) return;
+            const dx = e.changedTouches[0].clientX - shopTouchStartX.current;
+            shopTouchStartX.current = null;
+            if (Math.abs(dx) < 40) return;
+            const next = dx < 0
+              ? (shopListingPage + 1) % totalPages
+              : (shopListingPage - 1 + totalPages) % totalPages;
+            handleShopPageChange(next);
+          }}
+        >
+          <div
+            key={shopListingPage}
+            className="grid grid-cols-3 gap-2.5"
+            style={{
+              animation: "shopSlideIn 0.35s cubic-bezier(0.25,0.46,0.45,0.94) both",
+            }}
+          >
+            {pageListings.map((listing) => (
+              <ShopListingMiniCard key={listing.id} listing={listing} />
+            ))}
+          </div>
+        </div>
+        {/* Dot indicators — only shown when there are multiple pages */}
+        {totalPages > 1 && (
+          <div className="flex justify-center gap-1.5 mt-3">
+            {Array.from({ length: totalPages }).map((_, i) => (
+              <button
+                key={i}
+                onClick={() => handleShopPageChange(i)}
+                className={`rounded-full transition-all duration-300 ${
+                  i === shopListingPage
+                    ? "w-4 h-1.5 bg-[#003366] dark:bg-blue-400"
+                    : "w-1.5 h-1.5 bg-gray-300 dark:bg-slate-600"
+                }`}
+                aria-label={`Page ${i + 1}`}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  })()}
+
+CHANGE 5 — Add the slide animation keyframe.
+At the very top of the HomePage.tsx JSX return (before the outermost <div>),
+insert a style tag:
+
+  <>
+    <style>{`
+      @keyframes shopSlideIn {
+        from { opacity: 0; transform: translateX(28px); }
+        to   { opacity: 1; transform: translateX(0); }
+      }
+    `}</style>
+    <div className="animate-in fade-in duration-200">
+      ...existing content...
+    </div>
+  </>
+
+So the return statement becomes: return ( <> <style>...</style> <div ...>...</div> </> );
+Make sure the Fragment import is already in the imports (it is — Fragment is
+already imported in HomePage.tsx). If it's not, add it.
+
+CHANGE 6 — Reset carousel page when tab changes.
+Find the handleTabChange function and add one line inside it:
+  setShopListingPage(0);
+
+Do NOT change any other part of HomePage.tsx.
+
+After all changes, run: pnpm --filter xmum-market run build
+Report the full build output. Fix any errors before finishing.
