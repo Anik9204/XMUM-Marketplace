@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { CheckCircle, XCircle, Search, ExternalLink, X } from "lucide-react";
-import { getPendingShops, approveShop, rejectShop, writeAuditLog, ApprovalResult } from "../lib/firebase";
+import { CheckCircle, XCircle, Search, X } from "lucide-react";
+import { getPendingShops, approveShop, rejectShop, writeAuditLog, writePlatformActivity, ApprovalResult } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { AdminShop } from "../lib/types";
 
@@ -59,6 +59,15 @@ export default function ShopApprovalsPage() {
         targetLabel: shop.shopName,
         createdAt:   Date.now(),
       });
+      void writePlatformActivity({
+        type: "shop_approved",
+        label: `Shop approved: "${shop.shopName}"`,
+        sub: shop.ownerEmail,
+        actorEmail: adminUser?.email,
+        targetId: shop.id,
+        targetType: "shop",
+        href: "/shop-approvals",
+      });
     } catch (e) {
       console.error("[ShopApprovalsPage] approve failed:", e);
       alert("Failed to approve shop. Check Firestore permissions.");
@@ -86,6 +95,15 @@ export default function ShopApprovalsPage() {
         targetType:  "shop",
         targetLabel: shop.shopName,
         createdAt:   Date.now(),
+      });
+      void writePlatformActivity({
+        type: "shop_rejected",
+        label: `Shop rejected: "${shop.shopName}"`,
+        sub: reason ? `Reason: ${reason}` : shop.ownerEmail,
+        actorEmail: adminUser?.email,
+        targetId: shop.id,
+        targetType: "shop",
+        href: "/shop-approvals",
       });
     } catch (e) {
       console.error("[ShopApprovalsPage] reject failed:", e);
@@ -272,18 +290,17 @@ export default function ShopApprovalsPage() {
 
               <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-50
                               dark:border-slate-700/50">
-                {shop.shopSlug && (
+                {shop.ownerEmail && (
                   <a
-                    href={`${import.meta.env.VITE_MAIN_APP_URL ?? ""}/shop/${shop.shopSlug}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-[11px] text-blue-600
-                               dark:text-blue-400 border border-blue-200
-                               dark:border-blue-800 rounded-xl px-2.5 py-1.5
-                               hover:bg-blue-50 dark:hover:bg-blue-900/20
+                    href={`mailto:${shop.ownerEmail}`}
+                    className="flex items-center gap-1 text-[11px] text-slate-500
+                               dark:text-slate-400 border border-gray-200
+                               dark:border-slate-700 rounded-xl px-2.5 py-1.5
+                               hover:bg-slate-50 dark:hover:bg-slate-700/40
                                transition-colors min-h-[34px]"
+                    title="Email shop owner"
                   >
-                    <ExternalLink className="w-3 h-3" /> Preview
+                    Contact Owner
                   </a>
                 )}
                 <button

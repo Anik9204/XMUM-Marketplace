@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { collection, query, where, onSnapshot, orderBy, limit, getDocs } from "firebase/firestore";
+import { collection, query, where, onSnapshot, orderBy, limit } from "firebase/firestore";
 import { Link } from "wouter";
 import { db } from "../lib/firebase";
 import {
@@ -27,7 +27,7 @@ const defaultStats: Stats = {
 
 interface ActivityItem {
   id: string;
-  type: "report" | "signup" | "shop_ad";
+  type: string;
   label: string;
   sub: string;
   time: number;
@@ -130,64 +130,34 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    let mounted = true;
-    async function loadActivity() {
-      setActivityLoading(true);
-      try {
-        const [reportsSnap, signupsSnap, shopAdsSnap] = await Promise.all([
-          getDocs(query(collection(db, "reports"), orderBy("createdAt", "desc"), limit(5))),
-          getDocs(query(collection(db, "users"), orderBy("createdAt", "desc"), limit(5))),
-          getDocs(query(collection(db, "shopAds"), orderBy("submittedAt", "desc"), limit(5))),
-        ]);
-
-        const items: ActivityItem[] = [];
-
-        reportsSnap.docs.forEach(d => {
+    const q = query(
+      collection(db, "platformActivityFeed"),
+      orderBy("createdAt", "desc"),
+      limit(30)
+    );
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const items: ActivityItem[] = snap.docs.map((d) => {
           const data = d.data();
-          items.push({
+          return {
             id: d.id,
-            type: "report",
-            label: `Report: "${data.listingTitle ?? "listing"}"`,
-            sub: `by ${data.reportedByEmail ?? "unknown"} · ${data.status ?? "pending"}`,
+            type: data.type ?? "event",
+            label: data.label ?? "Platform event",
+            sub: data.sub ?? "",
             time: data.createdAt ?? 0,
-            href: "/reports",
-          });
+            href: data.href ?? "/",
+          };
         });
-
-        signupsSnap.docs.forEach(d => {
-          const data = d.data();
-          items.push({
-            id: d.id,
-            type: "signup",
-            label: `New user: ${data.displayName ?? data.email ?? "unknown"}`,
-            sub: data.email ?? "",
-            time: data.createdAt ?? 0,
-            href: "/users",
-          });
-        });
-
-        shopAdsSnap.docs.forEach(d => {
-          const data = d.data();
-          items.push({
-            id: d.id,
-            type: "shop_ad",
-            label: `Shop ad: "${data.shopName ?? "shop"}"`,
-            sub: `status: ${data.status ?? "pending"}`,
-            time: data.submittedAt ?? 0,
-            href: "/shop-ads",
-          });
-        });
-
-        items.sort((a, b) => b.time - a.time);
-        if (mounted) setActivity(items.slice(0, 10));
-      } catch (err) {
-        console.error("[Dashboard] activity load failed:", err);
-      } finally {
-        if (mounted) setActivityLoading(false);
+        setActivity(items);
+        setActivityLoading(false);
+      },
+      (err) => {
+        console.error("[Dashboard] activity feed snapshot:", err);
+        setActivityLoading(false);
       }
-    }
-    loadActivity();
-    return () => { mounted = false; };
+    );
+    return unsub;
   }, []);
 
   return (
@@ -252,9 +222,17 @@ export default function DashboardPage() {
                 <div className="flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50
                                 dark:hover:bg-slate-700/30 transition-colors cursor-pointer">
                   <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                    item.type === "report"   ? "bg-red-400" :
-                    item.type === "signup"   ? "bg-green-400" :
-                                               "bg-amber-400"
+                    item.type === "report"            ? "bg-red-400"    :
+                    item.type === "signup"            ? "bg-green-400"  :
+                    item.type === "rental_posted"     ? "bg-amber-400"  :
+                    item.type === "listing_posted"    ? "bg-blue-400"   :
+                    item.type === "listing_deleted"   ? "bg-slate-400"  :
+                    item.type === "shop_ad"           ? "bg-purple-400" :
+                    item.type === "shop_approved"     ? "bg-teal-400"   :
+                    item.type === "shop_rejected"     ? "bg-rose-400"   :
+                    item.type === "user_banned"       ? "bg-red-600"    :
+                    item.type === "moderation"        ? "bg-orange-400" :
+                                                        "bg-slate-300"
                   }`} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">

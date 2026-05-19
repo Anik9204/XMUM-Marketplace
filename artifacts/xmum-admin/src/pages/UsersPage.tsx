@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { collection, updateDoc, doc, orderBy, query, onSnapshot, getDocs, where } from "firebase/firestore";
-import { db, writeAuditLog } from "../lib/firebase";
+import { db, writeAuditLog, writePlatformActivity } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { AdminUser, UserRole } from "../lib/types";
 import { Ban, CheckCircle, CheckCircle2, X, ExternalLink } from "lucide-react";
@@ -88,6 +88,19 @@ export default function UsersPage() {
         targetLabel: targetUser?.email ?? uid,
         createdAt:   Date.now(),
       });
+      if ("isBlacklisted" in data) {
+        void writePlatformActivity({
+          type: (data as any).isBlacklisted ? "user_banned" : "user_unbanned",
+          label: (data as any).isBlacklisted
+            ? `User banned: ${targetUser?.email ?? uid}`
+            : `User unbanned: ${targetUser?.email ?? uid}`,
+          sub: `by ${adminUser?.email}`,
+          actorEmail: adminUser?.email,
+          targetId: uid,
+          targetType: "user",
+          href: "/users",
+        });
+      }
     } catch (e) {
       console.error("[UsersPage] updateUser failed:", e);
       setToast({ message: "Failed to save. Check the console.", type: "error" });
@@ -271,20 +284,22 @@ export default function UsersPage() {
                               : <><Ban className="w-3 h-3" /> Ban</>}
                           </button>
                         )}
-                        <a
-                          href={`${MAIN_APP_URL}/seller/${u.uid}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          onClick={e => e.stopPropagation()}
-                          className="flex items-center gap-1 text-xs text-blue-600
-                                     dark:text-blue-400 border border-blue-200
-                                     dark:border-blue-800 rounded-lg px-2.5 py-1.5
-                                     hover:bg-blue-50 dark:hover:bg-blue-900/20
-                                     transition-colors min-h-[32px]"
-                          title="View public profile"
-                        >
-                          <ExternalLink className="w-3 h-3" /> Profile
-                        </a>
+                        {MAIN_APP_URL && (
+                          <a
+                            href={`${MAIN_APP_URL}/seller/${u.uid}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={e => e.stopPropagation()}
+                            className="flex items-center gap-1 text-xs text-blue-600
+                                       dark:text-blue-400 border border-blue-200
+                                       dark:border-blue-800 rounded-lg px-2.5 py-1.5
+                                       hover:bg-blue-50 dark:hover:bg-blue-900/20
+                                       transition-colors min-h-[32px]"
+                            title="View public profile"
+                          >
+                            <ExternalLink className="w-3 h-3" /> Profile
+                          </a>
+                        )}
                       </div>
                     </td>
                   </tr>

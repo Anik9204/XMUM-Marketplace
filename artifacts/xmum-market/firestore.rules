@@ -254,6 +254,16 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ── Platform Activity Feed ─────────────────────────────────────────────────
+    match /platformActivityFeed/{docId} {
+      // Authenticated users (both apps) can create events
+      allow create: if request.auth != null;
+      // Any authenticated user can read (admin app reads the feed)
+      allow read: if request.auth != null;
+      // No client-side updates or deletes (cleanup is server-only)
+      allow update, delete: if false;
+    }
+
     // ── Admin Audit Logs ──────────────────────────────────────────────────────
     match /adminAuditLogs/{logId} {
       // Only admin-role users can read the audit trail

@@ -164,6 +164,16 @@ export async function createListing(
     isArchived: false,
     status: "active",
   });
+  void logPlatformActivity({
+    type: data.type === "rental" ? "rental_posted" : "listing_posted",
+    label: `New ${data.type} listing: "${data.title}"`,
+    sub: data.userEmail ?? data.userId,
+    actorUid: data.userId,
+    actorEmail: data.userEmail,
+    targetId: docRef.id,
+    targetType: "listing",
+    href: "/listings",
+  });
   return docRef.id;
 }
 
@@ -437,6 +447,17 @@ export async function deleteListing(listing: Listing): Promise<void> {
     new Promise<void>((resolve) => setTimeout(resolve, 6_000)),
   ]);
 
+  void logPlatformActivity({
+    type: "listing_deleted",
+    label: `Listing deleted: "${listing.title}"`,
+    sub: listing.userEmail ?? listing.userId,
+    actorUid: listing.userId,
+    actorEmail: listing.userEmail,
+    targetId: listing.id,
+    targetType: "listing",
+    href: "/listings",
+  });
+
   if (listing.userId && listing.status !== "sold" && !listing.isArchived) {
     updateDoc(doc(db, "users", listing.userId), {
       activeListingCount: increment(-1),
@@ -468,6 +489,31 @@ export async function getListingsByUser(uid: string): Promise<Listing[]> {
         .slice(0, 30);
     }
     throw err;
+  }
+}
+
+/**
+ * Write an event to the shared platformActivityFeed collection.
+ * Non-critical — errors are swallowed. Called from listing create/delete/edit.
+ */
+export async function logPlatformActivity(event: {
+  type: string;
+  label: string;
+  sub?: string;
+  actorUid?: string;
+  actorEmail?: string;
+  targetId?: string;
+  targetType?: string;
+  href?: string;
+}): Promise<void> {
+  try {
+    await addDoc(collection(db, "platformActivityFeed"), {
+      ...event,
+      createdAt: Date.now(),
+      expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000, // 30-day retention
+    });
+  } catch {
+    // non-critical
   }
 }
 

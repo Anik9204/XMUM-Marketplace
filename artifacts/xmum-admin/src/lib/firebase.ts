@@ -50,6 +50,30 @@ export async function writeAuditLog(entry: AuditEntry): Promise<void> {
   }
 }
 
+/**
+ * Write a platform activity event visible on the dashboard feed.
+ * Non-critical — errors swallowed.
+ */
+export async function writePlatformActivity(event: {
+  type: string;
+  label: string;
+  sub?: string;
+  actorEmail?: string;
+  targetId?: string;
+  targetType?: string;
+  href?: string;
+}): Promise<void> {
+  try {
+    await addDoc(collection(db, "platformActivityFeed"), {
+      ...event,
+      createdAt: Date.now(),
+      expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+    });
+  } catch {
+    // non-critical
+  }
+}
+
 // ── Campus Market helpers ────────────────────────────────────────────────────
 
 export async function getShops(limitCount = 100) {

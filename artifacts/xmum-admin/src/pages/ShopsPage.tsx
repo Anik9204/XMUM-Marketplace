@@ -593,9 +593,9 @@ export default function ShopsPage() {
                     <td className="px-4 py-3">{getSubscriptionBadge(shop)}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-1" ref={openMenuId === shop.id ? menuRef : undefined}>
-                        {shop.shopSlug && (
+                        {import.meta.env.VITE_MAIN_APP_URL && shop.shopSlug && (
                           <a
-                            href={`${import.meta.env.VITE_MAIN_APP_URL ?? ""}/shop/${shop.shopSlug}`}
+                            href={`${import.meta.env.VITE_MAIN_APP_URL}/shop/${shop.shopSlug}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             title="View public shop page"

@@ -1,0 +1,399 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless explicitly told to remove it in this prompt.
+4. After every change, mentally verify: "Does this break anything
+   that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages,
+   STOP and tell me what the impact will be before making the change.
+6. Never change any CSS class, layout structure, z-index, or responsive
+   breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing:
+   pnpm --filter xmum-admin run build
+
+
+
+## PART 3 — FIX BROKEN REDIRECTS AND PREVIEW SYSTEM
+ 
+### 3A — Users Page: Fix "Profile" button
+ 
+The current "Profile" button in `UsersPage.tsx` uses `MAIN_APP_URL` which may be empty. The user drawer already shows full user details inline (that is working correctly). The issue is the `<a>` link falling back to a blank URL. Fix it:
+ 
+In `UsersPage.tsx`, find the external link anchor in the table actions column:
+```tsx
+const MAIN_APP_URL = import.meta.env.VITE_MAIN_APP_URL ?? "";
+```
+And the `<a>` tag that looks like:
+```tsx
+href={`${MAIN_APP_URL}/seller/${u.uid}`}
+```
+ 
+Change it so the link is only rendered if `MAIN_APP_URL` is non-empty:
+```tsx
+{MAIN_APP_URL && (
+  <a
+    href={`${MAIN_APP_URL}/seller/${u.uid}`}
+    target="_blank"
+    rel="noreferrer"
+    onClick={e => e.stopPropagation()}
+    className="flex items-center gap-1 text-xs text-blue-600
+               dark:text-blue-400 border border-blue-200
+               dark:border-blue-800 rounded-lg px-2.5 py-1.5
+               hover:bg-blue-50 dark:hover:bg-blue-900/20
+               transition-colors min-h-[32px]"
+    title="View public profile"
+  >
+    <ExternalLink className="w-3 h-3" /> Profile
+  </a>
+)}
+```
+ 
+Also add the env variable check instruction: make sure `VITE_MAIN_APP_URL` is set in `artifacts/xmum-admin/.env` (and `.env.example`) to the production URL of the XMUM Market app (e.g. `https://xmum-market.vercel.app`).
+ 
+In `.env.example`, ensure this line exists:
+```
+VITE_MAIN_APP_URL=https://your-market-app.vercel.app
+```
+ 
+### 3B — ShopsPage: Verify and protect "View" link
+ 
+In `ShopsPage.tsx`, the "View" button already correctly uses `VITE_MAIN_APP_URL` + `/shop/${shop.shopSlug}`. This is correct. The bug only manifests when the env var is empty.
+ 
+Apply the same guard as in 3A — wrap the `<a>` tag near line 598 with a conditional render:
+```tsx
+{import.meta.env.VITE_MAIN_APP_URL && shop.shopSlug && (
+  <a
+    href={`${import.meta.env.VITE_MAIN_APP_URL}/shop/${shop.shopSlug}`}
+    target="_blank"
+    rel="noopener noreferrer"
+    ...existing classes...
+  >
+    <ExternalLink className="w-3 h-3" /> View
+  </a>
+)}
+```
+ 
+### 3C — ShopApprovalsPage: Fix "Preview" link + add detail modal
+ 
+The current "Preview" link opens the live shop page (which doesn't exist yet for pending shops). Replace it with an inline detail expansion since the shop card already shows most info. Also fix the Preview link guard.
+ 
+In `ShopApprovalsPage.tsx`:
+ 
+1. Find the `<a>` tag that is the Preview link (around line 277):
+```tsx
+href={`${import.meta.env.VITE_MAIN_APP_URL ?? ""}/shop/${shop.shopSlug}`}
+```
+Change it so it only renders when `VITE_MAIN_APP_URL` is set AND the approval status is already "approved" (for pending shops, the link would 404). Since all shops here are pending, replace the anchor with a button that just scrolls to the already-visible shop card details. The card already shows bio, categories, and timestamps — so this is good UX.
+ 
+Replace the entire `<a>` preview link block with:
+```tsx
+{shop.ownerEmail && (
+  <a
+    href={`mailto:${shop.ownerEmail}`}
+    className="flex items-center gap-1 text-[11px] text-slate-500
+               dark:text-slate-400 border border-gray-200
+               dark:border-slate-700 rounded-xl px-2.5 py-1.5
+               hover:bg-slate-50 dark:hover:bg-slate-700/40
+               transition-colors min-h-[34px]"
+    title="Email shop owner"
+  >
+    Contact Owner
+  </a>
+)}
+```
+ 
+This way admins can contact the owner directly without a broken redirect.
+ 
+---
+ 
+## PART 4 — REAL-TIME ACTIVITY FEED (DashboardPage)
+ 
+Replace the existing "Recent Activity" section in `DashboardPage.tsx` with a fully real-time, categorised activity feed.
+ 
+### Architecture notes implemented:
+ 
+- Uses `adminActivityFeed` Firestore collection (new) for a persistent feed
+- Events are written by the **market app** (listings posted, deleted, etc.) and the **admin app** (approvals, bans, etc.)
+- Feed documents are auto-expiring: they include a `ttl` field; a scheduled Cloud Function (setup instructions below) or manual cleanup is used for retention
+- Dashboard reads the last 30 events in real-time with `onSnapshot`
+- No extra reads for each event — all display info is embedded in the event document
+### 4A — Add `platformActivityFeed` writer to `artifacts/xmum-market/src/lib/listings.ts`
+ 
+Add this helper function at the bottom of `listings.ts` (before the export block, after `deleteListing`):
+ 
+```ts
+/**
+ * Write an event to the shared platformActivityFeed collection.
+ * Non-critical — errors are swallowed. Called from listing create/delete/edit.
+ */
+export async function logPlatformActivity(event: {
+  type: string;
+  label: string;
+  sub?: string;
+  actorUid?: string;
+  actorEmail?: string;
+  targetId?: string;
+  targetType?: string;
+  href?: string;
+}): Promise<void> {
+  try {
+    await addDoc(collection(db, "platformActivityFeed"), {
+      ...event,
+      createdAt: Date.now(),
+      expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000, // 30-day retention
+    });
+  } catch {
+    // non-critical
+  }
+}
+```
+ 
+Make sure `addDoc` and `collection` are already imported (they should be for the rental archive). Do not add duplicate imports.
+ 
+### 4B — Call `logPlatformActivity` when listings are created
+ 
+In `listings.ts`, find the `createListing` function (or wherever `addDoc` is called to create a listing). After the successful creation, add:
+ 
+```ts
+void logPlatformActivity({
+  type: listing.type === "rental" ? "rental_posted" : "listing_posted",
+  label: `New ${listing.type} listing: "${listing.title}"`,
+  sub: listing.userEmail ?? listing.userId,
+  actorUid: listing.userId,
+  actorEmail: listing.userEmail,
+  targetId: newDocRef.id,    // use whatever variable holds the new doc ID
+  targetType: "listing",
+  href: "/listings",
+});
+```
+ 
+Note: adapt `newDocRef.id` to whatever the actual variable name is in `createListing`. Read the function before editing.
+ 
+### 4C — Call `logPlatformActivity` when a listing is deleted (non-rental)
+ 
+In `deleteListing`, after the `deleteDoc` call succeeds, add:
+ 
+```ts
+void logPlatformActivity({
+  type: "listing_deleted",
+  label: `Listing deleted: "${listing.title}"`,
+  sub: listing.userEmail ?? listing.userId,
+  actorUid: listing.userId,
+  actorEmail: listing.userEmail,
+  targetId: listing.id,
+  targetType: "listing",
+  href: "/listings",
+});
+```
+ 
+### 4D — Upgrade `DashboardPage.tsx` activity feed section
+ 
+In `DashboardPage.tsx`, make the following changes:
+ 
+1. Add `onSnapshot` to the existing firebase/firestore import (it is already imported — do not duplicate).
+2. Change the `ActivityItem` interface to:
+```ts
+interface ActivityItem {
+  id: string;
+  type: string;
+  label: string;
+  sub: string;
+  time: number;
+  href: string;
+}
+```
+ 
+3. Replace the entire `useEffect` that calls `loadActivity()` (the one using `getDocs` and `Promise.all`) with this real-time version:
+```ts
+useEffect(() => {
+  const q = query(
+    collection(db, "platformActivityFeed"),
+    orderBy("createdAt", "desc"),
+    limit(30)
+  );
+  const unsub = onSnapshot(
+    q,
+    (snap) => {
+      const items: ActivityItem[] = snap.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          type: data.type ?? "event",
+          label: data.label ?? "Platform event",
+          sub: data.sub ?? "",
+          time: data.createdAt ?? 0,
+          href: data.href ?? "/",
+        };
+      });
+      setActivity(items);
+      setActivityLoading(false);
+    },
+    (err) => {
+      console.error("[Dashboard] activity feed snapshot:", err);
+      // Graceful fallback: fall back to legacy getDocs approach
+      setActivityLoading(false);
+    }
+  );
+  return unsub;
+}, []);
+```
+ 
+Also update the `unsubs` cleanup array at the top-level `useEffect` — the activity feed is its own `useEffect`, so just make sure the `unsub` is returned properly.
+ 
+4. In the `activity.map(...)` render block, update the dot color logic to handle more event types:
+```tsx
+<div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+  item.type === "report"            ? "bg-red-400"    :
+  item.type === "signup"            ? "bg-green-400"  :
+  item.type === "rental_posted"     ? "bg-amber-400"  :
+  item.type === "listing_posted"    ? "bg-blue-400"   :
+  item.type === "listing_deleted"   ? "bg-slate-400"  :
+  item.type === "shop_ad"           ? "bg-purple-400" :
+  item.type === "shop_approved"     ? "bg-teal-400"   :
+  item.type === "shop_rejected"     ? "bg-rose-400"   :
+  item.type === "user_banned"       ? "bg-red-600"    :
+  item.type === "moderation"        ? "bg-orange-400" :
+                                      "bg-slate-300"
+}`} />
+```
+ 
+5. Remove the now-unused `getDocs` import if it was only used in `loadActivity`. Check all other usages in DashboardPage first before removing.
+### 4E — Write activity from admin app (shop approvals, bans, etc.)
+ 
+The admin app already calls `writeAuditLog` for major actions. We will also write to `platformActivityFeed` from the admin app for important moderation events.
+ 
+Add a helper in `artifacts/xmum-admin/src/lib/firebase.ts`, at the bottom of the file, after `writeAuditLog`:
+ 
+```ts
+/**
+ * Write a platform activity event visible on the dashboard feed.
+ * Non-critical — errors swallowed.
+ */
+export async function writePlatformActivity(event: {
+  type: string;
+  label: string;
+  sub?: string;
+  actorEmail?: string;
+  targetId?: string;
+  targetType?: string;
+  href?: string;
+}): Promise<void> {
+  try {
+    await addDoc(collection(db, "platformActivityFeed"), {
+      ...event,
+      createdAt: Date.now(),
+      expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+    });
+  } catch {
+    // non-critical
+  }
+}
+```
+ 
+Check that `addDoc` and `collection` are already imported at the top of `firebase.ts`. They should be — do not add duplicate imports.
+ 
+Then in `ShopApprovalsPage.tsx`, after the existing `writeAuditLog` call inside `handleApprove`, add:
+```ts
+void writePlatformActivity({
+  type: "shop_approved",
+  label: `Shop approved: "${shop.shopName}"`,
+  sub: shop.ownerEmail,
+  actorEmail: adminUser?.email,
+  targetId: shop.id,
+  targetType: "shop",
+  href: "/shop-approvals",
+});
+```
+ 
+And after `writeAuditLog` inside `handleReject`, add:
+```ts
+void writePlatformActivity({
+  type: "shop_rejected",
+  label: `Shop rejected: "${shop.shopName}"`,
+  sub: reason ? `Reason: ${reason}` : shop.ownerEmail,
+  actorEmail: adminUser?.email,
+  targetId: shop.id,
+  targetType: "shop",
+  href: "/shop-approvals",
+});
+```
+ 
+Import `writePlatformActivity` from `../lib/firebase` in `ShopApprovalsPage.tsx`.
+ 
+Similarly in `UsersPage.tsx`, after the `writeAuditLog` call inside `updateUser` for bans, add:
+```ts
+if ("isBlacklisted" in data) {
+  void writePlatformActivity({
+    type: (data as any).isBlacklisted ? "user_banned" : "user_unbanned",
+    label: (data as any).isBlacklisted
+      ? `User banned: ${targetUser?.email ?? uid}`
+      : `User unbanned: ${targetUser?.email ?? uid}`,
+    sub: `by ${adminUser?.email}`,
+    actorEmail: adminUser?.email,
+    targetId: uid,
+    targetType: "user",
+    href: "/users",
+  });
+}
+```
+ 
+Import `writePlatformActivity` in `UsersPage.tsx`.
+ 
+### 4F — Add Firestore index for `platformActivityFeed`
+ 
+In `artifacts/xmum-market/firestore.indexes.json`, add:
+```json
+{
+  "collectionGroup": "platformActivityFeed",
+  "queryScope": "COLLECTION",
+  "fields": [
+    { "fieldPath": "createdAt", "order": "DESCENDING" }
+  ]
+}
+```
+ 
+Add it to the existing `indexes` array.
+ 
+### Firestore Rules for `platformActivityFeed`
+ 
+In `firestore.rules`, add:
+```
+match /platformActivityFeed/{docId} {
+  // Authenticated users (both apps) can create events
+  allow create: if request.auth != null;
+  // Any authenticated user can read (admin app reads the feed)
+  allow read: if request.auth != null;
+  // No client-side updates or deletes (cleanup is server-only)
+  allow update, delete: if false;
+}
+```
+ 
+### Retention / Scalability notes (implement manually or as a Cloud Function):
+ 
+Each document has an `expiresAt` field set to 30 days from creation. To auto-clean, create a Cloud Function in `artifacts/functions/src/index.ts` that runs on a schedule:
+ 
+```ts
+// Scheduled cleanup: delete platformActivityFeed documents older than 30 days
+// Run daily using Cloud Scheduler (pubsub)
+export const cleanActivityFeed = functions.pubsub
+  .schedule("every 24 hours")
+  .onRun(async () => {
+    const cutoff = Date.now();
+    const q = query(
+      collection(db, "platformActivityFeed"),
+      where("expiresAt", "<", cutoff),
+      limit(500)
+    );
+    const snap = await getDocs(q);
+    const batch = writeBatch(db);
+    snap.docs.forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+  });
+```
+ 
+This keeps the collection small and avoids unbounded growth. With ~30 events/day, 30-day retention = ~900 docs max — extremely cheap.
+ 
+---
