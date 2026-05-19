@@ -43,24 +43,57 @@ function HeroBanner({ ads }: { ads: ShopAd[] }) {
 
   if (ads.length === 0) {
     return (
+      <>
+      <style>{`
+        @keyframes heroFadeUp {
+          from { opacity: 0; transform: translateY(14px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        .hero-fade-up { animation: heroFadeUp both; }
+        @keyframes heroShimmer {
+          0%   { background-position: 200% center; }
+          100% { background-position: -200% center; }
+        }
+      `}</style>
       <div
         className="relative rounded-2xl overflow-hidden mx-4 mb-4"
         style={{ background: "linear-gradient(135deg, #003366 0%, #0066cc 60%, #0099ff 100%)" }}
       >
+        <div
+          className="pointer-events-none absolute inset-0 opacity-20"
+          style={{
+            background: "linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.18) 50%, transparent 60%)",
+            backgroundSize: "200% 100%",
+            animation: "heroShimmer 3.5s ease-in-out infinite",
+          }}
+        />
         <div className="px-6 py-8 sm:py-10">
-          <p className="text-white/70 text-xs font-semibold uppercase tracking-widest mb-1">Campus Market</p>
-          <h1 className="text-white text-2xl sm:text-3xl font-black leading-tight mb-2">
+          <p
+            className="hero-fade-up text-white/70 text-xs font-semibold uppercase tracking-widest mb-1"
+            style={{ animationDuration: "350ms", animationDelay: "0ms", animationFillMode: "both" }}
+          >Campus Market</p>
+          <h1
+            className="hero-fade-up text-white text-2xl sm:text-3xl font-black leading-tight mb-2"
+            style={{ animationDuration: "500ms", animationDelay: "80ms", animationFillMode: "both" }}
+          >
             Shop from fellow<br />XMUM students
           </h1>
-          <p className="text-white/70 text-sm mb-4">Discover food, services, and more — right on campus.</p>
+          <p
+            className="hero-fade-up text-white/70 text-sm mb-4"
+            style={{ animationDuration: "500ms", animationDelay: "180ms", animationFillMode: "both" }}
+          >Discover food, services, and more — right on campus.</p>
           <Link href="/create-shop">
-            <button className="bg-white text-[#003366] text-xs font-bold px-4 py-2 rounded-xl hover:bg-gray-100 transition">
+            <button
+              className="hero-fade-up bg-white text-[#003366] text-xs font-bold px-4 py-2 rounded-xl hover:bg-gray-100 transition"
+              style={{ animationDuration: "400ms", animationDelay: "280ms", animationFillMode: "both" }}
+            >
               Open Your Shop →
             </button>
           </Link>
         </div>
         <div className="absolute right-4 bottom-0 opacity-10 text-[120px] leading-none select-none pointer-events-none">🛍️</div>
       </div>
+      </>
     );
   }
 

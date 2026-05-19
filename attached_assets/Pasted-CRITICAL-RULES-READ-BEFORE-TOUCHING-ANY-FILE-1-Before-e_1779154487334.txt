@@ -1,0 +1,130 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything
+   that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages,
+   STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint
+   unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing:
+   pnpm --filter xmum-market run build
+
+TASK: Add creative entrance animations to the hero greeting in two places:
+  1. HomePage.tsx — the hero banner (gradient blue section at top)
+  2. CampusMarketPage.tsx — the "Shop from fellow XMUM students" hero banner
+
+Use ONLY Tailwind CSS animation classes and inline style animation —
+NO new npm packages, NO framer-motion, NO GSAP.
+Use the existing Tailwind animate utilities: animate-in, fade-in, slide-in-from-bottom,
+slide-in-from-left, duration-*, delay-*.
+If those aren't available, use @keyframes defined in a <style> tag injected via
+a small inline component — but prefer Tailwind-native classes first.
+
+--- PART A: HomePage.tsx hero ---
+
+File: artifacts/xmum-market/src/pages/HomePage.tsx
+
+Find the hero section JSX (the blue gradient div):
+  <div className="bg-gradient-to-br from-[#003366] via-[#004488] to-[#0055CC] text-white px-4 pt-8 pb-10">
+    <div className="max-w-5xl mx-auto">
+      {user && userProfile && (
+        <p className="text-sm text-white/70 mb-1">
+          Good day, {getLastName(userProfile.fullName || userProfile.displayName)} 👋
+        </p>
+      )}
+      <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold mt-1 leading-tight">
+        {t.hero1}<br />{t.hero2}
+      </h1>
+      <p className="text-white/70 text-sm mt-2 max-w-sm">{t.heroSub}</p>
+    </div>
+  </div>
+
+Apply staggered entrance animations to each element:
+- The greeting line "Good day, ..." → slides up + fades in, duration 400ms, no delay
+- The <h1> → slides up + fades in, duration 500ms, 80ms delay
+- The <p> heroSub → slides up + fades in, duration 500ms, 180ms delay
+
+Add a key={activeTab} on the outer blue div so animations re-trigger when
+the user switches tabs (hero re-renders). This is subtle and makes the
+experience feel alive.
+
+Use this pattern for each element (adjust delay with inline style):
+  style={{ animationDuration: "400ms", animationDelay: "0ms",
+           animationFillMode: "both" }}
+  className="... opacity-0 animate-in fade-in slide-in-from-bottom-3"
+
+If animate-in / slide-in-from-bottom-3 are not in the project's Tailwind config,
+use this inline keyframe approach instead — add a <style> tag as a sibling
+before the hero div (NOT inside it):
+  <style>{`
+    @keyframes heroFadeUp {
+      from { opacity: 0; transform: translateY(14px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .hero-fade-up { animation: heroFadeUp both; }
+  `}</style>
+
+Then apply className="hero-fade-up" + inline style animationDuration/Delay to each element.
+
+Also add a slow shimmer/pulse to the gradient background itself — a subtle
+animated shine that moves across the hero. Add this inside the outer blue div
+as a purely decorative element:
+  <div
+    className="pointer-events-none absolute inset-0 opacity-20"
+    style={{
+      background: "linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.18) 50%, transparent 60%)",
+      backgroundSize: "200% 100%",
+      animation: "heroShimmer 3.5s ease-in-out infinite",
+    }}
+  />
+  <style>{`
+    @keyframes heroShimmer {
+      0%   { background-position: 200% center; }
+      100% { background-position: -200% center; }
+    }
+  `}</style>
+
+Make the outer blue div position: relative (add "relative overflow-hidden" to its className)
+so the shimmer stays inside.
+
+--- PART B: CampusMarketPage.tsx hero ---
+
+File: artifacts/xmum-market/src/pages/CampusMarketPage.tsx
+
+Find the hero div (around line 48):
+  <div
+    className="relative rounded-2xl overflow-hidden"
+    style={{ background: "linear-gradient(135deg, #003366 0%, #0066cc 60%, #0099ff 100%)" }}
+  >
+    <div className="px-6 py-8 sm:py-10">
+      <p className="text-white/70 text-xs font-semibold uppercase tracking-widest mb-1">Campus Market</p>
+      <h1 className="text-white text-2xl sm:text-3xl font-black leading-tight mb-2">
+        Shop from fellow<br />XMUM students
+      </h1>
+      <p className="text-white/70 text-sm mb-4">Discover food, services, and more — right on campus.</p>
+      ...
+
+Apply the same staggered animation pattern:
+- "Campus Market" label → slide up + fade, 350ms, 0ms delay
+- <h1> → slide up + fade, 500ms, 80ms delay
+- <p> subtitle → slide up + fade, 500ms, 180ms delay
+- "Open Your Shop" button → slide up + fade, 400ms, 280ms delay
+
+Reuse the same @keyframes heroFadeUp and .hero-fade-up class (or the Tailwind
+animate-in approach) — the CSS class/keyframe name can be the same since it's
+all in the same document.
+
+Also add the shimmer effect to this hero's gradient background, same approach
+as Part A (add the shimmer div + keyframe, make parent relative overflow-hidden
+— it already has those classes).
+
+Do NOT change any text content, any button logic, or any link in either file.
+Do NOT change any other section of either page outside the hero div.
+
+After all changes, run: pnpm --filter xmum-market run build
+Report the full build output. Fix any errors before finishing.

@@ -360,17 +360,45 @@ export default function HomePage() {
   return (
     <div className="animate-in fade-in duration-200">
       {/* Hero — not sticky, scrolls away */}
-      <div className="bg-gradient-to-br from-[#003366] via-[#004488] to-[#0055CC] text-white px-4 pt-8 pb-10">
+      <style>{`
+        @keyframes heroFadeUp {
+          from { opacity: 0; transform: translateY(14px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        .hero-fade-up { animation: heroFadeUp both; }
+        @keyframes heroShimmer {
+          0%   { background-position: 200% center; }
+          100% { background-position: -200% center; }
+        }
+      `}</style>
+      <div key={activeTab} className="relative overflow-hidden bg-gradient-to-br from-[#003366] via-[#004488] to-[#0055CC] text-white px-4 pt-8 pb-10">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-20"
+          style={{
+            background: "linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.18) 50%, transparent 60%)",
+            backgroundSize: "200% 100%",
+            animation: "heroShimmer 3.5s ease-in-out infinite",
+          }}
+        />
         <div className="max-w-5xl mx-auto">
           {user && userProfile && (
-            <p className="text-sm text-white/70 mb-1">
+            <p
+              className="hero-fade-up text-sm text-white/70 mb-1"
+              style={{ animationDuration: "400ms", animationDelay: "0ms", animationFillMode: "both" }}
+            >
               Good day, {getLastName(userProfile.fullName || userProfile.displayName)} 👋
             </p>
           )}
-          <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold mt-1 leading-tight">
+          <h1
+            className="hero-fade-up text-xl sm:text-2xl lg:text-3xl font-bold mt-1 leading-tight"
+            style={{ animationDuration: "500ms", animationDelay: "80ms", animationFillMode: "both" }}
+          >
             {t.hero1}<br />{t.hero2}
           </h1>
-          <p className="text-white/70 text-sm mt-2 max-w-sm">{t.heroSub}</p>
+          <p
+            className="hero-fade-up text-white/70 text-sm mt-2 max-w-sm"
+            style={{ animationDuration: "500ms", animationDelay: "180ms", animationFillMode: "both" }}
+          >{t.heroSub}</p>
         </div>
       </div>
 
