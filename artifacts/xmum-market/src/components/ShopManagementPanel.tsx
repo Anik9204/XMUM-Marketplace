@@ -182,7 +182,7 @@ function AddListingForm({ shopId, shop, onClose, onCreated }: { shopId: string; 
       <form onSubmit={handleSubmit} className="space-y-3">
         {error && <p className="text-xs text-red-500">{error}</p>}
         <div><label className={labelCls}>Title <span className="text-red-500">*</span></label><input className={inputCls} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Nasi Lemak Set" maxLength={80} /></div>
-        <div><label className={labelCls}>Description</label><textarea className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} /></div>
+        <div><label className={labelCls}>Description</label><textarea className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none" rows={4} value={description} onChange={(e) => setDescription(e.target.value)} maxLength={3000} /></div>
         <div className="grid grid-cols-2 gap-2">
           <div><label className={labelCls}>Price (RM)</label><input className={inputCls} type="number" min="0" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00" /></div>
           <div>
@@ -271,7 +271,7 @@ function EditShopListingForm({ listing, shopId, shop, onCancel, onSaved }: { lis
       <form onSubmit={handleSave} className="space-y-3">
         {error && <p className="text-xs text-red-500">{error}</p>}
         <div><label className={labelCls}>Title <span className="text-red-500">*</span></label><input className={inputCls} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} /></div>
-        <div><label className={labelCls}>Description</label><textarea className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} /></div>
+        <div><label className={labelCls}>Description</label><textarea className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none" rows={4} value={description} onChange={(e) => setDescription(e.target.value)} maxLength={3000} /></div>
         <div className="grid grid-cols-2 gap-2">
           <div><label className={labelCls}>Price (RM)</label><input className={inputCls} type="number" min="0" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00" /></div>
           <div>

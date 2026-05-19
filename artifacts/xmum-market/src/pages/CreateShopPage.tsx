@@ -4,11 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { createShop, slugify, isSlugAvailable } from "@/lib/shops";
 import { ShopCategory } from "@/lib/types";
 import AuthModal from "@/components/AuthModal";
-import { Store, CheckCircle2, XCircle, Loader2, AlertCircle } from "lucide-react";
-
-function countWords(text: string): number {
-  return text.trim() === "" ? 0 : text.trim().split(/\s+/).length;
-}
+import { Store, CheckCircle2, XCircle, Loader2, AlertCircle, Edit2 } from "lucide-react";
 
 const SHOP_CATEGORIES: ShopCategory[] = [
   "Food & Beverage",
@@ -23,6 +19,53 @@ const SHOP_CATEGORIES: ShopCategory[] = [
   "Travel & Lifestyle",
   "Others",
 ];
+
+interface BioEditorModalProps {
+  value: string;
+  onChange: (val: string) => void;
+  onClose: () => void;
+}
+
+function BioEditorModal({ value, onChange, onClose }: BioEditorModalProps) {
+  const [draft, setDraft] = useState(value);
+  const handleSave = () => { onChange(draft); onClose(); };
+  return (
+    <div className="fixed inset-0 z-[70] flex flex-col bg-white dark:bg-slate-900">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-slate-700">
+        <button
+          type="button"
+          onClick={onClose}
+          className="text-sm text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200 transition-colors"
+        >
+          Cancel
+        </button>
+        <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-100">
+          Bio / Description
+        </h2>
+        <button
+          type="button"
+          onClick={handleSave}
+          className="text-sm font-semibold text-[#003366] dark:text-blue-400 hover:opacity-75 transition-opacity"
+        >
+          Done
+        </button>
+      </div>
+      <div className="flex flex-col flex-1 px-4 py-3 overflow-hidden">
+        <textarea
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value.slice(0, 3000))}
+          maxLength={3000}
+          placeholder="Describe your shop — what you sell, how to order, operating hours, policies..."
+          className="flex-1 w-full resize-none bg-transparent text-gray-900 dark:text-slate-100 text-sm leading-relaxed placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none"
+        />
+        <div className={`text-right text-xs mt-2 font-medium ${draft.length > 2700 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
+          {draft.length} / 3000
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const inputCls =
   "w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 transition min-h-[44px]";
@@ -40,6 +83,7 @@ export default function CreateShopPage() {
   const [slugChecking, setSlugChecking] = useState(false);
   const [category, setCategory] = useState<ShopCategory>("Others");
   const [bio, setBio] = useState("");
+  const [showBioEditor, setShowBioEditor] = useState(false);
   const [whatsapp, setWhatsapp] = useState("");
   const [wechat, setWechat] = useState("");
   const [loading, setLoading] = useState(false);
@@ -222,24 +266,39 @@ export default function CreateShopPage() {
 
         <div>
           <label className={labelCls}>Bio / Description</label>
-          <textarea
-            className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none"
-            rows={6}
-            placeholder="Describe your shop — what you sell, how to order, operating hours, policies..."
-            value={bio}
-            onChange={(e) => {
-              const words = countWords(e.target.value);
-              if (words <= 500) setBio(e.target.value);
-            }}
-          />
+          <button
+            type="button"
+            onClick={() => setShowBioEditor(true)}
+            className={`w-full text-left border rounded-xl px-3 py-2.5 text-sm min-h-[80px] bg-white dark:bg-slate-700 ${
+              bio ? "text-gray-900 dark:text-slate-100" : "text-gray-400 dark:text-slate-500"
+            } border-gray-300 dark:border-slate-600`}
+          >
+            {bio ? (
+              <div className="flex items-start justify-between gap-2">
+                <span className="line-clamp-3 leading-relaxed whitespace-pre-wrap">{bio}</span>
+                <Edit2 size={14} className="text-gray-400 dark:text-slate-500 shrink-0 mt-0.5" />
+              </div>
+            ) : (
+              <span>Describe your shop — what you sell, how to order, operating hours, policies...</span>
+            )}
+          </button>
           <div className="flex justify-between items-center mt-1">
             <p className="text-xs text-gray-400 dark:text-slate-500">
               Describe your shop's purpose, ordering process, and any important details.
             </p>
-            <p className={`text-xs font-semibold tabular-nums ${countWords(bio) >= 480 ? "text-amber-500" : "text-gray-400 dark:text-slate-500"}`}>
-              {countWords(bio)}/500 words
-            </p>
+            {bio && (
+              <p className={`text-xs font-semibold tabular-nums ${bio.length > 2700 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
+                {bio.length} / 3000
+              </p>
+            )}
           </div>
+          {showBioEditor && (
+            <BioEditorModal
+              value={bio}
+              onChange={setBio}
+              onClose={() => setShowBioEditor(false)}
+            />
+          )}
         </div>
 
         <div>

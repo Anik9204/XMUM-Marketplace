@@ -1,0 +1,185 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything
+   that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages,
+   STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint
+   unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing:
+   pnpm --filter xmum-market run build
+
+TASK: Three fixes to the shop bio/description field in CreateShopPage.tsx,
+and the shop listing description field in ShopManagementPanel.tsx.
+
+--- FIX A: Add a reusable DescriptionEditorModal to CreateShopPage.tsx ---
+
+Context: PostPage.tsx already has a DescriptionEditorModal component (a
+fullscreen writing overlay). We need the same pattern for the shop bio field
+in CreateShopPage.tsx. Do NOT import from PostPage — define a local copy
+directly inside CreateShopPage.tsx.
+
+File: artifacts/xmum-market/src/pages/CreateShopPage.tsx
+
+STEP A1 — Add these imports at the top of the file if not already present.
+Find the existing import block and add only what is missing:
+  import { useState } from "react"; // already there, skip if so
+  import { Edit2 } from "lucide-react"; // add only if not already imported
+
+STEP A2 — Add the DescriptionEditorModal component function.
+Place it BEFORE the CreateShopPage component function (after the existing
+helper functions like countWords and SHOP_CATEGORIES).
+Add this entire block:
+
+  interface BioEditorModalProps {
+    value: string;
+    onChange: (val: string) => void;
+    onClose: () => void;
+  }
+
+  function BioEditorModal({ value, onChange, onClose }: BioEditorModalProps) {
+    const [draft, setDraft] = useState(value);
+    const handleSave = () => { onChange(draft); onClose(); };
+    return (
+      <div className="fixed inset-0 z-[70] flex flex-col bg-white dark:bg-slate-900">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-slate-700">
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-sm text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200 transition-colors"
+          >
+            Cancel
+          </button>
+          <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-100">
+            Bio / Description
+          </h2>
+          <button
+            type="button"
+            onClick={handleSave}
+            className="text-sm font-semibold text-[#003366] dark:text-blue-400 hover:opacity-75 transition-opacity"
+          >
+            Done
+          </button>
+        </div>
+        <div className="flex flex-col flex-1 px-4 py-3 overflow-hidden">
+          <textarea
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value.slice(0, 3000))}
+            maxLength={3000}
+            placeholder="Describe your shop — what you sell, how to order, operating hours, policies..."
+            className="flex-1 w-full resize-none bg-transparent text-gray-900 dark:text-slate-100 text-sm leading-relaxed placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none"
+          />
+          <div className={`text-right text-xs mt-2 font-medium ${draft.length > 2700 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
+            {draft.length} / 3000
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+STEP A3 — Add showBioEditor state to the CreateShopPage component.
+Find where the other useState declarations are (near line 42 where bio is declared):
+  const [bio, setBio] = useState("");
+
+Add directly below it:
+  const [showBioEditor, setShowBioEditor] = useState(false);
+
+STEP A4 — Replace the textarea with a tap-to-open button + modal.
+Find this entire block (the textarea and its wrapper div):
+  <div>
+    <label className={labelCls}>Bio / Description</label>
+    <textarea
+      className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none"
+      rows={6}
+      placeholder="Describe your shop — what you sell, how to order, operating hours, policies..."
+      value={bio}
+      onChange={(e) => {
+        const words = countWords(e.target.value);
+        if (words <= 500) setBio(e.target.value);
+      }}
+    />
+    <div className="flex justify-between items-center mt-1">
+      <p className="text-xs text-gray-400 dark:text-slate-500">
+        Describe your shop's purpose, ordering process, and any important details.
+      </p>
+      <p className={`text-xs font-semibold tabular-nums ${countWords(bio) >= 480 ? "text-amber-500" : "text-gray-400 dark:text-slate-500"}`}>
+        {countWords(bio)}/500 words
+      </p>
+    </div>
+  </div>
+
+Replace with:
+  <div>
+    <label className={labelCls}>Bio / Description</label>
+    <button
+      type="button"
+      onClick={() => setShowBioEditor(true)}
+      className={`w-full text-left border rounded-xl px-3 py-2.5 text-sm min-h-[80px] bg-white dark:bg-slate-700 ${
+        bio ? "text-gray-900 dark:text-slate-100" : "text-gray-400 dark:text-slate-500"
+      } border-gray-300 dark:border-slate-600`}
+    >
+      {bio ? (
+        <div className="flex items-start justify-between gap-2">
+          <span className="line-clamp-3 leading-relaxed whitespace-pre-wrap">{bio}</span>
+          <Edit2 size={14} className="text-gray-400 dark:text-slate-500 shrink-0 mt-0.5" />
+        </div>
+      ) : (
+        <span>Describe your shop — what you sell, how to order, operating hours, policies...</span>
+      )}
+    </button>
+    <div className="flex justify-between items-center mt-1">
+      <p className="text-xs text-gray-400 dark:text-slate-500">
+        Describe your shop's purpose, ordering process, and any important details.
+      </p>
+      {bio && (
+        <p className={`text-xs font-semibold tabular-nums ${bio.length > 2700 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
+          {bio.length} / 3000
+        </p>
+      )}
+    </div>
+    {showBioEditor && (
+      <BioEditorModal
+        value={bio}
+        onChange={setBio}
+        onClose={() => setShowBioEditor(false)}
+      />
+    )}
+  </div>
+
+STEP A5 — Remove the now-unused countWords function.
+Check if countWords is used anywhere else in CreateShopPage.tsx.
+If it is only used in the textarea block we just replaced, delete the function:
+  function countWords(text: string): number {
+    return text.trim() === "" ? 0 : text.trim().split(/\s+/).length;
+  }
+If it's used elsewhere, leave it.
+
+--- FIX B: Fix shop listing description in ShopManagementPanel.tsx ---
+
+There are TWO textarea elements for shop listing description in this file —
+one in AddListingForm and one in EditListingForm. Both have maxLength={500}.
+
+File: artifacts/xmum-market/src/components/ShopManagementPanel.tsx
+
+STEP B1 — Fix AddListingForm description textarea.
+Find (line ~185):
+  <div><label className={labelCls}>Description</label><textarea className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} /></div>
+
+Change ONLY maxLength={500} to maxLength={3000} and rows={2} to rows={4}.
+Do NOT change any className or other prop.
+
+STEP B2 — Fix EditListingForm description textarea.
+Find (line ~274):
+  <div><label className={labelCls}>Description</label><textarea className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} /></div>
+
+Change ONLY maxLength={500} to maxLength={3000} and rows={2} to rows={4}.
+Do NOT change any className or other prop.
+
+After all changes, run: pnpm --filter xmum-market run build
+Report the full build output. Fix any errors before finishing.
