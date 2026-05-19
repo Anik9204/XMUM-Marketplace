@@ -389,6 +389,36 @@ export async function deleteListing(listing: Listing): Promise<void> {
     throw Object.assign(new Error("report-hold"), { code: "report-hold" });
   }
 
+  // Archive rental listings before hard-deletion (legal/moderation evidence)
+  if (listing.type === "rental") {
+    try {
+      await addDoc(collection(db, "rentalArchivedListings"), {
+        originalListingId: listing.id,
+        archivedAt: Date.now(),
+        archivedByUid: listing.userId,
+        title: listing.title ?? "",
+        description: listing.description ?? "",
+        price: listing.price ?? null,
+        category: listing.category ?? "",
+        photos: listing.photos ?? [],
+        userId: listing.userId ?? "",
+        userEmail: listing.userEmail ?? "",
+        userName: listing.userName ?? "",
+        createdAt: listing.createdAt ?? null,
+        updatedAt: listing.updatedAt ?? null,
+        status: listing.status ?? "active",
+        viewCount: listing.viewCount ?? 0,
+        location: listing.location ?? "",
+        condition: listing.condition ?? "",
+        listingType: "rental",
+        deletedAt: Date.now(),
+      });
+    } catch (archiveErr) {
+      // Archive failure is non-critical — do not block deletion
+      console.warn("[deleteListing] rental archive failed:", archiveErr);
+    }
+  }
+
   // No active report — proceed with hard delete (photos + Firestore doc)
   if (listing.photos.length > 0) {
     await Promise.allSettled(
