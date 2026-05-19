@@ -26,10 +26,6 @@ import { SiWhatsapp } from "react-icons/si";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-function countWords(text: string): number {
-  return text.trim() === "" ? 0 : text.trim().split(/\s+/).length;
-}
-
 const SHOP_CATEGORIES: ShopCategory[] = [
   "Food & Beverage", "Tutoring & Education", "Fashion & Apparel", "Electronics",
   "Beauty & Wellness", "Transport & Rental", "Handmade & Custom", "Books & Stationery",
@@ -116,11 +112,53 @@ function ListingRow({ listing, shopId, onRefresh, onEdit }: { listing: ShopListi
   );
 }
 
+// ── ListingDescEditorModal ─────────────────────────────────────────────────────
+
+interface ListingDescEditorModalProps {
+  value: string;
+  onChange: (val: string) => void;
+  onClose: () => void;
+}
+
+function ListingDescEditorModal({ value, onChange, onClose }: ListingDescEditorModalProps) {
+  const [draft, setDraft] = useState(value);
+  const handleSave = () => { onChange(draft); onClose(); };
+  return (
+    <div className="fixed inset-0 z-[70] flex flex-col bg-white dark:bg-slate-900">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-slate-700">
+        <button type="button" onClick={onClose}
+          className="text-sm text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200 transition-colors">
+          Cancel
+        </button>
+        <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Description</h2>
+        <button type="button" onClick={handleSave}
+          className="text-sm font-semibold text-[#003366] dark:text-blue-400 hover:opacity-75 transition-opacity">
+          Done
+        </button>
+      </div>
+      <div className="flex flex-col flex-1 px-4 py-3 overflow-hidden">
+        <textarea
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value.slice(0, 3000))}
+          maxLength={3000}
+          placeholder="Describe this listing — details, condition, availability..."
+          className="flex-1 w-full resize-none bg-transparent text-gray-900 dark:text-slate-100 text-sm leading-relaxed placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none"
+        />
+        <div className={`text-right text-xs mt-2 font-medium ${draft.length > 2700 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
+          {draft.length} / 3000
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── AddListingForm ─────────────────────────────────────────────────────────────
 
 function AddListingForm({ shopId, shop, onClose, onCreated }: { shopId: string; shop: Shop; onClose: () => void; onCreated: () => void }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [showDescModal, setShowDescModal] = useState(false);
   const [price, setPrice] = useState("");
   const [pricingModel, setPricingModel] = useState<ShopListing["pricingModel"]>("fixed");
   const [category, setCategory] = useState<ShopCategory>(shop.category);
@@ -182,7 +220,37 @@ function AddListingForm({ shopId, shop, onClose, onCreated }: { shopId: string; 
       <form onSubmit={handleSubmit} className="space-y-3">
         {error && <p className="text-xs text-red-500">{error}</p>}
         <div><label className={labelCls}>Title <span className="text-red-500">*</span></label><input className={inputCls} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Nasi Lemak Set" maxLength={80} /></div>
-        <div><label className={labelCls}>Description</label><textarea className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none" rows={4} value={description} onChange={(e) => setDescription(e.target.value)} maxLength={3000} /></div>
+        <div>
+          <label className={labelCls}>Description</label>
+          <button
+            type="button"
+            onClick={() => setShowDescModal(true)}
+            className={`w-full text-left border rounded-xl px-3 py-2.5 text-sm min-h-[60px] bg-white dark:bg-slate-700 ${
+              description ? "text-gray-900 dark:text-slate-100" : "text-gray-400 dark:text-slate-500"
+            } border-gray-300 dark:border-slate-600`}
+          >
+            {description ? (
+              <div className="flex items-start justify-between gap-2">
+                <span className="line-clamp-2 leading-relaxed whitespace-pre-wrap">{description}</span>
+                <Edit2 size={14} className="text-gray-400 dark:text-slate-500 shrink-0 mt-0.5" />
+              </div>
+            ) : (
+              <span>Add a description (optional)</span>
+            )}
+          </button>
+          {description && (
+            <p className={`text-right text-xs mt-1 font-medium ${description.length > 2700 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
+              {description.length} / 3000
+            </p>
+          )}
+          {showDescModal && (
+            <ListingDescEditorModal
+              value={description}
+              onChange={setDescription}
+              onClose={() => setShowDescModal(false)}
+            />
+          )}
+        </div>
         <div className="grid grid-cols-2 gap-2">
           <div><label className={labelCls}>Price (RM)</label><input className={inputCls} type="number" min="0" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00" /></div>
           <div>
@@ -229,6 +297,7 @@ function AddListingForm({ shopId, shop, onClose, onCreated }: { shopId: string; 
 function EditShopListingForm({ listing, shopId, shop, onCancel, onSaved }: { listing: ShopListing; shopId: string; shop: Shop; onCancel: () => void; onSaved: () => void }) {
   const [title, setTitle] = useState(listing.title);
   const [description, setDescription] = useState(listing.description);
+  const [showDescModal, setShowDescModal] = useState(false);
   const [price, setPrice] = useState(listing.price !== undefined ? String(listing.price) : "");
   const [pricingModel, setPricingModel] = useState<ShopListing["pricingModel"]>(listing.pricingModel ?? "fixed");
   const [category, setCategory] = useState<ShopCategory>(listing.category);
@@ -271,7 +340,37 @@ function EditShopListingForm({ listing, shopId, shop, onCancel, onSaved }: { lis
       <form onSubmit={handleSave} className="space-y-3">
         {error && <p className="text-xs text-red-500">{error}</p>}
         <div><label className={labelCls}>Title <span className="text-red-500">*</span></label><input className={inputCls} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} /></div>
-        <div><label className={labelCls}>Description</label><textarea className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none" rows={4} value={description} onChange={(e) => setDescription(e.target.value)} maxLength={3000} /></div>
+        <div>
+          <label className={labelCls}>Description</label>
+          <button
+            type="button"
+            onClick={() => setShowDescModal(true)}
+            className={`w-full text-left border rounded-xl px-3 py-2.5 text-sm min-h-[60px] bg-white dark:bg-slate-700 ${
+              description ? "text-gray-900 dark:text-slate-100" : "text-gray-400 dark:text-slate-500"
+            } border-gray-300 dark:border-slate-600`}
+          >
+            {description ? (
+              <div className="flex items-start justify-between gap-2">
+                <span className="line-clamp-2 leading-relaxed whitespace-pre-wrap">{description}</span>
+                <Edit2 size={14} className="text-gray-400 dark:text-slate-500 shrink-0 mt-0.5" />
+              </div>
+            ) : (
+              <span>Add a description (optional)</span>
+            )}
+          </button>
+          {description && (
+            <p className={`text-right text-xs mt-1 font-medium ${description.length > 2700 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
+              {description.length} / 3000
+            </p>
+          )}
+          {showDescModal && (
+            <ListingDescEditorModal
+              value={description}
+              onChange={setDescription}
+              onClose={() => setShowDescModal(false)}
+            />
+          )}
+        </div>
         <div className="grid grid-cols-2 gap-2">
           <div><label className={labelCls}>Price (RM)</label><input className={inputCls} type="number" min="0" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00" /></div>
           <div>
@@ -333,12 +432,14 @@ function EditShopListingForm({ listing, shopId, shop, onCancel, onSaved }: { lis
 
 // ── ListingsTab ────────────────────────────────────────────────────────────────
 
-function ListingsTab({ shopId, shop, listings, loading, showAdd, setShowAdd, onRefresh }: {
+function ListingsTab({ shopId, shop, listings, loading, showAdd, setShowAdd,
+  editingId, setEditingId, onRefresh }: {
   shopId: string; shop: Shop; listings: ShopListing[]; loading: boolean;
-  showAdd: boolean; setShowAdd: (v: boolean) => void; onRefresh: () => void;
+  showAdd: boolean; setShowAdd: (v: boolean) => void;
+  editingId: string | null; setEditingId: (id: string | null) => void;
+  onRefresh: () => void;
 }) {
   const [listingAdded, setListingAdded] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
@@ -525,6 +626,47 @@ function EditorsTab({ shop, editorEmail, setEditorEmail, editorLoading, editorEr
   );
 }
 
+// ── ShopBioEditorModal ─────────────────────────────────────────────────────────
+
+interface ShopBioEditorModalProps {
+  value: string;
+  onChange: (val: string) => void;
+  onClose: () => void;
+}
+
+function ShopBioEditorModal({ value, onChange, onClose }: ShopBioEditorModalProps) {
+  const [draft, setDraft] = useState(value);
+  const handleSave = () => { onChange(draft); onClose(); };
+  return (
+    <div className="fixed inset-0 z-[70] flex flex-col bg-white dark:bg-slate-900">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-slate-700">
+        <button type="button" onClick={onClose}
+          className="text-sm text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200 transition-colors">
+          Cancel
+        </button>
+        <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Bio / Description</h2>
+        <button type="button" onClick={handleSave}
+          className="text-sm font-semibold text-[#003366] dark:text-blue-400 hover:opacity-75 transition-opacity">
+          Done
+        </button>
+      </div>
+      <div className="flex flex-col flex-1 px-4 py-3 overflow-hidden">
+        <textarea
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value.slice(0, 3000))}
+          maxLength={3000}
+          placeholder="Describe your shop — what you sell, how to order, operating hours, policies..."
+          className="flex-1 w-full resize-none bg-transparent text-gray-900 dark:text-slate-100 text-sm leading-relaxed placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none"
+        />
+        <div className={`text-right text-xs mt-2 font-medium ${draft.length > 2700 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
+          {draft.length} / 3000
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── SettingsTab ────────────────────────────────────────────────────────────────
 
 function SettingsTab({
@@ -543,6 +685,7 @@ function SettingsTab({
   onSave: () => void; onBannerUpload: (f: File) => void; onLogoUpload: (f: File) => void; onDelete: () => void;
 }) {
   const [saved, setSaved] = useState(false);
+  const [showBioModal, setShowBioModal] = useState(false);
   const [bannerUploading, setBannerUploading] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
@@ -600,8 +743,37 @@ function SettingsTab({
       </div>
       <div>
         <label className={labelCls}>Bio</label>
-        <textarea className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none" rows={6} value={bio} onChange={(e) => { if (countWords(e.target.value) <= 500) setBio(e.target.value); }} placeholder="Describe your shop…" />
-        <div className="flex justify-between mt-1"><p className="text-xs text-gray-400 dark:text-slate-500">Describe your shop's purpose, process, and details.</p><p className={`text-xs font-semibold tabular-nums ${countWords(bio) >= 480 ? "text-amber-500" : "text-gray-400 dark:text-slate-500"}`}>{countWords(bio)}/500 words</p></div>
+        <button
+          type="button"
+          onClick={() => setShowBioModal(true)}
+          className={`w-full text-left border rounded-xl px-3 py-2.5 text-sm min-h-[80px] bg-white dark:bg-slate-700 ${
+            bio ? "text-gray-900 dark:text-slate-100" : "text-gray-400 dark:text-slate-500"
+          } border-gray-300 dark:border-slate-600`}
+        >
+          {bio ? (
+            <div className="flex items-start justify-between gap-2">
+              <span className="line-clamp-3 leading-relaxed whitespace-pre-wrap">{bio}</span>
+              <Edit2 size={14} className="text-gray-400 dark:text-slate-500 shrink-0 mt-0.5" />
+            </div>
+          ) : (
+            <span>Describe your shop — what you sell, how to order, operating hours, policies...</span>
+          )}
+        </button>
+        <div className="flex justify-between mt-1">
+          <p className="text-xs text-gray-400 dark:text-slate-500">Describe your shop's purpose, process, and details.</p>
+          {bio && (
+            <p className={`text-xs font-semibold tabular-nums ${bio.length > 2700 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
+              {bio.length} / 3000
+            </p>
+          )}
+        </div>
+        {showBioModal && (
+          <ShopBioEditorModal
+            value={bio}
+            onChange={setBio}
+            onClose={() => setShowBioModal(false)}
+          />
+        )}
       </div>
       <div><label className={labelCls}>WhatsApp</label><input className={inputCls} placeholder="+60123456789" value={whatsapp} onChange={(e) => setWhatsApp(e.target.value)} /></div>
       <div><label className={labelCls}>WeChat ID</label><input className={inputCls} placeholder="your_wechat_id" value={wechat} onChange={(e) => setWeChat(e.target.value)} /></div>
@@ -657,7 +829,7 @@ export default function ShopManagementPanel({
   const [listings, setListings] = useState<ShopListing[]>([]);
   const [loadingListings, setLoadingListings] = useState(false);
   const [showAddListing, setShowAddListing] = useState(false);
-
+  const [editingListingId, setEditingListingId] = useState<string | null>(null);
 
   const [editorEmail, setEditorEmail] = useState("");
   const [editorLoading, setEditorLoading] = useState(false);
@@ -689,6 +861,17 @@ export default function ShopManagementPanel({
       getShopListings(shopId).then(setListings).finally(() => setLoadingListings(false));
     }
   }, [tab, shopId]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const editId = params.get("editListing");
+    if (editId) {
+      setTab("listings");
+      setEditingListingId(editId);
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState(null, "", cleanUrl);
+    }
+  }, [shopId]);
 
   const updateShopState = (updates: Partial<Shop>) => {
     setShop((prev) => {
@@ -855,6 +1038,8 @@ export default function ShopManagementPanel({
           loading={loadingListings}
           showAdd={showAddListing}
           setShowAdd={setShowAddListing}
+          editingId={editingListingId}
+          setEditingId={setEditingListingId}
           onRefresh={() => {
             setLoadingListings(true);
             getShopListings(shopId).then(setListings).finally(() => setLoadingListings(false));
@@ -921,7 +1106,6 @@ export default function ShopManagementPanel({
             />
           ) : undefined}
           onSave={async () => {
-            if (countWords(settingsBio) > 500) return;
             setSettingsLoading(true);
             try {
               await updateShop(shopId, { name: settingsName, bio: settingsBio, category: settingsCategory, whatsapp: settingsWhatsApp, wechat: settingsWeChat });

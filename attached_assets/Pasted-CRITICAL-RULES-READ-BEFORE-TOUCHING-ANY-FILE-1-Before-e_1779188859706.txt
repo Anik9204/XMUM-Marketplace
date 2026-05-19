@@ -1,0 +1,346 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything
+   that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages,
+   STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint
+   unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing:
+   pnpm --filter xmum-market run build
+
+THREE fixes all in ShopManagementPanel.tsx and ShopListingDetailPage.tsx.
+
+═══════════════════════════════════════════════════
+FIX 1 — Shop bio in SettingsTab: fullscreen editor + 3000 char limit
+═══════════════════════════════════════════════════
+
+File: artifacts/xmum-market/src/components/ShopManagementPanel.tsx
+
+STEP 1A — Add a ShopBioEditorModal component.
+Place it after the existing countWords function (around line 31) and
+BEFORE the SettingsTab function. Add this entire block:
+
+  interface ShopBioEditorModalProps {
+    value: string;
+    onChange: (val: string) => void;
+    onClose: () => void;
+  }
+
+  function ShopBioEditorModal({ value, onChange, onClose }: ShopBioEditorModalProps) {
+    const [draft, setDraft] = useState(value);
+    const handleSave = () => { onChange(draft); onClose(); };
+    return (
+      <div className="fixed inset-0 z-[70] flex flex-col bg-white dark:bg-slate-900">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-slate-700">
+          <button type="button" onClick={onClose}
+            className="text-sm text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200 transition-colors">
+            Cancel
+          </button>
+          <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Bio / Description</h2>
+          <button type="button" onClick={handleSave}
+            className="text-sm font-semibold text-[#003366] dark:text-blue-400 hover:opacity-75 transition-opacity">
+            Done
+          </button>
+        </div>
+        <div className="flex flex-col flex-1 px-4 py-3 overflow-hidden">
+          <textarea
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value.slice(0, 3000))}
+            maxLength={3000}
+            placeholder="Describe your shop — what you sell, how to order, operating hours, policies..."
+            className="flex-1 w-full resize-none bg-transparent text-gray-900 dark:text-slate-100 text-sm leading-relaxed placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none"
+          />
+          <div className={`text-right text-xs mt-2 font-medium ${draft.length > 2700 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
+            {draft.length} / 3000
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+STEP 1B — Add Edit2 to the lucide imports at the top of the file.
+Find the lucide-react import line and add Edit2 to it if it is not already there.
+
+STEP 1C — Add showBioModal state to SettingsTab.
+SettingsTab is a function component. Find where its useState declarations are:
+  const [saved, setSaved] = useState(false);
+Add directly after it:
+  const [showBioModal, setShowBioModal] = useState(false);
+
+STEP 1D — Replace the bio textarea in SettingsTab with a button+modal.
+Find this exact block inside SettingsTab (around line 602):
+  <div>
+    <label className={labelCls}>Bio</label>
+    <textarea className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none" rows={6} value={bio} onChange={(e) => { if (countWords(e.target.value) <= 500) setBio(e.target.value); }} placeholder="Describe your shop…" />
+    <div className="flex justify-between mt-1"><p className="text-xs text-gray-400 dark:text-slate-500">Describe your shop's purpose, process, and details.</p><p className={`text-xs font-semibold tabular-nums ${countWords(bio) >= 480 ? "text-amber-500" : "text-gray-400 dark:text-slate-500"}`}>{countWords(bio)}/500 words</p></div>
+  </div>
+
+Replace with:
+  <div>
+    <label className={labelCls}>Bio</label>
+    <button
+      type="button"
+      onClick={() => setShowBioModal(true)}
+      className={`w-full text-left border rounded-xl px-3 py-2.5 text-sm min-h-[80px] bg-white dark:bg-slate-700 ${
+        bio ? "text-gray-900 dark:text-slate-100" : "text-gray-400 dark:text-slate-500"
+      } border-gray-300 dark:border-slate-600`}
+    >
+      {bio ? (
+        <div className="flex items-start justify-between gap-2">
+          <span className="line-clamp-3 leading-relaxed whitespace-pre-wrap">{bio}</span>
+          <Edit2 size={14} className="text-gray-400 dark:text-slate-500 shrink-0 mt-0.5" />
+        </div>
+      ) : (
+        <span>Describe your shop — what you sell, how to order, operating hours, policies...</span>
+      )}
+    </button>
+    <div className="flex justify-between mt-1">
+      <p className="text-xs text-gray-400 dark:text-slate-500">Describe your shop's purpose, process, and details.</p>
+      {bio && (
+        <p className={`text-xs font-semibold tabular-nums ${bio.length > 2700 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
+          {bio.length} / 3000
+        </p>
+      )}
+    </div>
+    {showBioModal && (
+      <ShopBioEditorModal
+        value={bio}
+        onChange={setBio}
+        onClose={() => setShowBioModal(false)}
+      />
+    )}
+  </div>
+
+STEP 1E — Remove the 500-word save guard in the main ShopManagementPanel component.
+Find this line (around line 924):
+  if (countWords(settingsBio) > 500) return;
+Delete this line entirely. The modal already enforces 3000 char limit, so
+this guard is no longer needed and would wrongly block saving.
+
+STEP 1F — Check if countWords is still used anywhere else in this file after
+removing all its usages. If it is now unused, delete the function:
+  function countWords(text: string): number {
+    return text.trim() === "" ? 0 : text.trim().split(/\s+/).length;
+  }
+If it's still used elsewhere, leave it.
+
+═══════════════════════════════════════════════════
+FIX 2 — Shop listing description: fullscreen editor for Add + Edit forms
+═══════════════════════════════════════════════════
+
+File: artifacts/xmum-market/src/components/ShopManagementPanel.tsx
+
+We need the same fullscreen modal pattern for listing descriptions, in both
+AddListingForm and EditShopListingForm. Add a single shared modal component
+used by both, placed just before AddListingForm.
+
+STEP 2A — Add ListingDescEditorModal component.
+Place it directly before AddListingForm (find the comment
+// ── AddListingForm or the function keyword). Add:
+
+  interface ListingDescEditorModalProps {
+    value: string;
+    onChange: (val: string) => void;
+    onClose: () => void;
+  }
+
+  function ListingDescEditorModal({ value, onChange, onClose }: ListingDescEditorModalProps) {
+    const [draft, setDraft] = useState(value);
+    const handleSave = () => { onChange(draft); onClose(); };
+    return (
+      <div className="fixed inset-0 z-[70] flex flex-col bg-white dark:bg-slate-900">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-slate-700">
+          <button type="button" onClick={onClose}
+            className="text-sm text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200 transition-colors">
+            Cancel
+          </button>
+          <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Description</h2>
+          <button type="button" onClick={handleSave}
+            className="text-sm font-semibold text-[#003366] dark:text-blue-400 hover:opacity-75 transition-opacity">
+            Done
+          </button>
+        </div>
+        <div className="flex flex-col flex-1 px-4 py-3 overflow-hidden">
+          <textarea
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value.slice(0, 3000))}
+            maxLength={3000}
+            placeholder="Describe this listing — details, condition, availability..."
+            className="flex-1 w-full resize-none bg-transparent text-gray-900 dark:text-slate-100 text-sm leading-relaxed placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none"
+          />
+          <div className={`text-right text-xs mt-2 font-medium ${draft.length > 2700 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
+            {draft.length} / 3000
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+STEP 2B — Update AddListingForm description field.
+Inside AddListingForm, find the description useState:
+  const [description, setDescription] = useState("");
+Add directly below it:
+  const [showDescModal, setShowDescModal] = useState(false);
+
+Find the description textarea line (around line 185):
+  <div><label className={labelCls}>Description</label><textarea className="..." rows={2} value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} /></div>
+
+Replace the entire div with:
+  <div>
+    <label className={labelCls}>Description</label>
+    <button
+      type="button"
+      onClick={() => setShowDescModal(true)}
+      className={`w-full text-left border rounded-xl px-3 py-2.5 text-sm min-h-[60px] bg-white dark:bg-slate-700 ${
+        description ? "text-gray-900 dark:text-slate-100" : "text-gray-400 dark:text-slate-500"
+      } border-gray-300 dark:border-slate-600`}
+    >
+      {description ? (
+        <div className="flex items-start justify-between gap-2">
+          <span className="line-clamp-2 leading-relaxed whitespace-pre-wrap">{description}</span>
+          <Edit2 size={14} className="text-gray-400 dark:text-slate-500 shrink-0 mt-0.5" />
+        </div>
+      ) : (
+        <span>Add a description (optional)</span>
+      )}
+    </button>
+    {description && (
+      <p className={`text-right text-xs mt-1 font-medium ${description.length > 2700 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
+        {description.length} / 3000
+      </p>
+    )}
+    {showDescModal && (
+      <ListingDescEditorModal
+        value={description}
+        onChange={setDescription}
+        onClose={() => setShowDescModal(false)}
+      />
+    )}
+  </div>
+
+STEP 2C — Update EditShopListingForm description field (same pattern).
+Inside EditShopListingForm, find:
+  const [description, setDescription] = useState(listing.description);
+Add directly below it:
+  const [showDescModal, setShowDescModal] = useState(false);
+
+Find the description textarea (around line 274):
+  <div><label className={labelCls}>Description</label><textarea className="..." rows={2} value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} /></div>
+
+Replace with the same button+modal pattern as Step 2B above, but
+use the existing description state (not empty string default).
+
+═══════════════════════════════════════════════════
+FIX 3 — Edit Listing button in ShopListingDetailPage opens edit form directly
+═══════════════════════════════════════════════════
+
+Currently the Edit Listing button does navigate(`/shop/${shop?.slug}`) which
+just goes to the shop's public page. The user has to manually find and click
+edit on the right listing. Instead, we want it to navigate to the shop page
+with a URL param ?editListing=<listingId> so ShopManagementPanel can
+immediately open that listing's edit form.
+
+STEP 3A — Update the Edit Listing button in ShopListingDetailPage.tsx.
+
+File: artifacts/xmum-market/src/pages/ShopListingDetailPage.tsx
+
+Find:
+  <button
+    onClick={() => navigate(`/shop/${shop?.slug}`)}
+    className="flex-1 flex items-center justify-center gap-1.5 min-h-[44px] border border-gray-200 dark:border-slate-600 text-gray-700 dark:text-slate-300 rounded-xl text-sm font-semibold hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+  >
+    <Edit2 size={14} /> Edit Listing
+  </button>
+
+Replace ONLY the onClick — change the navigate target:
+  onClick={() => navigate(`/shop/${shop?.slug}?editListing=${listing?.id}`)}
+
+Do NOT change the className or any other prop.
+
+STEP 3B — Read the URL param in ShopManagementPanel and open edit form.
+
+File: artifacts/xmum-market/src/components/ShopManagementPanel.tsx
+
+Inside the main ShopManagementPanel component function, after the existing
+useEffect declarations, add a new useEffect that reads the URL param and
+sets the editingId in ListingsTab.
+
+BUT — editingId is currently local state inside ListingsTab, not in
+ShopManagementPanel. We need to lift it up.
+
+Do this in two sub-steps:
+
+SUB-STEP 3B-i — Lift editingId out of ListingsTab into ShopManagementPanel.
+
+In ShopManagementPanel, add two new state declarations alongside the others:
+  const [editingListingId, setEditingListingId] = useState<string | null>(null);
+  const [showAddListing, setShowAddListing] = useState(false);
+
+Note: showAddListing may already exist — check first. If it does, skip adding it.
+
+Update the ListingsTab function signature to accept these as props:
+Find:
+  function ListingsTab({ shopId, shop, listings, loading, showAdd, setShowAdd, onRefresh }: {
+    shopId: string; shop: Shop; listings: ShopListing[]; loading: boolean;
+    showAdd: boolean; setShowAdd: (v: boolean) => void; onRefresh: () => void;
+  }) {
+    const [listingAdded, setListingAdded] = useState(false);\
+    const [editingId, setEditingId] = useState<string | null>(null);
+
+Replace (add the two new props to both the signature and the destructuring):
+  function ListingsTab({ shopId, shop, listings, loading, showAdd, setShowAdd,
+    editingId, setEditingId, onRefresh }: {
+    shopId: string; shop: Shop; listings: ShopListing[]; loading: boolean;
+    showAdd: boolean; setShowAdd: (v: boolean) => void;
+    editingId: string | null; setEditingId: (id: string | null) => void;
+    onRefresh: () => void;
+  }) {
+    const [listingAdded, setListingAdded] = useState(false);
+    // editingId and setEditingId now come from props — remove local useState
+
+Remove the local useState for editingId inside ListingsTab:
+  const [editingId, setEditingId] = useState<string | null>(null);  ← DELETE THIS LINE
+
+SUB-STEP 3B-ii — Pass the new props where ListingsTab is rendered.
+Find where ListingsTab is used inside ShopManagementPanel JSX:
+  {tab === "listings" && (
+    <ListingsTab
+      shopId={shopId}
+      shop={shop}
+      listings={listings}
+      loading={loadingListings}
+      showAdd={showAddListing}
+      setShowAdd={setShowAddListing}
+      onRefresh={...}
+    />
+  )}
+
+Add the two new props:
+  editingId={editingListingId}
+  setEditingId={setEditingListingId}
+
+SUB-STEP 3B-iii — Add useEffect to read ?editListing= URL param.
+In ShopManagementPanel, after the other useEffects, add:
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const editId = params.get("editListing");
+    if (editId) {
+      setTab("listings");
+      setEditingListingId(editId);
+      // Clean the URL param so refreshing doesn't re-trigger
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState(null, "", cleanUrl);
+    }
+  }, [shopId]);
+
+After all changes, run: pnpm --filter xmum-market run build
+Report the full build output. Fix any TypeScript errors before finishing.

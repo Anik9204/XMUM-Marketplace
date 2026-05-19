@@ -282,7 +282,7 @@ export default function ShopListingDetailPage() {
             </div>
             <div className="flex gap-2">
               <button
-                onClick={() => navigate(`/shop/${shop?.slug}`)}
+                onClick={() => navigate(`/shop/${shop?.slug}?editListing=${listing?.id}`)}
                 className="flex-1 flex items-center justify-center gap-1.5 min-h-[44px] border border-gray-200 dark:border-slate-600 text-gray-700 dark:text-slate-300 rounded-xl text-sm font-semibold hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
               >
                 <Edit2 size={14} /> Edit Listing
