@@ -2,7 +2,7 @@ import { ReactNode, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, Flag, Users, Megaphone, FileText,
-  Star, List, BarChart2, LogOut,
+  List, BarChart2, LogOut,
   Store, Newspaper, Moon, Sun, Menu, X, ShieldAlert, ClipboardList, SlidersHorizontal,
   Bell,
 } from "lucide-react";
@@ -136,7 +136,6 @@ export default function Layout({ children }: { children: ReactNode }) {
     { href: "/listings",      label: "Listings",      icon: List },
     { href: "/users",         label: "Users",         icon: Users },
     { href: "/reports",       label: "Reports",       icon: Flag },
-    { href: "/reviews",       label: "Reviews",       icon: Star },
     { href: "/rental-audit",  label: "Rental Audit",  icon: FileText },
     { href: "/ads",           label: "Ads",           icon: Megaphone },
     { href: "/analytics",     label: "Analytics",     icon: BarChart2 },

@@ -1,0 +1,79 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless explicitly told to remove it in this prompt.
+4. After every change, mentally verify: "Does this break anything
+   that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages,
+   STOP and tell me what the impact will be before making the change.
+6. Never change any CSS class, layout structure, z-index, or responsive
+   breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing:
+   pnpm --filter xmum-admin run build
+---
+ 
+## PART 1 — REMOVE THE REVIEW SYSTEM COMPLETELY
+ 
+The review feature was removed from the main XMUM Market app. The admin panel still has leftover review code. Surgically remove all of it.
+ 
+### 1A — Delete `ReviewsPage.tsx`
+ 
+Delete the file:
+```
+artifacts/xmum-admin/src/pages/ReviewsPage.tsx
+```
+ 
+### 1B — Edit `src/App.tsx`
+ 
+Remove these two lines:
+```tsx
+import ReviewsPage from "./pages/ReviewsPage";
+```
+and
+```tsx
+<Route path="/reviews" component={ReviewsPage} />
+```
+Do not touch any other lines.
+ 
+### 1C — Edit `src/components/Layout.tsx`
+ 
+1. Remove the `Star` import from the lucide-react import line (it is only used for Reviews).
+2. Remove this entry from the `NAV` array:
+   ```ts
+   { href: "/reviews", label: "Reviews", icon: Star },
+   ```
+Do not touch any other NAV entries or any other part of the file.
+ 
+### 1D — Edit `src/pages/AnalyticsPage.tsx`
+ 
+1. Remove `Star` from the lucide-react import line (it is only used for the Shop Reviews stat card).
+2. Remove `totalShopReviews: number;` from the `Stats` interface.
+3. In the `Promise.all(...)` block that fetches stats, remove the line:
+   ```ts
+   getDocs(collection(db, "shopReviews")),
+   ```
+   and remove the corresponding `shopReviewsSnap` variable from the destructuring.
+4. Remove the line that sets `totalShopReviews`:
+   ```ts
+   totalShopReviews: shopReviewsSnap.size,
+   ```
+5. Remove the entire `<StatCard>` block for "Shop Reviews":
+   ```tsx
+   <StatCard
+     icon={Star}
+     label="Shop Reviews"
+     value={stats?.totalShopReviews ?? 0}
+     color="bg-amber-500"
+   />
+   ```
+ 
+### 1E — Edit `src/lib/types.ts`
+ 
+Remove the entire `AdminReview` interface (the one with `shopId`, `buyerId`, `buyerName`, `rating`, `comment`, etc.). It is no longer needed.
+ 
+Do NOT remove `reviewedBy`, `reviewedAt`, or `totalReviews` fields — those belong to other interfaces (report hold tracking, shop data).
+ 
+---

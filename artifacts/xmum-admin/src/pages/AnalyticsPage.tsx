@@ -7,7 +7,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import {
-  Users, List, Flag, Star, Store, CheckCircle, Loader2,
+  Users, List, Flag, Store, CheckCircle, Loader2,
 } from "lucide-react";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -22,7 +22,6 @@ interface Stats {
   totalListings: number;
   pendingReports: number;
   resolvedReports: number;
-  totalShopReviews: number;
   totalShops: number;
 }
 
@@ -133,7 +132,6 @@ export default function AnalyticsPage() {
         listingsSnap,
         usersSnap,
         pendingReportsSnap,
-        shopReviewsSnap,
         shopsSnap,
         recentUsersSnap,
       ] = await Promise.all([
@@ -143,7 +141,6 @@ export default function AnalyticsPage() {
         )),
         getDocs(collection(db, "users")),
         getDocs(query(collection(db, "reports"), where("status", "==", "pending"))),
-        getDocs(collection(db, "shopReviews")),
         getDocs(collection(db, "shops")),
         getDocs(query(
           collection(db, "users"),
@@ -166,7 +163,6 @@ export default function AnalyticsPage() {
         totalListings:    listingsSnap.size,
         pendingReports:   pendingReportsSnap.size,
         resolvedReports,
-        totalShopReviews: shopReviewsSnap.size,
         totalShops:       shopsSnap.size,
       });
 
@@ -273,12 +269,6 @@ export default function AnalyticsPage() {
               label="Total Shops"
               value={stats?.totalShops ?? 0}
               color="bg-teal-500"
-            />
-            <StatCard
-              icon={Star}
-              label="Shop Reviews"
-              value={stats?.totalShopReviews ?? 0}
-              color="bg-amber-500"
             />
             <StatCard
               icon={Flag}

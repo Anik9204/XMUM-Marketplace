@@ -123,17 +123,3 @@ export interface ShopAd {
   reviewedAt?: number;
   reviewedBy?: string;
 }
-
-export interface AdminReview {
-  id: string;
-  shopId: string;
-  shopListingId?: string;
-  inquiryId?: string;
-  buyerId: string;
-  buyerName: string;
-  buyerEmail: string;
-  shopName?: string;
-  rating: number;
-  comment?: string;
-  createdAt: number;
-}
