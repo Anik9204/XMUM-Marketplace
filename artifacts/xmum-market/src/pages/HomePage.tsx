@@ -299,6 +299,7 @@ export default function HomePage() {
   const handleTabChange = (tab: ListingType) => {
     setActiveTab(tab);
     sessionStorage.setItem("xmum_home_active_tab", tab);
+    window.dispatchEvent(new CustomEvent("xmum_home_tab", { detail: tab }));
     const el = chipRowRef.current;
     if (el) {
       el.scrollLeft = 0;

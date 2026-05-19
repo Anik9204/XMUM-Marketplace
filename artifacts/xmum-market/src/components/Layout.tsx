@@ -22,12 +22,18 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [shopPendingCount, setShopPendingCount] = useState(0);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [showBackOnline, setShowBackOnline] = useState(false);
+  const [postTabHint, setPostTabHint] = useState("");
 
   function getPostHref(): string {
-    const tab = sessionStorage.getItem("xmum_home_active_tab");
-    if (tab && tab !== "buy-sell") return `/post?type=${tab}`;
+    if (postTabHint && postTabHint !== "buy-sell") return `/post?type=${postTabHint}`;
     return "/post";
   }
+
+  useEffect(() => {
+    const handler = (e: Event) => setPostTabHint((e as CustomEvent<string>).detail);
+    window.addEventListener("xmum_home_tab", handler);
+    return () => window.removeEventListener("xmum_home_tab", handler);
+  }, []);
 
   useEffect(() => {
     const onOnline = () => {
