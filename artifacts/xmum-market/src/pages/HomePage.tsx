@@ -407,15 +407,9 @@ export default function HomePage() {
           from { opacity: 0; transform: translateX(28px); }
           to   { opacity: 1; transform: translateX(0); }
         }
-        :root { --shop-carousel-min-h: 280px; }
+        .shop-picks-wrapper { min-height: 360px; }
         @media (min-width: 640px) {
-          :root { --shop-carousel-min-h: 180px; }
-        }
-        @media (min-width: 768px) {
-          :root { --shop-carousel-min-h: 180px; }
-        }
-        @media (min-width: 1024px) {
-          :root { --shop-carousel-min-h: 180px; }
+          .shop-picks-wrapper { min-height: unset; }
         }
       `}</style>
       <div key={activeTab} className="relative overflow-hidden bg-gradient-to-br from-[#003366] via-[#004488] to-[#0055CC] text-white px-4 pt-8 pb-10">
@@ -614,7 +608,7 @@ export default function HomePage() {
               shopListingPage * SHOP_PAGE_SIZE + SHOP_PAGE_SIZE
             );
             return (
-              <div className="mt-4">
+              <div className="mt-4 shop-picks-wrapper">
                 <div className="flex items-center justify-between mb-2">
                   <p className="section-header text-sm">🛍️ Campus Market Picks</p>
                   <Link
@@ -641,7 +635,7 @@ export default function HomePage() {
                   <div
                     key={shopListingPage}
                     className="grid grid-cols-3 sm:grid-cols-6 gap-2.5"
-                    style={{ animation: "shopSlideIn 0.35s cubic-bezier(0.25,0.46,0.45,0.94) both", minHeight: "var(--shop-carousel-min-h, 280px)" }}
+                    style={{ animation: "shopSlideIn 0.35s cubic-bezier(0.25,0.46,0.45,0.94) both" }}
                   >
                     {pageListings.map((listing) => (
                       <ShopListingMiniCard key={listing.id} listing={listing} />

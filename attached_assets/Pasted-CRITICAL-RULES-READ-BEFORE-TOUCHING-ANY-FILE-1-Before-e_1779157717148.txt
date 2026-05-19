@@ -1,0 +1,114 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything
+   that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages,
+   STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint
+   unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing:
+   pnpm --filter xmum-market run build
+
+TASK: The "Student Listings" section still jumps up/down when the
+"Campus Market Picks" carousel slides between pages with fewer cards.
+The minHeight on the inner grid div alone is not enough because the dot
+indicators and header also contribute to the total section height.
+
+The correct fix is to give the OUTER wrapper div of the entire
+"Campus Market Picks" section a fixed height on mobile, so the whole
+block — header, carousel grid, and dot indicators — occupies constant
+space regardless of how many cards are on the current page.
+
+On desktop (sm+) the carousel is now a single row of 6, so it's always
+one consistent height and not the problem there.
+
+If recentShopListings is empty, the whole section is not rendered at all
+(existing conditional rendering handles that), so Student Listings will
+naturally move up — that behaviour must be preserved.
+
+FILE: artifacts/xmum-market/src/pages/HomePage.tsx
+
+--- CHANGE 1: Remove the minHeight from the inner grid div ---
+
+The inner animated grid div currently has:
+  style={{ animation: "shopSlideIn 0.35s cubic-bezier(0.25,0.46,0.45,0.94) both", minHeight: "var(--shop-carousel-min-h, 280px)" }}
+
+Remove ONLY the minHeight property. Keep the animation property:
+  style={{ animation: "shopSlideIn 0.35s cubic-bezier(0.25,0.46,0.45,0.94) both" }}
+
+--- CHANGE 2: Remove the CSS variables from the style tag ---
+
+In the <style> tag, find and remove these lines entirely:
+  :root { --shop-carousel-min-h: 280px; }
+  @media (min-width: 640px) {
+    :root { --shop-carousel-min-h: 180px; }
+  }
+  @media (min-width: 768px) {
+    :root { --shop-carousel-min-h: 180px; }
+  }
+  @media (min-width: 1024px) {
+    :root { --shop-carousel-min-h: 180px; }
+  }
+
+Leave the shopSlideIn, heroFadeUp, heroShimmer keyframes untouched.
+
+--- CHANGE 3: Add fixed height to the outer Campus Market Picks wrapper ---
+
+Find the outermost div of the "Campus Market Picks" section. It is the div
+that wraps the header row ("🛍️ Campus Market Picks" + "Browse all →"),
+the carousel overflow-hidden div, and the dot indicators. It currently has:
+  <div className="mt-4">
+
+Change it to:
+  <div className="mt-4 sm:h-auto" style={{ minHeight: "360px" }}>
+
+Wait — read this carefully before applying:
+The minHeight must only apply on MOBILE (< 640px) where the 2-row grid
+causes height variation. On desktop sm+ the single-row layout is already
+stable. Use this instead:
+
+  <div
+    className="mt-4"
+    style={{ minHeight: "clamp(0px, 360px, 360px)" }}
+  >
+
+No — even simpler and more correct. Use a ref-free approach with a
+wrapper that has a fixed height only on mobile using a className:
+
+Add a new CSS rule to the existing <style> tag:
+  .shop-picks-wrapper {
+    min-height: 360px;
+  }
+  @media (min-width: 640px) {
+    .shop-picks-wrapper {
+      min-height: unset;
+    }
+  }
+
+Then change the outer div from:
+  <div className="mt-4">
+to:
+  <div className="mt-4 shop-picks-wrapper">
+
+The 360px value covers: section header (~28px) + gap (~8px) + 2 rows of
+cards at mobile 3-column width (~264px) + dot indicators (~24px) + padding
+(~16px) = ~340px, with 20px buffer = 360px.
+
+This means:
+- Mobile: the whole Campus Market Picks block is always 360px tall minimum,
+  so Student Listings never jumps regardless of how many cards slide in.
+- Desktop (sm+): min-height is unset, the section is naturally sized to
+  its single-row content — no wasted space.
+- If recentShopListings is empty, the section is not rendered at all
+  (existing {recentShopListings.length > 0 && ...} condition), so
+  Student Listings moves up naturally to fill the space. ✅
+
+Do NOT change any other div, any other className, or any other logic.
+
+After the change, run: pnpm --filter xmum-market run build
+Report the full build output.
