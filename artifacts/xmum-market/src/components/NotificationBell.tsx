@@ -53,7 +53,7 @@ export default function NotificationBell() {
         const prevIds = new Set(prev.map(n => n.id));
         const brandNew = notifs.filter(n => !prevIds.has(n.id) && !n.read);
         brandNew.forEach(n => {
-          if (Notification.permission === "granted") {
+          if (typeof Notification !== "undefined" && Notification.permission === "granted") {
             try {
               new Notification(n.title, { body: n.body, icon: "/favicon.svg" });
             } catch {}
