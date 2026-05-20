@@ -187,18 +187,6 @@ export async function updateListing(
   userId: string,
   data: Partial<Omit<Listing, "id" | "createdAt" | "userId" | "userEmail" | "userName">>
 ): Promise<void> {
-  // Force-refresh the ID token so Firestore's auth context is current
-  try {
-    if (auth.currentUser) {
-      await auth.currentUser.reload();
-      await auth.currentUser.getIdToken(true);
-      // Small delay: Firestore's long-poll connection needs a moment to
-      // pick up the refreshed token before the write is sent
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
-  } catch {
-    // Non-critical — proceed even if refresh fails
-  }
   const shouldDecrement =
     data.status === "sold" || data.isArchived === true;
 
@@ -402,18 +390,6 @@ export async function getUserListings(userId: string): Promise<Listing[]> {
 }
 
 export async function deleteListing(listing: Listing): Promise<void> {
-  // Force-refresh the ID token so Firestore's auth context is current
-  try {
-    if (auth.currentUser) {
-      await auth.currentUser.reload();
-      await auth.currentUser.getIdToken(true);
-      // Small delay: Firestore's long-poll connection needs a moment to
-      // pick up the refreshed token before the write is sent
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
-  } catch {
-    // Non-critical — proceed even if refresh fails
-  }
   // Check if this listing has an active report hold
   const held = await listingHasActiveReport(listing.id);
   if (held) {

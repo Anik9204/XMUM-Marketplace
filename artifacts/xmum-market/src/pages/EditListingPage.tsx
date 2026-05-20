@@ -386,8 +386,6 @@ export default function EditListingPage() {
 
     try {
       await withTimeout(auth.currentUser?.reload() ?? Promise.resolve(), 5_000, "token-refresh");
-      await withTimeout(auth.currentUser?.getIdToken(true) ?? Promise.resolve(""), 10_000, "token-refresh");
-      await new Promise((resolve) => setTimeout(resolve, 500));
 
       // Upload new photos, keep existing URLs
       const finalUrls: string[] = [];

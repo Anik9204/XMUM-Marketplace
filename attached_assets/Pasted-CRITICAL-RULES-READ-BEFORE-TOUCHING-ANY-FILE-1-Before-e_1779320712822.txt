@@ -1,0 +1,68 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed.
+3. Do NOT remove any existing function, prop, import, or JSX element unless explicitly told to.
+4. After every change, mentally verify: "Does this break anything that was working before?"
+5. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless directly part of the fix.
+6. Confirm the app builds with zero errors: pnpm --filter xmum-market run build
+
+TASK: Fix the Firestore auth token issue causing permission-denied on edit and delete.
+
+ROOT CAUSE (confirmed): The Firestore SDK is configured with experimentalForceLongPolling: false, which means it uses WebSocket connections when available. WebSocket connections bake the auth token in at connection time — when Firebase Auth silently refreshes the token (every ~1 hour), the existing WebSocket connection does NOT pick up the new token. Firestore rules then see an expired/invalid request.auth, failing even isSignedIn(). Setting experimentalForceLongPolling: true forces HTTP long-polling instead, where every request is a fresh HTTP call that sends the current auth token — token refreshes are picked up immediately.
+
+FILE TO CHANGE: artifacts/xmum-market/src/lib/firebase.ts
+
+Find this exact block:
+
+  db = initializeFirestore(app, {
+    experimentalAutoDetectLongPolling: true,
+    experimentalForceLongPolling: false,
+  });
+
+Replace with:
+
+  db = initializeFirestore(app, {
+    experimentalForceLongPolling: true,
+  });
+
+What changed and why:
+- Remove experimentalAutoDetectLongPolling: true — this causes the SDK to prefer WebSocket when available, which has the stale-token problem.
+- Change experimentalForceLongPolling: false → true — this forces ALL Firestore requests to use HTTP long-polling. Every request is a fresh HTTP call that reads the current token from Firebase Auth's memory. There is no persistent connection that holds a stale token.
+- This is a single-line effective change. It does not affect reads, writes, or any other behavior — only the transport layer.
+
+Note: experimentalAutoDetectLongPolling and experimentalForceLongPolling cannot both be true simultaneously — remove experimentalAutoDetectLongPolling entirely when setting experimentalForceLongPolling: true.
+
+ALSO — remove the token refresh code from listings.ts since it is no longer needed (but only if it is safe to do so — check first):
+
+In artifacts/xmum-market/src/lib/listings.ts, inside updateListing and deleteListing, find and REMOVE these blocks (they are now redundant and add unnecessary latency):
+
+  // Force-refresh the ID token so Firestore's auth context is current
+  try {
+    if (auth.currentUser) {
+      await auth.currentUser.reload();
+      await auth.currentUser.getIdToken(true);
+      // Small delay: Firestore's long-poll connection needs a moment to
+      // pick up the refreshed token before the write is sent
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+  } catch {
+    // Non-critical — proceed even if refresh fails
+  }
+
+Remove the same block from artifacts/xmum-market/src/pages/EditListingPage.tsx — find:
+
+      await withTimeout(auth.currentUser?.reload() ?? Promise.resolve(), 5_000, "token-refresh");
+      await withTimeout(auth.currentUser?.getIdToken(true) ?? Promise.resolve(""), 10_000, "token-refresh");
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+Replace with just:
+
+      await withTimeout(auth.currentUser?.reload() ?? Promise.resolve(), 5_000, "token-refresh");
+
+(Keep the reload() — it's still useful for refreshing the emailVerified flag. Just remove getIdToken(true) and the delay.)
+
+After all changes, run: pnpm --filter xmum-market run build
+
+Confirm zero errors, then show me the updated firebase.ts, the token refresh sections of listings.ts (both updateListing and deleteListing), and the changed lines in EditListingPage.tsx.
+
+Then commit and push to GitHub so Vercel redeploys with the fix.
