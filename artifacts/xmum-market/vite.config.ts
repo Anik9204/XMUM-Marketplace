@@ -5,6 +5,7 @@ import path from "path";
 import fs from "node:fs";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 import { VitePWA } from "vite-plugin-pwa";
+import { sentryVitePlugin } from "@sentry/vite-plugin";
 
 // PORT and BASE_PATH are only used by the dev/preview server.
 // During a production build (vite build) they are irrelevant, so we fall back
@@ -100,6 +101,14 @@ export default defineConfig({
         ],
       },
     }),
+    sentryVitePlugin({
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+      org: "xmum",
+      project: "xmum-market",
+      sourcemaps: {
+        filesToDeleteAfterUpload: ["./dist/**/*.map"],
+      },
+    }),
   ],
   resolve: {
     alias: {
@@ -110,6 +119,7 @@ export default defineConfig({
   },
   root: path.resolve(import.meta.dirname),
   build: {
+    sourcemap: "hidden",
     outDir: path.resolve(import.meta.dirname, "dist"),
     emptyOutDir: true,
     rollupOptions: {

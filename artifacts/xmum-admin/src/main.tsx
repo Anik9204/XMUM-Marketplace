@@ -1,3 +1,5 @@
+import { initSentry, Sentry } from "./lib/sentry";
+initSentry();
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
@@ -9,7 +11,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <DarkModeProvider>
       <AuthProvider>
-        <App />
+        <Sentry.ErrorBoundary fallback={<p>An unexpected error occurred.</p>}>
+          <App />
+        </Sentry.ErrorBoundary>
       </AuthProvider>
     </DarkModeProvider>
   </React.StrictMode>

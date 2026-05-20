@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import fs from "node:fs";
 import path from "node:path";
+import { sentryVitePlugin } from "@sentry/vite-plugin";
 
 const port = Number(process.env.PORT ?? "3002");
 
@@ -34,8 +35,19 @@ function readmeTimestampPlugin() {
 }
 
 export default defineConfig({
-  plugins: [react(), readmeTimestampPlugin()],
-  build: { outDir: "dist" },
+  plugins: [
+    react(),
+    readmeTimestampPlugin(),
+    sentryVitePlugin({
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+      org: "xmum",
+      project: "xmum-admin",
+      sourcemaps: {
+        filesToDeleteAfterUpload: ["./dist/**/*.map"],
+      },
+    }),
+  ],
+  build: { outDir: "dist", sourcemap: "hidden" },
   server: {
     port,
     strictPort: false,

@@ -1,0 +1,210 @@
+Here is your Replit prompt, ready to paste:
+
+---
+
+```
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build (use pnpm --filter xmum-admin run build for admin-side changes)
+
+---
+
+## Task: Add Sentry error monitoring to both apps
+
+### OVERVIEW
+We are adding Sentry to both `artifacts/xmum-market/` and `artifacts/xmum-admin/`. Do all changes for both apps. The DSN values will come from the environment variable `VITE_SENTRY_DSN` — do NOT hardcode any DSN string anywhere in the source code.
+
+---
+
+### STEP 1 — Install dependencies
+
+Run the following in the repo root:
+
+```
+pnpm --filter xmum-market add @sentry/react
+pnpm --filter xmum-admin add @sentry/react
+pnpm --filter xmum-market add -D @sentry/vite-plugin
+pnpm --filter xmum-admin add -D @sentry/vite-plugin
+```
+
+---
+
+### STEP 2 — Create `src/lib/sentry.ts` in xmum-market
+
+Create the file `artifacts/xmum-market/src/lib/sentry.ts` with this exact content:
+
+```ts
+import * as Sentry from "@sentry/react";
+
+export function initSentry() {
+  if (import.meta.env.MODE !== "production") return;
+
+  Sentry.init({
+    dsn: import.meta.env.VITE_SENTRY_DSN,
+    environment: import.meta.env.MODE,
+    integrations: [
+      Sentry.browserTracingIntegration(),
+      Sentry.replayIntegration(),
+    ],
+    tracesSampleRate: 0.2,
+    replaysSessionSampleRate: 0.1,
+    replaysOnErrorSampleRate: 1.0,
+  });
+}
+
+export { Sentry };
+```
+
+---
+
+### STEP 3 — Create `src/lib/sentry.ts` in xmum-admin
+
+Create the file `artifacts/xmum-admin/src/lib/sentry.ts` with this exact content (identical logic, same env var name):
+
+```ts
+import * as Sentry from "@sentry/react";
+
+export function initSentry() {
+  if (import.meta.env.MODE !== "production") return;
+
+  Sentry.init({
+    dsn: import.meta.env.VITE_SENTRY_DSN,
+    environment: import.meta.env.MODE,
+    integrations: [
+      Sentry.browserTracingIntegration(),
+      Sentry.replayIntegration(),
+    ],
+    tracesSampleRate: 0.2,
+    replaysSessionSampleRate: 0.1,
+    replaysOnErrorSampleRate: 1.0,
+  });
+}
+
+export { Sentry };
+```
+
+---
+
+### STEP 4 — Edit `artifacts/xmum-market/src/main.tsx`
+
+Make two surgical edits to `main.tsx`:
+
+1. Add these two imports at the very top of the file, before all existing imports:
+```ts
+import { initSentry, Sentry } from "@/lib/sentry";
+initSentry();
+```
+
+2. Find the `<App />` element inside `createRoot(...).render(...)` and wrap it with `Sentry.ErrorBoundary`. The result should look like:
+```tsx
+<Sentry.ErrorBoundary fallback={<p>An unexpected error occurred.</p>}>
+  <App />
+</Sentry.ErrorBoundary>
+```
+
+Do NOT change anything else in main.tsx.
+
+---
+
+### STEP 5 — Edit `artifacts/xmum-admin/src/main.tsx`
+
+Apply the identical two edits as Step 4, but to `artifacts/xmum-admin/src/main.tsx`.
+
+---
+
+### STEP 6 — Edit `artifacts/xmum-market/vite.config.ts`
+
+Make two surgical edits:
+
+1. Add this import at the top of the file with the other imports:
+```ts
+import { sentryVitePlugin } from "@sentry/vite-plugin";
+```
+
+2. Add `sentryVitePlugin` to the end of the `plugins: []` array (after all existing plugins):
+```ts
+sentryVitePlugin({
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  org: "xmum",
+  project: "xmum-market",
+  sourcemaps: {
+    filesToDeleteAfterUpload: ["./dist/**/*.map"],
+  },
+}),
+```
+
+3. In the `build:` config block, add or merge:
+```ts
+sourcemap: "hidden",
+```
+
+Do NOT remove or reorder any existing plugins.
+
+---
+
+### STEP 7 — Edit `artifacts/xmum-admin/vite.config.ts`
+
+Apply the same edits as Step 6, but change the `project` value to `"xmum-admin"`.
+
+---
+
+### STEP 8 — Update `.env.example` files
+
+1. In `artifacts/xmum-market/.env.example`, add this line at the end:
+```
+VITE_SENTRY_DSN=
+```
+
+2. In `artifacts/xmum-admin/.env.example`, add this line at the end:
+```
+VITE_SENTRY_DSN=
+```
+
+Do NOT add the actual DSN values anywhere in the codebase.
+
+---
+
+### STEP 9 — Verify builds
+
+Run both build commands and confirm zero errors:
+```
+pnpm --filter xmum-market run build
+pnpm --filter xmum-admin run build
+```
+
+If the Sentry vite plugin fails during build because `SENTRY_AUTH_TOKEN` is not set in the local environment, that is expected and acceptable — it will work correctly in Vercel where the env var will be set. The build should still succeed.
+
+---
+
+### MANUAL STEPS AFTER DEPLOY (do NOT do these in Replit — these are for the user to do in Vercel)
+
+After Replit pushes to GitHub and Vercel redeploys:
+
+1. In the `xmum-market` Vercel project → Settings → Environment Variables → add:
+   - `VITE_SENTRY_DSN` = (xmum-market DSN)
+   - `SENTRY_AUTH_TOKEN` = (Sentry auth token)
+
+2. In the `xmum-admin` Vercel project → Settings → Environment Variables → add:
+   - `VITE_SENTRY_DSN` = (xmum-admin DSN)
+   - `SENTRY_AUTH_TOKEN` = (Sentry auth token)
+
+Then trigger a redeploy of both projects so the env vars take effect.
+```
+
+---
+
+A few things to do on your end alongside this:
+
+**Before pasting the prompt**, open both Vercel projects and add the environment variables now (you can do it before redeploy — Vercel stores them and uses them on the next build). That way the very first Vercel build after Replit pushes will already have them.
+
+**The Resend API key** — as the handoff note flagged, go delete `re_CeV3Ve7M_8RZ551uAjBKop9ParxHLQVGB` in your Resend dashboard right now and generate a new one. Then update the SMTP password in Firebase Console → Authentication → Templates → SMTP settings. This is time-sensitive since the key was exposed in chat.
+
+**DSN values to paste into Vercel** (keep these out of source code):
+- xmum-market: `https://a0b3d624178f265297d8ae7f7a84b36f@o4511420176334848.ingest.us.sentry.io/4511420179480576`
+- xmum-admin: `https://9c0c04401442b3764935685320bfc47f@o4511420176334848.ingest.us.sentry.io/4511420208381952`
+- Auth token (both projects): `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`
