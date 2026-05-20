@@ -1,0 +1,152 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed.
+3. Do NOT remove any existing function, prop, import, or JSX element unless explicitly told to.
+4. After every change, mentally verify: "Does this break anything that was working before?"
+5. If a fix requires changing a shared component, STOP and ask permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+
+---
+
+You are fixing 5 bugs. Fix them one at a time in order.
+
+---
+
+FIX 1 — Sanitizer collapses intentional newlines in descriptions
+File: artifacts/xmum-market/src/lib/sanitize.ts
+
+The sanitizeText function currently has:
+  .replace(/\s{2,}/g, " ")
+
+This destroys line breaks that users intentionally write. Change it to only collapse runs of spaces/tabs but preserve newlines:
+  .replace(/[^\S\n]{2,}/g, " ")
+
+This regex matches 2+ whitespace characters that are NOT newlines, and collapses them to one space. Newlines are preserved.
+
+That is the only change in this file.
+
+---
+
+FIX 2 — Draft restore in PostPage does not re-sanitize the restored description
+File: artifacts/xmum-market/src/pages/PostPage.tsx
+
+Find the section where a draft is restored from localStorage. It will contain a line like:
+  if (d.description) setDescription(d.description);
+
+Change it to trim the description to 3000 characters when restoring (matching the editor's maxLength):
+  if (d.description) setDescription(String(d.description).slice(0, 3000));
+
+Find any other draft field restores in the same block (title, meetupSpot, etc.) and apply similar safe string coercion:
+- For title: if (d.title) setTitle(String(d.title).slice(0, 100));
+- For meetupSpot: if (d.meetupSpot) setMeetupSpot(String(d.meetupSpot).slice(0, 200));
+
+Do NOT change any other logic in this block. Only the value being passed to the setters.
+
+---
+
+FIX 3 — Draft save fails silently when localStorage is full
+File: artifacts/xmum-market/src/pages/PostPage.tsx
+
+Find the useEffect that writes the draft to localStorage. It will contain something like:
+  try { localStorage.setItem(DRAFT_KEY, JSON.stringify({...})); }
+  catch {}
+
+Change the empty catch to show an error state:
+  catch {
+    console.warn("[PostPage] Draft save failed — localStorage may be full.");
+  }
+
+Do not add a toast or UI element for this — just the console.warn. That is the only change.
+
+---
+
+FIX 4 — Layout.tsx shop pending count poll does not restart when user's shop list changes
+File: artifacts/xmum-market/src/components/Layout.tsx
+
+Find the useEffect that polls getPendingActivityCount. It will look like:
+  useEffect(() => {
+    if (!user) { setShopPendingCount(0); return; }
+    let interval: ReturnType<typeof setInterval>;
+    getProfile(user.uid).then((profile) => {
+      const shopId = profile?.myShopIds?.[0];
+      if (!shopId) return;
+      getPendingActivityCount(shopId).then(setShopPendingCount).catch(() => {});
+      interval = setInterval(() => {
+        getPendingActivityCount(shopId).then(setShopPendingCount).catch(() => {});
+      }, 60000);
+    }).catch(() => {});
+    return () => clearInterval(interval);
+  }, [user?.uid]);
+
+The issue is `interval` is declared inside the `.then()` so if `getProfile` rejects, `interval` is never assigned and `clearInterval(undefined)` is a no-op — which is fine. But there is a separate issue: `interval` is declared with `let` inside the effect, but the cleanup closure captures it by reference correctly in JS. This is actually safe as-is for the declared bug.
+
+The real fix needed: move the `let interval` declaration outside the `.then()` so the cleanup always has a valid reference even if the promise resolves late:
+
+  useEffect(() => {
+    if (!user) { setShopPendingCount(0); return; }
+    let interval: ReturnType<typeof setInterval> | undefined;
+    getProfile(user.uid).then((profile) => {
+      const shopId = profile?.myShopIds?.[0];
+      if (!shopId) return;
+      getPendingActivityCount(shopId).then(setShopPendingCount).catch(() => {});
+      interval = setInterval(() => {
+        getPendingActivityCount(shopId).then(setShopPendingCount).catch(() => {});
+      }, 60000);
+    }).catch(() => {});
+    return () => { if (interval) clearInterval(interval); };
+  }, [user?.uid]);
+
+Only the `let interval` declaration position and the cleanup guard change. Nothing else.
+
+---
+
+FIX 5 — Saved listings loads N individual Firestore reads — add a loading guard to prevent hammering
+File: artifacts/xmum-market/src/pages/ProfilePage.tsx
+
+This is a partial mitigation only — do NOT attempt to batch the reads (that would require a larger refactor). Instead, add an AbortController-style guard so if the user clicks away from the Saved tab and back quickly, stale results from the first load don't overwrite a newer load.
+
+Find the useEffect for the saved tab:
+  useEffect(() => {
+    if (tab !== "saved" || !user) return;
+    setSavedLoading(true);
+    getSavedListings(user.uid)
+      .then(async (saved) => {
+        setSavedCount(saved.length);
+        const results = await Promise.all(saved.map(s => getListing(s.listingId).catch(() => null)));
+        setSavedListings(results.filter((l): l is Listing => l !== null));
+      })
+      .catch(() => {})
+      .finally(() => setSavedLoading(false));
+  }, [tab, user?.uid]);
+
+Add a mounted guard:
+  useEffect(() => {
+    if (tab !== "saved" || !user) return;
+    let mounted = true;
+    setSavedLoading(true);
+    getSavedListings(user.uid)
+      .then(async (saved) => {
+        if (!mounted) return;
+        setSavedCount(saved.length);
+        const results = await Promise.all(saved.map(s => getListing(s.listingId).catch(() => null)));
+        if (!mounted) return;
+        setSavedListings(results.filter((l): l is Listing => l !== null));
+      })
+      .catch(() => {})
+      .finally(() => { if (mounted) setSavedLoading(false); });
+    return () => { mounted = false; };
+  }, [tab, user?.uid]);
+
+That is the only change to this useEffect.
+
+---
+
+AFTER ALL 5 FIXES:
+1. Run pnpm --filter xmum-market run build — confirm zero errors.
+2. Commit with message: "fix: batch 2 — newlines preserved, draft restore safe, draft save warn, layout cleanup, saved tab guard"
+
+⚠️ REMINDER FOR DEVELOPER: After deploy, manually test:
+- Write a listing description with line breaks between paragraphs — they should now be preserved when the listing is viewed.
+- Start writing a post, leave the page, come back — the draft should restore correctly.
+- Open your profile → Saved tab — it should still load correctly.

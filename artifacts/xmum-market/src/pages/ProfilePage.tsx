@@ -319,15 +319,19 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (tab !== "saved" || !user) return;
+    let mounted = true;
     setSavedLoading(true);
     getSavedListings(user.uid)
       .then(async (saved) => {
+        if (!mounted) return;
         setSavedCount(saved.length);
         const results = await Promise.all(saved.map(s => getListing(s.listingId).catch(() => null)));
+        if (!mounted) return;
         setSavedListings(results.filter((l): l is Listing => l !== null));
       })
       .catch(() => {})
-      .finally(() => setSavedLoading(false));
+      .finally(() => { if (mounted) setSavedLoading(false); });
+    return () => { mounted = false; };
   }, [tab, user?.uid]);
 
   useEffect(() => {

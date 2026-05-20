@@ -374,21 +374,23 @@ export default function PostPage() {
       condition, whatsapp, wechat, meetupSpot,
       savedAt: Date.now(),
     };
-    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch {}
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch {
+      console.warn("[PostPage] Draft save failed — localStorage may be full.");
+    }
   }
 
   function restoreDraft() {
     if (!draftBanner) return;
     const d = draftBanner.draft;
     if (d.type) setType(d.type);
-    if (d.title) setTitle(d.title);
-    if (d.description) setDescription(d.description);
+    if (d.title) setTitle(String(d.title).slice(0, 100));
+    if (d.description) setDescription(String(d.description).slice(0, 3000));
     if (d.price != null) setPriceCents(Number(d.price));
     if (d.category) setCategory(d.category);
     if (d.condition) setCondition(d.condition);
     if (d.whatsapp) setWhatsapp(d.whatsapp);
     if (d.wechat) setWechat(d.wechat);
-    if (d.meetupSpot) setMeetupSpot(d.meetupSpot);
+    if (d.meetupSpot) setMeetupSpot(String(d.meetupSpot).slice(0, 200));
     setDraftBanner(null);
   }
 

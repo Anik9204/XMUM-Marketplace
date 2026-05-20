@@ -5,7 +5,7 @@ export function sanitizeText(
   return input
     .trim()
     .replace(/<[^>]*>/g, "")
-    .replace(/\s{2,}/g, " ")
+    .replace(/[^\S\n]{2,}/g, " ")
     .slice(0, maxLength);
 }
 

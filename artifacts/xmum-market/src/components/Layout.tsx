@@ -63,7 +63,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!user) { setShopPendingCount(0); return; }
-    let interval: ReturnType<typeof setInterval>;
+    let interval: ReturnType<typeof setInterval> | undefined;
     getProfile(user.uid).then((profile) => {
       const shopId = profile?.myShopIds?.[0];
       if (!shopId) return;
@@ -72,7 +72,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         getPendingActivityCount(shopId).then(setShopPendingCount).catch(() => {});
       }, 60000);
     }).catch(() => {});
-    return () => clearInterval(interval);
+    return () => { if (interval) clearInterval(interval); };
   }, [user?.uid]);
 
   const navItems = [
