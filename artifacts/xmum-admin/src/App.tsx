@@ -1,19 +1,21 @@
 import { Switch, Route, Redirect } from "wouter";
+import { lazy, Suspense } from "react";
 import { useAuth } from "./contexts/AuthContext";
 import LoginPage        from "./pages/LoginPage";
-import DashboardPage    from "./pages/DashboardPage";
-import ReportsPage      from "./pages/ReportsPage";
-import UsersPage        from "./pages/UsersPage";
-import AdsPage          from "./pages/AdsPage";
-import RentalAuditPage  from "./pages/RentalAuditPage";
-import ListingsPage     from "./pages/ListingsPage";
-import AnalyticsPage    from "./pages/AnalyticsPage";
-import ShopsPage        from "./pages/ShopsPage";
-import ShopAdsPage      from "./pages/ShopAdsPage";
-import AuditLogPage     from "./pages/AuditLogPage";
-import ShopApprovalsPage      from "./pages/ShopApprovalsPage";
-import SubscriptionConfigPage from "./pages/SubscriptionConfigPage";
 import Layout           from "./components/Layout";
+
+const DashboardPage         = lazy(() => import("./pages/DashboardPage"));
+const ReportsPage           = lazy(() => import("./pages/ReportsPage"));
+const UsersPage             = lazy(() => import("./pages/UsersPage"));
+const AdsPage               = lazy(() => import("./pages/AdsPage"));
+const RentalAuditPage       = lazy(() => import("./pages/RentalAuditPage"));
+const ListingsPage          = lazy(() => import("./pages/ListingsPage"));
+const AnalyticsPage         = lazy(() => import("./pages/AnalyticsPage"));
+const ShopsPage             = lazy(() => import("./pages/ShopsPage"));
+const ShopAdsPage           = lazy(() => import("./pages/ShopAdsPage"));
+const AuditLogPage          = lazy(() => import("./pages/AuditLogPage"));
+const ShopApprovalsPage     = lazy(() => import("./pages/ShopApprovalsPage"));
+const SubscriptionConfigPage = lazy(() => import("./pages/SubscriptionConfigPage"));
 
 export default function App() {
   const { user, isEditor, loading } = useAuth();
@@ -32,6 +34,7 @@ export default function App() {
 
   return (
     <Layout>
+      <Suspense fallback={<div className="flex items-center justify-center h-96"><div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>}>
       <Switch>
         <Route path="/"               component={DashboardPage} />
         <Route path="/listings"       component={ListingsPage} />
@@ -49,6 +52,7 @@ export default function App() {
           <Redirect to="/" />
         </Route>
       </Switch>
+      </Suspense>
     </Layout>
   );
 }
