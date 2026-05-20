@@ -50,6 +50,7 @@ let db: Firestore;
 try {
   db = initializeFirestore(app, {
     experimentalAutoDetectLongPolling: true,
+    experimentalForceLongPolling: false,
   });
 } catch {
   db = getFirestore(app);
