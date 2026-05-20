@@ -1,0 +1,50 @@
+
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+
+Surgical edits only — minimum lines changed.
+Do not rewrite any file from scratch.
+Build must pass: pnpm --filter xmum-market run build
+
+
+TASK: Fix getUserRole() in firestore.rules to not throw when user document has no role field.
+Root cause: In Firestore security rules, get() on a document that exists but has no role field returns null safely. However, the isEditorRole() function calls getUserRole() twice (once for 'editor', once for 'admin'), and getUserRole() calls get() — this means two extra Firestore reads on every delete and every rule evaluation that touches isEditorRole(). If either read times out or the document path is slightly wrong, the entire rule throws and defaults to DENY.
+More critically: isEditorRole() appears in the delete rule as || isEditorRole(). Firestore rules do not reliably short-circuit || — both branches may be evaluated. If getUserRole() throws for any reason, the entire delete rule returns DENY regardless of whether the first branch (owner check) would have passed.
+File to change: artifacts/xmum-market/firestore.rules
+Find:
+function getUserRole() {
+  return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+}
+
+function isAdmin() {
+  return isSignedIn() && getUserRole() == 'admin';
+}
+
+function isEditorRole() {
+  return isSignedIn() && (getUserRole() == 'editor' || getUserRole() == 'admin');
+}
+Replace with:
+function getUserRole() {
+  let u = get(/databases/$(database)/documents/users/$(request.auth.uid));
+  return u.data.get('role', null);
+}
+
+function isAdmin() {
+  return isSignedIn() && getUserRole() == 'admin';
+}
+
+function isEditorRole() {
+  let role = getUserRole();
+  return isSignedIn() && (role == 'editor' || role == 'admin');
+}
+What changed and why:
+
+u.data.get('role', null) — uses the safe Firestore rules map accessor with a default value of null. This never throws even if the role field is missing or the document doesn't exist. Previously .data.role would throw if .data itself was null (non-existent document), causing the entire rule evaluation to error and default to DENY.
+isEditorRole() now calls getUserRole() only once instead of twice, halving the number of Firestore reads and eliminating a potential race between the two get() calls returning different results.
+
+After saving firestore.rules, do NOT run the Vercel build — rules files are not compiled by Vite. Instead:
+
+Copy the entire contents of artifacts/xmum-market/firestore.rules
+Go to Firebase Console → Firestore → Rules
+Paste and click Publish
+
+Then test edit and delete again on www.xmummarket.com with a regular student account.

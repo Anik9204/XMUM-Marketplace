@@ -21,7 +21,8 @@ service cloud.firestore {
     }
 
     function getUserRole() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+      let u = get(/databases/$(database)/documents/users/$(request.auth.uid));
+      return u.data.get('role', null);
     }
 
     function isAdmin() {
@@ -29,7 +30,8 @@ service cloud.firestore {
     }
 
     function isEditorRole() {
-      return isSignedIn() && (getUserRole() == 'editor' || getUserRole() == 'admin');
+      let role = getUserRole();
+      return isSignedIn() && (role == 'editor' || role == 'admin');
     }
 
     function isShopOwner(shopId) {
