@@ -1,0 +1,167 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only.
+3. Do NOT remove any existing function, prop, import, or JSX element unless explicitly told to.
+4. After every change, mentally verify: "Does this break anything that was working before?"
+5. If a fix requires changing a shared component, STOP and ask permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+
+---
+
+You are fixing 7 bugs. Fix them one at a time in order. After each fix, tell me what you changed before moving to the next.
+
+---
+
+FIX 1 — rateLimit.ts localStorage race condition and incognito bypass
+File: artifacts/xmum-market/src/lib/rateLimit.ts
+
+The existing try/catch already handles errors silently. The issue is that on quota errors or SecurityError, the catch is empty so the rate limit is bypassed entirely. Change the catch block so that if localStorage is unavailable, the function returns false (blocks the action) rather than silently allowing it:
+
+Find:
+  try { localStorage.setItem(`rl_${key}`, JSON.stringify(record)); }
+  catch {}
+
+Change to:
+  try { localStorage.setItem(`rl_${key}`, JSON.stringify(record)); }
+  catch {
+    // localStorage unavailable (quota exceeded or private mode) — block the action to be safe
+    return false;
+  }
+
+That is the only change in this file.
+
+---
+
+FIX 2 — Auto-delete expired listings shows misleading toast when listing is report-held
+File: artifacts/xmum-market/src/pages/ProfilePage.tsx
+
+Find the block in the main listings useEffect where expired listings are auto-deleted:
+  Promise.allSettled(expired.map(l => deleteListing(l))).then(() => {
+    if (!isMounted) return;
+    if (expired.length === 1) setSuccessToast(`"${expired[0].title}" has been automatically removed after 30 days.`);
+    else setSuccessToast(`${expired.length} listings have been automatically removed after 30 days.`);
+    ...
+  });
+
+Change it to check the actual results so report-held items don't show a misleading "removed" message:
+  Promise.allSettled(expired.map(l => deleteListing(l))).then((results) => {
+    if (!isMounted) return;
+    const actuallyDeleted = expired.filter((_, i) => results[i].status === "fulfilled");
+    if (actuallyDeleted.length === 0) return;
+    if (actuallyDeleted.length === 1) setSuccessToast(`"${actuallyDeleted[0].title}" has been automatically removed after 30 days.`);
+    else setSuccessToast(`${actuallyDeleted.length} listings have been automatically removed after 30 days.`);
+    actuallyDeleted.forEach(l => {
+      addNotification(user.uid, { type: "listing_deleted", title: "Listing Removed", body: `"${l.title}" was automatically removed after 30 days.`, listingId: l.id });
+    });
+  });
+
+Remove the old addNotification call that was inside the same block (it is now inside the new block above). Do not duplicate it.
+
+---
+
+FIX 3 — handleSend in MessagesPage has stale closure over userProfile
+File: artifacts/xmum-market/src/pages/MessagesPage.tsx
+
+Find the handleSend useCallback. Its dependency array currently ends with:
+  }, [inputText, activeConv?.id, user?.uid, sending]);
+
+Add userProfile to the dependency array:
+  }, [inputText, activeConv?.id, user?.uid, sending, userProfile]);
+
+That is the only change. Do not touch anything else in this function.
+
+---
+
+FIX 4 — getOlderMessages uses a JS number timestamp against Firestore Timestamp fields
+File: artifacts/xmum-market/src/lib/messaging.ts
+
+Find the getOlderMessages function. It currently queries:
+  where("createdAt", "<", oldestCreatedAt),
+
+where oldestCreatedAt is a number (milliseconds). Firestore stores message createdAt as a serverTimestamp() Timestamp. Comparing a Timestamp field against a raw number works in Firestore but can behave unexpectedly. The safe fix is to convert the millisecond number to a Firestore Timestamp before the query.
+
+First, check the existing imports at the top of messaging.ts. Find the firebase/firestore import line. Add `Timestamp` to it if it is not already there.
+
+Then in getOlderMessages, change:
+  where("createdAt", "<", oldestCreatedAt),
+
+to:
+  where("createdAt", "<", Timestamp.fromMillis(oldestCreatedAt)),
+
+That is the only change in this function.
+
+---
+
+FIX 5 — Participant profile cache in MessagesPage never invalidates on error
+File: artifacts/xmum-market/src/pages/MessagesPage.tsx
+
+Find the useEffect that lazily fetches participant profiles. It currently filters with:
+  .filter((uid): uid is string => !!uid && !(uid in participantProfiles))
+
+This means if a profile load fails and sets the value to null in the map (which it does via .catch(() => {})), the uid IS in participantProfiles (with value null) and will never be retried.
+
+Change the filter condition to also retry null entries:
+  .filter((uid): uid is string => !!uid && participantProfiles[uid] === undefined)
+
+Note: this means only profiles that have never been attempted (undefined) will be fetched. Profiles that returned null (user deleted, error) won't be retried on every render — but newly unknown UIDs will always be fetched. This is the correct behaviour.
+
+That is the only change in this useEffect filter line.
+
+---
+
+FIX 6 — HomePage live-listing snapshot creates duplicate listeners on rapid category filter changes
+File: artifacts/xmum-market/src/pages/HomePage.tsx
+
+Find the useEffect that sets up the onSnapshot listener for new items. Its dependency array is:
+  }, [activeTab, categoryFilter]);
+
+The issue is that categoryFilter is in the dependency array, so every category chip click creates a new Firestore listener. The categoryFilter check inside the snapshot callback is sufficient — we don't need to recreate the listener for category changes.
+
+Change the dependency array to only re-run when activeTab changes:
+  }, [activeTab]);
+
+The snapshot callback already has this line that filters by category:
+  if (categoryFilter && categoryFilter !== "all" && newListing.category !== categoryFilter) return;
+
+This filter will still run correctly because it reads categoryFilter from the closure at callback-execution time. But wait — if categoryFilter is not in the deps, the closure will be stale. To fix this properly, use a ref for categoryFilter inside this effect:
+
+BEFORE the useEffect that sets up the snapshot, find where categoryFilter state is declared. Then add a ref that tracks the latest value:
+  const categoryFilterRef = useRef(categoryFilter);
+  useEffect(() => { categoryFilterRef.current = categoryFilter; }, [categoryFilter]);
+
+Then inside the snapshot callback, replace:
+  if (categoryFilter && categoryFilter !== "all" && newListing.category !== categoryFilter) return;
+with:
+  if (categoryFilterRef.current && categoryFilterRef.current !== "all" && newListing.category !== categoryFilterRef.current) return;
+
+And change the snapshot useEffect dependency array to:
+  }, [activeTab]);
+
+Check that `useRef` is already imported in HomePage.tsx. If not, add it to the existing React import line.
+
+---
+
+FIX 7 — Admin DashboardPage loading state depends on one listener firing
+File: artifacts/xmum-admin/src/pages/DashboardPage.tsx
+
+Find where setLoading(false) is called. It is currently only called inside the reports snapshot callback and its error handler. Add a safety fallback timeout so the loading state always clears even if a listener is slow or errors silently:
+
+Find the useEffect that sets up the dashboard snapshots. At the very beginning of that useEffect (after the unsubs array declaration), add:
+  const loadingTimeout = setTimeout(() => setLoading(false), 8000);
+  unsubs.push(() => clearTimeout(loadingTimeout));
+
+This ensures loading clears within 8 seconds regardless of listener behaviour. The existing setLoading(false) calls inside the reports listener remain unchanged — they will fire first in normal conditions and the timeout is just a safety net.
+
+---
+
+AFTER ALL 7 FIXES:
+1. Run pnpm --filter xmum-market run build — confirm zero errors.
+2. Run pnpm --filter xmum-admin run build — confirm zero errors.
+3. Commit with message: "fix: batch 3 — rateLimit safe, expiry toast accurate, handleSend deps, timestamp fix, profile cache, snapshot dedup, dashboard loading"
+
+⚠️ REMINDER FOR DEVELOPER: After deploy, manually test these:
+- Send a message — verify it still sends correctly and your name appears.
+- Open Messages → scroll up to "Load older messages" if you have a long conversation — verify it loads.
+- Switch category filters rapidly on the home page — verify new listing notifications still appear.
+- Open Admin dashboard — verify it loads without getting stuck.

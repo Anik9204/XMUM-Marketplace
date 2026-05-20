@@ -19,6 +19,9 @@ export function checkRateLimit(
   if (record.timestamps.length >= maxCalls) return false;
   record.timestamps.push(now);
   try { localStorage.setItem(`rl_${key}`, JSON.stringify(record)); }
-  catch {}
+  catch {
+    // localStorage unavailable (quota exceeded or private mode) — block the action to be safe
+    return false;
+  }
   return true;
 }

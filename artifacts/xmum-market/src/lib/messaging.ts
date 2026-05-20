@@ -1,7 +1,7 @@
 import {
   collection, doc, getDoc, setDoc, addDoc, getDocs, increment,
   query, orderBy, limit, onSnapshot, updateDoc, arrayUnion,
-  serverTimestamp, where, Unsubscribe,
+  serverTimestamp, where, Unsubscribe, Timestamp,
 } from "firebase/firestore";
 import { db } from "./firebase";
 
@@ -270,7 +270,7 @@ export async function getOlderMessages(
   const q = query(
     collection(db, "conversations", convId, "messages"),
     orderBy("createdAt", "asc"),
-    where("createdAt", "<", oldestCreatedAt),
+    where("createdAt", "<", Timestamp.fromMillis(oldestCreatedAt)),
     limit(50)
   );
   const snap = await getDocs(q);

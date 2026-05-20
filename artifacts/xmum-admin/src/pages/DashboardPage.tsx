@@ -62,6 +62,9 @@ export default function DashboardPage() {
   useEffect(() => {
     const unsubs: (() => void)[] = [];
 
+    const loadingTimeout = setTimeout(() => setLoading(false), 8000);
+    unsubs.push(() => clearTimeout(loadingTimeout));
+
     unsubs.push(onSnapshot(
       collection(db, "users"),
       (snap) => {

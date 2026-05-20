@@ -186,6 +186,8 @@ export default function HomePage() {
   const [hasMore, setHasMore] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const categoryFilterRef = useRef(categoryFilter);
+  useEffect(() => { categoryFilterRef.current = categoryFilter; }, [categoryFilter]);
   const [ads, setAds] = useState<SponsoredAd[]>([]);
   const [tabCounts, setTabCounts] = useState<Partial<Record<HomeTab, number>>>({});
   const [searchQuery, setSearchQuery] = useState("");
@@ -276,7 +278,7 @@ export default function HomePage() {
       snap.docChanges().forEach((change) => {
         if (change.type === "added") {
           const newListing = { id: change.doc.id, ...change.doc.data() } as Listing;
-          if (categoryFilter && categoryFilter !== "all" && newListing.category !== categoryFilter) return;
+          if (categoryFilterRef.current && categoryFilterRef.current !== "all" && newListing.category !== categoryFilterRef.current) return;
           setNewItemsBuffer((prev) =>
             prev.some((l) => l.id === newListing.id) ? prev : [newListing, ...prev]
           );
@@ -285,7 +287,7 @@ export default function HomePage() {
     }, () => {});
 
     return () => unsub();
-  }, [activeTab, categoryFilter]);
+  }, [activeTab]);
 
   const handleLoadMore = async () => {
     if (loadingMore || !hasMore) return;

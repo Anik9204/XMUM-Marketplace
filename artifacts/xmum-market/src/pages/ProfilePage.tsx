@@ -285,11 +285,13 @@ export default function ProfilePage() {
         const expired = data.filter(l => now - l.createdAt >= LISTING_EXPIRY_MS && l.status === "active");
         const active = data.filter(l => !(now - l.createdAt >= LISTING_EXPIRY_MS && l.status === "active"));
         if (expired.length > 0) {
-          Promise.allSettled(expired.map(l => deleteListing(l))).then(() => {
+          Promise.allSettled(expired.map(l => deleteListing(l))).then((results) => {
             if (!isMounted) return;
-            if (expired.length === 1) setSuccessToast(`"${expired[0].title}" has been automatically removed after 30 days.`);
-            else setSuccessToast(`${expired.length} listings have been automatically removed after 30 days.`);
-            expired.forEach(l => {
+            const actuallyDeleted = expired.filter((_, i) => results[i].status === "fulfilled");
+            if (actuallyDeleted.length === 0) return;
+            if (actuallyDeleted.length === 1) setSuccessToast(`"${actuallyDeleted[0].title}" has been automatically removed after 30 days.`);
+            else setSuccessToast(`${actuallyDeleted.length} listings have been automatically removed after 30 days.`);
+            actuallyDeleted.forEach(l => {
               addNotification(user.uid, { type: "listing_deleted", title: "Listing Removed", body: `"${l.title}" was automatically removed after 30 days.`, listingId: l.id });
             });
           });

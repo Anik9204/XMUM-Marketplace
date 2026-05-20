@@ -146,7 +146,7 @@ export default function MessagesPage() {
     if (!user || conversations.length === 0) return;
     const uids = conversations
       .map((c) => c.participants.find((p) => p !== user.uid))
-      .filter((uid): uid is string => !!uid && !(uid in participantProfiles));
+      .filter((uid): uid is string => !!uid && participantProfiles[uid] === undefined);
     if (uids.length === 0) return;
     const deduplicated = [...new Set(uids)];
     deduplicated.forEach((uid) => {
@@ -274,7 +274,7 @@ export default function MessagesPage() {
     } finally {
       setSending(false);
     }
-  }, [inputText, activeConv?.id, user?.uid, sending]);
+  }, [inputText, activeConv?.id, user?.uid, sending, userProfile]);
 
   const handleLoadOlderMessages = async () => {
     if (!activeConv || messages.length === 0 || loadingOlder) return;
