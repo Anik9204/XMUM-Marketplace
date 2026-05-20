@@ -259,7 +259,7 @@ export default function MessagesPage() {
     autoResizeTextarea();
     setSending(true);
     try {
-      await sendMessage(activeConv.id, user.uid, senderName, text, otherUid);
+      await sendMessage(activeConv.id, user.uid, senderName, text, otherUid, activeConv.listingTitle ?? "");
       inputRef.current?.focus();
     } catch {
       setInputText(text);

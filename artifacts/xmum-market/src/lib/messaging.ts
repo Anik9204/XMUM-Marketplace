@@ -1,5 +1,5 @@
 import {
-  collection, doc, getDoc, setDoc, addDoc, getDocs,
+  collection, doc, getDoc, setDoc, addDoc, getDocs, increment,
   query, orderBy, limit, onSnapshot, updateDoc, arrayUnion,
   serverTimestamp, where, Unsubscribe,
 } from "firebase/firestore";
@@ -82,7 +82,8 @@ export async function sendMessage(
   senderId: string,
   senderName: string,
   text: string,
-  otherUid: string
+  otherUid: string,
+  listingTitle: string = ""
 ): Promise<void> {
   const trimmed = text.trim();
   if (!trimmed) return;
@@ -95,22 +96,18 @@ export async function sendMessage(
     seenBy: [],
   });
 
-  const convSnap = await getDoc(convRef);
-  const prevUnread = convSnap.data()?.unreadCount?.[otherUid] ?? 0;
   await updateDoc(convRef, {
     lastMessage: trimmed.slice(0, 80),
     lastMessageAt: Date.now(),
-    [`unreadCount.${otherUid}`]: (convSnap.data()?.unreadCount?.[otherUid] ?? 0) + 1,
+    [`unreadCount.${otherUid}`]: increment(1),
   });
 
   try {
-    if (prevUnread === 0) {
-      await sendNewMessageNotification(
-        otherUid,
-        senderName,
-        convSnap.data()?.listingTitle ?? "a listing"
-      );
-    }
+    await sendNewMessageNotification(
+      otherUid,
+      senderName,
+      listingTitle
+    );
   } catch {}
 }
 
