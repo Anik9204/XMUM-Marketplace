@@ -8,6 +8,7 @@ import { checkContent } from "@/lib/contentFilter";
 import { auth } from "@/lib/firebase";
 import { ListingType, Condition } from "@/lib/types";
 import { validateWhatsApp, suggestMalaysianFormat } from "@/lib/validation";
+import { Sentry } from "@/lib/sentry";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { ImagePlus, X, AlertCircle, CheckCircle2, Lock, Edit2, Loader2, Wifi, WifiOff } from "lucide-react";
 
@@ -384,6 +385,7 @@ export default function EditListingPage() {
     }
 
     try {
+      await withTimeout(auth.currentUser?.reload() ?? Promise.resolve(), 5_000, "token-refresh");
       await withTimeout(auth.currentUser?.getIdToken(true) ?? Promise.resolve(""), 10_000, "token-refresh");
 
       // Upload new photos, keep existing URLs
@@ -452,10 +454,16 @@ export default function EditListingPage() {
       if (msg.startsWith("timeout:token-refresh")) setError("Session refresh timed out. Please sign out and sign back in.");
       else if (msg.startsWith("timeout:photo-upload")) setError("A photo upload timed out. Try a smaller image or check your connection.");
       else if (msg.startsWith("timeout:update-listing")) setError("Update timed out. Please check your connection and try again.");
-      else if (code === "permission-denied") setError("Permission denied. Make sure your email is verified.");
+      else if (code === "permission-denied") {
+        Sentry.captureException(err, { tags: { flow: "edit-listing", code } });
+        setError("Permission denied. Make sure your email is verified.");
+      }
       else if (code === "unauthenticated") setError("Your session expired. Please sign out and sign back in.");
-      else if (msg) setError(`Error: ${msg}`);
-      else setError(t.errorOccurred);
+      else {
+        Sentry.captureException(err, { tags: { flow: "edit-listing", code } });
+        if (msg) setError(`Error: ${msg}`);
+        else setError(t.errorOccurred);
+      }
     } finally {
       setLoading(false);
     }

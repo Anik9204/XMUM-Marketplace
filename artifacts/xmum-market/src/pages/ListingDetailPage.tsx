@@ -21,6 +21,7 @@ import { SiWhatsapp, SiWechat } from "react-icons/si";
 import { MdGroups } from "react-icons/md";
 import { useToast } from "@/hooks/use-toast";
 import { saveListing, unsaveListing, isListingSaved } from "@/lib/savedListings";
+import { Sentry } from "@/lib/sentry";
 
 const fmtRM = (n: number) =>
   n.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -293,6 +294,7 @@ export default function ListingDetailPage() {
         setShowHoldModal(true);
       } else {
         console.error("[ListingDetailPage] delete error:", err);
+        Sentry.captureException(err, { tags: { flow: "delete-listing" } });
         toast({ title: "Failed to delete listing. Please try again.", variant: "destructive" });
       }
     } finally {

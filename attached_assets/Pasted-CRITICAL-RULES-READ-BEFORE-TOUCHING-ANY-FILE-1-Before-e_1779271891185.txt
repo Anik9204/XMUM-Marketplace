@@ -1,0 +1,136 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+
+---
+
+Fix THREE bugs described below. Make all three fixes. Do not fix anything else.
+
+═══════════════════════════════════════════════════════
+BUG 1 — Storage delete rule missing → listing delete always fails with permission-denied
+═══════════════════════════════════════════════════════
+
+FILE: artifacts/xmum-market/storage.rules
+
+PROBLEM: The `listings/{userId}/...` match block only has `allow write:` which covers upload/update but NOT delete. Firebase Storage treats delete as a separate operation. When deleteListing() in listings.ts calls deleteObject() on a photo, Storage rejects it, the whole delete flow aborts, and the user sees "Permission denied".
+
+FIX: In the `match /listings/{userId}/{allPaths=**}` block, split `allow write:` into separate `allow create, update:` and `allow delete:` rules. The delete rule only needs to check that the requester is the owner of that userId path (no request.resource checks — request.resource is unavailable on delete).
+
+The block should become:
+
+    match /listings/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow create, update: if request.auth != null
+                   && request.auth.token.email.matches('.*@xmu\\.edu\\.my')
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null
+                   && request.auth.uid == userId;
+    }
+
+IMPORTANT: Do not change any other block in storage.rules. Only change the listings block.
+
+After editing, I will manually deploy via: Firebase Console → Storage → Rules → paste → Publish.
+
+═══════════════════════════════════════════════════════
+BUG 2 — Edit listing Save fails with "Permission denied. Make sure your email is verified"
+═══════════════════════════════════════════════════════
+
+FILE: artifacts/xmum-market/src/pages/EditListingPage.tsx
+
+PROBLEM: The handleSubmit function calls `auth.currentUser?.getIdToken(true)` to force a token refresh, but then discards the result. More importantly, it does NOT call `auth.currentUser?.reload()` first. Firebase Auth stores the user object in memory — `emailVerified` on the in-memory object may be stale if the user verified their email in a different tab or session. Without reload(), the ID token refresh may still use the stale in-memory state. Firestore then evaluates `request.auth.token.email_verified` from the JWT which reflects the old unverified state, causing permission-denied on the update.
+
+FIX: In handleSubmit, replace the existing token-refresh line:
+
+FIND this exact line inside the try block at the top of handleSubmit:
+      await withTimeout(auth.currentUser?.getIdToken(true) ?? Promise.resolve(""), 10_000, "token-refresh");
+
+REPLACE with these two sequential awaits:
+      await withTimeout(auth.currentUser?.reload() ?? Promise.resolve(), 5_000, "token-refresh");
+      await withTimeout(auth.currentUser?.getIdToken(true) ?? Promise.resolve(""), 10_000, "token-refresh");
+
+This forces Firebase to re-fetch the user's auth state from the server (including the latest emailVerified flag) and then get a fresh JWT that contains email_verified: true, which Firestore's security rules will then accept.
+
+The `withTimeout` wrapper and the error handler for `"timeout:token-refresh"` already exist — do not change them.
+
+═══════════════════════════════════════════════════════
+BUG 3 — Sentry not capturing permission-denied and other handled errors
+═══════════════════════════════════════════════════════
+
+PROBLEM: `Sentry.captureException()` is never called in any catch block in the codebase. Sentry only auto-captures unhandled errors and React render crashes. The delete error (ListingDetailPage) and save error (EditListingPage) are caught and handled — so Sentry never sees them. This is why these bugs were invisible in Sentry.
+
+Fix the following two files only. In each file, import Sentry and add `Sentry.captureException(err)` in the relevant catch block. Do not add it to every catch block — only to the ones that indicate real unexpected failures (not user-facing validation errors or report-hold flow).
+
+── FILE 1: artifacts/xmum-market/src/pages/ListingDetailPage.tsx ──
+
+STEP A: Add this import at the top of the file (after existing imports):
+  import { Sentry } from "@/lib/sentry";
+
+STEP B: In the handleDeleteListing catch block, add Sentry capture for the non-report-hold branch only.
+
+FIND:
+      } else {
+        console.error("[ListingDetailPage] delete error:", err);
+        toast({ title: "Failed to delete listing. Please try again.", variant: "destructive" });
+      }
+
+REPLACE WITH:
+      } else {
+        console.error("[ListingDetailPage] delete error:", err);
+        Sentry.captureException(err, { tags: { flow: "delete-listing" } });
+        toast({ title: "Failed to delete listing. Please try again.", variant: "destructive" });
+      }
+
+── FILE 2: artifacts/xmum-market/src/pages/EditListingPage.tsx ──
+
+STEP A: Add this import at the top of the file (after existing imports):
+  import { Sentry } from "@/lib/sentry";
+
+STEP B: In the handleSubmit catch block, add Sentry capture for the real unexpected errors (permission-denied and unknown errors), but NOT for timeout errors (those are user-network issues, not bugs).
+
+FIND:
+    } catch (err: any) {
+      const code: string = err?.code ?? "";
+      const msg: string = err?.message ?? "";
+      if (msg.startsWith("timeout:token-refresh")) setError("Session refresh timed out. Please sign out and sign back in.");
+      else if (msg.startsWith("timeout:photo-upload")) setError("A photo upload timed out. Try a smaller image or check your connection.");
+      else if (msg.startsWith("timeout:update-listing")) setError("Update timed out. Please check your connection and try again.");
+      else if (code === "permission-denied") setError("Permission denied. Make sure your email is verified.");
+      else if (code === "unauthenticated") setError("Your session expired. Please sign out and sign back in.");
+      else if (msg) setError(`Error: ${msg}`);
+      else setError(t.errorOccurred);
+    }
+
+REPLACE WITH:
+    } catch (err: any) {
+      const code: string = err?.code ?? "";
+      const msg: string = err?.message ?? "";
+      if (msg.startsWith("timeout:token-refresh")) setError("Session refresh timed out. Please sign out and sign back in.");
+      else if (msg.startsWith("timeout:photo-upload")) setError("A photo upload timed out. Try a smaller image or check your connection.");
+      else if (msg.startsWith("timeout:update-listing")) setError("Update timed out. Please check your connection and try again.");
+      else if (code === "permission-denied") {
+        Sentry.captureException(err, { tags: { flow: "edit-listing", code } });
+        setError("Permission denied. Make sure your email is verified.");
+      }
+      else if (code === "unauthenticated") setError("Your session expired. Please sign out and sign back in.");
+      else {
+        Sentry.captureException(err, { tags: { flow: "edit-listing", code } });
+        if (msg) setError(`Error: ${msg}`);
+        else setError(t.errorOccurred);
+      }
+    }
+
+═══════════════════════════════════════════════════════
+AFTER ALL THREE CHANGES:
+═══════════════════════════════════════════════════════
+
+Run: pnpm --filter xmum-market run build
+
+Confirm zero TypeScript errors and zero build errors before finishing.
+
+Do NOT touch any other file. Do NOT change any CSS, layout, routing, or other logic.
