@@ -451,7 +451,9 @@ export async function deleteListing(listing: Listing): Promise<void> {
 
   await Promise.race([
     deleteDoc(doc(db, "listings", listing.id)),
-    new Promise<void>((resolve) => setTimeout(resolve, 6_000)),
+    new Promise<void>((_, reject) =>
+      setTimeout(() => reject(new Error("timeout:delete-listing")), 6_000)
+    ),
   ]);
 
   void logPlatformActivity({

@@ -300,10 +300,10 @@ export function subscribeToUnreadCount(
   return onSnapshot(
     q,
     (snap) => {
-      const total = snap.docs.filter((d) => {
+      const total = snap.docs.reduce((sum, d) => {
         const count = d.data()?.unreadCount?.[uid] ?? 0;
-        return typeof count === "number" && count > 0;
-      }).length;
+        return sum + (typeof count === "number" ? count : 0);
+      }, 0);
       callback(total);
     },
     () => callback(0)

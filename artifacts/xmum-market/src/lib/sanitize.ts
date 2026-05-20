@@ -16,7 +16,7 @@ export function sanitizeListingData(
   if (typeof out.title === "string")
     out.title = sanitizeText(out.title, 100);
   if (typeof out.description === "string")
-    out.description = sanitizeText(out.description, 1000);
+    out.description = sanitizeText(out.description, 3000);
   if (typeof out.meetupSpot === "string")
     out.meetupSpot = sanitizeText(out.meetupSpot, 200);
   if (typeof out.wechat === "string")

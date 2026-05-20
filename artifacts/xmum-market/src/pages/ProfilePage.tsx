@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { getUserListings, deleteListing, markAsSold, bumpListing, getListing, LISTING_EXPIRY_MS, LISTING_REMINDER_MS, BUMP_COOLDOWN_MS } from "@/lib/listings";
@@ -272,7 +272,7 @@ export default function ProfilePage() {
   const [inquiriesLoading, setInquiriesLoading] = useState(false);
 
   const listingsCache = useRef<Listing[]>([]);
-  const now = Date.now();
+  const now = useMemo(() => Date.now(), [listings, refreshCounter]);
 
   useEffect(() => {
     if (!user) return;

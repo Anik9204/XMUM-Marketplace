@@ -1,4 +1,4 @@
-export type ListingType = "buy-sell" | "lost-found" | "jobs" | "assistance" | "rental" | "shop-listing";
+export type ListingType = "buy-sell" | "lost-found" | "jobs" | "assistance" | "rental";
 export type Condition = "new" | "used";
 export type ListingStatus = "active" | "sold";
 
