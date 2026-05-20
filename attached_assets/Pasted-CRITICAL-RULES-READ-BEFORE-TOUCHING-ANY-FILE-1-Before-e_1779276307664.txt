@@ -1,0 +1,150 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+
+---
+
+PART 6 — Fix A: viewCount increments on every page refresh — no deduplication
+
+FILE TO EDIT: artifacts/xmum-market/src/pages/ListingDetailPage.tsx
+
+THE BUG:
+The useEffect that increments viewCount fires every time the page mounts, meaning every
+refresh by any non-owner user adds +1. This inflates the metric used in admin analytics.
+
+THE FIX:
+Find the useEffect that increments viewCount. It currently looks like this:
+
+  useEffect(() => {
+    if (!listing || !listing.id) return;
+    if (user?.uid === listing.userId) return;
+    const timer = setTimeout(() => {
+      updateDoc(doc(db, "listings", listing.id), { viewCount: increment(1) }).catch((err) => {
+        console.warn("[viewCount] Failed to increment:", err?.code, err?.message);
+      });
+      setListing((prev) => prev ? { ...prev, viewCount: (prev.viewCount ?? 0) + 1 } : prev);
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [listing?.id]);
+
+Replace it with:
+
+  useEffect(() => {
+    if (!listing || !listing.id) return;
+    if (user?.uid === listing.userId) return;
+    const seenKey = `viewed_${listing.id}`;
+    if (sessionStorage.getItem(seenKey)) return;
+    const timer = setTimeout(() => {
+      sessionStorage.setItem(seenKey, "1");
+      updateDoc(doc(db, "listings", listing.id), { viewCount: increment(1) }).catch((err) => {
+        console.warn("[viewCount] Failed to increment:", err?.code, err?.message);
+      });
+      setListing((prev) => prev ? { ...prev, viewCount: (prev.viewCount ?? 0) + 1 } : prev);
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [listing?.id]);
+
+This uses sessionStorage so the view is counted once per browser session per listing.
+Closing and reopening the browser allows a new view (reasonable behavior).
+Do not change anything else in this file.
+
+---
+
+PART 6 — Fix B: sessionStorage cursor cache serialises QueryDocumentSnapshot to {}
+
+FILE TO EDIT: artifacts/xmum-market/src/lib/listings.ts
+
+THE BUG:
+writeCache and readCache in listings.ts store the full result object including
+cursor: QueryDocumentSnapshot via JSON.stringify. QueryDocumentSnapshot is a Firestore
+class instance — JSON.stringify turns it into {}. When the cache is read back, the cursor
+is a plain empty object, not a valid Firestore cursor. Calling startAfter({}) errors
+or silently returns listings from the start, breaking "Load more".
+
+THE FIX:
+The fix is to exclude the cursor from what gets cached — only cache the listings array
+and hasMore. The cursor (a live Firestore document reference) cannot be serialised.
+
+Find the writeCache call inside getListingsPage. It currently reads:
+    const result = { listings, cursor: nextCursor, hasMore };
+    writeCache(cacheKey, result);
+    return result;
+
+Change it to:
+    const result = { listings, cursor: nextCursor, hasMore };
+    writeCache(cacheKey, { listings, hasMore });
+    return result;
+
+Find the readCache call at the top of getListingsPage. It currently reads:
+  const cached = readCache<{ listings: Listing[]; cursor: QueryDocumentSnapshot | null; hasMore: boolean }>(cacheKey);
+  if (cached) return cached;
+
+Change it to:
+  const cached = readCache<{ listings: Listing[]; hasMore: boolean }>(cacheKey);
+  if (cached) return { ...cached, cursor: null };
+
+The returned cursor will be null on a cache hit. This means "Load more" after a cache hit
+will re-fetch from the beginning of the next page — which is correct and safe. The only
+minor UX difference is that a cached first page always returns cursor: null, so "Load more"
+re-fetches the second page fresh from Firestore (no cache for page 2). This is fine.
+
+Apply the same two-part change to getAllListingsPage — it has the same writeCache/readCache
+pattern. Find and update both occurrences.
+
+Do not change any other function in listings.ts.
+
+---
+
+PART 6 — Fix C: PWA CacheFirst for Firebase Storage images causes 7-day stale photos
+
+FILE TO EDIT: artifacts/xmum-market/vite.config.ts
+
+THE BUG:
+The Workbox runtime cache for firebasestorage.googleapis.com uses CacheFirst with a
+7-day maxAgeSeconds. If a user updates listing photos or their avatar, other users see
+the old image for up to 7 days.
+
+THE FIX:
+Find the runtimeCaching entry in the VitePWA config. It currently reads:
+
+          {
+            urlPattern: /^https:\/\/firebasestorage\.googleapis\.com\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "firebase-images",
+              expiration: {
+                maxEntries: 100,
+                maxAgeSeconds: 60 * 60 * 24 * 7,
+              },
+            },
+          },
+
+Change it to:
+
+          {
+            urlPattern: /^https:\/\/firebasestorage\.googleapis\.com\/.*/i,
+            handler: "StaleWhileRevalidate",
+            options: {
+              cacheName: "firebase-images",
+              expiration: {
+                maxEntries: 100,
+                maxAgeSeconds: 60 * 60 * 24 * 1,
+              },
+            },
+          },
+
+StaleWhileRevalidate serves the cached image immediately (fast) but always fetches a
+fresh copy in the background for the next load. maxAgeSeconds changed from 7 days to
+1 day so stale images expire within 24 hours at most.
+
+Do not change any other part of vite.config.ts.
+
+VERIFICATION:
+- Run: pnpm --filter xmum-market run build
+- Confirm zero TypeScript errors
+- Confirm StaleWhileRevalidate is spelled exactly as shown (case-sensitive Workbox string)

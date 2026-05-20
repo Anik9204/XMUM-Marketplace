@@ -164,7 +164,10 @@ export default function ListingDetailPage() {
   useEffect(() => {
     if (!listing || !listing.id) return;
     if (user?.uid === listing.userId) return;
+    const seenKey = `viewed_${listing.id}`;
+    if (sessionStorage.getItem(seenKey)) return;
     const timer = setTimeout(() => {
+      sessionStorage.setItem(seenKey, "1");
       updateDoc(doc(db, "listings", listing.id), { viewCount: increment(1) }).catch((err) => {
         console.warn("[viewCount] Failed to increment:", err?.code, err?.message);
       });

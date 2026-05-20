@@ -263,8 +263,8 @@ export async function getListingsPage(
   cursor?: QueryDocumentSnapshot | null
 ): Promise<{ listings: Listing[]; cursor: QueryDocumentSnapshot | null; hasMore: boolean }> {
   const cacheKey = getCacheKey(type, cursor?.id ?? null);
-  const cached = readCache<{ listings: Listing[]; cursor: QueryDocumentSnapshot | null; hasMore: boolean }>(cacheKey);
-  if (cached) return cached;
+  const cached = readCache<{ listings: Listing[]; hasMore: boolean }>(cacheKey);
+  if (cached) return { ...cached, cursor: null };
   try {
     const constraints = [
       where("type", "==", type),
