@@ -83,12 +83,16 @@ service cloud.firestore {
         && (!request.resource.data.keys().hasAny(["price"])
             || (request.resource.data.price >= 0
                 && request.resource.data.price <= 1000000));
-      allow update: if (isXmuEmail()
+      allow update: if (isSignedIn()
         && resource.data.userId == request.auth.uid
         && resource.data.isReportHeld != true
         && (!request.resource.data.keys().hasAny(["price"])
             || (request.resource.data.price >= 0
                 && request.resource.data.price <= 1000000)))
+        || (isSignedIn()
+            && resource.data.userId == request.auth.uid
+            && resource.data.isReportHeld == true
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isArchived', 'status']))
         || (isSignedIn()
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount']));
       allow delete: if ((isSignedIn() && resource.data.userId == request.auth.uid && resource.data.isReportHeld != true)

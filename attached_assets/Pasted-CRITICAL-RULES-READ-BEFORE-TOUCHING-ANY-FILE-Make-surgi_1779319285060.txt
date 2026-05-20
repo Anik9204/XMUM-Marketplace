@@ -1,0 +1,54 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+
+Make surgical edits only — minimum lines changed.
+Do NOT touch any .tsx, .ts, or .css files.
+Do NOT run pnpm build — rules files are not compiled by Vite.
+After editing, commit and push to git so the rules file is in sync.
+
+
+TASK: Fix firestore.rules and deploy it to Firebase. This is the only change needed.
+The confirmed root cause: The allow update rule on the listings collection requires isXmuEmail(), which includes email_verified == true in the JWT. Token staleness causes this to fail for regular students on edit. This is why create works (token is fresh at sign-in) but edit fails (token may be stale hours later).
+File to change: artifacts/xmum-market/firestore.rules
+Find this exact block:
+      allow update: if (isXmuEmail()
+        && resource.data.userId == request.auth.uid
+        && resource.data.isReportHeld != true
+        && (!request.resource.data.keys().hasAny(["price"])
+            || (request.resource.data.price >= 0
+                && request.resource.data.price <= 1000000)))
+        || (isSignedIn()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount']));
+Replace it with:
+      allow update: if (isSignedIn()
+        && resource.data.userId == request.auth.uid
+        && resource.data.isReportHeld != true
+        && (!request.resource.data.keys().hasAny(["price"])
+            || (request.resource.data.price >= 0
+                && request.resource.data.price <= 1000000)))
+        || (isSignedIn()
+            && resource.data.userId == request.auth.uid
+            && resource.data.isReportHeld == true
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isArchived', 'status']))
+        || (isSignedIn()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount']));
+What changed:
+
+Branch 1: isXmuEmail() → isSignedIn(). Owner identity is proven by userId == auth.uid, not by re-checking email verification on every edit.
+Branch 2 (new): Owner can soft-archive their own report-held listing. This fixes the deleteListing soft-delete path which calls updateDoc({isArchived: true, status: "sold"}) when isReportHeld is true.
+Branch 3: viewCount unchanged.
+allow create stays isXmuEmail() — new listings must still come from verified XMU students.
+allow delete is unchanged — already correct.
+
+After saving the file, do these three things in order:
+Step 1 — Commit the rules file to git:
+bashcd /home/user/XMUM-Marketplace
+git add artifacts/xmum-market/firestore.rules
+git commit -m "Fix listings update rule: isXmuEmail → isSignedIn for owner edits"
+git push origin main
+Step 2 — Deploy the rules to Firebase:
+bashcd artifacts/xmum-market
+npx firebase-tools deploy --only firestore:rules --project xmum--market
+If that fails due to missing Firebase login, print the exact error. Do NOT skip this step — the rules MUST be deployed via CLI or manually pasted into Firebase Console. Vercel does NOT deploy Firestore rules.
+Step 3 — Verify deployment succeeded:
+After the deploy command completes, print the last 10 lines of its output. Confirm it says Deploy complete or similar.
+Then tell me: show the updated allow update block from the saved file, and confirm whether the Firebase CLI deploy succeeded or failed (and if failed, paste the exact error).
