@@ -245,6 +245,10 @@ export default function MessagesPage() {
 
   const handleSend = useCallback(async () => {
     if (!inputText.trim() || !activeConv || !user || sending) return;
+    if (userProfile?.isBlacklisted) {
+      setInputError("Your account has been suspended. You cannot send messages.");
+      return;
+    }
     if (!checkRateLimit(`msg_${user.uid}`, 30, 60 * 1000)) {
       setInputError("You're sending messages too quickly. Please slow down.");
       return;

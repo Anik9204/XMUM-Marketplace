@@ -510,6 +510,12 @@ export default function PostPage() {
     setFieldError(null);
     setLoading(true);
 
+    if (userProfile?.isBlacklisted) {
+      setError("Your account has been suspended. Please contact admin at cys2209204@xmu.edu.my for assistance.");
+      setLoading(false);
+      return;
+    }
+
     if (!title.trim()) { setError("Title is required."); setLoading(false); return; }
     if (!description.trim()) { setError("Description is required."); setLoading(false); return; }
     if (type === "buy-sell" && priceCents <= 0) { setError("Please enter a price."); setLoading(false); return; }

@@ -1,0 +1,72 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+
+---
+
+PART 7 — Fix: Blacklisted users can still post, message, and take all actions
+
+THE BUG:
+The isBlacklisted flag is set by admins in the admin panel and stored on the user profile
+in Firestore. But nothing in the market app checks it. Banned users continue posting,
+messaging, and using all features normally.
+
+IMPORTANT BEFORE YOU START:
+Read the following files completely before touching any of them:
+- artifacts/xmum-market/src/contexts/AuthContext.tsx
+- artifacts/xmum-market/src/pages/PostPage.tsx
+- artifacts/xmum-market/src/pages/MessagesPage.tsx
+
+The strategy is: check isBlacklisted from userProfile (already available via AuthContext)
+at the point of action, not at page load. We do NOT redirect banned users away from pages
+or show a full-screen block — we only prevent the specific actions (posting, sending messages)
+and show a clear inline error. This is the safest approach that touches the least code.
+
+---
+
+FIX IN: artifacts/xmum-market/src/pages/PostPage.tsx
+
+Find handleSubmit. Near the very top of handleSubmit, after setLoading(true) and before
+any validation, add this blacklist check:
+
+    if (userProfile?.isBlacklisted) {
+      setError("Your account has been suspended. Please contact admin at cys2209204@xmu.edu.my for assistance.");
+      setLoading(false);
+      return;
+    }
+
+Place it after the line: setLoading(true);
+Place it before the line: if (!title.trim()) { ...
+
+Do not change anything else in PostPage.tsx.
+
+---
+
+FIX IN: artifacts/xmum-market/src/pages/MessagesPage.tsx
+
+Find the handleSend function. Near the very top of handleSend, after the guard
+  if (!inputText.trim() || !activeConv || !user || sending) return;
+add this check on the very next line:
+
+    if (userProfile?.isBlacklisted) {
+      setInputError("Your account has been suspended. You cannot send messages.");
+      return;
+    }
+
+Confirm that userProfile is already destructured from useAuth() at the top of
+MessagesPage. If it is not, add it — the existing line should look like:
+  const { user, userProfile } = useAuth();
+If userProfile is missing from that destructure, add it. Do not add a new useAuth() call.
+
+Do not change anything else in MessagesPage.tsx.
+
+VERIFICATION:
+- Run: pnpm --filter xmum-market run build
+- Confirm zero TypeScript errors
+- Confirm userProfile is not newly imported — it must come from the existing useAuth() call
+- Confirm the error messages match the exact strings shown above
