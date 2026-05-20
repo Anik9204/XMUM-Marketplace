@@ -1,0 +1,68 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+
+Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed.
+Do NOT remove any existing function, prop, import, or JSX element unless explicitly told to.
+After every change, mentally verify: "Does this break anything that was working before?"
+Never change any CSS class, layout structure, z-index, or responsive breakpoint unless directly part of the fix.
+Confirm the app builds with zero errors: pnpm --filter xmum-market run build
+
+
+TASK: Fix silent auth loss causing permission-denied on edit and delete.
+Root cause confirmed: experimentalAutoDetectLongPolling: true in firebase.ts causes the Firestore connection to lose its auth token silently when the long-poll connection drops, making request.auth appear null to Firestore rules even though the user is still signed in client-side. The rules are correct. The token is valid. Firestore just isn't seeing it.
+File 1: artifacts/xmum-market/src/lib/firebase.ts
+Find this block:
+tslet db: Firestore;
+try {
+  db = initializeFirestore(app, {
+    experimentalAutoDetectLongPolling: true,
+  });
+} catch {
+  db = getFirestore(app);
+}
+Replace with:
+tslet db: Firestore;
+try {
+  db = initializeFirestore(app, {
+    experimentalAutoDetectLongPolling: true,
+    experimentalForceLongPolling: false,
+  });
+} catch {
+  db = getFirestore(app);
+}
+File 2: artifacts/xmum-market/src/lib/listings.ts
+In updateListing, replace the token refresh block so it waits for the token and explicitly passes it, then adds a small delay before the write to let Firestore pick up the refreshed auth:
+Find:
+ts  // Force-refresh token so Firestore rules see latest email_verified claim
+  try {
+    if (auth.currentUser) {
+      await auth.currentUser.reload();
+      await auth.currentUser.getIdToken(true);
+    }
+  } catch {
+    // Non-critical — proceed even if refresh fails
+  }
+Replace with:
+ts  // Force-refresh the ID token so Firestore's auth context is current
+  try {
+    if (auth.currentUser) {
+      await auth.currentUser.reload();
+      await auth.currentUser.getIdToken(true);
+      // Small delay: Firestore's long-poll connection needs a moment to
+      // pick up the refreshed token before the write is sent
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+  } catch {
+    // Non-critical — proceed even if refresh fails
+  }
+Do the same replacement in deleteListing — find the identical token refresh block there and apply the same await new Promise((resolve) => setTimeout(resolve, 500)); line after getIdToken(true).
+File 3: artifacts/xmum-market/src/pages/EditListingPage.tsx
+Find this block (around line 388):
+ts      await withTimeout(auth.currentUser?.reload() ?? Promise.resolve(), 5_000, "token-refresh");
+      await withTimeout(auth.currentUser?.getIdToken(true) ?? Promise.resolve(""), 10_000, "token-refresh");
+Add a delay line immediately after:
+ts      await withTimeout(auth.currentUser?.reload() ?? Promise.resolve(), 5_000, "token-refresh");
+      await withTimeout(auth.currentUser?.getIdToken(true) ?? Promise.resolve(""), 10_000, "token-refresh");
+      await new Promise((resolve) => setTimeout(resolve, 500));
+After making all 3 changes, run: pnpm --filter xmum-market run build
+Confirm zero errors, then show me the changed sections of all 3 files.
