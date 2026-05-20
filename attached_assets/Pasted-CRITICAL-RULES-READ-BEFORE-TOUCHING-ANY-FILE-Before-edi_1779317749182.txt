@@ -1,0 +1,25 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+
+Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+Do NOT rewrite a file from scratch. Make surgical edits only.
+Do NOT remove any existing function, prop, import, or JSX element unless explicitly told to.
+Never change any CSS class, layout structure, z-index, or responsive breakpoint.
+Confirm zero build errors: pnpm --filter xmum-market run build
+
+
+TASK: Fix the Content Security Policy in vercel.json to allow Firebase Auth token refresh.
+Root cause: getIdToken(true) spawns a hidden iframe to https://*.firebaseapp.com to refresh the auth token. This domain is blocked by the current connect-src and script-src directives, causing the token refresh to fail silently. The try/catch swallows the error and updateDoc/deleteDoc fires with a stale or missing token, producing permission-denied.
+File to change: artifacts/xmum-market/vercel.json
+Find the Content-Security-Policy header value. It currently contains:
+connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firebasestorage.googleapis.com https://*.sentry.io https://*.ingest.sentry.io
+Replace the entire CSP value string with this:
+default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.firebaseapp.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firebasestorage.googleapis.com https://*.firebaseapp.com https://*.sentry.io https://*.ingest.sentry.io; frame-src 'self' https://*.firebaseapp.com; frame-ancestors 'none';
+What changed and why:
+
+script-src — added https://*.firebaseapp.com so Firebase Auth's token-refresh iframe can load its scripts
+connect-src — added https://*.firebaseapp.com so the auth iframe can make network requests
+frame-src 'self' https://*.firebaseapp.com — new directive added; Firebase Auth's getIdToken(true) uses a hidden iframe hosted at xmum--market.firebaseapp.com for secure token exchange. Without frame-src allowing this origin, the iframe is blocked entirely and the refresh silently fails.
+
+Do not change anything else in vercel.json. Do not touch any .tsx or .ts files.
+After saving, run pnpm --filter xmum-market run build and confirm zero errors. Then show me the full updated CSP line.
+After Replit confirms the change, you must redeploy to Vercel for the new CSP headers to take effect — either push to GitHub and let Vercel auto-deploy, or trigger a manual redeploy in the Vercel dashboard. The fix only takes effect after redeployment.
