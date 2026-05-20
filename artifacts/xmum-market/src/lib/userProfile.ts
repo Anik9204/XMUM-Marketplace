@@ -156,10 +156,12 @@ export async function deleteAccount(password: string): Promise<void> {
             })
           );
         }
-        // Race against 6s timeout as a safety net in case of slow server response
-        // in Replit's proxy environment. (Offline persistence is disabled so writes
-        // fail fast, but network latency can still cause slow responses.)
-        await deleteDocWithTimeout(listingDoc.ref);
+        try {
+          await deleteDocWithTimeout(listingDoc.ref);
+        } catch (err: any) {
+          // If delete fails (e.g. missing isReportHeld field on old docs), log and continue
+          console.warn("[deleteAccount] Step 4: could not delete listing doc", listingDoc.id, err?.code);
+        }
       })
     );
     console.log("[deleteAccount] Step 4 Complete");

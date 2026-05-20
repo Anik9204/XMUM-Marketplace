@@ -1,0 +1,45 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+
+---
+
+Fix: deleteAccount still fails with "Missing or insufficient permissions" after photos are deleted.
+
+The Storage DELETE errors are now 404 (not 403) — photos are deleting fine. The failure is now happening when trying to delete the Firestore listing documents in Step 4.
+
+FILE: artifacts/xmum-market/src/lib/userProfile.ts
+
+In the deleteAccount function, Step 4 currently does:
+    await deleteDocWithTimeout(listingDoc.ref);
+
+The problem: if a listing document is missing the `isReportHeld` field entirely (undefined), the Firestore delete rule `resource.data.isReportHeld != true` may behave unexpectedly. More importantly, the `deleteDocWithTimeout` throws on any error and causes the whole Promise.all to reject.
+
+Fix Step 4 to catch and ignore permission errors on individual listing deletes (the photos are already gone, so a listing doc that can't be deleted should not abort the whole account deletion):
+
+Find this exact block inside the listingsSnap.docs.map:
+        // Race against 6s timeout as a safety net in case of slow server response
+        // in Replit's proxy environment. (Offline persistence is disabled so writes
+        // fail fast, but network latency can still cause slow responses.)
+        await deleteDocWithTimeout(listingDoc.ref);
+
+Replace with:
+        try {
+          await deleteDocWithTimeout(listingDoc.ref);
+        } catch (err: any) {
+          // If delete fails (e.g. missing isReportHeld field on old docs), log and continue
+          console.warn("[deleteAccount] Step 4: could not delete listing doc", listingDoc.id, err?.code);
+        }
+
+This ensures one problematic listing doc does not abort the entire account deletion flow. The account and user doc will still be deleted even if an old listing doc can't be removed.
+
+Build to confirm zero errors: pnpm --filter xmum-market run build
+Then push to GitHub:
+git add -A
+git commit -m "fix: swallow individual listing delete errors during account deletion"
+git push
