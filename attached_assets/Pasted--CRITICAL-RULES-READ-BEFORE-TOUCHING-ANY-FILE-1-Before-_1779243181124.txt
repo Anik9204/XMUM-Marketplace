@@ -1,0 +1,93 @@
+
+
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+6. Confirm the app builds with zero errors before finishing: `pnpm --filter xmum-market run build`
+
+---
+
+**Task: SEO improvements for xmum-market**
+
+Make the following 3 changes:
+
+**Change 1** — In `artifacts/xmum-market/index.html`, replace ONLY the `<!-- SEO / Social -->` comment block (from `<!-- SEO / Social -->` down to the closing `<meta property="og:type" content="website" />` line) with this:
+
+```html
+<!-- SEO / Social -->
+<meta name="description" content="XMUM Market — The student marketplace for Xiamen University Malaysia. Buy, sell, find lost items, browse jobs, and explore campus shops." />
+<link rel="canonical" href="https://www.xmummarket.com/" />
+
+<!-- Open Graph -->
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://www.xmummarket.com/" />
+<meta property="og:site_name" content="XMUM Market" />
+<meta property="og:title" content="XMUM Market — Student Marketplace for XMUM" />
+<meta property="og:description" content="The student marketplace for Xiamen University Malaysia. Buy, sell, find lost items, browse jobs, and explore campus shops." />
+<meta property="og:image" content="https://www.xmummarket.com/opengraph.jpg" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:locale" content="en_MY" />
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="XMUM Market — Student Marketplace for XMUM" />
+<meta name="twitter:description" content="The student marketplace for Xiamen University Malaysia. Buy, sell, find lost items, browse jobs, and explore campus shops." />
+<meta name="twitter:image" content="https://www.xmummarket.com/opengraph.jpg" />
+
+<!-- Structured Data -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "name": "XMUM Market",
+  "url": "https://www.xmummarket.com",
+  "description": "The student marketplace for Xiamen University Malaysia students.",
+  "potentialAction": {
+    "@type": "SearchAction",
+    "target": "https://www.xmummarket.com/search?q={search_term_string}",
+    "query-input": "required name=search_term_string"
+  }
+}
+</script>
+```
+
+Do not touch anything else in index.html — especially the CSP meta tag, PWA tags, favicon tags, font tags, and the dark mode script.
+
+**Change 2** — Create a new file `artifacts/xmum-market/public/robots.txt` with this exact content:
+
+```
+User-agent: *
+Allow: /
+
+Sitemap: https://www.xmummarket.com/sitemap.xml
+```
+
+**Change 3** — Create a new file `artifacts/xmum-market/public/sitemap.xml` with this exact content:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://www.xmummarket.com/</loc>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://www.xmummarket.com/search</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://www.xmummarket.com/campus-market</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+</urlset>
+```
+
+After all changes, run `pnpm --filter xmum-market run build` and confirm zero errors.
