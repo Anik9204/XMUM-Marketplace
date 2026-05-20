@@ -1,0 +1,147 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+
+---
+
+PART 8 — Fix: Messages hard-capped at 100 with no way to load older history
+
+THE BUG:
+subscribeToMessages always queries limit(100) with no pagination. In any conversation
+with more than 100 messages, all older messages are permanently invisible with no UI
+indication they exist.
+
+IMPORTANT BEFORE YOU START:
+Read these files completely before touching either:
+- artifacts/xmum-market/src/lib/messaging.ts
+- artifacts/xmum-market/src/pages/MessagesPage.tsx
+
+The strategy is simple and surgical: increase the real-time subscription limit to 150
+(covers the vast majority of conversations without pagination complexity), and add a
+separate one-time fetch function for loading older messages on demand. Then add a
+"Load older messages" button in the chat UI that only appears when the subscription
+returns exactly 150 messages (indicating there may be more).
+
+---
+
+FIX IN: artifacts/xmum-market/src/lib/messaging.ts
+
+CHANGE 1 — Increase the real-time subscription limit:
+Find subscribeToMessages. Find this line:
+    limit(100)
+Change it to:
+    limit(150)
+
+CHANGE 2 — Add a new function for fetching older messages:
+Add getDocs and startAfter to the firebase/firestore imports if they are not already
+imported. Then add this new function at the end of messaging.ts, after all existing
+functions:
+
+export async function getOlderMessages(
+  convId: string,
+  oldestMessageId: string,
+  oldestCreatedAt: number
+): Promise<Message[]> {
+  const { getDocs, query, collection, orderBy, limit, where } = await import("firebase/firestore");
+  const { db } = await import("./firebase");
+  const q = query(
+    collection(db, "conversations", convId, "messages"),
+    orderBy("createdAt", "asc"),
+    where("createdAt", "<", oldestCreatedAt),
+    limit(50)
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => {
+    const data = d.data();
+    return {
+      id: d.id,
+      ...data,
+      createdAt: typeof data.createdAt === "number"
+        ? data.createdAt
+        : data.createdAt?.toMillis?.() ?? Date.now(),
+      seenBy: data.seenBy ?? [],
+    } as Message;
+  });
+}
+
+NOTE: getDocs, query, collection, orderBy, limit, where may already be imported at the
+top of messaging.ts. Check the existing imports. If they are already there, do NOT use
+dynamic import inside the function body — instead remove the dynamic imports and use the
+top-level imports directly. The dynamic import fallback above is only if they are missing.
+Rewrite the function using top-level imports if they exist. Check carefully.
+
+---
+
+FIX IN: artifacts/xmum-market/src/pages/MessagesPage.tsx
+
+CHANGE 1 — Import the new function:
+Add getOlderMessages to the import from "@/lib/messaging". Find the existing import line
+that imports from messaging and add getOlderMessages to it.
+
+CHANGE 2 — Add state for older messages loading:
+Find where the other useState declarations are (sending, searching, etc.) and add:
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasOlderMessages, setHasOlderMessages] = useState(false);
+
+CHANGE 3 — Detect when there may be older messages:
+Find the useEffect that calls subscribeToMessages. Inside the subscription callback,
+after setMessages(msgs), add:
+  setHasOlderMessages(msgs.length >= 150);
+
+CHANGE 4 — Add a handler to load older messages:
+Find where handleSend is defined and add this new function nearby:
+
+  const handleLoadOlderMessages = async () => {
+    if (!activeConv || messages.length === 0 || loadingOlder) return;
+    setLoadingOlder(true);
+    try {
+      const oldest = messages[0];
+      const older = await getOlderMessages(activeConv.id, oldest.id, oldest.createdAt);
+      if (older.length < 50) setHasOlderMessages(false);
+      setMessages((prev) => {
+        const existingIds = new Set(prev.map((m) => m.id));
+        const newOnes = older.filter((m) => !existingIds.has(m.id));
+        return [...newOnes, ...prev];
+      });
+    } catch {
+      // silent — non-critical
+    } finally {
+      setLoadingOlder(false);
+    }
+  };
+
+CHANGE 5 — Add the "Load older messages" button in the JSX:
+Find where the messages list is rendered inside the chat panel. Find the top of the
+messages list (just before the first message is rendered, inside the scrollable area).
+Add this button above the messages list, but only render it when hasOlderMessages is true:
+
+  {hasOlderMessages && (
+    <div className="flex justify-center py-2">
+      <button
+        onClick={handleLoadOlderMessages}
+        disabled={loadingOlder}
+        className="text-xs text-[#003366] dark:text-blue-400 underline disabled:opacity-50"
+      >
+        {loadingOlder ? "Loading..." : "Load older messages"}
+      </button>
+    </div>
+  )}
+
+Place this div immediately before the messages.map(...) call in the JSX.
+Do not change any other JSX, styling, or layout.
+
+VERIFICATION:
+- Run: pnpm --filter xmum-market run build
+- Confirm zero TypeScript errors
+- Confirm getOlderMessages is exported from messaging.ts and imported in MessagesPage.tsx
+- Confirm the subscription limit changed from 100 to 150 in subscribeToMessages
+- Confirm hasOlderMessages state is reset to false when activeConv changes
+  (it will reset automatically since useState initialises fresh — but double check
+  that setHasOlderMessages(false) is called when activeConv changes, either in the
+  useEffect cleanup or when setActiveConv is called. If not, add
+  setHasOlderMessages(false) inside the useEffect that runs on [activeConv?.id] cleanup)

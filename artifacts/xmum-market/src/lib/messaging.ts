@@ -118,7 +118,7 @@ export function subscribeToMessages(
   const q = query(
     collection(db, "conversations", convId, "messages"),
     orderBy("createdAt", "asc"),
-    limit(100)
+    limit(150)
   );
   return onSnapshot(q, (snap) => {
     const msgs: Message[] = snap.docs.map((d) => {
@@ -260,6 +260,31 @@ export async function sendNewMessageNotification(
       body: `Re: ${listingTitle}`,
     });
   } catch {}
+}
+
+export async function getOlderMessages(
+  convId: string,
+  oldestMessageId: string,
+  oldestCreatedAt: number
+): Promise<Message[]> {
+  const q = query(
+    collection(db, "conversations", convId, "messages"),
+    orderBy("createdAt", "asc"),
+    where("createdAt", "<", oldestCreatedAt),
+    limit(50)
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => {
+    const data = d.data();
+    return {
+      id: d.id,
+      ...data,
+      createdAt: typeof data.createdAt === "number"
+        ? data.createdAt
+        : data.createdAt?.toMillis?.() ?? Date.now(),
+      seenBy: data.seenBy ?? [],
+    } as Message;
+  });
 }
 
 // Real-time listener — sums unreadCount[uid] across all the user's conversations.

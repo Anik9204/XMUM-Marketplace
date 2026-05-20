@@ -8,7 +8,7 @@ import { checkRateLimit } from "@/lib/rateLimit";
 import {
   subscribeToConversations, subscribeToMessages, sendMessage,
   markConversationRead, markMessagesAsSeen, setTypingStatus,
-  subscribeToTyping, clearConversation, Conversation, Message,
+  subscribeToTyping, clearConversation, getOlderMessages, Conversation, Message,
 } from "@/lib/messaging";
 import { MessageCircle, ArrowLeft, Send, Loader2, Search, X, Trash2, Flag } from "lucide-react";
 import { reportUser, USER_REPORT_REASONS, UserReportReason } from "@/lib/reports";
@@ -100,6 +100,8 @@ export default function MessagesPage() {
   const [reportReason, setReportReason] = useState<UserReportReason>("spam");
   const [submittingReport, setSubmittingReport] = useState(false);
   const [reportDone, setReportDone] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasOlderMessages, setHasOlderMessages] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -175,6 +177,7 @@ export default function MessagesPage() {
     markConversationRead(convId, uid);
     const unsub = subscribeToMessages(convId, (msgs) => {
       setMessages(msgs);
+      setHasOlderMessages(msgs.length >= 150);
       setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
       const unseenIds = msgs
         .filter((m) => m.senderId !== uid && !(m.seenBy ?? []).includes(uid))
@@ -187,6 +190,7 @@ export default function MessagesPage() {
     return () => {
       unsub();
       markConversationRead(convId, uid);
+      setHasOlderMessages(false);
     };
   }, [activeConv?.id, user?.uid]);
 
@@ -271,6 +275,25 @@ export default function MessagesPage() {
       setSending(false);
     }
   }, [inputText, activeConv?.id, user?.uid, sending]);
+
+  const handleLoadOlderMessages = async () => {
+    if (!activeConv || messages.length === 0 || loadingOlder) return;
+    setLoadingOlder(true);
+    try {
+      const oldest = messages[0];
+      const older = await getOlderMessages(activeConv.id, oldest.id, oldest.createdAt);
+      if (older.length < 50) setHasOlderMessages(false);
+      setMessages((prev) => {
+        const existingIds = new Set(prev.map((m) => m.id));
+        const newOnes = older.filter((m) => !existingIds.has(m.id));
+        return [...newOnes, ...prev];
+      });
+    } catch {
+      // silent — non-critical
+    } finally {
+      setLoadingOlder(false);
+    }
+  };
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -685,6 +708,18 @@ export default function MessagesPage() {
                 Say hi about &ldquo;{activeConv.listingTitle}&rdquo;
               </span>
             )}
+          </div>
+        )}
+
+        {hasOlderMessages && (
+          <div className="flex justify-center py-2">
+            <button
+              onClick={handleLoadOlderMessages}
+              disabled={loadingOlder}
+              className="text-xs text-[#003366] dark:text-blue-400 underline disabled:opacity-50"
+            >
+              {loadingOlder ? "Loading..." : "Load older messages"}
+            </button>
           </div>
         )}
 
