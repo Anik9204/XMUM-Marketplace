@@ -1,0 +1,86 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only.
+3. Do NOT remove any existing function, prop, import, or JSX element unless explicitly told to.
+4. After every change, mentally verify: "Does this break anything that was working before?"
+5. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless directly part of the fix.
+6. Confirm builds with zero errors: pnpm --filter xmum-market run build && pnpm --filter xmum-admin run build
+
+---
+
+FIX 1 — shopListingHasActiveReport queries the forbidden `reports` collection
+File: artifacts/xmum-market/src/lib/reportHold.ts
+
+The current function queries the `reports` collection which regular users cannot read (403). The fix is to read the `isReportHeld` field directly from the shopListing document — the same pattern used by `listingHasActiveReport`.
+
+Find the entire shopListingHasActiveReport function:
+  export async function shopListingHasActiveReport(listingId: string): Promise<boolean> {
+    const q = query(
+      collection(db, "reports"),
+      where("listingId", "==", listingId),
+      where("status", "in", ["pending", "reviewed"]),
+      limit(1)
+    );
+    const snap = await getDocs(q);
+    return !snap.empty;
+  }
+
+Replace the entire function body (keep the function signature) with:
+  export async function shopListingHasActiveReport(listingId: string): Promise<boolean> {
+    try {
+      const snap = await getDoc(doc(db, "shopListings", listingId));
+      if (!snap.exists()) return false;
+      return snap.data().isReportHeld === true;
+    } catch {
+      return false;
+    }
+  }
+
+Check that `getDoc` and `doc` are already imported at the top of reportHold.ts. They should be — `listingHasActiveReport` uses them. If they are not, add them to the existing firebase/firestore import line.
+
+You can now remove the imports that are no longer used by this file: `collection`, `query`, `where`, `getDocs` (if they are ONLY used by the old shopListingHasActiveReport function and nothing else in the file). Check carefully — only remove an import if nothing else in the file uses it.
+
+---
+
+FIX 2 — Admin ListingsPage filter combination has no error fallback
+File: artifacts/xmum-admin/src/pages/ListingsPage.tsx
+
+Find the fetchPage function. Inside the try block, after the getDocs call, there is no error handling for missing composite indexes. Find the catch block at the bottom of fetchPage — it currently just logs:
+  } catch (err) {
+    console.error("[ListingsPage] fetch failed:", err);
+  }
+
+Change it to also set an error state so the admin sees a message instead of a blank table. First, check if there is already an error state in this component. If not, add one near the other useState declarations:
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
+Then update the catch block:
+  } catch (err: any) {
+    console.error("[ListingsPage] fetch failed:", err);
+    const isIndexError = err?.code === "failed-precondition" || err?.message?.includes("index");
+    setFetchError(
+      isIndexError
+        ? "This filter combination requires a Firestore index that is not yet ready. Try a different filter."
+        : "Failed to load listings. Check the console for details."
+    );
+  }
+
+Also add setFetchError(null) at the start of fetchPage (before the try block) so it clears on each new fetch:
+  setFetchError(null);
+
+Then in the JSX, find where the listings table or list is rendered, and add the error display just above it:
+  {fetchError && (
+    <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-700 dark:text-red-400">
+      {fetchError}
+    </div>
+  )}
+
+---
+
+AFTER BOTH FIXES:
+1. pnpm --filter xmum-market run build — zero errors.
+2. pnpm --filter xmum-admin run build — zero errors.
+3. Commit: "fix: batch 4a — shopListing report hold uses direct doc read, admin listing filter error display"
+
+⚠️ REMINDER FOR DEVELOPER: After deploy, manually test:
+- Open a shop listing detail page as a logged-in student — it should load without console errors.
+- In the admin panel, go to Listings, apply a Type + Status filter combo — if an index is missing you'll now see a clear error message instead of a blank table.

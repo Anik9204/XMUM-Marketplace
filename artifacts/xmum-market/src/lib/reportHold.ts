@@ -14,14 +14,13 @@ export async function listingHasActiveReport(listingId: string): Promise<boolean
 }
 
 export async function shopListingHasActiveReport(listingId: string): Promise<boolean> {
-  const q = query(
-    collection(db, "reports"),
-    where("listingId", "==", listingId),
-    where("status", "in", ["pending", "reviewed"]),
-    limit(1)
-  );
-  const snap = await getDocs(q);
-  return !snap.empty;
+  try {
+    const snap = await getDoc(doc(db, "shopListings", listingId));
+    if (!snap.exists()) return false;
+    return snap.data().isReportHeld === true;
+  } catch {
+    return false;
+  }
 }
 
 export async function userHasHeldListings(userId: string): Promise<boolean> {

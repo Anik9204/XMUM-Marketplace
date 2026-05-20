@@ -46,11 +46,13 @@ export default function ListingsPage() {
   const [typeFilter, setTypeFilter]   = useState<ListingType | "all">("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [search, setSearch]       = useState("");
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const cursorRef = useRef<QueryDocumentSnapshot | null>(null);
 
   async function fetchPage(reset = false, type = typeFilter, status = statusFilter) {
     if (reset) setLoading(true);
     else setLoadingMore(true);
+    setFetchError(null);
 
     try {
       const constraints: any[] = [orderBy("createdAt", "desc"), limit(PAGE_SIZE + 1)];
@@ -75,8 +77,14 @@ export default function ListingsPage() {
       if (reset) setListings(mapped);
       else setListings((prev) => [...prev, ...mapped]);
       setHasMore(more);
-    } catch (err) {
+    } catch (err: any) {
       console.error("[ListingsPage] fetch failed:", err);
+      const isIndexError = err?.code === "failed-precondition" || err?.message?.includes("index");
+      setFetchError(
+        isIndexError
+          ? "This filter combination requires a Firestore index that is not yet ready. Try a different filter."
+          : "Failed to load listings. Check the console for details."
+      );
     } finally {
       setLoading(false);
       setLoadingMore(false);
@@ -260,6 +268,12 @@ export default function ListingsPage() {
                      min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1 min-w-[200px]"
         />
       </div>
+
+      {fetchError && (
+        <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-700 dark:text-red-400">
+          {fetchError}
+        </div>
+      )}
 
       {loading ? (
         <div className="space-y-3">
