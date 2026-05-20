@@ -206,9 +206,8 @@ service cloud.firestore {
       // Users can create (write) an archive record when deleting their own rental
       allow create: if request.auth != null
         && request.resource.data.archivedByUid == request.auth.uid;
-      // Only admins/editors can read archived records (enforced client-side via role check)
-      // Firestore rule: allow read only to authenticated users (admin role checked in app)
-      allow read: if request.auth != null;
+      // Only admins/editors can read archived records
+      allow read: if isEditorRole();
       // Only admins can delete archived records (enforced via admin app only)
       allow delete: if false; // all deletes go through admin app with server-side check
       allow update: if false;
