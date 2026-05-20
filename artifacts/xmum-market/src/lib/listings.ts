@@ -230,7 +230,9 @@ export async function markAsSold(id: string): Promise<void> {
   // are never reset — this is intentional; they serve as monotonically increasing metrics.
   await Promise.race([
     updateDoc(doc(db, "listings", id), { status: "sold" }),
-    new Promise<void>((resolve) => setTimeout(resolve, 6_000)),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("timeout:mark-as-sold")), 6_000)
+    ),
   ]);
 }
 

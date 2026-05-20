@@ -1,0 +1,87 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+
+---
+
+PART 2 — Fix A: markAsSold swallows timeout as success
+
+FILE TO EDIT: artifacts/xmum-market/src/lib/listings.ts
+
+THE BUG:
+markAsSold uses Promise.race with a timeout that resolves (not rejects) on expiry:
+  new Promise<void>((resolve) => setTimeout(resolve, 6_000))
+This means if the Firestore write is slow, the race resolves with undefined — the caller
+thinks the update succeeded but the listing may still be active in Firestore.
+
+THE FIX:
+Change the timeout inside markAsSold from resolve to reject, exactly like updateListing
+and bumpListing already do. Find this exact block inside markAsSold:
+
+  await Promise.race([
+    updateDoc(doc(db, "listings", id), { status: "sold" }),
+    new Promise<void>((resolve) => setTimeout(resolve, 6_000)),
+  ]);
+
+Change it to:
+
+  await Promise.race([
+    updateDoc(doc(db, "listings", id), { status: "sold" }),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("timeout:mark-as-sold")), 6_000)
+    ),
+  ]);
+
+Do not touch any other function in listings.ts.
+
+---
+
+PART 2 — Fix B: Photo upload silently skips failed photos
+
+FILE TO EDIT: artifacts/xmum-market/src/pages/PostPage.tsx
+
+THE BUG:
+In handleSubmit, each photo upload failure is caught and silently skipped with only a
+console.warn. The listing gets created with fewer photos than the user selected, with no
+error shown. For rental listings this is especially bad since they require at least 2 photos
+but the pre-submit check passes before uploads happen.
+
+THE FIX:
+Find this block inside handleSubmit in PostPage.tsx:
+
+      const urls: string[] = [];
+      for (const f of photos) {
+        try {
+          const url = await withTimeout(uploadPhoto(f, user.uid), 30_000, "photo-upload");
+          urls.push(url);
+        } catch (photoErr: any) {
+          console.warn("[PostPage] Photo skipped:", photoErr?.message);
+        }
+      }
+
+Replace it with:
+
+      const urls: string[] = [];
+      for (const f of photos) {
+        const url = await withTimeout(uploadPhoto(f, user.uid), 30_000, "photo-upload");
+        urls.push(url);
+      }
+
+The error is already caught by the outer try/catch in handleSubmit which sets the error
+message and calls setLoading(false). The existing catch block for "timeout:photo-upload"
+in the outer catch already handles this correctly:
+  else if (msg.startsWith("timeout:photo-upload")) setError("A photo upload timed out...")
+
+So removing the inner try/catch means any photo failure now surfaces to the user as a
+proper error instead of silently continuing. Do not change anything else in this function.
+
+VERIFICATION:
+- Run: pnpm --filter xmum-market run build
+- Confirm zero TypeScript errors
+- Confirm the markAsSold change used Promise<never> with reject, matching the pattern
+  in bumpListing and updateListing

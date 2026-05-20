@@ -578,12 +578,8 @@ export default function PostPage() {
 
       const urls: string[] = [];
       for (const f of photos) {
-        try {
-          const url = await withTimeout(uploadPhoto(f, user.uid), 30_000, "photo-upload");
-          urls.push(url);
-        } catch (photoErr: any) {
-          console.warn("[PostPage] Photo skipped:", photoErr?.message);
-        }
+        const url = await withTimeout(uploadPhoto(f, user.uid), 30_000, "photo-upload");
+        urls.push(url);
       }
 
       const now = Date.now();
