@@ -1,0 +1,94 @@
+## Root Cause
+
+Inside `deleteListing()`, the very first thing it does is call `listingHasActiveReport()`, which queries the **`reports` collection**:
+
+```ts
+const held = await listingHasActiveReport(listing.id);
+```
+
+But your Firestore rule for `reports` is:
+```
+allow read, update: if isEditorRole();
+```
+
+**Regular students cannot read the `reports` collection.** So the moment a student tries to delete their listing, this query fires, Firestore returns `permission-denied`, the error bubbles up, and the UI shows "Permission denied. Make sure you are signed in with your XMUM email."
+
+The delete never even gets to the actual deletion step.
+
+---
+
+## The Fix
+
+This is a Replit prompt — surgical change to `reportHold.ts`:
+
+---
+
+```
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+
+---
+
+## Task: Fix listing delete — permission denied when reading reports collection
+
+### Root cause
+`listingHasActiveReport()` in `artifacts/xmum-market/src/lib/reportHold.ts` queries the `reports` collection directly. Regular students cannot read `reports` (Firestore rules restrict it to editors/admins only). This causes a `permission-denied` error when any student tries to delete their own listing.
+
+### Fix: replace the reports query with a direct listing field check
+
+In `artifacts/xmum-market/src/lib/reportHold.ts`, change the `listingHasActiveReport` function.
+
+BEFORE:
+```ts
+export async function listingHasActiveReport(listingId: string): Promise<boolean> {
+  const q = query(
+    collection(db, "reports"),
+    where("listingId", "==", listingId),
+    where("status", "in", ["pending", "reviewed"]),
+    limit(1)
+  );
+  const snap = await getDocs(q);
+  return !snap.empty;
+}
+```
+
+AFTER:
+```ts
+export async function listingHasActiveReport(listingId: string): Promise<boolean> {
+  try {
+    const snap = await getDoc(doc(db, "listings", listingId));
+    if (!snap.exists()) return false;
+    return snap.data().isReportHeld === true;
+  } catch {
+    return false;
+  }
+}
+```
+
+Also add `getDoc` to the imports at the top of the file. The current import line is:
+```ts
+import {
+  collection, query, where, getDocs, updateDoc, doc, limit,
+} from "firebase/firestore";
+```
+
+Change it to:
+```ts
+import {
+  collection, query, where, getDocs, getDoc, updateDoc, doc, limit,
+} from "firebase/firestore";
+```
+
+### Why this works
+The `listings` collection is publicly readable (`allow read: if true`). The `isReportHeld` field is already set to `true` on a listing when an admin places a hold. So checking the listing document directly is both safe and accurate — no need to query the restricted `reports` collection.
+
+Do NOT change `shopListingHasActiveReport` — it is only called from admin-side code where editors can read reports.
+
+Verify build: `pnpm --filter xmum-market run build`
+```
