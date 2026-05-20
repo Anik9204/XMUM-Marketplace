@@ -1,0 +1,70 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. No pnpm build needed for this part — these are JSON config files only.
+
+---
+
+PART 5 — Fix A: xmum-market missing all security headers
+
+FILE TO EDIT: artifacts/xmum-market/vercel.json
+
+THE BUG:
+The market app's vercel.json has only cache headers. It has no X-Frame-Options,
+X-Content-Type-Options, Referrer-Policy, or Content-Security-Policy. The public-facing
+app used by all students has zero clickjacking and XSS protection.
+
+THE FIX:
+The current headers array in xmum-market/vercel.json ends after the /index.html cache
+rule. Add a new headers entry at the END of the headers array (after the last existing
+entry, before the closing ] of the headers array):
+
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firebasestorage.googleapis.com https://*.sentry.io https://*.ingest.sentry.io; frame-ancestors 'none';"
+        }
+      ]
+    }
+
+Do not remove or reorder any existing headers entries.
+
+---
+
+PART 5 — Fix B: Admin CSP missing firebasestorage.googleapis.com in connect-src
+
+FILE TO EDIT: artifacts/xmum-admin/vercel.json
+
+THE BUG:
+The admin CSP connect-src does not include firebasestorage.googleapis.com. Firebase Storage
+SDK makes XHR requests to that domain for upload progress and metadata. Those requests are
+blocked under the current CSP, causing Storage operations in admin to silently fail.
+
+THE FIX:
+Find the Content-Security-Policy header value in xmum-admin/vercel.json.
+Find the connect-src directive inside that value string. It currently reads:
+  connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.sentry.io https://*.ingest.sentry.io;
+
+Note that https://*.googleapis.com already covers firebasestorage.googleapis.com as a
+wildcard match. However to make it explicit and future-proof, add
+https://firebasestorage.googleapis.com after https://securetoken.googleapis.com:
+
+  connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firebasestorage.googleapis.com https://*.sentry.io https://*.ingest.sentry.io;
+
+Do not change any other part of the CSP or any other header.
+
+VERIFICATION:
+- Validate both files are valid JSON (no trailing commas, no syntax errors)
+- Show me the final complete headers array from xmum-market/vercel.json so I can
+  confirm the new entry was added correctly
+- Remind me these changes take effect on next Vercel deploy — no manual action needed
+  beyond pushing to GitHub
