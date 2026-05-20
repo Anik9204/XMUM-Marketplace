@@ -1,0 +1,156 @@
+Here is the prompt:
+
+---
+
+**CRITICAL RULES:**
+1. Do NOT change any file. Read and investigate only.
+2. Do NOT run `firebase deploy`. Do NOT push to GitHub.
+3. Produce a diagnostic report only.
+
+---
+
+**TASK: Re-investigate the "Missing or insufficient permissions" bug from scratch. Ignore all previous assumptions. Treat this as a fresh investigation.**
+
+---
+
+**THE BUG:**
+Regular students cannot edit or delete their own listings on `www.xmummarket.com`. Admins are unaffected. Creating listings works fine. The error is `FirebaseError: Missing or insufficient permissions`.
+
+---
+
+**WHAT HAS ALREADY BEEN TRIED (all confirmed in place — do not suggest these again):**
+- Firestore rules updated: listings update rule uses `isSignedIn()` not `isXmuEmail()`
+- Token refresh (`reload()` + `getIdToken(true)` + 500ms delay) added in `updateListing`, `deleteListing`, and `EditListingPage`
+- `experimentalForceLongPolling: false` added to `firebase.ts`
+- CSP in `vercel.json` updated to include `https://*.firebaseapp.com` in `script-src`, `connect-src`, and `frame-src`
+- `getUserRole()` patched to use `u.data.get('role', null)` to avoid throwing on missing field
+- All changes are deployed to production
+
+**None of these fixed the problem.**
+
+---
+
+**INVESTIGATION STEPS — do every single one:**
+
+**STEP 1: Read and print the EXACT current state of these files in full:**
+- `artifacts/xmum-market/firestore.rules` — print the entire listings match block
+- `artifacts/xmum-market/src/lib/listings.ts` — print the entire `deleteListing` and `updateListing` functions
+- `artifacts/xmum-market/src/lib/reportHold.ts` — print entire file
+- `artifacts/xmum-market/src/pages/EditListingPage.tsx` — print the token refresh section and the `baseData` construction
+- `artifacts/xmum-market/src/pages/ListingDetailPage.tsx` — print the `handleDeleteListing` function
+- `artifacts/xmum-market/src/lib/firebase.ts` — print entire file
+- `artifacts/xmum-market/src/contexts/AuthContext.tsx` — print entire file
+
+**STEP 2: Run this curl command and print the FULL response headers:**
+```bash
+curl -sI https://www.xmummarket.com/ | cat
+```
+Count how many `Content-Security-Policy` headers appear. If there are two, that is a conflict.
+
+**STEP 3: Check if the Vercel deployment actually has the latest code.**
+
+Run:
+```bash
+cd artifacts/xmum-market
+git log --oneline -10
+```
+Then check:
+```bash
+git diff HEAD~1 HEAD -- vercel.json
+git diff HEAD~1 HEAD -- src/lib/firebase.ts
+git diff HEAD~1 HEAD -- src/lib/listings.ts
+```
+This tells us whether the recent fixes were actually committed and pushed to GitHub (and therefore deployed to Vercel), or whether they only exist locally in Replit.
+
+**STEP 4: Check the BUILT output to confirm the deployed JS actually contains the 500ms delay.**
+
+Run:
+```bash
+cd artifacts/xmum-market
+pnpm run build 2>&1 | tail -5
+grep -r "setTimeout.*500" dist/ 2>/dev/null | head -5
+grep -r "experimentalForceLongPolling" dist/ 2>/dev/null | head -3
+```
+If these strings are NOT in the dist output, the fixes are not actually deployed.
+
+**STEP 5: Carefully re-read the delete flow and answer these specific questions:**
+
+In `deleteListing` in `listings.ts`:
+- After the token refresh and 500ms delay, the FIRST Firestore operation is `listingHasActiveReport(listing.id)` which calls `getDoc` on `listings/{id}`. What rule covers this? (answer: `allow read: if true` — public read, no auth needed — so this succeeds)
+- The SECOND operation depends on whether `held` is true or false. If `held` is false, it goes to the rental archive check, then `deleteDoc`. What is the exact rule for `deleteDoc` on listings?
+- If `held` is true, it calls `updateDoc` with `{ isArchived: true, status: "sold" }`. What rule covers this?
+- After the main delete, `logPlatformActivity` calls `addDoc` on `platformActivityFeed`. What rule covers this? Does it require `isXmuEmail()`?
+- After that, `updateDoc` on `users/{userId}` decrements `activeListingCount`. What rule covers this?
+
+**STEP 6: Check whether `listing.isReportHeld` on the client matches `resource.data.isReportHeld` in Firestore.**
+
+In the delete rule: `resource.data.isReportHeld != true`
+
+The client-side `listing` object is fetched once when the page loads. If the listing has `isReportHeld: true` in Firestore but the client has `isReportHeld: undefined` or `isReportHeld: false` (stale), then:
+- Client thinks `held = false` → calls `deleteDoc`
+- Firestore sees `isReportHeld == true` → delete rule fails because `resource.data.isReportHeld != true` is false
+
+Check: does `listingHasActiveReport` re-fetch from Firestore live (it does — it uses `getDoc`), so `held` should be accurate. But does `deleteDoc` use the LIVE Firestore value? Yes. So if the listing genuinely has `isReportHeld: true` in Firestore, `deleteDoc` would fail even for the owner.
+
+**Question: Is it possible that these specific listings have `isReportHeld: true` set in Firestore?** The student posted a new listing and immediately tried to delete it — could a report have been placed on it already? Or could `isReportHeld` be set to something other than `false` (e.g. `null`, `undefined`, or missing field)?
+
+In Firestore rules, `resource.data.isReportHeld != true` evaluates as:
+- `false != true` → `true` ✅ (allows)
+- `null != true` → `true` ✅ (allows)  
+- missing field → **throws** ❌ (denies entire rule)
+
+**Check: does `createListing` in `listings.ts` set `isReportHeld` when creating a new listing?** Read the `createListing` function and check whether `isReportHeld: false` is explicitly set on the document. If it is NOT set, then new listings don't have the field, and `resource.data.isReportHeld` in the rules throws a "key not found" error, causing the entire delete rule to DENY.
+
+**STEP 7: Check `createListing` exactly.**
+
+Print the full `createListing` function from `listings.ts`. Check whether it sets `isReportHeld: false` explicitly in the document it writes to Firestore.
+
+If `isReportHeld` is NOT in the document written by `createListing`, then:
+- New listings have no `isReportHeld` field
+- `resource.data.isReportHeld != true` in the delete rule **throws** (undefined field access)
+- The entire rule errors and defaults to DENY
+- This would explain EXACTLY why create works but edit/delete fail
+- And why admins work (they bypass via `isEditorRole()`)
+
+**STEP 8: Check old vs new listings.**
+
+If Step 7 confirms `isReportHeld` is missing from new listings, check whether listings created BEFORE this codebase was set up (older listings that the admin created manually or via a different flow) DO have `isReportHeld: false`. This would explain why some listings can be deleted and others cannot.
+
+---
+
+**OUTPUT — produce this exact report:**
+
+```
+=== DIAGNOSTIC REPORT ===
+
+1. CURRENT FILE STATE
+   [print the key sections from Step 1]
+
+2. CURL HEADERS
+   [print full curl output, count CSP headers]
+
+3. GIT LOG + DIFFS
+   [print git log and diffs — confirm fixes are committed]
+
+4. BUILD OUTPUT CHECK
+   [confirm setTimeout 500 and experimentalForceLongPolling are in dist/]
+
+5. DELETE FLOW ANALYSIS
+   [answer every question in Step 5]
+
+6. isReportHeld FIELD ANALYSIS
+   [answer Step 6 questions]
+
+7. createListing FIELD CHECK
+   [print createListing function, confirm whether isReportHeld is set]
+
+8. ROOT CAUSE CONCLUSION
+   Most likely cause: [one sentence]
+   Confidence: [high/medium/low]
+   Evidence: [bullet points]
+
+9. RECOMMENDED FIX
+   [one specific change, nothing else]
+```
+
+Do NOT make any changes. Report only.
