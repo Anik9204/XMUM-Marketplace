@@ -74,7 +74,7 @@ service cloud.firestore {
         && request.resource.data.title.size() > 0
         && request.resource.data.title.size() <= 100
         && request.resource.data.description is string
-        && request.resource.data.description.size() <= 1000
+        && request.resource.data.description.size() <= 3000
         && request.resource.data.type in
            ["buy-sell", "lost-found", "jobs", "assistance", "rental"]
         // Price must be 0–1,000,000 RM when present (stored as a float)

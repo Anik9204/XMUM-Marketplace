@@ -1,0 +1,38 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+
+---
+
+PART 1 — Fix: Description character limit mismatch between UI and Firestore rules
+
+FILE TO EDIT: artifacts/xmum-market/firestore.rules
+
+THE BUG:
+The Firestore rule for listings creation enforces `description.size() <= 1000`, but the UI
+(PostPage.tsx and EditListingPage.tsx) allows users to type up to 3,000 characters. Any post
+with a description longer than 1,000 characters throws permission-denied and fails silently.
+
+THE FIX:
+In firestore.rules, find the listings `allow create` rule. Change the single line:
+  && request.resource.data.description.size() <= 1000
+to:
+  && request.resource.data.description.size() <= 3000
+
+That is the only change. Do not touch any other rule, any other file, or any other line.
+
+VERIFICATION:
+- The file should still pass `firebase deploy --only firestore:rules --project xmum--market`
+- Search the entire file for any other occurrence of `description.size()` — if any exist, apply
+  the same change. Report back how many occurrences you found.
+- Do NOT run pnpm build for this part — firestore.rules is not a TypeScript file.
+
+AFTER THE EDIT:
+Tell me exactly which line number was changed and show me the before and after of that single line.
+Then remind me: "Deploy this file via Firebase Console → Firestore → Rules → paste and Publish,
+OR run: firebase deploy --only firestore:rules --project xmum--market"
