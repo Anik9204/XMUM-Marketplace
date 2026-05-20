@@ -1,0 +1,131 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+
+---
+
+## Task: Fix "Permission denied" on listing delete and edit for all regular users
+
+### Root cause
+Both delete and edit fail with `permission-denied` from Firestore for all regular users. The Firestore `isXmuEmail()` rule requires `email_verified == true` in the Auth token. Even though `getIdToken(true)` is called before the edit save, and even though the stored session shows `emailVerified: true`, Firestore still rejects the write. The token must be force-refreshed AND the user object must be reloaded from Firebase Auth before every Firestore write that requires `isXmuEmail()`. The delete flow in `ProfilePage.tsx` currently does NO token refresh at all before calling `deleteListing()`.
+
+### Fix 1 — ProfilePage.tsx: add token refresh before delete
+
+File: `artifacts/xmum-market/src/pages/ProfilePage.tsx`
+
+Step 1: Add `auth` to the existing import from `"@/lib/firebase"`. The current import line on line 19 is:
+```ts
+import { logOut } from "@/lib/auth";
+```
+Change it to:
+```ts
+import { logOut } from "@/lib/auth";
+import { auth } from "@/lib/firebase";
+```
+
+Step 2: In the `handleDelete` function, add a token refresh as the very first thing inside the try block. The current try block starts as:
+```ts
+    try {
+      await deleteListing(listing);
+```
+Change it to:
+```ts
+    try {
+      if (auth.currentUser) {
+        await auth.currentUser.reload();
+        await auth.currentUser.getIdToken(true);
+      }
+      await deleteListing(listing);
+```
+
+Do NOT touch anything else in handleDelete or anywhere else in ProfilePage.tsx.
+
+---
+
+### Fix 2 — listings.ts: add token refresh inside deleteListing itself as a safety net
+
+File: `artifacts/xmum-market/src/lib/listings.ts`
+
+Step 1: `auth` is not currently imported in this file. Add it to the existing firebase import. The current import line is:
+```ts
+import { db, storage } from "./firebase";
+```
+Change it to:
+```ts
+import { auth, db, storage } from "./firebase";
+```
+
+Step 2: At the very start of the `deleteListing` function, add a token refresh before anything else. The current function starts as:
+```ts
+export async function deleteListing(listing: Listing): Promise<void> {
+  // Check if this listing has an active report hold
+  const held = await listingHasActiveReport(listing.id);
+```
+Change it to:
+```ts
+export async function deleteListing(listing: Listing): Promise<void> {
+  // Force-refresh token so Firestore rules see latest email_verified claim
+  try {
+    if (auth.currentUser) {
+      await auth.currentUser.reload();
+      await auth.currentUser.getIdToken(true);
+    }
+  } catch {
+    // Non-critical — proceed even if refresh fails
+  }
+  // Check if this listing has an active report hold
+  const held = await listingHasActiveReport(listing.id);
+```
+
+Step 3: At the very start of the `updateListing` function, add the same token refresh. The current function starts as:
+```ts
+export async function updateListing(
+  id: string,
+  userId: string,
+  data: Partial<Omit<Listing, "id" | "createdAt" | "userId" | "userEmail" | "userName">>
+): Promise<void> {
+  const shouldDecrement =
+```
+Change it to:
+```ts
+export async function updateListing(
+  id: string,
+  userId: string,
+  data: Partial<Omit<Listing, "id" | "createdAt" | "userId" | "userEmail" | "userName">>
+): Promise<void> {
+  // Force-refresh token so Firestore rules see latest email_verified claim
+  try {
+    if (auth.currentUser) {
+      await auth.currentUser.reload();
+      await auth.currentUser.getIdToken(true);
+    }
+  } catch {
+    // Non-critical — proceed even if refresh fails
+  }
+  const shouldDecrement =
+```
+
+Do NOT touch anything else in listings.ts.
+
+---
+
+### Fix 3 — EditListingPage.tsx: remove duplicate token refresh since listings.ts now handles it
+
+File: `artifacts/xmum-market/src/pages/EditListingPage.tsx`
+
+The page currently does its own `reload()` + `getIdToken(true)` before calling `updateListing`. Since `updateListing` now does this internally, the page-level refresh is now redundant but harmless — DO NOT remove it. Leave EditListingPage.tsx completely untouched.
+
+---
+
+### Verification checklist
+1. `auth` is now imported in both `ProfilePage.tsx` and `listings.ts`
+2. `deleteListing` in `listings.ts` starts with the try/catch token refresh block
+3. `updateListing` in `listings.ts` starts with the try/catch token refresh block
+4. `handleDelete` in `ProfilePage.tsx` has the token refresh before `await deleteListing(listing)`
+5. No other functions, imports, or JSX were changed in any file
+6. Run: `pnpm --filter xmum-market run build` — must complete with zero errors

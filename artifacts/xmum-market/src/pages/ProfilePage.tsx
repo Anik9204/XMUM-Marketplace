@@ -17,6 +17,7 @@ import {
   Tag, BadgeCheck,
 } from "lucide-react";
 import { logOut } from "@/lib/auth";
+import { auth } from "@/lib/firebase";
 import { useLocation, Link } from "wouter";
 import { addNotification } from "@/lib/notifications";
 
@@ -368,6 +369,10 @@ export default function ProfilePage() {
     setDeleting(true);
     setDeleteError("");
     try {
+      if (auth.currentUser) {
+        await auth.currentUser.reload();
+        await auth.currentUser.getIdToken(true);
+      }
       await deleteListing(listing);
       const updated = listingsCache.current.filter((l) => l.id !== listing.id);
       listingsCache.current = updated;
