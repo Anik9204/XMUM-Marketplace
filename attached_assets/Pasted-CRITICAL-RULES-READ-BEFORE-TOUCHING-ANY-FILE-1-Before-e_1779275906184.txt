@@ -1,0 +1,64 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+
+---
+
+PART 3 — Fix A: Cloud Function writes isRead, client reads read — field name mismatch
+
+FILE TO EDIT: artifacts/functions/src/index.ts
+
+THE BUG:
+The sendNotification helper inside functions/src/index.ts writes isRead: false to
+notification documents. But the client (notifications.ts, NotificationBell.tsx) reads
+the read field — not isRead. Notifications created by Cloud Functions always appear
+with read as undefined, which breaks the unread badge logic and means markNotificationsRead
+(which sets read: true) never clears isRead. Two different field names for the same concept.
+
+THE FIX:
+Find the sendNotification function. Inside it, find:
+      isRead:    false,
+
+Change it to:
+      read:      false,
+
+That single word change is the entire fix. Do not change anything else in this function
+or any other part of the file.
+
+---
+
+PART 3 — Fix B: getTabCounts includes archived and sold listings
+
+FILE TO EDIT: artifacts/xmum-market/src/lib/listings.ts
+
+THE BUG:
+getTabCounts queries each listing type with only where("type", "==", type) — no filter
+for isArchived or status. The tab badge counts include sold, archived, and expired listings,
+making every tab show a much higher count than the actual visible listings.
+
+THE FIX:
+Find getTabCounts in listings.ts. Find this line inside the types.map async callback:
+
+          const q = query(collection(db, "listings"), where("type", "==", type));
+
+Change it to:
+
+          const q = query(
+            collection(db, "listings"),
+            where("type", "==", type),
+            where("isArchived", "==", false),
+            where("status", "==", "active")
+          );
+
+Do not change anything else in getTabCounts or any other function.
+
+VERIFICATION:
+- Run: pnpm --filter xmum-market run build
+- Confirm zero TypeScript errors
+- Note: the functions change does not need a pnpm build — it deploys separately via
+  Firebase. Remind me to deploy functions: firebase deploy --only functions --project xmum--market

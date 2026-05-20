@@ -41,7 +41,7 @@ async function sendNotification(
       shopId:    data.shopId,
       shopName:  data.shopName,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      isRead:    false,
+      read:      false,
     });
   } catch (err) {
     console.warn(`[sendNotification] failed for uid=${uid}:`, err);

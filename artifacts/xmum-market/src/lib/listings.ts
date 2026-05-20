@@ -138,7 +138,12 @@ export async function getTabCounts(): Promise<Partial<Record<ListingType, number
     const counts = await Promise.all(
       types.map(async (type) => {
         try {
-          const q = query(collection(db, "listings"), where("type", "==", type));
+          const q = query(
+            collection(db, "listings"),
+            where("type", "==", type),
+            where("isArchived", "==", false),
+            where("status", "==", "active")
+          );
           const snap = await getCountFromServer(q);
           return snap.data().count;
         } catch {
