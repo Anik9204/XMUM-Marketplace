@@ -1,0 +1,63 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+
+FILE TO EDIT: artifacts/xmum-market/src/components/AuthModal.tsx
+
+FEATURE: When a sign-in attempt fails with "user-not-found" (no account exists with that email/ID), instead of showing a plain red error text, show a friendly inline card that nudges the student to sign up.
+
+EXACT CHANGES REQUIRED:
+
+1. Add a new state variable near the other useState declarations:
+const [showNoAccountNudge, setShowNoAccountNudge] = useState(false);
+
+2. In handleSubmit, at the top of the try block where setError("") is called, also add:
+setShowNoAccountNudge(false);
+
+3. In the catch block, find this existing line:
+else if (code.includes("user-not-found")) setError("No account found with this email.");
+
+Replace it with:
+else if (code.includes("user-not-found")) setShowNoAccountNudge(true);
+
+So instead of setting an error string, we set the nudge flag. Do not delete the else-if line — just change what it does.
+
+4. In the JSX, find the existing error display block:
+{error && <p className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">{error}</p>}
+
+Directly below that line (keep the error line exactly as is), add this new block:
+
+{showNoAccountNudge && mode === "signin" && (
+  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl px-4 py-3 text-center">
+    <p className="text-sm font-semibold text-blue-800 dark:text-blue-200 mb-0.5">No account found</p>
+    <p className="text-xs text-blue-600 dark:text-blue-300 mb-2.5">
+      Looks like you don't have an account yet. Sign up takes less than a minute!
+    </p>
+    <button
+      type="button"
+      onClick={() => {
+        setShowNoAccountNudge(false);
+        setError("");
+        setMode("signup");
+      }}
+      className="btn-primary text-sm min-h-[40px] px-5"
+    >
+      Create account →
+    </button>
+  </div>
+)}
+
+5. Also reset the nudge when the user switches tabs. Find the two tab switcher buttons (Sign In and Sign Up). In each button's onClick, add setShowNoAccountNudge(false) alongside the existing setError("") and setSuccess("") calls. Example for the Sign In tab:
+onClick={() => { setMode("signin"); setError(""); setSuccess(""); setShowNoAccountNudge(false); }}
+And for Sign Up tab:
+onClick={() => { setMode("signup"); setError(""); setSuccess(""); setShowNoAccountNudge(false); }}
+
+6. Do not change anything else — no layout, no CSS, no other logic.
+
+After making changes, run: pnpm --filter xmum-market run build
+Confirm zero TypeScript errors before finishing.

@@ -58,6 +58,7 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
 
   const [forgotCooldown, setForgotCooldown] = useState(0);
   const forgotTimerRef = useRef<ReturnType<typeof setInterval>>(undefined);
+  const [showNoAccountNudge, setShowNoAccountNudge] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -110,6 +111,7 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
     e.preventDefault();
     setError("");
     setSuccess("");
+    setShowNoAccountNudge(false);
     setLoading(true);
     try {
       const resolvedEmail = resolveEmail(email);
@@ -149,7 +151,7 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
       } else if (code === "only_xmu_email" || code.includes("only_xmu")) setError(t.onlyXmuEmail);
       else if (code === "profile_create_failed") setError("Account created but profile setup failed. Please contact support.");
       else if (code.includes("wrong-password") || code.includes("invalid-credential")) setError("Invalid email or password.");
-      else if (code.includes("user-not-found")) setError("No account found with this email.");
+      else if (code.includes("user-not-found")) setShowNoAccountNudge(true);
       else if (code.includes("email-already-in-use")) setError("An account already exists with this email. Please sign in.");
       else setError(t.errorOccurred);
     } finally {
@@ -234,7 +236,7 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
           {mode !== "forgot" && (
             <div className="flex bg-slate-100 dark:bg-slate-700 rounded-xl p-1 mb-5">
               <button
-                onClick={() => { setMode("signin"); setError(""); setSuccess(""); }}
+                onClick={() => { setMode("signin"); setError(""); setSuccess(""); setShowNoAccountNudge(false); }}
                 className={`flex-1 py-2 rounded-lg text-sm font-medium min-h-[40px] transition-colors ${
                   mode === "signin"
                     ? "bg-white dark:bg-slate-600 text-slate-900 dark:text-slate-100 shadow-sm"
@@ -244,7 +246,7 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
                 {t.signIn}
               </button>
               <button
-                onClick={() => { setMode("signup"); setError(""); setSuccess(""); }}
+                onClick={() => { setMode("signup"); setError(""); setSuccess(""); setShowNoAccountNudge(false); }}
                 className={`flex-1 py-2 rounded-lg text-sm font-medium min-h-[40px] transition-colors ${
                   mode === "signup"
                     ? "bg-white dark:bg-slate-600 text-slate-900 dark:text-slate-100 shadow-sm"
@@ -359,6 +361,25 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
             )}
 
             {error && <p className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">{error}</p>}
+            {showNoAccountNudge && mode === "signin" && (
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl px-4 py-3 text-center">
+                <p className="text-sm font-semibold text-blue-800 dark:text-blue-200 mb-0.5">No account found</p>
+                <p className="text-xs text-blue-600 dark:text-blue-300 mb-2.5">
+                  Looks like you don't have an account yet. Sign up takes less than a minute!
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowNoAccountNudge(false);
+                    setError("");
+                    setMode("signup");
+                  }}
+                  className="btn-primary text-sm min-h-[40px] px-5"
+                >
+                  Create account →
+                </button>
+              </div>
+            )}
             {success && <p className="text-xs text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 rounded-lg px-3 py-2">{success}</p>}
 
             <button
