@@ -7,6 +7,11 @@ import { checkRateLimit } from "@/lib/rateLimit";
 
 type Mode = "signin" | "signup" | "forgot";
 
+function resolveEmail(raw: string): string {
+  const trimmed = raw.trim();
+  return trimmed.includes("@") ? trimmed : `${trimmed}@xmu.edu.my`;
+}
+
 function getPasswordStrength(pw: string): { level: 0 | 1 | 2 | 3; label: string } {
   if (pw.length === 0) return { level: 0, label: "" };
   const hasLetter = /[a-zA-Z]/.test(pw);
@@ -107,8 +112,9 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
     setSuccess("");
     setLoading(true);
     try {
+      const resolvedEmail = resolveEmail(email);
       if (mode === "forgot") {
-        await resetPasswordWithCheck(email);
+        await resetPasswordWithCheck(resolvedEmail);
         setSuccess(t.emailSent);
         setForgotCooldown(60);
         forgotTimerRef.current = setInterval(() => {
@@ -118,22 +124,22 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
           });
         }, 1000);
       } else if (mode === "signup") {
-        if (!isXmuEmail(email)) { setError(t.onlyXmuEmail); return; }
+        if (!isXmuEmail(resolvedEmail)) { setError(t.onlyXmuEmail); return; }
         if (!fullName.trim()) { setError("Full name is required."); return; }
         if (password.length < 8) { setError(t.passwordTooShort); return; }
         if (password.length > 32) { setError(t.passwordTooLong); return; }
         if (!/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) { setError(t.passwordTooWeak); return; }
         if (password !== confirmPass) { setError(t.passwordsNoMatch); return; }
-        await signUp(email, password, fullName.trim(), whatsapp.trim(), wechat.trim());
-        setPendingEmail(email);
+        await signUp(resolvedEmail, password, fullName.trim(), whatsapp.trim(), wechat.trim());
+        setPendingEmail(resolvedEmail);
         setVerificationPending(true);
         startCooldown();
       } else {
-        if (!checkRateLimit(`login_${email}`, 5, 5 * 60 * 1000)) {
+        if (!checkRateLimit(`login_${resolvedEmail}`, 5, 5 * 60 * 1000)) {
           setError("Too many login attempts. Please wait 5 minutes and try again.");
           return;
         }
-        await signIn(email, password);
+        await signIn(resolvedEmail, password);
         onClose();
       }
     } catch (err: any) {
@@ -270,13 +276,18 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
             <div>
               <label className="block text-xs font-medium text-gray-600 dark:text-slate-300 mb-1">{t.email}</label>
               <input
-                type="email"
+                type="text"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="student@xmu.edu.my"
                 required
                 className={inputCls}
               />
+              {email.trim() && !email.includes("@") && (
+                <p className="text-[11px] text-blue-500 dark:text-blue-400 mt-1">
+                  → {email.trim()}@xmu.edu.my
+                </p>
+              )}
             </div>
 
             {mode !== "forgot" && (
