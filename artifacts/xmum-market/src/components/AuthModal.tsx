@@ -4,12 +4,29 @@ import { useAuth } from "@/contexts/AuthContext";
 import { signIn, signUp, resetPasswordWithCheck, isXmuEmail, resendVerification } from "@/lib/auth";
 import { X, Eye, EyeOff, MailCheck, Loader2 } from "lucide-react";
 import { checkRateLimit } from "@/lib/rateLimit";
+import { getFirestore, collection, query, where, getDocs, limit } from "firebase/firestore";
+import { getApp } from "firebase/app";
 
 type Mode = "signin" | "signup" | "forgot";
 
 function resolveEmail(raw: string): string {
   const trimmed = raw.trim();
   return trimmed.includes("@") ? trimmed : `${trimmed}@xmu.edu.my`;
+}
+
+async function emailExistsInFirestore(email: string): Promise<boolean> {
+  try {
+    const db = getFirestore(getApp());
+    const q = query(
+      collection(db, "users"),
+      where("email", "==", email.toLowerCase()),
+      limit(1)
+    );
+    const snap = await getDocs(q);
+    return !snap.empty;
+  } catch {
+    return true;
+  }
 }
 
 function getPasswordStrength(pw: string): { level: 0 | 1 | 2 | 3; label: string } {
@@ -141,6 +158,11 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
           setError("Too many login attempts. Please wait 5 minutes and try again.");
           return;
         }
+        const exists = await emailExistsInFirestore(resolvedEmail);
+        if (!exists) {
+          setShowNoAccountNudge(true);
+          return;
+        }
         await signIn(resolvedEmail, password);
         onClose();
       }
@@ -150,8 +172,7 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
         setError(t.emailNotRegistered);
       } else if (code === "only_xmu_email" || code.includes("only_xmu")) setError(t.onlyXmuEmail);
       else if (code === "profile_create_failed") setError("Account created but profile setup failed. Please contact support.");
-      else if (code.includes("wrong-password") || code.includes("invalid-credential")) setError("Invalid email or password.");
-      else if (code.includes("user-not-found")) setShowNoAccountNudge(true);
+      else if (code.includes("wrong-password") || code.includes("invalid-credential") || code.includes("user-not-found")) setError("Invalid email or password.");
       else if (code.includes("email-already-in-use")) setError("An account already exists with this email. Please sign in.");
       else setError(t.errorOccurred);
     } finally {

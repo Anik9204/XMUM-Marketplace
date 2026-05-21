@@ -1,0 +1,81 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+
+FILE TO EDIT: artifacts/xmum-market/src/components/AuthModal.tsx
+
+PROBLEM: Firebase no longer returns "user-not-found" as a separate error code for sign-in. It now returns "invalid-credential" for BOTH wrong password AND non-existent account. So the "no account" nudge never shows — instead the user just sees "Invalid email or password."
+
+We need to distinguish these two cases ourselves by checking Firestore before attempting sign-in.
+
+IMPORTS NEEDED: Add these two imports to the existing firebase/firestore import (already imported in the file via auth.ts, but we need direct Firestore access here). Add this import at the top of the file alongside the existing imports:
+
+import { getFirestore, collection, query, where, getDocs, limit } from "firebase/firestore";
+import { getApp } from "firebase/app";
+
+EXACT CHANGES:
+
+1. Add a helper function after the resolveEmail function (around line 12, before getPasswordStrength):
+
+async function emailExistsInFirestore(email: string): Promise<boolean> {
+  try {
+    const db = getFirestore(getApp());
+    const q = query(
+      collection(db, "users"),
+      where("email", "==", email.toLowerCase()),
+      limit(1)
+    );
+    const snap = await getDocs(q);
+    return !snap.empty;
+  } catch {
+    // If the check fails for any reason, assume account exists
+    // so we don't wrongly show the nudge — fall through to Firebase signIn error
+    return true;
+  }
+}
+
+2. In handleSubmit, find the sign-in else block which currently looks like:
+
+      } else {
+        if (!checkRateLimit(`login_${resolvedEmail}`, 5, 5 * 60 * 1000)) {
+          setError("Too many login attempts. Please wait 5 minutes and try again.");
+          return;
+        }
+        await signIn(resolvedEmail, password);
+        onClose();
+      }
+
+Replace it with:
+
+      } else {
+        if (!checkRateLimit(`login_${resolvedEmail}`, 5, 5 * 60 * 1000)) {
+          setError("Too many login attempts. Please wait 5 minutes and try again.");
+          return;
+        }
+        const exists = await emailExistsInFirestore(resolvedEmail);
+        if (!exists) {
+          setShowNoAccountNudge(true);
+          return;
+        }
+        await signIn(resolvedEmail, password);
+        onClose();
+      }
+
+3. In the catch block, find:
+      else if (code.includes("wrong-password") || code.includes("invalid-credential")) setError("Invalid email or password.");
+      else if (code.includes("user-not-found")) setShowNoAccountNudge(true);
+
+Replace those two lines with just:
+      else if (code.includes("wrong-password") || code.includes("invalid-credential") || code.includes("user-not-found")) setError("Invalid email or password.");
+
+Reasoning: If we reach the catch block now, it means the account EXISTS (we checked above) but the password was wrong. So "Invalid email or password." is always the correct message here.
+
+4. Do not change anything else — no layout, no CSS, no other logic.
+
+After making changes, run: pnpm --filter xmum-market run build
+Confirm zero TypeScript errors before finishing.
