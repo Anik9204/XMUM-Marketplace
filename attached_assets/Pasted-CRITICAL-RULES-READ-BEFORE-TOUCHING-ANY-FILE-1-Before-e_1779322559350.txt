@@ -1,0 +1,258 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — minimum lines changed.
+3. Do NOT remove any existing function, prop, import, or JSX element unless explicitly told to.
+4. After every change, mentally verify: "Does this break anything that was working before?"
+5. Never change any CSS class, layout structure, z-index, or responsive breakpoint.
+6. Confirm zero build errors: pnpm --filter xmum-market run build
+
+TASK: Replace the Firestore SDK updateDoc and deleteDoc calls in updateListing and deleteListing with direct Firebase REST API calls. This bypasses all SDK auth-token caching issues permanently.
+
+BACKGROUND: The Firebase JS SDK caches the Firestore connection and its auth token. Token refreshes via getIdToken(true) update Firebase Auth's in-memory state but the Firestore SDK's transport layer (WebSocket or long-poll connection) does not always pick up the new token before the next write. The REST API sends a fresh Authorization header on every call, so it is immune to this problem.
+
+---
+
+FILE 1: artifacts/xmum-market/src/lib/listings.ts
+
+CHANGE 1A — Add a helper function. Find the line:
+
+const PAGE_SIZE = 30;
+
+Add this block directly AFTER that line (do not replace it):
+
+// ── Firestore REST helpers ──────────────────────────────────────────────────
+// These bypass the Firestore JS SDK for write operations to avoid stale-token
+// issues with the SDK's persistent connection. Every REST call sends a fresh
+// Authorization header from getIdToken(true).
+
+const FIRESTORE_REST_BASE = `https://firestore.googleapis.com/v1/projects/${import.meta.env.VITE_FIREBASE_PROJECT_ID}/databases/(default)/documents`;
+
+async function getRestToken(): Promise<string> {
+  const user = auth.currentUser;
+  if (!user) throw new Error("not-authenticated");
+  return user.getIdToken(true);
+}
+
+async function restUpdateDoc(
+  collectionPath: string,
+  docId: string,
+  fields: Record<string, unknown>
+): Promise<void> {
+  const token = await getRestToken();
+  // Convert plain JS values to Firestore REST field value format
+  function toFirestoreValue(val: unknown): unknown {
+    if (val === null || val === undefined) return { nullValue: null };
+    if (typeof val === "boolean") return { booleanValue: val };
+    if (typeof val === "number") return Number.isInteger(val) ? { integerValue: String(val) } : { doubleValue: val };
+    if (typeof val === "string") return { stringValue: val };
+    if (Array.isArray(val)) return { arrayValue: { values: val.map(toFirestoreValue) } };
+    if (typeof val === "object") {
+      const fields: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+        fields[k] = toFirestoreValue(v);
+      }
+      return { mapValue: { fields } };
+    }
+    return { stringValue: String(val) };
+  }
+
+  const firestoreFields: Record<string, unknown> = {};
+  const updateMask: string[] = [];
+  for (const [key, value] of Object.entries(fields)) {
+    firestoreFields[key] = toFirestoreValue(value);
+    updateMask.push(key);
+  }
+
+  const url = `${FIRESTORE_REST_BASE}/${collectionPath}/${docId}?${updateMask.map((f) => `updateMask.fieldPaths=${encodeURIComponent(f)}`).join("&")}`;
+
+  const res = await fetch(url, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ fields: firestoreFields }),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const code = body?.error?.status ?? "UNKNOWN";
+    const message = body?.error?.message ?? res.statusText;
+    throw Object.assign(new Error(message), { code: code === "PERMISSION_DENIED" ? "permission-denied" : code.toLowerCase() });
+  }
+}
+
+async function restDeleteDoc(
+  collectionPath: string,
+  docId: string
+): Promise<void> {
+  const token = await getRestToken();
+  const url = `${FIRESTORE_REST_BASE}/${collectionPath}/${docId}`;
+  const res = await fetch(url, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const code = body?.error?.status ?? "UNKNOWN";
+    const message = body?.error?.message ?? res.statusText;
+    throw Object.assign(new Error(message), { code: code === "PERMISSION_DENIED" ? "permission-denied" : code.toLowerCase() });
+  }
+}
+// ── End Firestore REST helpers ──────────────────────────────────────────────
+
+
+CHANGE 1B — Replace the updateDoc call in updateListing.
+
+Find this exact block inside updateListing:
+
+  const safeUpdates = sanitizeListingData(data as Record<string, unknown>);
+  await Promise.race([
+    updateDoc(doc(db, "listings", id), safeUpdates),
+    new Promise<void>((_, reject) =>
+      setTimeout(() => reject(new Error("timeout:update-listing")), 6_000)
+    ),
+  ]);
+
+Replace with:
+
+  const safeUpdates = sanitizeListingData(data as Record<string, unknown>);
+  await Promise.race([
+    restUpdateDoc("listings", id, safeUpdates),
+    new Promise<void>((_, reject) =>
+      setTimeout(() => reject(new Error("timeout:update-listing")), 6_000)
+    ),
+  ]);
+
+
+CHANGE 1C — Remove the token refresh block from updateListing (it is no longer needed — getRestToken() always calls getIdToken(true) internally).
+
+Find and DELETE this entire block from updateListing:
+
+  // Force-refresh the ID token so Firestore's auth context is current
+  try {
+    if (auth.currentUser) {
+      await auth.currentUser.reload();
+      await auth.currentUser.getIdToken(true);
+      // Small delay: Firestore's long-poll connection needs a moment to
+      // pick up the refreshed token before the write is sent
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+  } catch {
+    // Non-critical — proceed even if refresh fails
+  }
+
+
+CHANGE 1D — Replace the deleteDoc call in deleteListing.
+
+Find this exact block inside deleteListing:
+
+  await Promise.race([
+    deleteDoc(doc(db, "listings", listing.id)),
+    new Promise<void>((_, reject) =>
+      setTimeout(() => reject(new Error("timeout:delete-listing")), 6_000)
+    ),
+  ]);
+
+Replace with:
+
+  await Promise.race([
+    restDeleteDoc("listings", listing.id),
+    new Promise<void>((_, reject) =>
+      setTimeout(() => reject(new Error("timeout:delete-listing")), 6_000)
+    ),
+  ]);
+
+
+CHANGE 1E — Remove the token refresh block from deleteListing (same reason as 1C).
+
+Find and DELETE this entire block from deleteListing:
+
+  // Force-refresh the ID token so Firestore's auth context is current
+  try {
+    if (auth.currentUser) {
+      await auth.currentUser.reload();
+      await auth.currentUser.getIdToken(true);
+      // Small delay: Firestore's long-poll connection needs a moment to
+      // pick up the refreshed token before the write is sent
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+  } catch {
+    // Non-critical — proceed even if refresh fails
+  }
+
+
+CHANGE 1F — Also replace the soft-delete updateDoc inside deleteListing (the report-held branch).
+
+Find this exact block:
+
+    // Apply soft delete — hide from public but preserve evidence
+    await updateDoc(doc(db, "listings", listing.id), {
+      isArchived: true,
+      status: "sold",
+    });
+
+Replace with:
+
+    // Apply soft delete — hide from public but preserve evidence
+    await restUpdateDoc("listings", listing.id, {
+      isArchived: true,
+      status: "sold",
+    });
+
+
+---
+
+FILE 2: artifacts/xmum-market/src/pages/EditListingPage.tsx
+
+CHANGE 2A — Remove the token refresh from the save handler. It is now redundant since restUpdateDoc calls getIdToken(true) internally.
+
+Find:
+
+      await withTimeout(auth.currentUser?.reload() ?? Promise.resolve(), 5_000, "token-refresh");
+      await withTimeout(auth.currentUser?.getIdToken(true) ?? Promise.resolve(""), 10_000, "token-refresh");
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+Replace with just:
+
+      await withTimeout(auth.currentUser?.reload() ?? Promise.resolve(), 5_000, "token-refresh");
+
+(Keep the reload() — it still syncs emailVerified. Remove only getIdToken(true) and the delay.)
+
+Also find and remove the timeout error handler for token-refresh since getIdToken is no longer wrapped in withTimeout there. Find:
+
+      if (msg.startsWith("timeout:token-refresh")) setError("Session refresh timed out. Please sign out and sign back in.");
+
+Delete that line entirely.
+
+---
+
+FILE 3: artifacts/xmum-market/vercel.json
+
+CHANGE 3A — Add the Firestore REST API domain to connect-src in the CSP header.
+
+Find in the Content-Security-Policy value:
+
+connect-src 'self' https://*.googleapis.com
+
+The https://*.googleapis.com already covers https://firestore.googleapis.com so NO change is needed here. Do not touch vercel.json.
+
+---
+
+After all changes, run:
+
+pnpm --filter xmum-market run build
+
+Confirm zero errors. Then show me:
+1. The full restUpdateDoc and restDeleteDoc helper functions as saved
+2. The updateListing function body (the part that calls restUpdateDoc)
+3. The deleteListing function body (the part that calls restDeleteDoc, both branches)
+4. The save handler section of EditListingPage around where the token refresh used to be
+
+Then commit and push to GitHub:
+
+git add artifacts/xmum-market/src/lib/listings.ts artifacts/xmum-market/src/pages/EditListingPage.tsx
+git commit -m "Fix edit/delete: use Firestore REST API for writes to bypass SDK auth-token caching"
+git push origin main
+
+Wait for Vercel to redeploy, then test edit and delete on www.xmummarket.com with a regular student account.

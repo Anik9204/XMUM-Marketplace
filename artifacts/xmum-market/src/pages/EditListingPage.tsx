@@ -450,8 +450,7 @@ export default function EditListingPage() {
     } catch (err: any) {
       const code: string = err?.code ?? "";
       const msg: string = err?.message ?? "";
-      if (msg.startsWith("timeout:token-refresh")) setError("Session refresh timed out. Please sign out and sign back in.");
-      else if (msg.startsWith("timeout:photo-upload")) setError("A photo upload timed out. Try a smaller image or check your connection.");
+      if (msg.startsWith("timeout:photo-upload")) setError("A photo upload timed out. Try a smaller image or check your connection.");
       else if (msg.startsWith("timeout:update-listing")) setError("Update timed out. Please check your connection and try again.");
       else if (code === "permission-denied") {
         Sentry.captureException(err, { tags: { flow: "edit-listing", code } });

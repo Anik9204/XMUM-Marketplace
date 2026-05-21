@@ -51,6 +51,81 @@ import { listingHasActiveReport } from "./reportHold";
 
 const PAGE_SIZE = 30;
 
+// ── Firestore REST helpers ──────────────────────────────────────────────────
+// These bypass the Firestore JS SDK for write operations to avoid stale-token
+// issues with the SDK's persistent connection. Every REST call sends a fresh
+// Authorization header from getIdToken(true).
+
+const FIRESTORE_REST_BASE = `https://firestore.googleapis.com/v1/projects/${import.meta.env.VITE_FIREBASE_PROJECT_ID}/databases/(default)/documents`;
+
+async function getRestToken(): Promise<string> {
+  const user = auth.currentUser;
+  if (!user) throw new Error("not-authenticated");
+  return user.getIdToken(true);
+}
+
+async function restUpdateDoc(
+  collectionPath: string,
+  docId: string,
+  fields: Record<string, unknown>
+): Promise<void> {
+  const token = await getRestToken();
+  function toFirestoreValue(val: unknown): unknown {
+    if (val === null || val === undefined) return { nullValue: null };
+    if (typeof val === "boolean") return { booleanValue: val };
+    if (typeof val === "number") return Number.isInteger(val) ? { integerValue: String(val) } : { doubleValue: val };
+    if (typeof val === "string") return { stringValue: val };
+    if (Array.isArray(val)) return { arrayValue: { values: val.map(toFirestoreValue) } };
+    if (typeof val === "object") {
+      const f: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+        f[k] = toFirestoreValue(v);
+      }
+      return { mapValue: { fields: f } };
+    }
+    return { stringValue: String(val) };
+  }
+
+  const firestoreFields: Record<string, unknown> = {};
+  const updateMask: string[] = [];
+  for (const [key, value] of Object.entries(fields)) {
+    firestoreFields[key] = toFirestoreValue(value);
+    updateMask.push(key);
+  }
+
+  const url = `${FIRESTORE_REST_BASE}/${collectionPath}/${docId}?${updateMask.map((f) => `updateMask.fieldPaths=${encodeURIComponent(f)}`).join("&")}`;
+  const res = await fetch(url, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ fields: firestoreFields }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const code = body?.error?.status ?? "UNKNOWN";
+    const message = body?.error?.message ?? res.statusText;
+    throw Object.assign(new Error(message), { code: code === "PERMISSION_DENIED" ? "permission-denied" : code.toLowerCase() });
+  }
+}
+
+async function restDeleteDoc(
+  collectionPath: string,
+  docId: string
+): Promise<void> {
+  const token = await getRestToken();
+  const url = `${FIRESTORE_REST_BASE}/${collectionPath}/${docId}`;
+  const res = await fetch(url, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const code = body?.error?.status ?? "UNKNOWN";
+    const message = body?.error?.message ?? res.statusText;
+    throw Object.assign(new Error(message), { code: code === "PERMISSION_DENIED" ? "permission-denied" : code.toLowerCase() });
+  }
+}
+// ── End Firestore REST helpers ──────────────────────────────────────────────
+
 const CACHE_TTL_MS = 60_000;
 
 /**
@@ -192,7 +267,7 @@ export async function updateListing(
 
   const safeUpdates = sanitizeListingData(data as Record<string, unknown>);
   await Promise.race([
-    updateDoc(doc(db, "listings", id), safeUpdates),
+    restUpdateDoc("listings", id, safeUpdates),
     new Promise<void>((_, reject) =>
       setTimeout(() => reject(new Error("timeout:update-listing")), 6_000)
     ),
@@ -394,7 +469,7 @@ export async function deleteListing(listing: Listing): Promise<void> {
   const held = await listingHasActiveReport(listing.id);
   if (held) {
     // Apply soft delete — hide from public but preserve evidence
-    await updateDoc(doc(db, "listings", listing.id), {
+    await restUpdateDoc("listings", listing.id, {
       isArchived: true,
       status: "sold",
     });
@@ -450,7 +525,7 @@ export async function deleteListing(listing: Listing): Promise<void> {
   }
 
   await Promise.race([
-    deleteDoc(doc(db, "listings", listing.id)),
+    restDeleteDoc("listings", listing.id),
     new Promise<void>((_, reject) =>
       setTimeout(() => reject(new Error("timeout:delete-listing")), 6_000)
     ),
