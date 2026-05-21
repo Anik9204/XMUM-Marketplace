@@ -81,7 +81,8 @@ export default function SearchPage() {
   };
 
   const doSearch = async () => {
-    if (!keyword.trim() && !searched) return;
+    const hasActiveFilter = !!minPrice || !!maxPrice || (condition !== "all");
+    if (!keyword.trim() && !searched && !hasActiveFilter) return;
     setLoading(true);
     setSearched(true);
     try {
@@ -107,7 +108,8 @@ export default function SearchPage() {
       skipNextDebounceRef.current = false;
       return;
     }
-    if (!keyword.trim() && !searched) return;
+    const hasActiveFilter = !!minPrice || !!maxPrice || (condition !== "all");
+    if (!keyword.trim() && !searched && !hasActiveFilter) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       doSearch();
@@ -328,7 +330,16 @@ export default function SearchPage() {
               {["electronics", "books", "clothing", "furniture", "food"].map((cat) => (
                 <button
                   key={cat}
-                  onClick={() => setKeyword(t.categories[cat as keyof typeof t.categories] ?? cat)}
+                  onClick={() => {
+                    const label = t.categories[cat as keyof typeof t.categories] ?? cat;
+                    setKeyword(label);
+                    setSearched(true);
+                    setLoading(true);
+                    searchListings(type, label, undefined, undefined, "all")
+                      .then(setResults)
+                      .catch(() => setResults([]))
+                      .finally(() => setLoading(false));
+                  }}
                   className="flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl text-xs font-medium text-gray-700 dark:text-slate-300 hover:border-[#003366] dark:hover:border-blue-400 transition-colors shadow-sm"
                 >
                   {({"electronics":"💻","books":"📚","clothing":"👕","furniture":"🪑","food":"🍳"} as Record<string, string>)[cat]}
