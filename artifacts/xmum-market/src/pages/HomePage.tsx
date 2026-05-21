@@ -454,7 +454,6 @@ export default function HomePage() {
           >{t.heroSub}</p>
         </div>
       </div>
-
       {/* ── Sticky group: search + tabs + chips ── */}
       <div data-sticky-subheader className="sticky top-14 z-30 bg-white dark:bg-[#1E293B] shadow-sm">
 
@@ -548,14 +547,12 @@ export default function HomePage() {
         )}
       </div>
       {/* ── End sticky group ── */}
-
       {/* "Near You" location context — mobile only */}
       <div className="md:hidden max-w-5xl mx-auto px-4 pt-3 pb-0">
         <p className="text-xs text-gray-400 dark:text-slate-500 italic">
           📍 XMUM Campus, Sepang
         </p>
       </div>
-
       {/* Signup nudge — unauthenticated users only */}
       {!user && (
         <div className="max-w-5xl mx-auto px-4 mt-3">
@@ -572,14 +569,12 @@ export default function HomePage() {
           </div>
         </div>
       )}
-
       {ads.length > 0 && (
         <div className="max-w-5xl mx-auto px-4 mt-4">
           <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1">Sponsored</p>
           <SponsoredAdCard ad={ads[0]} />
         </div>
       )}
-
       {/* ── Campus Market Discovery ─────────────────────────────────────────── */}
       {(loadingShops || featuredShops.length > 0 || recentShopListings.length > 0) && (
         <div className="max-w-5xl mx-auto px-4 mt-5">
@@ -681,7 +676,6 @@ export default function HomePage() {
         </div>
       )}
       {/* ── End Campus Market Discovery ─────────────────────────────────────── */}
-
       {/* Listings grid */}
       <div ref={listingsRef} className="max-w-5xl mx-auto px-4 pt-4 pb-5">
         <div className="flex items-center gap-2 mb-4">
@@ -769,7 +763,6 @@ export default function HomePage() {
           </>
         )}
       </div>
-
       {/* ===== ABOUT SECTION ===== */}
       <section className="mt-16 mb-8 px-4">
         {/* Divider */}
@@ -909,15 +902,16 @@ export default function HomePage() {
             </div>
 
             {/* Footer note */}
-            <p className="text-center text-xs text-slate-400 dark:text-slate-500 pt-2">
-              XMUM Market is a student project. For official university matters, contact XMUM administration directly.
-            </p>
+            <p className="dark:text-slate-500 pt-2 font-normal text-[#90a0b9] text-center text-[12px]">Legal & Trademark Disclaimer
+
+            XMUM Market is an independent, student-run community utility built strictly for portfolio and educational purposes. It is not officially endorsed, operated, sponsored, or affiliated with Xiamen University Malaysia. All institutional names, logos, and trademarks (including "XMUM") belong exclusively to their respective owners.
+
+            The platform acts solely as a free classifieds directory. The developer assumes zero liability for user-generated listings, item authenticity, or private student-to-student transactions</p>
 
           </div>
         </div>
       </section>
       {/* ===== END ABOUT SECTION ===== */}
-
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
     </div>
   );
