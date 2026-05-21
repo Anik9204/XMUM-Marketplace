@@ -1,0 +1,33 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+
+---
+
+## ISSUE — Preferences (dark mode toggle) should live next to the Language switcher, not buried in Settings
+
+The dark mode toggle is currently inside a "Preferences" card in SettingsPage.tsx. It needs to be moved to the Layout header, sitting right beside the existing Language switcher button (EN/中).
+
+FILES: src/components/Layout.tsx and src/pages/SettingsPage.tsx
+
+FIX:
+
+1. In src/components/Layout.tsx:
+   - Find where the Language switcher button is rendered in the header (the EN / 中 toggle button).
+   - Import useDarkMode from "@/hooks/use-dark-mode" at the top of the file if it isn't already imported.
+   - Right beside the language button (before or after it, whichever looks more natural given the existing layout — prefer: dark mode icon button first, then language button), add a small icon button that toggles dark mode:
+     - Use the Moon icon (from lucide-react) when in light mode, Sun icon when in dark mode.
+     - Same size and style as the language button so they look like a pair.
+     - No label text — icon only, with a tooltip title attribute of "Toggle dark mode".
+     - Use the existing toggleDark function from useDarkMode.
+
+2. In src/pages/SettingsPage.tsx:
+   - Remove the entire "PREFERENCES CARD" block — the <div> that contains the SectionHeader with label="Preferences" and the dark mode toggle row inside it. This includes the surrounding card div and Divider.
+   - After removal, check if Moon, Sun, and Shield are still used elsewhere in SettingsPage.tsx. If any of them are now unused, remove them from the lucide-react import line.
+
+Do not touch any other file. Build and confirm zero errors.

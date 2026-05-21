@@ -12,7 +12,7 @@ import VerificationBanner from "@/components/VerificationBanner";
 import AvatarCropModal from "@/components/AvatarCropModal";
 import {
   User, Camera, CheckCircle2, Trash2, Settings, AlertCircle,
-  Eye, EyeOff, Moon, Sun, Lock, Shield, LogOut,
+  Eye, EyeOff, Lock, LogOut,
   CheckCircle, MessageCircle,
 } from "lucide-react";
 import ReportHoldModal from "@/components/ReportHoldModal";
@@ -580,31 +580,6 @@ export default function SettingsPage() {
                 "Update Password"
               )}
             </button>
-          </div>
-        </div>
-
-        {/* ── PREFERENCES CARD ─────────────────────────────── */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 mb-3 overflow-hidden">
-          <SectionHeader icon={<Shield size={13} />} label="Preferences" />
-          <Divider />
-          <div className="px-4 py-3">
-            <div className="flex items-center justify-between py-2">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0">
-                  {dark ? <Moon size={15} className="text-blue-500" /> : <Sun size={15} className="text-amber-500" />}
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-800 dark:text-slate-200">{t.darkMode}</p>
-                  <p className="text-[11px] text-gray-400 dark:text-slate-500">{t.darkModeDesc}</p>
-                </div>
-              </div>
-              <button
-                onClick={toggleDark}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0 ${dark ? "bg-[#003366] dark:bg-blue-600" : "bg-gray-200 dark:bg-slate-600"}`}
-              >
-                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${dark ? "translate-x-6" : "translate-x-1"}`} />
-              </button>
-            </div>
           </div>
         </div>
 
