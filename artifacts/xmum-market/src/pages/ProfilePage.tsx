@@ -4,9 +4,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { getUserListings, deleteListing, markAsSold, getListing, LISTING_EXPIRY_MS, LISTING_REMINDER_MS } from "@/lib/listings";
 import { getUserConversations } from "@/lib/messaging";
 import { sendDailyDigestIfDue } from "@/lib/notifications";
-import { Listing, Shop, ShopInquiry, InquiryStatus } from "@/lib/types";
+import { Listing, Shop } from "@/lib/types";
 import { getSavedListings } from "@/lib/savedListings";
-import { getShopsByOwner, getShopsWhereEditor, getInquiriesForBuyer } from "@/lib/shops";
+import { getShopsByOwner, getShopsWhereEditor } from "@/lib/shops";
 import ListingCard from "@/components/ListingCard";
 import AuthModal from "@/components/AuthModal";
 import ReportHoldModal from "@/components/ReportHoldModal";
@@ -249,9 +249,6 @@ export default function ProfilePage() {
 
   const [myShops, setMyShops] = useState<Shop[]>([]);
   const [shopsLoading, setShopsLoading] = useState(false);
-  const [myInquiries, setMyInquiries] = useState<ShopInquiry[]>([]);
-  const [inquiriesLoading, setInquiriesLoading] = useState(false);
-
   const listingsCache = useRef<Listing[]>([]);
   const now = useMemo(() => Date.now(), [listings, refreshCounter]);
 
@@ -328,8 +325,6 @@ export default function ProfilePage() {
       }
       setMyShops(merged.filter(s => s.isActive !== false));
     }).catch(() => {}).finally(() => setShopsLoading(false));
-    setInquiriesLoading(true);
-    getInquiriesForBuyer(user.uid).then(setMyInquiries).catch(() => {}).finally(() => setInquiriesLoading(false));
   }, [user?.uid]);
 
   if (!user) {
@@ -709,46 +704,6 @@ export default function ProfilePage() {
                     <Plus size={12} /> Create New Shop
                   </button>
                 </Link>
-              </div>
-            )}
-          </div>
-
-          {/* ── MY INQUIRIES ─────────────────────────────────────── */}
-          <div className="mt-8">
-            <h2 className="text-sm font-bold text-gray-900 dark:text-slate-100 flex items-center gap-2 mb-3">
-              <MessageSquare size={15} className="text-[#003366] dark:text-blue-400" /> My Inquiries
-            </h2>
-            {inquiriesLoading ? (
-              <div className="space-y-2">
-                {[1, 2].map(i => <div key={i} className="h-16 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 animate-pulse" />)}
-              </div>
-            ) : myInquiries.length === 0 ? (
-              <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-5 text-center">
-                <MessageSquare size={24} className="mx-auto text-gray-200 dark:text-slate-600 mb-2" />
-                <p className="text-xs text-gray-500 dark:text-slate-400">No inquiries yet. Browse the Campus Market!</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {myInquiries.map((inq) => {
-                  const statusMap: Record<InquiryStatus, { label: string; cls: string }> = {
-                    pending: { label: "Pending", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
-                    replied: { label: "Replied", cls: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
-                  };
-                  const { label, cls } = statusMap[inq.status] ?? statusMap.pending;
-                  return (
-                    <div key={inq.id} className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-gray-900 dark:text-slate-100 truncate">{inq.listingTitle}</p>
-                          <p className="text-xs text-gray-400 dark:text-slate-500">
-                            {inq.shopName} · {new Date(inq.createdAt).toLocaleDateString("en-MY", { month: "short", day: "numeric" })}
-                          </p>
-                        </div>
-                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${cls}`}>{label}</span>
-                      </div>
-                    </div>
-                  );
-                })}
               </div>
             )}
           </div>
