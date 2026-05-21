@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { uploadPhoto, createListing, writeRentalTcAuditLog } from "@/lib/listings";
 import { checkContent } from "@/lib/contentFilter";
 import { auth, db } from "@/lib/firebase";
-import { doc, updateDoc, increment } from "firebase/firestore";
+import { doc, updateDoc, increment, getCountFromServer, collection, query, where } from "firebase/firestore";
 import { ListingType, Condition, Listing } from "@/lib/types";
 import { validateWhatsApp, suggestMalaysianFormat } from "@/lib/validation";
 import AuthModal from "@/components/AuthModal";
@@ -202,6 +202,7 @@ export default function PostPage() {
   const [, navigate] = useLocation();
 
   const activeListingCount = userProfile?.activeListingCount ?? 0;
+  const [realActiveCount, setRealActiveCount] = useState<number | null>(null);
 
   const [type, setType] = useState<ListingType>("buy-sell");
   const [title, setTitle] = useState("");
@@ -272,6 +273,28 @@ export default function PostPage() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const maxPhotos = type === "rental" ? 5 : 3;
+
+  // Fetch the real active listing count from Firestore to avoid stale counter drift
+  useEffect(() => {
+    if (!user?.uid) return;
+    let cancelled = false;
+    async function fetchRealCount() {
+      try {
+        const q = query(
+          collection(db, "listings"),
+          where("userId", "==", user!.uid),
+          where("isArchived", "==", false),
+          where("status", "==", "active")
+        );
+        const snap = await getCountFromServer(q);
+        if (!cancelled) setRealActiveCount(snap.data().count);
+      } catch {
+        if (!cancelled) setRealActiveCount(userProfile?.activeListingCount ?? 0);
+      }
+    }
+    fetchRealCount();
+    return () => { cancelled = true; };
+  }, [user?.uid]);
 
   // FIX 3: beforeunload
   useEffect(() => {
@@ -521,7 +544,8 @@ export default function PostPage() {
     if (!description.trim()) { setError("Description is required."); setLoading(false); return; }
     if (type === "buy-sell" && priceCents <= 0) { setError("Please enter a price."); setLoading(false); return; }
 
-    if (activeListingCount >= 6) {
+    const countToCheck = realActiveCount !== null ? realActiveCount : (userProfile?.activeListingCount ?? 0);
+    if (countToCheck >= 6) {
       setError("You've reached the maximum of 6 active listings. Delete an existing listing to free up a slot.");
       setLoading(false);
       return;
@@ -641,6 +665,7 @@ export default function PostPage() {
         await updateDoc(doc(db, "users", user.uid), {
           activeListingCount: increment(1),
         });
+        setRealActiveCount(prev => (prev !== null ? prev + 1 : 1));
       } catch (err) {
         console.warn("[PostPage] Failed to increment activeListingCount:", err);
       }

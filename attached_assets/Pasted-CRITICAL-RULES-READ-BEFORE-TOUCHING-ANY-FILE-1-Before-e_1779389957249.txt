@@ -1,0 +1,110 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build and pnpm --filter xmum-admin run build
+
+PROBLEM: The stored activeListingCount field on the user document can drift out of sync (e.g. when admin bans/unbans a user, or when listings are archived via edge cases). This causes users to be wrongly blocked from posting even when they have 0 active listings.
+
+TWO FILES TO EDIT:
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FILE 1: artifacts/xmum-market/src/pages/PostPage.tsx
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FIX: Instead of trusting the stored activeListingCount from userProfile, query Firestore for the actual count of the user's active listings when the component mounts. Use this real count as the enforcer. Keep updating the stored counter (increment/decrement) as it is — we just stop using it for the gate check.
+
+STEP 1 — Add new imports. The file already imports from "firebase/firestore". Add getCountFromServer to that import if it is not already there. Check the existing import line and add it only if missing.
+
+STEP 2 — Add a new state variable near the other useState declarations (around line 207, after the activeListingCount line):
+
+  const [realActiveCount, setRealActiveCount] = useState<number | null>(null);
+
+STEP 3 — Add a useEffect to fetch the real count when the user is known. Place this after the existing useEffects in the component (look for the block of useEffects near the top of the component body):
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    let cancelled = false;
+    async function fetchRealCount() {
+      try {
+        const { getCountFromServer, collection, query, where } = await import("firebase/firestore");
+        const { db } = await import("@/lib/firebase");
+        const q = query(
+          collection(db, "listings"),
+          where("userId", "==", user.uid),
+          where("isArchived", "==", false),
+          where("status", "==", "active")
+        );
+        const snap = await getCountFromServer(q);
+        if (!cancelled) setRealActiveCount(snap.data().count);
+      } catch {
+        // If the count query fails, fall back to the stored counter
+        if (!cancelled) setRealActiveCount(userProfile?.activeListingCount ?? 0);
+      }
+    }
+    fetchRealCount();
+    return () => { cancelled = true; };
+  }, [user?.uid]);
+
+STEP 4 — Find this line (around line 524):
+
+    if (activeListingCount >= 6) {
+      setError("You've reached the maximum of 6 active listings. Delete an existing listing to free up a slot.");
+
+Replace it with:
+
+    const countToCheck = realActiveCount !== null ? realActiveCount : (userProfile?.activeListingCount ?? 0);
+    if (countToCheck >= 6) {
+      setError("You've reached the maximum of 6 active listings. Delete an existing listing to free up a slot.");
+
+STEP 5 — After a listing is successfully created (find the increment block around line 639), after the updateDoc increment call succeeds, also update realActiveCount locally so the UI reflects it immediately without waiting for the next mount:
+
+      try {
+        await updateDoc(doc(db, "users", user.uid), {
+          activeListingCount: increment(1),
+        });
+        setRealActiveCount(prev => (prev !== null ? prev + 1 : 1));
+      } catch (err) {
+        console.warn("[PostPage] Failed to increment activeListingCount:", err);
+      }
+
+Do not remove the existing increment(1) call — just add the setRealActiveCount line inside the same try block after the updateDoc line.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FILE 2: artifacts/xmum-admin/src/pages/UsersPage.tsx
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FIX: When admin unbans a user (isBlacklisted set to false), also reset their activeListingCount to 0 in the same Firestore write. This is because when a user is banned their listings are typically removed/archived by admin, so their counter should be zeroed on unban.
+
+Find the handleBanToggle function:
+
+  function handleBanToggle(u: AdminUser) {
+    const action = u.isBlacklisted ? "unban" : "ban";
+    if (!window.confirm(`Are you sure you want to ${action} ${u.email}?`)) return;
+    updateUser(u.uid, { isBlacklisted: !u.isBlacklisted });
+  }
+
+Replace it with:
+
+  function handleBanToggle(u: AdminUser) {
+    const action = u.isBlacklisted ? "unban" : "ban";
+    if (!window.confirm(`Are you sure you want to ${action} ${u.email}?`)) return;
+    if (u.isBlacklisted) {
+      // Unbanning — reset activeListingCount to 0 since their listings were cleared during ban
+      updateUser(u.uid, { isBlacklisted: false, activeListingCount: 0 });
+    } else {
+      updateUser(u.uid, { isBlacklisted: true });
+    }
+  }
+
+Note: The updateUser function already calls updateDoc with whatever fields are passed in, so passing activeListingCount: 0 alongside isBlacklisted: false will write both fields in the same Firestore update. No other changes to updateUser are needed.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+After making all changes, run:
+pnpm --filter xmum-market run build
+pnpm --filter xmum-admin run build
+Confirm zero TypeScript errors in both before finishing.

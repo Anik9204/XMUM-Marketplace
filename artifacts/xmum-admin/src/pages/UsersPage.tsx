@@ -115,7 +115,12 @@ export default function UsersPage() {
   function handleBanToggle(u: AdminUser) {
     const action = u.isBlacklisted ? "unban" : "ban";
     if (!window.confirm(`Are you sure you want to ${action} ${u.email}?`)) return;
-    updateUser(u.uid, { isBlacklisted: !u.isBlacklisted });
+    if (u.isBlacklisted) {
+      // Unbanning — reset activeListingCount to 0 since their listings were cleared during ban
+      updateUser(u.uid, { isBlacklisted: false, activeListingCount: 0 });
+    } else {
+      updateUser(u.uid, { isBlacklisted: true });
+    }
   }
 
   async function openDrawer(u: AdminUser) {
