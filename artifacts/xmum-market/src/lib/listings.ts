@@ -282,7 +282,7 @@ export async function updateListing(
 }
 
 
-export async function markAsSold(id: string): Promise<void> {
+export async function markAsSold(id: string, userId?: string): Promise<void> {
   // Firestore atomic increment() counters (totalListings, totalInquiries, viewCount)
   // are never reset — this is intentional; they serve as monotonically increasing metrics.
   await Promise.race([
@@ -291,6 +291,11 @@ export async function markAsSold(id: string): Promise<void> {
       setTimeout(() => reject(new Error("timeout:mark-as-sold")), 6_000)
     ),
   ]);
+  if (userId) {
+    updateDoc(doc(db, "users", userId), {
+      activeListingCount: increment(-1),
+    }).catch(() => {});
+  }
 }
 
 export async function writeRentalTcAuditLog(

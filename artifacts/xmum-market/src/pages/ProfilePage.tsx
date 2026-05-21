@@ -384,7 +384,7 @@ export default function ProfilePage() {
 
   const handleMarkAsSold = async (listing: Listing) => {
     try {
-      await markAsSold(listing.id);
+      await markAsSold(listing.id, listing.userId);
       const updated = listingsCache.current.map(l => l.id === listing.id ? { ...l, status: "sold" as const } : l);
       listingsCache.current = updated;
       setListings(updated);

@@ -310,7 +310,7 @@ export default function ListingDetailPage() {
     if (!listing) return;
     setMarkingAsSold(true);
     try {
-      await markAsSold(listing.id);
+      await markAsSold(listing.id, listing.userId);
       setListing({ ...listing, status: "sold" });
       setSoldToast(true);
       setTimeout(() => setSoldToast(false), 3000);

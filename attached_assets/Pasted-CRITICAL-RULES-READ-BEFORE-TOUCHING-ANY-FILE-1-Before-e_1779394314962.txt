@@ -1,0 +1,50 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+
+---
+
+## ISSUE — Active listing count stays at 1 after marking sold or deleting a sold post
+
+There are two related bugs:
+
+BUG A: When a user marks their only listing as sold, the "Active" stat in their profile header still shows 1 instead of 0. This is because markAsSold() in listings.ts only sets status="sold" in Firestore but never decrements activeListingCount on the user document.
+
+BUG B: When a user then deletes that sold listing, the activeListingCount in Firestore is NOT decremented (deleteListing() has a guard: `if (listing.userId && listing.status !== "sold" && !listing.isArchived)` — which intentionally skips sold listings). But that means the counter on the users document is now permanently wrong (stuck at 1), which also causes the PostPage listing cap to wrongly block new posts.
+
+FILES TO EDIT: src/lib/listings.ts only.
+
+FIX:
+
+1. In markAsSold(), after the Promise.race that sets status="sold", add a decrement of activeListingCount on the user doc. You need the userId, so update the function signature to accept userId as a second parameter:
+   export async function markAsSold(id: string, userId: string): Promise<void>
+
+   Then after the Promise.race, add:
+   if (userId) {
+     updateDoc(doc(db, "users", userId), {
+       activeListingCount: increment(-1),
+     }).catch(() => {});
+   }
+
+2. In deleteListing(), the existing guard that skips the decrement for sold listings is:
+   if (listing.userId && listing.status !== "sold" && !listing.isArchived)
+   Change it to also decrement when the listing IS sold (since we now decrement on markAsSold, this would double-decrement — so instead, just REMOVE the status !== "sold" condition from the guard):
+   if (listing.userId && !listing.isArchived)
+
+   This means deleting an active listing decrements, and deleting a sold listing also decrements. Since markAsSold already decremented when it was marked sold, this would double-count. The correct approach is: only decrement on delete if status is NOT already sold (markAsSold handles its own decrement). So keep the guard as-is for deleteListing — no change needed there.
+
+   CORRECTION — re-read carefully:
+   - markAsSold: now decrements (new behavior from fix #1 above).
+   - deleteListing: currently decrements only if status !== "sold". This is correct — if already sold, markAsSold already decremented. No change needed to deleteListing.
+
+   So the ONLY change needed is fix #1: add userId param to markAsSold and decrement activeListingCount inside it.
+
+3. Now find every call site of markAsSold() in the codebase. There will be at least one in ProfilePage.tsx. Update each call to pass listing.userId as the second argument:
+   markAsSold(listing.id, listing.userId)
+
+Do not touch any other file beyond listings.ts and the call sites. Build and confirm zero errors.
