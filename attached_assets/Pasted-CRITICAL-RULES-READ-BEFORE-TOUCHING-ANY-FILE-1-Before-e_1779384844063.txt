@@ -1,0 +1,37 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+
+---
+
+### OBJECTIVE
+Add an elegant, dynamic "Read more" / "Read less" truncation mechanism to the listing description block on the Listing Details page (`artifacts/xmum-market/src/pages/ListingDetails` or equivalent view). This ensures that long descriptions don't visually overwhelm the layout.
+
+---
+
+### TECHNICAL & UI IMPLEMENTATION DETAILS
+
+1. **State Management:**
+   - Inside the component, add a simple local boolean state to track if the description is expanded:
+     ```tsx
+     const [isExpanded, setIsExpanded] = useState(false);
+     ```
+
+2. **Truncation Threshold:**
+   - Set a reasonable character or line threshold (e.g., 300 characters). 
+   - If the listing description is shorter than this threshold, render it normally without any toggles.
+
+3. **UI Layout Updates:**
+   - If the description exceeds the threshold and `isExpanded` is `false`:
+     - Render a truncated substring of the description appended with `...`.
+     - Right below or inline with the text, render a clean text button that says **"Read more"**. Use modern Tailwind styling: `text-blue-600 hover:text-blue-700 font-semibold text-sm ml-1 cursor-pointer transition-colors`.
+   - If `isExpanded` is `true`:
+     - Render the full description text.
+     - Append or place a clean text button right below it that says **"Read less"** using the same styling so the student can collapse it back down easily.
+
+Please apply this functionality surgically directly to the element rendering the listing's description text block, leaving all surrounding elements and layout parameters intact. Verify the project builds cleanly.

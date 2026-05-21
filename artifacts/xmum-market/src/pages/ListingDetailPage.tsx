@@ -92,6 +92,7 @@ export default function ListingDetailPage() {
   const overflowRef = useRef<HTMLDivElement>(null);
   const [showHoldModal, setShowHoldModal] = useState(false);
   const [holdModalAction, setHoldModalAction] = useState<"delete" | "edit">("delete");
+  const [isExpanded, setIsExpanded] = useState(false);
 
   // Lightbox state
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -708,7 +709,19 @@ export default function ListingDetailPage() {
 
           {/* Description */}
           <div>
-            <p className="text-sm text-gray-600 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{listing.description}</p>
+            {listing.description && listing.description.length > 300 ? (
+              <p className="text-sm text-gray-600 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
+                {isExpanded ? listing.description : listing.description.slice(0, 300) + "..."}
+                <button
+                  onClick={() => setIsExpanded((v) => !v)}
+                  className="text-blue-600 hover:text-blue-700 font-semibold text-sm ml-1 cursor-pointer transition-colors"
+                >
+                  {isExpanded ? "Read less" : "Read more"}
+                </button>
+              </p>
+            ) : (
+              <p className="text-sm text-gray-600 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{listing.description}</p>
+            )}
           </div>
 
           {/* Meet-up spot */}
