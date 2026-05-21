@@ -242,6 +242,7 @@ export async function createListing(
     createdAt: serverTimestamp(),
     sortKey: now,
     isArchived: false,
+    isReportHeld: false,
     status: "active",
   });
   void logPlatformActivity({

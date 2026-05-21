@@ -1,0 +1,125 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Surgical edits only — minimum lines changed.
+2. Do NOT rewrite any file from scratch.
+3. Do NOT remove any existing function, prop, import, or JSX element unless explicitly told to.
+4. After every change, mentally verify: "Does this break anything that was working before?"
+5. Never change any CSS class, layout structure, z-index, or responsive breakpoint.
+6. Confirm zero build errors: pnpm --filter xmum-market run build
+
+ROOT CAUSE (confirmed by inspecting the actual Firestore document):
+Listing documents do NOT have an isReportHeld field on them — it is simply absent.
+In Firestore security rules, accessing resource.data.isReportHeld on a document
+where the field does not exist throws an error and causes the ENTIRE rule to
+default to DENY. This is why every student gets permission-denied on delete and
+update. The REST API change and token fixes were all correct but irrelevant —
+the rules were throwing before they even evaluated the auth checks.
+
+TWO FILE CHANGES NEEDED:
+
+════════════════════════════════════════════════════════════
+CHANGE 1 — artifacts/xmum-market/firestore.rules
+════════════════════════════════════════════════════════════
+
+Find the listings allow update rule (exact current text):
+
+      allow update: if (isSignedIn()
+        && resource.data.userId == request.auth.uid
+        && resource.data.isReportHeld != true
+        && (!request.resource.data.keys().hasAny(["price"])
+            || (request.resource.data.price >= 0
+                && request.resource.data.price <= 1000000)))
+        || (isSignedIn()
+            && resource.data.userId == request.auth.uid
+            && resource.data.isReportHeld == true
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isArchived', 'status']))
+        || (isSignedIn()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount']));
+
+Replace with:
+
+      allow update: if (isSignedIn()
+        && resource.data.userId == request.auth.uid
+        && resource.data.get('isReportHeld', false) != true
+        && (!request.resource.data.keys().hasAny(["price"])
+            || (request.resource.data.price >= 0
+                && request.resource.data.price <= 1000000)))
+        || (isSignedIn()
+            && resource.data.userId == request.auth.uid
+            && resource.data.get('isReportHeld', false) == true
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isArchived', 'status']))
+        || (isSignedIn()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount']));
+
+Find the listings allow delete rule (exact current text):
+
+      allow delete: if ((isSignedIn() && resource.data.userId == request.auth.uid && resource.data.isReportHeld != true)
+        || isEditorRole());
+
+Replace with:
+
+      allow delete: if (isSignedIn() && resource.data.userId == request.auth.uid && resource.data.get('isReportHeld', false) != true)
+        || (isSignedIn() && resource.data.userId != request.auth.uid && isEditorRole());
+
+What changed and why:
+- resource.data.isReportHeld → resource.data.get('isReportHeld', false) in all 3 places.
+  The .get(field, default) syntax safely returns false when the field is missing,
+  instead of throwing. This is the entire fix.
+- The delete rule also separates the owner branch from the isEditorRole() branch
+  so that the get() call inside isEditorRole() is never triggered for regular
+  owner-deletes, preventing any secondary failure from that path.
+
+Do NOT change any other rule. Do NOT touch any other collection.
+
+After saving firestore.rules:
+  git add artifacts/xmum-market/firestore.rules
+  git commit -m "Fix rules: safe .get() for isReportHeld, fix delete rule branching"
+  git push origin main
+
+Then copy the ENTIRE contents of artifacts/xmum-market/firestore.rules
+and paste into Firebase Console → Firestore → Rules → Publish.
+Wait 30 seconds after publishing before testing.
+
+
+════════════════════════════════════════════════════════════
+CHANGE 2 — artifacts/xmum-market/src/lib/listings.ts
+════════════════════════════════════════════════════════════
+
+Find the addDoc call inside createListing (exact current text):
+
+  const docRef = await addDoc(collection(db, "listings"), {
+    ...safeData,
+    createdAt: serverTimestamp(),
+    sortKey: now,
+    isArchived: false,
+    status: "active",
+  });
+
+Replace with:
+
+  const docRef = await addDoc(collection(db, "listings"), {
+    ...safeData,
+    createdAt: serverTimestamp(),
+    sortKey: now,
+    isArchived: false,
+    isReportHeld: false,
+    status: "active",
+  });
+
+What changed: added isReportHeld: false so all new listings always have
+this field explicitly set. This prevents the same rules error for future listings.
+
+After this change run: pnpm --filter xmum-market run build
+Confirm zero errors, then commit and push:
+  git add artifacts/xmum-market/src/lib/listings.ts
+  git commit -m "Fix createListing: always set isReportHeld: false on new listings"
+  git push origin main
+
+
+════════════════════════════════════════════════════════════
+VERIFICATION
+════════════════════════════════════════════════════════════
+
+After both changes show me:
+1. The full listings match block from firestore.rules (allow read through allow delete)
+2. The addDoc call inside createListing as saved
+3. Confirm the build passes with zero errors
