@@ -185,6 +185,7 @@ export default function HomePage() {
   const [cursor, setCursor] = useState<QueryDocumentSnapshot | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
+  const [showLegalModal, setShowLegalModal] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const categoryFilterRef = useRef(categoryFilter);
   useEffect(() => { categoryFilterRef.current = categoryFilter; }, [categoryFilter]);
@@ -902,40 +903,13 @@ export default function HomePage() {
             </div>
 
             {/* Footer note */}
-            <div className="max-w-2xl mx-auto mt-8 mb-6 px-4">
-              <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl p-4 text-left shadow-sm space-y-3">
-
-                {/* Section 1: Trademark */}
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-amber-500 dark:text-amber-400 text-xs">⚠️</span>
-                    <h4 className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                      Legal & Trademark Disclaimer
-                    </h4>
-                  </div>
-                  <p className="text-[12px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                    <strong className="text-slate-700 dark:text-slate-300 font-medium">XMUM Market</strong> is an independent, student-run community utility built strictly for portfolio and educational purposes. It is <span className="font-semibold text-slate-700 dark:text-slate-300">not</span> officially endorsed, operated, sponsored, or affiliated with Xiamen University Malaysia. All institutional names, logos, and trademarks belong exclusively to their respective owners.
-                  </p>
-                </div>
-
-                {/* Section 2: PDPA Privacy */}
-                <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-blue-500 dark:text-blue-400 text-xs">🔒</span>
-                    <h4 className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                      PDPA Data Privacy Notice
-                    </h4>
-                  </div>
-                  <p className="text-[12px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                    We handle personal data strictly in accordance with the <span className="font-medium text-slate-700 dark:text-slate-300">Personal Data Protection Act 2010 (PDPA)</span> of Malaysia. By logging in and using this platform, you consent to the collection, verification, and use of your student profile data solely for internal marketplace functionality.
-                  </p>
-                </div>
-
-                {/* Section 3: Liability */}
-                <p className="pt-2 border-t border-slate-200/60 dark:border-slate-800 text-[11px] text-slate-400 dark:text-slate-500 italic">
-                  The platform acts solely as a free classifieds directory. The developer assumes zero liability for user-generated listings, item authenticity, or private student-to-student transactions.
-                </p>
-              </div>
+            <div className="text-center mt-12 mb-6">
+              <button
+                onClick={() => setShowLegalModal(true)}
+                className="inline-flex items-center gap-1.5 text-[12px] text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors font-medium"
+              >
+                <span>⚖️</span> Legal & Privacy Policy
+              </button>
             </div>
 
           </div>
@@ -943,6 +917,59 @@ export default function HomePage() {
       </section>
       {/* ===== END ABOUT SECTION ===== */}
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
+
+      {showLegalModal && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200"
+          onClick={() => setShowLegalModal(false)}
+        >
+          <div
+            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 md:p-6 max-w-lg w-full shadow-2xl relative space-y-4 animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setShowLegalModal(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+              aria-label="Close"
+            >
+              ✕
+            </button>
+
+            {/* Section 1: Trademark */}
+            <div>
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="text-amber-500 dark:text-amber-400 text-sm">⚠️</span>
+                <h4 className="text-[12px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                  Legal & Trademark Disclaimer
+                </h4>
+              </div>
+              <p className="text-[13px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                <strong className="text-slate-700 dark:text-slate-300 font-medium">XMUM Market</strong> is an independent, student-run community utility built strictly for portfolio and educational purposes. It is <span className="font-semibold text-slate-700 dark:text-slate-300">not</span> officially endorsed, operated, sponsored, or affiliated with Xiamen University Malaysia. All institutional names, logos, and trademarks belong exclusively to their respective owners.
+              </p>
+            </div>
+
+            {/* Section 2: PDPA Privacy */}
+            <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="text-blue-500 dark:text-blue-400 text-sm">🔒</span>
+                <h4 className="text-[12px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                  PDPA Data Privacy Notice
+                </h4>
+              </div>
+              <p className="text-[13px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                We handle personal data strictly in accordance with the <span className="font-medium text-slate-700 dark:text-slate-300">Personal Data Protection Act 2010 (PDPA)</span> of Malaysia. By logging in and using this platform, you consent to the collection, verification, and use of your student profile data solely for internal marketplace functionality.
+              </p>
+            </div>
+
+            {/* Section 3: Liability */}
+            <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
+              <p className="text-[11px] text-slate-400 dark:text-slate-500 italic leading-relaxed">
+                The platform acts solely as a free classifieds directory. The developer assumes zero liability for user-generated listings, item authenticity, or private student-to-student transactions.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
