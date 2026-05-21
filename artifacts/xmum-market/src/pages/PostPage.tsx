@@ -3,7 +3,6 @@ import { useLocation } from "wouter";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { uploadPhoto, createListing, writeRentalTcAuditLog } from "@/lib/listings";
-import { checkRateLimit } from "@/lib/rateLimit";
 import { checkContent } from "@/lib/contentFilter";
 import { auth, db } from "@/lib/firebase";
 import { doc, updateDoc, increment } from "firebase/firestore";
@@ -522,8 +521,8 @@ export default function PostPage() {
     if (!description.trim()) { setError("Description is required."); setLoading(false); return; }
     if (type === "buy-sell" && priceCents <= 0) { setError("Please enter a price."); setLoading(false); return; }
 
-    if (!checkRateLimit(`post_daily_${user.uid}`, 6, 24 * 60 * 60 * 1000)) {
-      setError("You've reached the daily posting limit (6 listings per 24 hours). Please try again tomorrow.");
+    if (activeListingCount >= 6) {
+      setError("You've reached the maximum of 6 active listings. Delete an existing listing to free up a slot.");
       setLoading(false);
       return;
     }

@@ -1,0 +1,144 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it.
+2. Surgical edits only — minimum lines changed.
+3. Do NOT rewrite any file from scratch.
+4. Do NOT remove any existing function, prop, import, or JSX element unless told to.
+5. After every change, mentally verify: "Does this break anything that was working before?"
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint.
+7. Confirm zero build errors: pnpm --filter xmum-market run build
+
+TASK: Replace the localStorage-based daily post rate limit with a Firestore-based
+active listing slot system. The new rule: a user may have at most 6 active listings
+at any time. Deleting a listing frees a slot immediately. No time window — just slots.
+
+WHY: The current checkRateLimit() uses localStorage which can be cleared by the user
+(incognito, clearing storage) to bypass the limit. activeListingCount in Firestore
+is already tracked correctly — it increments on create and decrements on delete.
+Using it as the gate is simpler, server-authoritative, and gives users the
+delete-to-free-a-slot behaviour they expect.
+
+════════════════════════════════════════════════════════════
+CHANGE 1 — artifacts/xmum-market/src/pages/PostPage.tsx
+════════════════════════════════════════════════════════════
+
+Step 1a — Remove the checkRateLimit import.
+
+Find:
+import { checkRateLimit } from "@/lib/rateLimit";
+
+Delete that line entirely.
+
+Step 1b — Replace the rate limit check with an activeListingCount check.
+
+Find this exact block:
+
+    if (!checkRateLimit(`post_daily_${user.uid}`, 6, 24 * 60 * 60 * 1000)) {
+      setError("You've reached the daily posting limit (6 listings per 24 hours). Please try again tomorrow.");
+      setLoading(false);
+      return;
+    }
+
+Replace with:
+
+    if (activeListingCount >= 6) {
+      setError("You've reached the maximum of 6 active listings. Delete an existing listing to free up a slot.");
+      setLoading(false);
+      return;
+    }
+
+What changed:
+- Removed localStorage checkRateLimit call entirely for the post limit.
+- Now checks activeListingCount (already loaded from userProfile at the top of
+  the component — line 205: const activeListingCount = userProfile?.activeListingCount ?? 0).
+- If activeListingCount is 6 or more, block. When user deletes a listing,
+  activeListingCount decrements in Firestore → userProfile re-fetches via
+  onSnapshot → activeListingCount drops → user can post again immediately.
+- No time window, no localStorage, no bypass possible.
+
+Do NOT remove the checkRateLimit import from rateLimit.ts itself —
+other rate limits (e.g. photo uploads, bumps) may use it elsewhere.
+Only remove the import in PostPage.tsx.
+
+════════════════════════════════════════════════════════════
+CHANGE 2 — artifacts/xmum-market/firestore.rules
+════════════════════════════════════════════════════════════
+
+The create rule currently requires isXmuEmail() and validates fields but does NOT
+enforce the 6-listing cap server-side. Add a server-side cap so even if someone
+bypasses the client check, they cannot exceed 6 active listings.
+
+Find the listings allow create rule (exact current text):
+
+      allow create: if isXmuEmail()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 100
+        && request.resource.data.description is string
+        && request.resource.data.description.size() <= 3000
+        && request.resource.data.type in
+           ["buy-sell", "lost-found", "jobs", "assistance", "rental"]
+        // Price must be 0–1,000,000 RM when present (stored as a float)
+        && (!request.resource.data.keys().hasAny(["price"])
+            || (request.resource.data.price >= 0
+                && request.resource.data.price <= 1000000));
+
+Replace with:
+
+      allow create: if isXmuEmail()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 100
+        && request.resource.data.description is string
+        && request.resource.data.description.size() <= 3000
+        && request.resource.data.type in
+           ["buy-sell", "lost-found", "jobs", "assistance", "rental"]
+        && (!request.resource.data.keys().hasAny(["price"])
+            || (request.resource.data.price >= 0
+                && request.resource.data.price <= 1000000))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('activeListingCount', 0) < 6;
+
+What changed: added a server-side cap — reads the user's activeListingCount from
+Firestore and blocks the create if it is already 6 or more. This is the
+server-authoritative enforcement. The client-side check in PostPage is the first
+line of defence (fast, no network call); this rule is the second line of defence.
+
+After saving firestore.rules:
+  git add artifacts/xmum-market/firestore.rules
+  git commit -m "Rules: enforce 6 active listing cap server-side on create"
+  git push origin main
+
+Then copy the ENTIRE contents of firestore.rules and paste into
+Firebase Console → Firestore → Rules → Publish.
+
+════════════════════════════════════════════════════════════
+CHANGE 3 — Confirm activeListingCount is accurate in Firestore
+════════════════════════════════════════════════════════════
+
+Read artifacts/xmum-market/src/lib/listings.ts and confirm:
+- createListing does NOT increment activeListingCount (PostPage does it after)
+- deleteListing DOES call updateDoc({ activeListingCount: increment(-1) })
+  in all branches (normal delete, soft-delete/report-held branch, and after
+  the hard delete)
+
+Just read and confirm — do NOT change anything in listings.ts unless one of
+the above is missing. If something is missing, tell me before changing anything.
+
+════════════════════════════════════════════════════════════
+AFTER ALL CHANGES
+════════════════════════════════════════════════════════════
+
+Run: pnpm --filter xmum-market run build
+Confirm zero errors.
+
+Commit and push all changes:
+  git add artifacts/xmum-market/src/pages/PostPage.tsx
+  git add artifacts/xmum-market/firestore.rules
+  git commit -m "Replace daily post rate limit with 6-slot active listing system"
+  git push origin main
+
+Then show me:
+1. The rate limit check section of PostPage.tsx as saved (the if block that was replaced)
+2. The full listings allow create rule from firestore.rules as saved
+3. Confirmation from listings.ts that activeListingCount is decremented in all delete branches

@@ -79,10 +79,10 @@ service cloud.firestore {
         && request.resource.data.description.size() <= 3000
         && request.resource.data.type in
            ["buy-sell", "lost-found", "jobs", "assistance", "rental"]
-        // Price must be 0–1,000,000 RM when present (stored as a float)
         && (!request.resource.data.keys().hasAny(["price"])
             || (request.resource.data.price >= 0
-                && request.resource.data.price <= 1000000));
+                && request.resource.data.price <= 1000000))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('activeListingCount', 0) < 6;
       allow update: if (isSignedIn()
         && resource.data.userId == request.auth.uid
         && resource.data.get('isReportHeld', false) != true
