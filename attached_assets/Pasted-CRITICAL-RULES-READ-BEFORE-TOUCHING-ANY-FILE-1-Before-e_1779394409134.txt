@@ -1,0 +1,65 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the functions package builds with zero errors before finishing: cd artifacts/functions && npm run build
+
+---
+
+## FEATURE — Auto-delete sold listings and their Storage photos after 7 days
+
+FILE TO EDIT: artifacts/functions/src/index.ts only.
+
+Do NOT touch any client-side files (xmum-market or xmum-admin).
+
+BACKGROUND:
+- When a listing is marked as sold, its status field becomes "sold" in Firestore.
+- When a listing is marked as sold, the updatedAt field may or may not be set — so we will use a new field soldAt (a timestamp in milliseconds) that we set from the client side. BUT since we cannot touch client files in this prompt, we will fall back to using createdAt if soldAt is not present, combined with a status check. Actually — the safest server-side approach is: query all listings where status == "sold", and check if the document has a soldAt field. If soldAt is present, use it. If not, use the document's Firestore update time (document metadata is not available in admin SDK queries easily), so instead stamp it now and skip until next run. The correct implementation is described in detail below.
+
+IMPLEMENTATION:
+
+Add a new exported Cloud Function called dailySoldListingCleanup to index.ts. Add it AFTER the existing dailySubscriptionCheck function. Do not modify dailySubscriptionCheck at all.
+
+The new function should:
+
+1. Be a scheduled function using the same pattern as dailySubscriptionCheck:
+   - Region: asia-southeast1
+   - Schedule: "0 3 * * *" (runs daily at 3:00 AM Malaysia time, off-peak)
+   - TimeZone: Asia/Kuala_Lumpur
+
+2. Query Firestore for all listings where status == "sold".
+
+3. For each sold listing document:
+   a. Read the soldAt field (number, milliseconds). If soldAt is missing or 0, write soldAt = Date.now() to that document and skip it — it will be cleaned up on the next run 24h later. This stamps previously sold listings gracefully without deleting them immediately.
+   b. If soldAt is present and (Date.now() - soldAt) >= 7 * 24 * 60 * 60 * 1000 (7 days), proceed to delete it.
+
+4. Deletion logic for each eligible listing:
+   a. Read the photos array from the document (array of Firebase Storage download URLs).
+   b. For each photo URL, extract the storage path using this regex: url.match(/\/o\/(.+?)(\?|$)/), then decodeURIComponent the capture group. Delete the file from Storage using admin.storage().bucket().file(path).delete(). Wrap each delete in try/catch and log warnings — a missing photo must NOT abort the whole deletion.
+   c. After photos are deleted (or attempted), delete the Firestore document using doc.ref.delete().
+   d. After deleting, send an in-app notification to the listing's userId (use the existing sendNotification helper — but note it currently sends to a users/{uid}/notifications subcollection which is correct). The notification should be:
+      type: "listing_deleted"
+      title: "Listing Removed"
+      body: `Your listing "${listingTitle}" was automatically removed 7 days after being marked as sold.`
+      shopId: "" 
+      shopName: ""
+
+5. Process listings in batches — use Promise.allSettled so one failure does not stop the rest.
+
+6. Log a summary at the end:
+   console.log(`[dailySoldListingCleanup] complete. Stamped: X. Deleted: Y. Errors: Z.`)
+
+7. Wrap the entire function body in try/catch and return null at the end, same pattern as dailySubscriptionCheck.
+
+IMPORTANT NOTES:
+- The storage bucket name is the default bucket — use admin.storage().bucket() with no arguments (Firebase Admin SDK uses the default bucket from the initialized app).
+- The photos field in a listing document is an array of strings (download URLs). It may be empty or missing — handle both cases.
+- The userId field holds the owner's uid. The listingTitle field is called title in the document.
+- Do not use Firestore batched writes for deletions — each document is deleted individually via doc.ref.delete() so failures are isolated.
+- Do not import anything new — firebase-admin and firebase-functions are already imported. admin.storage() is available via the existing admin import.
+
+After adding the function, run: cd artifacts/functions && npm run build
+Confirm zero TypeScript errors before finishing.
