@@ -441,7 +441,7 @@ export default function ListingDetailPage() {
         </div>
       )}
 
-      <div className="max-w-2xl mx-auto pb-6 md:pb-8 animate-in fade-in duration-200">
+      <div className="max-w-6xl mx-auto pb-6 md:pb-8 animate-in fade-in duration-200">
         {/* Back button + overflow menu */}
         <div data-sticky-subheader className="sticky top-14 z-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-gray-100 dark:border-slate-700">
           <div className="flex items-center justify-between px-4">
@@ -494,72 +494,76 @@ export default function ListingDetailPage() {
           </div>
         )}
 
-        {/* ── Photo Gallery ─────────────────────────────────────────────────── */}
-        <div
-          className="relative bg-black overflow-hidden select-none"
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
-        >
-          {listing.photos.length > 0 ? (
-            <>
-              {/* Hero image — tappable to open lightbox */}
-              <img
-                src={listing.photos[activePhoto]}
-                alt={listing.title}
-                className={`w-full h-64 sm:h-80 md:h-96 object-contain cursor-zoom-in transition-opacity duration-150 ${isSold ? "opacity-50" : ""}`}
-                onClick={() => openLightbox(activePhoto)}
-                fetchPriority="high"
-                loading="eager"
-              />
-              {isSold && (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <span className="bg-black/75 text-white text-2xl font-black tracking-widest px-6 py-3 rounded-2xl rotate-[-8deg] shadow-2xl">
-                    {listing.type === "lost-found" ? t.resolvedBadge : t.soldBadge}
-                  </span>
-                </div>
-              )}
-              {/* Dot indicators */}
-              {listing.photos.length > 1 && (
-                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 pointer-events-none">
-                  {listing.photos.map((_, i) => (
-                    <span
-                      key={i}
-                      className={`rounded-full transition-all ${i === activePhoto ? "w-4 h-2 bg-white" : "w-2 h-2 border-2 border-white/60 bg-transparent"}`}
-                    />
-                  ))}
-                </div>
-              )}
-            </>
-          ) : (
-            <div className={`w-full h-64 bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-slate-700 dark:to-slate-600 flex items-center justify-center ${isSold ? "opacity-50" : ""}`}>
-              <span className="text-6xl">{isRental && listing.vehicleType ? VEHICLE_ICONS[listing.vehicleType] : "📦"}</span>
-              {isSold && (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="bg-black/75 text-white text-2xl font-black tracking-widest px-6 py-3 rounded-2xl rotate-[-8deg] shadow-2xl">
-                    {listing.type === "lost-found" ? t.resolvedBadge : t.soldBadge}
-                  </span>
+        {/* ── 2-column grid: Image (left) + Details (right) ──────────────── */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-4 py-6">
+
+          {/* LEFT COLUMN — Photo Gallery */}
+          <div>
+            <div
+              className="relative bg-black rounded-2xl overflow-hidden select-none"
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
+            >
+              {listing.photos.length > 0 ? (
+                <>
+                  <img
+                    src={listing.photos[activePhoto]}
+                    alt={listing.title}
+                    className={`w-full aspect-[4/3] object-cover cursor-zoom-in transition-opacity duration-150 ${isSold ? "opacity-50" : ""}`}
+                    onClick={() => openLightbox(activePhoto)}
+                    fetchPriority="high"
+                    loading="eager"
+                  />
+                  {isSold && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <span className="bg-black/75 text-white text-2xl font-black tracking-widest px-6 py-3 rounded-2xl rotate-[-8deg] shadow-2xl">
+                        {listing.type === "lost-found" ? t.resolvedBadge : t.soldBadge}
+                      </span>
+                    </div>
+                  )}
+                  {listing.photos.length > 1 && (
+                    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 pointer-events-none">
+                      {listing.photos.map((_, i) => (
+                        <span
+                          key={i}
+                          className={`rounded-full transition-all ${i === activePhoto ? "w-4 h-2 bg-white" : "w-2 h-2 border-2 border-white/60 bg-transparent"}`}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className={`w-full aspect-[4/3] bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-slate-700 dark:to-slate-600 flex items-center justify-center ${isSold ? "opacity-50" : ""}`}>
+                  <span className="text-6xl">{isRental && listing.vehicleType ? VEHICLE_ICONS[listing.vehicleType] : "📦"}</span>
+                  {isSold && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="bg-black/75 text-white text-2xl font-black tracking-widest px-6 py-3 rounded-2xl rotate-[-8deg] shadow-2xl">
+                        {listing.type === "lost-found" ? t.resolvedBadge : t.soldBadge}
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-          )}
-        </div>
 
-        {/* Thumbnail strip — 56×56px, active = navy ring */}
-        {listing.photos.length > 1 && (
-          <div className="flex gap-2 px-4 py-3 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 overflow-x-auto scrollbar-hide">
-            {listing.photos.map((src, i) => (
-              <button
-                key={i}
-                onClick={() => setActivePhoto(i)}
-                className={`w-14 h-14 flex-shrink-0 rounded-xl overflow-hidden border-2 transition-all ${i === activePhoto ? "border-[#003366] dark:border-blue-400 ring-2 ring-[#003366]/30" : "border-transparent"}`}
-              >
-                <img src={src} alt={`${listing.title} photo ${i + 1}`} className="w-full h-full object-cover" loading="lazy" decoding="async" />
-              </button>
-            ))}
+            {/* Thumbnail strip — 56×56px, active = navy ring */}
+            {listing.photos.length > 1 && (
+              <div className="flex gap-2 pt-3 overflow-x-auto scrollbar-hide">
+                {listing.photos.map((src, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setActivePhoto(i)}
+                    className={`w-14 h-14 flex-shrink-0 rounded-xl overflow-hidden border-2 transition-all ${i === activePhoto ? "border-[#003366] dark:border-blue-400 ring-2 ring-[#003366]/30" : "border-transparent"}`}
+                  >
+                    <img src={src} alt={`${listing.title} photo ${i + 1}`} className="w-full h-full object-cover" loading="lazy" decoding="async" />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-        )}
 
-        <div className="px-4 py-4 space-y-4">
+          {/* RIGHT COLUMN — Details & Actions */}
+          <div className="flex flex-col space-y-5">
           {/* Sold notice */}
           {isSold && (
             <div className="bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl px-4 py-3 text-center">
@@ -571,15 +575,15 @@ export default function ListingDetailPage() {
 
           {/* Title & price */}
           <div>
-            <h1 className="text-xl font-display font-bold text-gray-900 dark:text-slate-100 leading-tight">{listing.title}</h1>
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-gray-900 dark:text-slate-100 leading-tight">{listing.title}</h1>
             {listing.type === "buy-sell" && (
-              <p className={`mt-1 text-3xl font-bold ${isSold ? "text-gray-400 dark:text-slate-500 line-through" : "text-blue-600 dark:text-blue-400"}`}>
+              <p className={`mt-2 text-xl font-semibold ${isSold ? "text-gray-400 dark:text-slate-500 line-through" : "text-foreground dark:text-slate-100"}`}>
                 {listing.price === 0 ? "Free / Return Item" : `RM ${fmtRM(listing.price ?? 0)}`}
               </p>
             )}
             {isRental && listing.rentalPricePerDay != null && (
-              <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                <p className={`text-3xl font-bold ${isSold ? "text-gray-400 dark:text-slate-500 line-through" : "text-yellow-700 dark:text-yellow-400"}`}>
+              <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <p className={`text-xl font-semibold ${isSold ? "text-gray-400 dark:text-slate-500 line-through" : "text-foreground dark:text-slate-100"}`}>
                   RM {fmtRM(listing.rentalPricePerDay)}{t.rentalPerDay}
                 </p>
                 {listing.rentalPricePerHour != null && (
@@ -595,16 +599,16 @@ export default function ListingDetailPage() {
                   {VEHICLE_ICONS[listing.vehicleType]} {t.rentalBadge}
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1 text-xs bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300 px-2 py-1 rounded-full">
+                <span className="inline-flex items-center gap-1 text-xs bg-secondary text-secondary-foreground px-2.5 py-0.5 rounded-full">
                   <Tag size={10} />{catLabel}
                 </span>
               )}
               {!isRental && (
-                <span className={`text-xs px-2 py-1 rounded-full font-medium ${listing.condition === "new" ? "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"}`}>
+                <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${listing.condition === "new" ? "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"}`}>
                   {listing.condition === "new" ? t.conditionNew : t.conditionUsed}
                 </span>
               )}
-              <span className="inline-flex items-center gap-1 text-xs text-gray-400 dark:text-slate-500">
+              <span className="inline-flex items-center gap-1 text-xs text-gray-400 dark:text-slate-500 bg-secondary/50 px-2.5 py-0.5 rounded-full">
                 <Clock size={10} />Listed {relativeTime(listing.createdAt)}
               </span>
             </div>
@@ -714,79 +718,68 @@ export default function ListingDetailPage() {
             </span>
           )}
 
-          {/* ── Seller Card ────────────────────────────────────────────────── */}
-          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden border-t-4 border-t-[#003366]">
-            <div className="p-4">
-              {user ? (
-                <>
-                  <div className="flex items-center gap-3">
-                    <img
-                      src={sellerProfile?.avatarUrl || avatarFallback}
-                      alt={listing.userName}
-                      className="w-12 h-12 rounded-full object-cover border-2 border-white dark:border-slate-600 shadow-sm shrink-0"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-sm text-slate-900 dark:text-slate-100 truncate">{listing.userName}</p>
-                      {sellerProfile?.isVerified ? (
-                        <p className="text-[11px] font-display font-medium text-teal-600 dark:text-teal-400 flex items-center gap-1">
-                          <ShieldCheck size={11} /> Verified XMUM Student
-                        </p>
-                      ) : null}
-                      <div className="flex items-center gap-2 mt-0.5">
-                        {sellerProfile?.rating != null && sellerProfile.rating > 0 && (
-                          <StarRating rating={sellerProfile.rating} />
-                        )}
-                        {sellerProfile?.createdAt && (
-                          <span className="text-[11px] text-gray-400 dark:text-slate-500">
-                            Member since {memberSince(sellerProfile.createdAt)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2 mt-4">
-                    {!isOwner && user.emailVerified && (
-                      <button
-                        onClick={handleMessageSeller}
-                        disabled={startingChat}
-                        className="btn-primary flex-1 flex items-center justify-center gap-2 min-h-[44px] disabled:opacity-50"
-                      >
-                        {startingChat ? <Loader2 size={15} className="animate-spin" /> : <MessageCircle size={15} />}
-                        Message
-                      </button>
-                    )}
-                    {!isOwner && (
-                      <Link
-                        href={`/seller/${listing.userId}`}
-                        className="flex-1 flex items-center justify-center gap-2 border-2 border-[#003366] dark:border-blue-500 text-[#003366] dark:text-blue-400 text-sm font-semibold rounded-xl py-2.5 min-h-[44px] hover:bg-[#003366]/5 dark:hover:bg-blue-500/10 transition-colors"
-                      >
-                        View Profile <ArrowRight size={14} />
-                      </Link>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <div className="flex flex-col items-center gap-3 py-2 text-center">
-                  <div className="w-12 h-12 rounded-full bg-gray-200 dark:bg-slate-700 blur-sm" />
-                  <p className="text-sm font-semibold text-gray-500 dark:text-slate-400">Sign in to see seller details</p>
-                  <button
-                    onClick={() => setShowAuth(true)}
-                    className="btn-primary px-5 py-2 text-sm"
-                  >
-                    Sign In
-                  </button>
+          {/* ── Seller Row (slim, borderless) ─────────────────────────────── */}
+          {user ? (
+            <div className="flex items-center gap-3">
+              <img
+                src={sellerProfile?.avatarUrl || avatarFallback}
+                alt={listing.userName}
+                className="w-9 h-9 rounded-full object-cover shrink-0"
+              />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-gray-900 dark:text-slate-100 truncate">{listing.userName}</p>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  {sellerProfile?.isVerified && (
+                    <span className="text-[11px] text-teal-600 dark:text-teal-400 flex items-center gap-0.5">
+                      <ShieldCheck size={10} /> Verified
+                    </span>
+                  )}
+                  {sellerProfile?.rating != null && sellerProfile.rating > 0 && (
+                    <StarRating rating={sellerProfile.rating} />
+                  )}
+                  {sellerProfile?.createdAt && (
+                    <span className="text-[11px] text-gray-400 dark:text-slate-500">
+                      Member since {memberSince(sellerProfile.createdAt)}
+                    </span>
+                  )}
                 </div>
-              )}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {!isOwner && user.emailVerified && (
+                  <button
+                    onClick={handleMessageSeller}
+                    disabled={startingChat}
+                    className="btn-primary flex items-center gap-1.5 px-3 py-2 text-sm min-h-[36px] disabled:opacity-50"
+                  >
+                    {startingChat ? <Loader2 size={14} className="animate-spin" /> : <MessageCircle size={14} />}
+                    Message
+                  </button>
+                )}
+                {!isOwner && (
+                  <Link
+                    href={`/seller/${listing.userId}`}
+                    className="flex items-center gap-1 text-xs text-[#003366] dark:text-blue-400 font-medium hover:underline"
+                  >
+                    Profile <ArrowRight size={12} />
+                  </Link>
+                )}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-gray-200 dark:bg-slate-700 blur-sm shrink-0" />
+              <p className="text-sm text-gray-500 dark:text-slate-400">
+                <button onClick={() => setShowAuth(true)} className="underline font-semibold text-[#003366] dark:text-blue-400">Sign in</button> to see seller details
+              </p>
+            </div>
+          )}
 
           {/* Owner: Mark as Sold + Edit + Delete */}
           {isOwner && !isSold && (
             <button
               onClick={handleMarkAsSold}
               disabled={markingAsSold}
-              className="w-full min-h-[44px] border-2 border-[#003366] dark:border-blue-500 text-[#003366] dark:text-blue-400 rounded-xl py-2.5 text-sm font-semibold hover:bg-[#003366]/5 dark:hover:bg-blue-500/10 disabled:opacity-50 transition-colors"
+              className="w-full min-h-[44px] bg-primary text-primary-foreground rounded-xl py-2.5 text-sm font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors"
             >
               {markingAsSold ? "Updating..." : (listing.type === "lost-found" ? t.markAsResolved : t.markAsSold)}
             </button>
@@ -860,12 +853,12 @@ export default function ListingDetailPage() {
 
               <p className="text-sm font-semibold text-gray-700 dark:text-slate-200 mb-2">{t.contactSeller}</p>
               {profileLoading ? (
-                <div className="flex flex-col sm:flex-row gap-2">
+                <div className="flex flex-wrap gap-3">
                   <div className="flex-1 h-12 rounded-xl bg-gray-100 dark:bg-slate-800 animate-pulse" />
                   <div className="flex-1 h-12 rounded-xl bg-gray-100 dark:bg-slate-800 animate-pulse" />
                 </div>
               ) : (
-                <div className="flex flex-col sm:flex-row gap-2">
+                <div className="flex flex-wrap gap-3 w-full">
                   {canShowWhatsApp && (
                     <button
                       onClick={() => handleContact(() => {
@@ -910,62 +903,64 @@ export default function ListingDetailPage() {
             </div>
           )}
 
-          {/* ── Similar Listings ──────────────────────────────────────────── */}
-          {(similarLoading || similarListings.length >= 2) && (
-            <div className="pt-2">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="section-header">More in {catLabel}</h2>
-                <Link
-                  href={`/search?category=${listing.category}&type=${listing.type}`}
-                  className="flex items-center gap-1 text-xs text-[#003366] dark:text-blue-400 font-medium hover:underline"
-                >
-                  See all <ArrowRight size={12} />
-                </Link>
-              </div>
+          </div>{/* end RIGHT COLUMN */}
+        </div>{/* end 2-column grid */}
 
-              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-4 px-4">
-                {similarLoading
-                  ? Array.from({ length: 3 }).map((_, i) => (
-                      <div key={i} className="flex-shrink-0 w-40 md:w-48 rounded-xl bg-gray-100 dark:bg-slate-800 animate-pulse aspect-[3/4]" />
-                    ))
-                  : similarListings.map((sl) => (
-                      <Link
-                        key={sl.id}
-                        href={`/listing/${sl.id}`}
-                        className="flex-shrink-0 w-40 md:w-48 card-base overflow-hidden hover:scale-[1.02] transition-all duration-200"
-                      >
-                        {sl.photos.length > 0 ? (
-                          <img
-                            src={sl.photos[0]}
-                            alt={sl.title}
-                            className="w-full aspect-[4/3] object-cover"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="w-full aspect-[4/3] bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-3xl">
-                            📦
-                          </div>
-                        )}
-                        <div className="p-2">
-                          <p className="text-xs font-display font-semibold text-gray-900 dark:text-slate-100 line-clamp-2 leading-snug">{sl.title}</p>
-                          {sl.price != null && sl.type === "buy-sell" && (
-                            <p className="text-xs font-bold text-blue-600 dark:text-blue-400 mt-1">
-                              {sl.price === 0 ? "Free" : `RM ${fmtRM(sl.price)}`}
-                            </p>
-                          )}
-                          {sl.type === "rental" && sl.rentalPricePerDay != null && (
-                            <p className="text-xs font-bold text-yellow-700 dark:text-yellow-400 mt-1">
-                              RM {fmtRM(sl.rentalPricePerDay)}/day
-                            </p>
-                          )}
-                        </div>
-                      </Link>
-                    ))
-                }
-              </div>
+        {/* ── Similar Listings (full-width below grid) ───────────────────── */}
+        {(similarLoading || similarListings.length >= 2) && (
+          <div className="px-4 pb-6 pt-2">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="section-header">More in {catLabel}</h2>
+              <Link
+                href={`/search?category=${listing.category}&type=${listing.type}`}
+                className="flex items-center gap-1 text-xs text-[#003366] dark:text-blue-400 font-medium hover:underline"
+              >
+                See all <ArrowRight size={12} />
+              </Link>
             </div>
-          )}
-        </div>
+
+            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-4 px-4">
+              {similarLoading
+                ? Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="flex-shrink-0 w-40 md:w-48 rounded-xl bg-gray-100 dark:bg-slate-800 animate-pulse aspect-[3/4]" />
+                  ))
+                : similarListings.map((sl) => (
+                    <Link
+                      key={sl.id}
+                      href={`/listing/${sl.id}`}
+                      className="flex-shrink-0 w-40 md:w-48 card-base overflow-hidden hover:scale-[1.02] transition-all duration-200"
+                    >
+                      {sl.photos.length > 0 ? (
+                        <img
+                          src={sl.photos[0]}
+                          alt={sl.title}
+                          className="w-full aspect-[4/3] object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="w-full aspect-[4/3] bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-3xl">
+                          📦
+                        </div>
+                      )}
+                      <div className="p-2">
+                        <p className="text-xs font-display font-semibold text-gray-900 dark:text-slate-100 line-clamp-2 leading-snug">{sl.title}</p>
+                        {sl.price != null && sl.type === "buy-sell" && (
+                          <p className="text-xs font-bold text-foreground dark:text-slate-100 mt-1">
+                            {sl.price === 0 ? "Free" : `RM ${fmtRM(sl.price)}`}
+                          </p>
+                        )}
+                        {sl.type === "rental" && sl.rentalPricePerDay != null && (
+                          <p className="text-xs font-bold text-yellow-700 dark:text-yellow-400 mt-1">
+                            RM {fmtRM(sl.rentalPricePerDay)}/day
+                          </p>
+                        )}
+                      </div>
+                    </Link>
+                  ))
+              }
+            </div>
+          </div>
+        )}
       </div>
 
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}

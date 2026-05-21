@@ -1,0 +1,41 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build (use pnpm --filter xmum-admin run build for admin-side changes)
+
+---
+
+### OBJECTIVE
+Completely modernize the Individual Listing Details Page (`artifacts/xmum-market/src/pages/ListingDetails` or equivalent view) to transform it from a dated, stretched out, vertical layout into a premium, responsive, 2-column marketplace experience tailored for university students. 
+
+Keep all backend data, conditions (owner checks, visibility logic), and functionality completely intact. Make surgical edits to the layout architecture, typography, and buttons using Tailwind CSS and existing Shadcn elements.
+
+---
+
+### UI/UX DESIGN SPECIFICATIONS TO EXECUTE
+
+#### 1. Layout Overhaul (Responsive 2-Column Desktop Grid)
+* **Mobile/Small Screens:** Keep a clean, vertically stacked column layout (`grid-cols-1`).
+* **Desktop (md and up):** Wrap the listing image and the listing details inside a responsive 2-column grid container (`md:grid-cols-2 gap-8 max-w-6xl mx-auto px-4 py-6`).
+  * **Left Column:** The Listing Image. Make it fill its container sleekly with an aspect-ratio frame, rounded corners (`rounded-2xl`), and ensure it handles cropped images elegantly (`object-cover`).
+  * **Right Column:** The Product Details & Actions. Make this side a flexible vertical stack (`flex flex-col space-y-6`) that stays clean, crisp, and neatly aligned, avoiding wide horizontal stretching.
+
+#### 2. Visual Hierarchy & Typography Upgrades
+* **The Listing Title:** Make it highly prominent with a bold, modern heading class (`text-2xl md:text-3xl font-bold tracking-tight`).
+* **The Price:** Remove any bright, neon-blue colors. Change the price typography to an elegant, high-contrast, premium font size (`text-xl font-semibold text-foreground` or a subtle brand accent color). 
+* **Metadata Badges (Category, Condition, Time):** Instead of distinct, harsh boxed borders, style them as modern, clean pills using Shadcn’s secondary badge style or a soft background padding with muted text colors (`bg-secondary text-secondary-foreground px-2.5 py-0.5 rounded-full text-xs`).
+
+#### 3. Seller Profile Card Minimization
+* Eliminate the thick, massive full-width container card currently wrapping the seller's information.
+* Refactor the seller block into a sleek, borderless profile row placed cleanly beneath the title or description. Use a small circular avatar, alongside the seller's name and join date, styled in a minimalist fashion.
+
+#### 4. Action Buttons & Hierarchy Rebalancing
+* **Primary Actions:** Give the high-importance buttons (such as "Mark as Sold" or "Contact Seller" states) a commanding, filled background color using Shadcn primary styles (`bg-primary text-primary-foreground hover:bg-primary/90`) so they stand out instantly.
+* **Secondary Actions:** Shift management buttons like "Edit" and "Delete" away from thick full-width layouts. Style them as balanced, refined secondary buttons or ghost variants (`variant="outline"` or `variant="ghost"`).
+* **Communication Row (WhatsApp, WeChat, MS Teams):** Do not stack these as full-width blocks. Group them into a tight, horizontal container row (`flex flex-wrap gap-3 w-full`). Use balanced padding, clean text, and prominent brand icon positioning to make contacting a seller feel instantaneous and modern.
+
+Please apply these layout styling improvements cleanly without touching the internal page state or logic hooks. Ensure a successful, error-free build.
