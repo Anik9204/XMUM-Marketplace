@@ -544,7 +544,7 @@ export default function ProfilePage() {
 
             <Link href="/post" className="ml-auto">
               <button className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-[#003366] dark:text-blue-400 hover:border-[#003366]/40 transition-colors">
-                <Plus size={14} /> Post
+                <Plus size={14} /> {t.post}
               </button>
             </Link>
           </div>
@@ -591,7 +591,7 @@ export default function ProfilePage() {
                 </p>
                 <Link href="/">
                   <button className="btn-primary mt-4 flex items-center gap-1.5">
-                    Browse Listings
+                    {t.browseListings}
                   </button>
                 </Link>
               </div>
@@ -657,7 +657,7 @@ export default function ProfilePage() {
           {/* ── MY SHOPS ─────────────────────────────────────────── */}
           <div className="mt-8">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="section-header">🏪 My Shops</h2>
+              <h2 className="section-header">🏪 {t.myShops}</h2>
               <Link href="/campus-market" className="text-xs text-[#003366] dark:text-blue-400 font-semibold flex items-center gap-0.5">
                 Browse <ChevronRight size={12} />
               </Link>
@@ -672,7 +672,7 @@ export default function ProfilePage() {
                 <p className="text-xs text-gray-500 dark:text-slate-400 mb-3">You don't have a shop yet.</p>
                 <Link href="/create-shop">
                   <button className="flex items-center gap-1.5 mx-auto bg-[#003366] dark:bg-blue-600 text-white text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-[#002244] transition">
-                    <Plus size={12} /> Open Your Shop
+                    <Plus size={12} /> {t.openYourShop}
                   </button>
                 </Link>
               </div>
@@ -701,7 +701,7 @@ export default function ProfilePage() {
                 ))}
                 <Link href="/create-shop">
                   <button className="w-full flex items-center justify-center gap-1.5 border border-dashed border-gray-200 dark:border-slate-700 text-gray-400 dark:text-slate-500 text-xs font-semibold py-3 rounded-2xl hover:border-[#003366] hover:text-[#003366] dark:hover:border-blue-500 dark:hover:text-blue-400 transition">
-                    <Plus size={12} /> Create New Shop
+                    <Plus size={12} /> {t.createShop}
                   </button>
                 </Link>
               </div>

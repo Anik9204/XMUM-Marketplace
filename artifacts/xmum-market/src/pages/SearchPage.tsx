@@ -18,12 +18,12 @@ const ALL_TABS: { value: ListingType; label: (t: any) => string }[] = [
 
 type PriceRange = "all" | "under50" | "50-200" | "200-500" | "500plus";
 
-const PRICE_RANGE_PILLS: { value: PriceRange; label: string; min?: number; max?: number }[] = [
-  { value: "all",      label: "All Prices" },
-  { value: "under50",  label: "Under RM50",  max: 50 },
-  { value: "50-200",   label: "RM50–200",    min: 50,  max: 200 },
-  { value: "200-500",  label: "RM200–500",   min: 200, max: 500 },
-  { value: "500plus",  label: "RM500+",      min: 500 },
+const PRICE_RANGE_PILLS: { value: PriceRange; label: (t: any) => string; min?: number; max?: number }[] = [
+  { value: "all",      label: (t) => t.priceAll },
+  { value: "under50",  label: (t) => t.priceUnder50,  max: 50 },
+  { value: "50-200",   label: (t) => t.price50to200,  min: 50,  max: 200 },
+  { value: "200-500",  label: (t) => t.price200to500, min: 200, max: 500 },
+  { value: "500plus",  label: (t) => t.price500plus,  min: 500 },
 ];
 
 export default function SearchPage() {
@@ -189,7 +189,7 @@ export default function SearchPage() {
             className={`relative flex items-center gap-1.5 px-3 min-h-[44px] rounded-xl border transition-colors ${showFilters || hasFilters ? "bg-[#003366] dark:bg-blue-600 border-[#003366] dark:border-blue-600 text-white" : "border-gray-300 dark:border-slate-600 text-gray-500 dark:text-slate-400 dark:bg-slate-700"}`}
           >
             <SlidersHorizontal size={16} />
-            <span className="text-xs font-medium hidden sm:inline">Filters</span>
+            <span className="text-xs font-medium hidden sm:inline">{t.filters}</span>
             {hasFilters && (
               <span className="absolute -top-1 -right-1 w-2 h-2 bg-blue-500 rounded-full" />
             )}
@@ -205,7 +205,7 @@ export default function SearchPage() {
                 onClick={() => applyPriceRange(value)}
                 className={`chip flex-shrink-0 ${priceRange === value ? "chip-active" : ""}`}
               >
-                {label}
+                {label(t)}
               </button>
             ))}
           </div>
@@ -294,7 +294,7 @@ export default function SearchPage() {
                            border border-gray-300 dark:border-slate-600 rounded-xl
                            hover:bg-gray-50 dark:hover:bg-slate-700 transition"
               >
-                Reset
+                {t.clearFilters}
               </button>
               <button
                 onClick={() => { setShowFilters(false); doSearch(); }}
@@ -324,7 +324,7 @@ export default function SearchPage() {
         ) : !searched ? (
           <div className="py-8">
             <p className="text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide mb-3">
-              Popular Categories
+              {t.popularCategories}
             </p>
             <div className="flex flex-wrap gap-2">
               {["electronics", "books", "clothing", "furniture", "food"].map((cat) => (
@@ -352,16 +352,16 @@ export default function SearchPage() {
           <div className="col-span-full flex flex-col items-center py-16 text-center">
             <span className="text-5xl mb-4">🔍</span>
             <p className="text-base font-semibold text-slate-700 dark:text-slate-300">
-              No results{keyword ? ` for "${keyword}"` : ""}
+              {keyword ? `${t.noResults.replace(/[.。]$/, "")} for "${keyword}"` : t.noResults}
             </p>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              Try different keywords or browse by category
+              {t.searchEmptyHint}
             </p>
           </div>
         ) : (
           <>
             <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-3">
-              {results.length} result{results.length !== 1 ? "s" : ""} found
+              {results.length} {t.resultsFound}
             </p>
             <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {results.map((listing) => (

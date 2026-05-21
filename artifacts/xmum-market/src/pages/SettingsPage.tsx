@@ -329,7 +329,7 @@ export default function SettingsPage() {
             onClick={() => navigate("/profile")}
             className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300 transition-colors -mb-px"
           >
-            My Listings
+            {t.myListings}
           </button>
           <button className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold border-b-2 border-[#003366] dark:border-blue-400 text-[#003366] dark:text-blue-400 -mb-px">
             <Settings size={13} />
@@ -596,7 +596,7 @@ export default function SettingsPage() {
                 <MessageCircle size={15} className="text-gray-400 dark:text-slate-500" />
               </div>
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-700 dark:text-slate-300 group-hover:text-gray-900 dark:group-hover:text-slate-100">Sign Out</p>
+                <p className="text-sm font-medium text-gray-700 dark:text-slate-300 group-hover:text-gray-900 dark:group-hover:text-slate-100">{t.signOut}</p>
                 <p className="text-[11px] text-gray-400 dark:text-slate-500">Sign out of your XMUM Market account</p>
               </div>
             </button>

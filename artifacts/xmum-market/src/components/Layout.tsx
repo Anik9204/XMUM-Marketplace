@@ -80,7 +80,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const navItems = [
     { href: "/", icon: Home, label: t.home },
     { href: "/search", icon: Search, label: t.search },
-    { href: "/campus-market", icon: Store, label: "Market" },
+    { href: "/campus-market", icon: Store, label: t.campusMarket },
     { href: "/messages", icon: MessageCircle, label: t.messages },
     { href: "/profile", icon: User, label: t.profile, activeFor: ["/profile", "/settings"] },
   ];
@@ -144,7 +144,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 )}
               </Link>
               <Link href="/campus-market" className={`relative px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${location === "/campus-market" ? "text-white bg-white/20" : "text-white/70 hover:text-white hover:bg-white/10"}`}>
-                Market
+                {t.campusMarket}
                 {shopPendingCount > 0 && (
                   <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center leading-none">
                     {shopPendingCount > 9 ? "9+" : shopPendingCount}

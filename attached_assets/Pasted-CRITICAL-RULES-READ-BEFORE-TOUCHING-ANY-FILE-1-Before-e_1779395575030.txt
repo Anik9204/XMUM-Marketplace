@@ -1,0 +1,51 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+
+---
+
+## ISSUE — Language switcher (EN/中) does not affect all text across the app — many strings are hardcoded in English
+
+The useLang() hook and t object from LanguageContext are available globally. The problem is that many pages and components use hardcoded English strings instead of t.keyName. Go through each file below and replace hardcoded strings with the correct translation keys. All keys already exist in src/lib/i18n.ts — do not add new keys.
+
+Go file by file. For each file, only change hardcoded UI-visible strings that have a matching key in i18n.ts. Do not change console.log strings, error codes, Firestore field names, or developer comments.
+
+FILES TO AUDIT AND FIX:
+
+1. src/pages/ProfilePage.tsx
+   - "My Listings" → t.myListings
+   - "Account Settings" → t.accountSettings
+   - "Active", "Sold", "Saved" tab labels → use t where keys exist (check i18n.ts)
+   - "My Shops" → t.myShops
+   - "Manage", "View", "Post", "Edit", "Remove" action buttons — replace any that have matching keys in i18n.ts
+   - Empty state texts like "No saved listings yet", "No sold items yet" — replace if keys exist
+   - "Settings" button label → check for key
+
+2. src/pages/SearchPage.tsx
+   - "All Prices", "Under RM50", "RM50–200", "RM200–500", "RM500+" price pill labels — add translation keys for these to i18n.ts (both en and zh) and use them. Key names: priceAll, priceUnder50, price50to200, price200to500, price500plus. zh values: 全部价格, RM50以下, RM50–200, RM200–500, RM500以上
+   - "Popular Categories" heading → add key popularCategories (zh: 热门分类) and use it
+   - "Filters" button label → add key filters (zh: 筛选) and use it
+   - "Reset" button in filter panel → check if t.clearFilters exists and use it
+   - "results found" / "result found" suffix → add key resultsFound (zh: 个结果) and use it
+   - "No results for" empty state → check i18n for noResults key and use it
+   - "Try different keywords or browse by category" → add key searchEmptyHint (zh: 尝试不同关键词或按类别浏览) and use it
+
+3. src/components/Layout.tsx
+   - Bottom nav labels "Home", "Search", "Post", "Profile" → t.home, t.search, t.post, t.profile
+   - Any other hardcoded nav or header strings that have matching keys
+
+4. src/pages/SettingsPage.tsx
+   - Section headers "Profile", "Security", "Account" and all row labels — replace with t keys where they exist in i18n.ts
+   - "Sign Out", "Delete Account" — check for keys
+
+5. src/pages/HomePage.tsx
+   - Any hardcoded tab labels or section headers that have matching keys in i18n.ts
+
+For any string where NO translation key exists in i18n.ts, leave it as-is — do not invent new keys except for the specific ones listed in item 2 above (SearchPage price pills, Popular Categories, Filters, resultsFound, searchEmptyHint). Add those new keys to BOTH en and zh in src/lib/i18n.ts.
+
+Build and confirm zero errors after all changes.
