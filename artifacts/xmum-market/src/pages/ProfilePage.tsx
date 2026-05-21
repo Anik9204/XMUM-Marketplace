@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { getUserListings, deleteListing, markAsSold, bumpListing, getListing, LISTING_EXPIRY_MS, LISTING_REMINDER_MS, BUMP_COOLDOWN_MS } from "@/lib/listings";
+import { getUserListings, deleteListing, markAsSold, getListing, LISTING_EXPIRY_MS, LISTING_REMINDER_MS } from "@/lib/listings";
 import { getUserConversations } from "@/lib/messaging";
 import { sendDailyDigestIfDue } from "@/lib/notifications";
 import { Listing, Shop, ShopInquiry, InquiryStatus } from "@/lib/types";
@@ -12,7 +12,7 @@ import AuthModal from "@/components/AuthModal";
 import ReportHoldModal from "@/components/ReportHoldModal";
 import {
   User, CheckCircle, AlertCircle, CheckCircle2, Settings, Clock, X,
-  ArrowUp, Bookmark, Store, MessageSquare, Plus,
+  Bookmark, Store, MessageSquare, Plus,
   Pencil, Trash2, Eye, Package, BarChart2, ChevronRight,
   Tag, BadgeCheck,
 } from "lucide-react";
@@ -51,17 +51,16 @@ const fmtRM = (n: number) =>
 
 function OwnerListingRow({
   listing, now, lang, t,
-  onDelete, onMarkSold, onEdit, onBump,
+  onDelete, onMarkSold, onEdit,
 }: {
   listing: Listing; now: number; lang: string; t: any;
   onDelete: () => void; onMarkSold: () => void;
-  onEdit: () => void; onBump: () => void;
+  onEdit: () => void;
 }) {
   const isSold = listing.status === "sold";
   const expiringSoon = !isSold && listing.status === "active"
     && now - listing.createdAt >= LISTING_REMINDER_MS
     && now - listing.createdAt < LISTING_EXPIRY_MS;
-  const onCooldown = !!listing.lastBumpedAt && (now - listing.lastBumpedAt) < BUMP_COOLDOWN_MS;
   const daysLeft = Math.ceil((listing.createdAt + LISTING_EXPIRY_MS - now) / 86_400_000);
   const expiryPct = Math.max(0, Math.min(100, ((LISTING_EXPIRY_MS - (now - listing.createdAt)) / LISTING_EXPIRY_MS) * 100));
   const typeInfo = TYPE_COLOR[listing.type] ?? TYPE_COLOR["buy-sell"];
@@ -83,8 +82,6 @@ function OwnerListingRow({
     if (h < 24) return `${h}h ago`;
     return `${d}d ago`;
   })();
-
-  const hoursSinceBump = listing.lastBumpedAt ? Math.floor((now - listing.lastBumpedAt) / 3_600_000) : null;
 
   return (
     <div className={`bg-white dark:bg-slate-800 rounded-2xl border overflow-hidden transition-all ${
@@ -111,11 +108,6 @@ function OwnerListingRow({
                 <span className="text-white text-[9px] font-black tracking-widest uppercase px-2 py-0.5 border border-white/60 rounded">
                   {listing.type === "lost-found" ? "Resolved" : "Sold"}
                 </span>
-              </div>
-            )}
-            {!isSold && listing.lastBumpedAt && (now - listing.lastBumpedAt) < 3 * 3_600_000 && (
-              <div className="absolute top-1 left-1 bg-green-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full">
-                ↑ TOP
               </div>
             )}
           </div>
@@ -198,18 +190,6 @@ function OwnerListingRow({
             className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[11px] font-medium text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700/40 transition-colors min-h-[40px]"
           >
             <Pencil size={12} /> Edit
-          </button>
-          <button
-            onClick={onBump}
-            disabled={onCooldown}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[11px] font-medium transition-colors min-h-[40px] ${
-              onCooldown
-                ? "text-gray-300 dark:text-slate-600 cursor-not-allowed"
-                : "text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20"
-            }`}
-          >
-            <ArrowUp size={12} />
-            {onCooldown ? (hoursSinceBump !== null ? `${hoursSinceBump}h ago` : "Bumped") : "Bump"}
           </button>
           <button
             onClick={onMarkSold}
@@ -407,29 +387,6 @@ export default function ProfilePage() {
     }
   };
 
-  const handleBump = async (listing: Listing) => {
-    if (listing.status === "sold") return;
-    try {
-      const result = await bumpListing(listing.id);
-      if (result.success) {
-        const bumpedAt = Date.now();
-        setSuccessToast(`"${listing.title}" bumped to the top!`);
-        const update = (prev: Listing[]) => {
-          const bumped = prev.find(l => l.id === listing.id);
-          if (!bumped) return prev;
-          return [{ ...bumped, lastBumpedAt: bumpedAt, sortKey: bumpedAt }, ...prev.filter(l => l.id !== listing.id)];
-        };
-        setListings(update);
-        listingsCache.current = update(listingsCache.current);
-      } else {
-        const hours = Math.ceil((result.nextBumpAt - Date.now()) / 3_600_000);
-        setSuccessToast(`You can bump "${listing.title}" again in ${hours}h.`);
-      }
-    } catch {
-      setSuccessToast("Bump failed — check your connection.");
-    }
-  };
-
   const handleMarkAsSold = async (listing: Listing) => {
     try {
       await markAsSold(listing.id);
@@ -603,7 +560,7 @@ export default function ProfilePage() {
               <Clock size={14} className="text-amber-600 dark:text-amber-400 shrink-0" />
               <p className="flex-1 text-xs text-amber-800 dark:text-amber-300 font-medium">
                 {expiryReminders.length === 1
-                  ? `"${expiryReminders[0].title}" expires soon — bump it to refresh`
+                  ? `"${expiryReminders[0].title}" expires soon — consider reposting`
                   : `${expiryReminders.length} listings expiring soon`}
               </p>
               <button onClick={() => setExpiryReminders([])} className="text-amber-400 hover:text-amber-600 transition-colors p-1">
@@ -697,7 +654,6 @@ export default function ProfilePage() {
                     }
                     navigate(`/edit/${l.id}`);
                   }}
-                  onBump={() => handleBump(l)}
                 />
               ))}
             </div>

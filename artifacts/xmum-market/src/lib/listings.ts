@@ -281,30 +281,6 @@ export async function updateListing(
   }
 }
 
-export const BUMP_COOLDOWN_MS = 24 * 60 * 60 * 1000;
-
-export async function bumpListing(
-  id: string
-): Promise<{ success: boolean; nextBumpAt: number }> {
-  const now = Date.now();
-  const snap = await getDoc(doc(db, "listings", id));
-  if (snap.exists()) {
-    const lastBumpedAt: number = snap.data()?.lastBumpedAt ?? 0;
-    if (now - lastBumpedAt < BUMP_COOLDOWN_MS) {
-      return { success: false, nextBumpAt: lastBumpedAt + BUMP_COOLDOWN_MS };
-    }
-  }
-  await Promise.race([
-    updateDoc(doc(db, "listings", id), {
-      lastBumpedAt: now,
-      sortKey: now,
-    }),
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("timeout:bump-listing")), 6_000)
-    ),
-  ]);
-  return { success: true, nextBumpAt: now + BUMP_COOLDOWN_MS };
-}
 
 export async function markAsSold(id: string): Promise<void> {
   // Firestore atomic increment() counters (totalListings, totalInquiries, viewCount)
