@@ -274,7 +274,7 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
             )}
 
             <div>
-              <label className="block text-xs font-medium text-gray-600 dark:text-slate-300 mb-1">{t.email}</label>
+              <label className="block text-xs font-medium text-gray-600 dark:text-slate-300 mb-1">ID/Email</label>
               <input
                 type="text"
                 value={email}
