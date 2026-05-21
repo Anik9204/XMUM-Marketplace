@@ -1,0 +1,45 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+
+FILE TO EDIT: artifacts/xmum-market/src/pages/PostPage.tsx
+
+BUG: In the Contact Info section of the post form, WeChat ID and Microsoft Teams fields are hidden when listing type is "rental" because of `{type !== "rental" && (...)}` guards. This is wrong — rental listings should also allow WeChat and Teams as optional contact methods (just like all other listing types). WhatsApp stays required for rental.
+
+EXACT CHANGE REQUIRED:
+
+Find these two blocks in the Contact Info section JSX (they are adjacent, around line 1185–1195):
+
+          {type !== "rental" && (
+            <div>
+              <label className={labelCls}>WeChat ID <span className="text-gray-400 font-normal">(optional)</span></label>
+              <input type="text" value={wechat} onChange={(e) => { setWechat(e.target.value); setIsDirty(true); }} onBlur={saveDraft} placeholder="WeChat ID" className={inputCls} />
+            </div>
+          )}
+          {type !== "rental" && (
+            <div>
+              <label className={labelCls}>Microsoft Teams <span className="text-gray-400 font-normal">(optional)</span></label>
+              <input type="text" value={teams} onChange={(e) => { setTeams(e.target.value); setIsDirty(true); }} placeholder="your@xmu.edu.my" className={inputCls} />
+            </div>
+          )}
+
+Remove the `{type !== "rental" && (...)}` wrappers from BOTH blocks so they always render, regardless of listing type. The inner <div> content stays exactly the same — do not touch any className, label text, placeholder, value, or onChange. The result should look like:
+
+          <div>
+            <label className={labelCls}>WeChat ID <span className="text-gray-400 font-normal">(optional)</span></label>
+            <input type="text" value={wechat} onChange={(e) => { setWechat(e.target.value); setIsDirty(true); }} onBlur={saveDraft} placeholder="WeChat ID" className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>Microsoft Teams <span className="text-gray-400 font-normal">(optional)</span></label>
+            <input type="text" value={teams} onChange={(e) => { setTeams(e.target.value); setIsDirty(true); }} placeholder="your@xmu.edu.my" className={inputCls} />
+          </div>
+
+Do not touch anything else in this file — not the WhatsApp field, not the rental validation that requires WhatsApp, not any other section.
+
+After making changes, run: pnpm --filter xmum-market run build
+Confirm zero TypeScript errors before finishing.

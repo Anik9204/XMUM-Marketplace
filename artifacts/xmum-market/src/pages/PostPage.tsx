@@ -1182,18 +1182,14 @@ export default function PostPage() {
               <p className="text-xs text-slate-400 mt-1">Include country code, e.g. +60 for Malaysia</p>
             )}
           </div>
-          {type !== "rental" && (
-            <div>
-              <label className={labelCls}>WeChat ID <span className="text-gray-400 font-normal">(optional)</span></label>
-              <input type="text" value={wechat} onChange={(e) => { setWechat(e.target.value); setIsDirty(true); }} onBlur={saveDraft} placeholder="WeChat ID" className={inputCls} />
-            </div>
-          )}
-          {type !== "rental" && (
-            <div>
-              <label className={labelCls}>Microsoft Teams <span className="text-gray-400 font-normal">(optional)</span></label>
-              <input type="text" value={teams} onChange={(e) => { setTeams(e.target.value); setIsDirty(true); }} placeholder="your@xmu.edu.my" className={inputCls} />
-            </div>
-          )}
+          <div>
+            <label className={labelCls}>WeChat ID <span className="text-gray-400 font-normal">(optional)</span></label>
+            <input type="text" value={wechat} onChange={(e) => { setWechat(e.target.value); setIsDirty(true); }} onBlur={saveDraft} placeholder="WeChat ID" className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>Microsoft Teams <span className="text-gray-400 font-normal">(optional)</span></label>
+            <input type="text" value={teams} onChange={(e) => { setTeams(e.target.value); setIsDirty(true); }} placeholder="your@xmu.edu.my" className={inputCls} />
+          </div>
         </div>
 
         {error && (
