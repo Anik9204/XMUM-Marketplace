@@ -191,9 +191,9 @@ export default function ShopPublicPage() {
           {/* LEFT COLUMN — shop info + management panel */}
           <div className="lg:sticky lg:top-[72px] order-1">
             {/* Shop info card */}
-            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg -mt-12 lg:-mt-16 relative z-10 p-5">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg mt-4 lg:-mt-16 relative z-10 p-5">
               <div className="flex items-start gap-4">
-                <div className="w-[72px] h-[72px] lg:w-20 lg:h-20 rounded-2xl border-2 border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 overflow-hidden shadow-sm shrink-0 -mt-14 lg:-mt-16">
+                <div className="w-[72px] h-[72px] lg:w-20 lg:h-20 rounded-2xl border-2 border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 overflow-hidden shadow-sm shrink-0 lg:-mt-16">
                   {shop.logoUrl ? (
                     <img src={shop.logoUrl} alt="" className="w-full h-full object-cover" />
                   ) : (
