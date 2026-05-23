@@ -148,7 +148,7 @@ export default defineConfig({
           clientPort: 443,
           protocol: "wss",
         }
-      : { port },
+      : true,
     fs: {
       strict: true,
     },
