@@ -1,0 +1,197 @@
+# Replit Prompt — 4 Bug Fixes
+
+Paste this entire block into Replit.
+
+---
+
+```
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+```
+
+---
+
+## FIX 1 — Banner & logo upload: raise limit to 15 MB + add size hint text
+
+**File:** `artifacts/xmum-market/src/components/ShopManagementPanel.tsx`
+
+There are two size checks to change. Search for both of these exact strings and apply the fix:
+
+**Change 1a — banner size check:**
+Find:
+```
+if (file.size > 5 * 1024 * 1024) { setUploadError("Banner must be under 5 MB."); return; }
+```
+Replace with:
+```
+if (file.size > 15 * 1024 * 1024) { setUploadError("Banner must be under 15 MB."); return; }
+```
+
+**Change 1b — logo size check:**
+Find:
+```
+if (file.size > 5 * 1024 * 1024) { setUploadError("Logo must be under 5 MB."); return; }
+```
+Replace with:
+```
+if (file.size > 15 * 1024 * 1024) { setUploadError("Logo must be under 15 MB."); return; }
+```
+
+**Change 1c — add size/dimension hint text below the banner upload button in SettingsTab.**
+
+In `SettingsTab`, locate the `<input ref={bannerInputRef} ...>` hidden input. Immediately AFTER the closing `>` of that input element, add this hint element:
+```tsx
+<p className="text-[11px] text-gray-400 dark:text-slate-500 mt-1.5 text-center">
+  Recommended: 1500 × 500 px · JPG or PNG · Max 15 MB
+</p>
+```
+
+Immediately AFTER the closing `>` of the `<input ref={logoInputRef} ...>` hidden input, add:
+```tsx
+<p className="text-[11px] text-gray-400 dark:text-slate-500 mt-1 text-center">
+  Recommended: 400 × 400 px · Max 15 MB
+</p>
+```
+
+---
+
+## FIX 2 — Auto-delete old banner/logo from Storage when a new one is uploaded
+
+**File:** `artifacts/xmum-market/src/components/ShopManagementPanel.tsx`
+
+The `onBannerUpload` and `onLogoUpload` handlers (inside the main `ShopManagementPanel` return, around line 1132) currently just upload and update Firestore. They need to delete the OLD file from Storage first.
+
+`ref` and `deleteObject` are already imported from `firebase/storage` at the top of the file. `storage` is already imported from `@/lib/firebase`. A `storagePathFromUrl` function already exists in the file (inside `EditListingForm`). Do NOT move or duplicate that function — instead add a small inline helper at the top of the `onBannerUpload` and `onLogoUpload` handlers.
+
+Find:
+```
+onBannerUpload={async (file) => {
+  const url = await uploadShopBanner(shopId, file);
+  await updateShop(shopId, { bannerUrl: url });
+  updateShopState({ bannerUrl: url });
+}}
+```
+Replace with:
+```
+onBannerUpload={async (file) => {
+  const oldUrl = shop.bannerUrl;
+  const url = await uploadShopBanner(shopId, file);
+  await updateShop(shopId, { bannerUrl: url });
+  updateShopState({ bannerUrl: url });
+  if (oldUrl) {
+    try {
+      const oldPath = decodeURIComponent(oldUrl.split("/o/")[1]?.split("?")[0] ?? "");
+      if (oldPath) await deleteObject(ref(storage, oldPath)).catch(() => {});
+    } catch {}
+  }
+}}
+```
+
+Find:
+```
+onLogoUpload={async (file) => {
+  const url = await uploadShopLogo(shopId, file);
+  await updateShop(shopId, { logoUrl: url });
+  updateShopState({ logoUrl: url });
+}}
+```
+Replace with:
+```
+onLogoUpload={async (file) => {
+  const oldUrl = shop.logoUrl;
+  const url = await uploadShopLogo(shopId, file);
+  await updateShop(shopId, { logoUrl: url });
+  updateShopState({ logoUrl: url });
+  if (oldUrl) {
+    try {
+      const oldPath = decodeURIComponent(oldUrl.split("/o/")[1]?.split("?")[0] ?? "");
+      if (oldPath) await deleteObject(ref(storage, oldPath)).catch(() => {});
+    } catch {}
+  }
+}}
+```
+
+**File:** `artifacts/xmum-market/src/lib/userProfile.ts`
+
+The `uploadAvatar` function (line ~63) already reads `oldAvatarUrl` and calls `deleteObject` on it. Check that this logic is correct and complete — it should be working. If the old avatar uses a fixed path like `avatars/${uid}/avatar.jpg` (overwriting the same path each time), then Firebase Storage automatically overwrites it and no delete is needed. READ the function carefully. If the path is fixed (same filename every time), the old file is automatically replaced — no bug here. If the path is dynamic (e.g. includes a timestamp), add the same delete-before-upload pattern used above. Only make a change if the path is dynamic. Do NOT touch `uploadAvatar` if the path is already fixed/overwriting.
+
+---
+
+## FIX 3 — Banner image gets cut on mobile: use object-position center top
+
+**File:** `artifacts/xmum-market/src/pages/ShopPublicPage.tsx`
+
+The banner image crops the top of the photo on mobile because `object-cover` centers by default and the banner is shorter on mobile (`h-44`) than desktop (`lg:h-72`). Fix this by adding `object-top` so the top of the photo is always visible.
+
+Find:
+```tsx
+<img src={shop.bannerUrl} alt="" className="w-full h-full object-cover" />
+```
+Replace with:
+```tsx
+<img src={shop.bannerUrl} alt="" className="w-full h-full object-cover object-top" />
+```
+
+Also apply the same fix to the skeleton loading state banner (the `animate-pulse` div is fine as-is since it has no image — leave that unchanged).
+
+Also apply the same fix to the mini banner preview inside `SettingsTab` in `ShopManagementPanel.tsx`:
+
+Find:
+```tsx
+{shop.bannerUrl && <img src={shop.bannerUrl} alt="" className="w-full h-full object-cover" />}
+```
+Replace with:
+```tsx
+{shop.bannerUrl && <img src={shop.bannerUrl} alt="" className="w-full h-full object-cover object-top" />}
+```
+
+---
+
+## FIX 4 — Description "Done" button covered by browser/app header on desktop
+
+**File:** `artifacts/xmum-market/src/components/ShopManagementPanel.tsx`
+
+The `ListingDescEditorModal` function uses `fixed inset-0 z-[70]` which covers the full viewport. On desktop, the app's sticky header sits at z-50, so z-[70] should be on top of it — but the modal's OWN header bar (with Cancel / Description / Done) needs enough top padding to clear the browser UI and the app header.
+
+There are TWO instances of `ListingDescEditorModal` — one for AddListingForm (around line 247) and one used by EditListingForm (around line 367). The fix is inside the `ListingDescEditorModal` component definition itself (around line 127), so it fixes both at once.
+
+Find the modal's header div:
+```tsx
+<div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-slate-700">
+```
+Replace with:
+```tsx
+<div className="flex items-center justify-between px-4 py-3 pt-safe border-b border-gray-200 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-900 z-10">
+```
+
+Then also add `pt-4` to the outer modal wrapper to push the header bar down slightly on desktop:
+
+Find:
+```tsx
+<div className="fixed inset-0 z-[70] flex flex-col bg-white dark:bg-slate-900">
+```
+Replace with:
+```tsx
+<div className="fixed inset-0 z-[70] flex flex-col bg-white dark:bg-slate-900 pt-[env(safe-area-inset-top)]">
+```
+
+There is a SECOND identical `ListingDescEditorModal` component for shop BIO editing around line 643 (inside `SettingsTab`). Apply the exact same two changes to that component's outer div and header div as well.
+
+---
+
+## AFTER ALL CHANGES — VERIFY
+
+1. Run `pnpm --filter xmum-market run build` — must pass with zero TypeScript errors.
+2. Mentally verify each fix:
+   - Fix 1: Banner input shows "Recommended: 1500 × 500 px" hint. Logo shows "400 × 400 px" hint. Size limit is 15 MB for both.
+   - Fix 2: When a new banner/logo is uploaded, the old Storage file is deleted (fires after the new URL is saved to Firestore — so there's no broken image window).
+   - Fix 3: Banner image on mobile shows top of image, not center-cropped.
+   - Fix 4: "Done" and "Cancel" buttons in the description fullscreen modal are visible and not hidden behind any header bar.
+3. Do NOT change any other file, component, Firebase rule, or routing logic.
+```

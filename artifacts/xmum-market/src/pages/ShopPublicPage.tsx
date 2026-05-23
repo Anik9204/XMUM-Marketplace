@@ -165,7 +165,7 @@ export default function ShopPublicPage() {
         }}
       >
         {shop.bannerUrl && (
-          <img src={shop.bannerUrl} alt="" className="w-full h-full object-cover" />
+          <img src={shop.bannerUrl} alt="" className="w-full h-full object-cover object-top" />
         )}
         <div className="absolute inset-0 bg-gradient-to-b from-black/20 to-black/40 pointer-events-none" />
 

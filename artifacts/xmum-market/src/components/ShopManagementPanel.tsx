@@ -124,8 +124,8 @@ function ListingDescEditorModal({ value, onChange, onClose }: ListingDescEditorM
   const [draft, setDraft] = useState(value);
   const handleSave = () => { onChange(draft); onClose(); };
   return (
-    <div className="fixed inset-0 z-[70] flex flex-col bg-white dark:bg-slate-900">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-slate-700">
+    <div className="fixed inset-0 z-[70] flex flex-col bg-white dark:bg-slate-900 pt-[env(safe-area-inset-top)]">
+      <div className="flex items-center justify-between px-4 py-3 pt-safe border-b border-gray-200 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-900 z-10">
         <button type="button" onClick={onClose}
           className="text-sm text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200 transition-colors">
           Cancel
@@ -640,8 +640,8 @@ function ShopBioEditorModal({ value, onChange, onClose }: ShopBioEditorModalProp
   const [draft, setDraft] = useState(value);
   const handleSave = () => { onChange(draft); onClose(); };
   return (
-    <div className="fixed inset-0 z-[70] flex flex-col bg-white dark:bg-slate-900">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-slate-700">
+    <div className="fixed inset-0 z-[70] flex flex-col bg-white dark:bg-slate-900 pt-[env(safe-area-inset-top)]">
+      <div className="flex items-center justify-between px-4 py-3 pt-safe border-b border-gray-200 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-900 z-10">
         <button type="button" onClick={onClose}
           className="text-sm text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200 transition-colors">
           Cancel
@@ -706,16 +706,19 @@ function SettingsTab({
     <div className="space-y-5">
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden">
         <div className="h-28 relative" style={{ background: shop.bannerUrl ? undefined : "linear-gradient(135deg, #003366 0%, #0066cc 100%)" }}>
-          {shop.bannerUrl && <img src={shop.bannerUrl} alt="" className="w-full h-full object-cover" />}
+          {shop.bannerUrl && <img src={shop.bannerUrl} alt="" className="w-full h-full object-cover object-top" />}
           <button onClick={() => !bannerUploading && bannerInputRef.current?.click()} disabled={bannerUploading} className="absolute top-2 right-2 bg-black/40 text-white p-1.5 rounded-lg hover:bg-black/60 transition disabled:opacity-60">
             {bannerUploading ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
           </button>
           <input ref={bannerInputRef} type="file" accept="image/*" className="hidden" onChange={async (e) => {
             const file = e.target.files?.[0]; if (!file) return;
-            if (file.size > 5 * 1024 * 1024) { setUploadError("Banner must be under 5 MB."); return; }
+            if (file.size > 15 * 1024 * 1024) { setUploadError("Banner must be under 15 MB."); return; }
             setUploadError(""); setBannerUploading(true);
             try { await onBannerUpload(file); } catch (err: any) { setUploadError("Upload failed: " + (err?.message ?? "Unknown error")); } finally { setBannerUploading(false); }
           }} />
+          <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-1.5 text-center">
+            Recommended: 1500 × 500 px · JPG or PNG · Max 15 MB
+          </p>
         </div>
         <div className="px-4 pb-4 -mt-6 flex items-end gap-3">
           <div className="relative">
@@ -727,10 +730,13 @@ function SettingsTab({
             </button>
             <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={async (e) => {
               const file = e.target.files?.[0]; if (!file) return;
-              if (file.size > 5 * 1024 * 1024) { setUploadError("Logo must be under 5 MB."); return; }
+              if (file.size > 15 * 1024 * 1024) { setUploadError("Logo must be under 15 MB."); return; }
               setUploadError(""); setLogoUploading(true);
               try { await onLogoUpload(file); } catch (err: any) { setUploadError("Upload failed: " + (err?.message ?? "Unknown error")); } finally { setLogoUploading(false); }
             }} />
+            <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-1 text-center">
+              Recommended: 400 × 400 px · Max 15 MB
+            </p>
           </div>
           <div className="pb-1"><p className="text-sm font-bold text-gray-900 dark:text-slate-100">{shop.name}</p><p className="text-xs text-gray-500 dark:text-slate-400">{shop.category}</p></div>
         </div>
@@ -1129,14 +1135,28 @@ export default function ShopManagementPanel({
             } finally { setSettingsLoading(false); }
           }}
           onBannerUpload={async (file) => {
+            const oldUrl = shop.bannerUrl;
             const url = await uploadShopBanner(shopId, file);
             await updateShop(shopId, { bannerUrl: url });
             updateShopState({ bannerUrl: url });
+            if (oldUrl) {
+              try {
+                const oldPath = decodeURIComponent(oldUrl.split("/o/")[1]?.split("?")[0] ?? "");
+                if (oldPath) await deleteObject(ref(storage, oldPath)).catch(() => {});
+              } catch {}
+            }
           }}
           onLogoUpload={async (file) => {
+            const oldUrl = shop.logoUrl;
             const url = await uploadShopLogo(shopId, file);
             await updateShop(shopId, { logoUrl: url });
             updateShopState({ logoUrl: url });
+            if (oldUrl) {
+              try {
+                const oldPath = decodeURIComponent(oldUrl.split("/o/")[1]?.split("?")[0] ?? "");
+                if (oldPath) await deleteObject(ref(storage, oldPath)).catch(() => {});
+              } catch {}
+            }
           }}
           onDelete={async () => {
             await deleteShopCompletely(shopId);
