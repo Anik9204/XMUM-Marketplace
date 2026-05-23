@@ -124,8 +124,8 @@ function ListingDescEditorModal({ value, onChange, onClose }: ListingDescEditorM
   const [draft, setDraft] = useState(value);
   const handleSave = () => { onChange(draft); onClose(); };
   return (
-    <div className="fixed inset-0 z-[70] flex flex-col bg-white dark:bg-slate-900 pt-[env(safe-area-inset-top)]">
-      <div className="flex items-center justify-between px-4 py-3 pt-safe border-b border-gray-200 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-900 z-10">
+    <div className="fixed inset-0 z-[70] flex flex-col bg-white dark:bg-slate-900 pt-[env(safe-area-inset-top,0px)] md:pt-14">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900">
         <button type="button" onClick={onClose}
           className="text-sm text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200 transition-colors">
           Cancel
@@ -640,8 +640,8 @@ function ShopBioEditorModal({ value, onChange, onClose }: ShopBioEditorModalProp
   const [draft, setDraft] = useState(value);
   const handleSave = () => { onChange(draft); onClose(); };
   return (
-    <div className="fixed inset-0 z-[70] flex flex-col bg-white dark:bg-slate-900 pt-[env(safe-area-inset-top)]">
-      <div className="flex items-center justify-between px-4 py-3 pt-safe border-b border-gray-200 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-900 z-10">
+    <div className="fixed inset-0 z-[70] flex flex-col bg-white dark:bg-slate-900 pt-[env(safe-area-inset-top,0px)] md:pt-14">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900">
         <button type="button" onClick={onClose}
           className="text-sm text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200 transition-colors">
           Cancel
@@ -716,9 +716,6 @@ function SettingsTab({
             setUploadError(""); setBannerUploading(true);
             try { await onBannerUpload(file); } catch (err: any) { setUploadError("Upload failed: " + (err?.message ?? "Unknown error")); } finally { setBannerUploading(false); }
           }} />
-          <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-1.5 text-center">
-            Recommended: 1500 × 500 px · JPG or PNG · Max 15 MB
-          </p>
         </div>
         <div className="px-4 pb-4 -mt-6 flex items-end gap-3">
           <div className="relative">
@@ -734,13 +731,14 @@ function SettingsTab({
               setUploadError(""); setLogoUploading(true);
               try { await onLogoUpload(file); } catch (err: any) { setUploadError("Upload failed: " + (err?.message ?? "Unknown error")); } finally { setLogoUploading(false); }
             }} />
-            <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-1 text-center">
-              Recommended: 400 × 400 px · Max 15 MB
-            </p>
           </div>
           <div className="pb-1"><p className="text-sm font-bold text-gray-900 dark:text-slate-100">{shop.name}</p><p className="text-xs text-gray-500 dark:text-slate-400">{shop.category}</p></div>
         </div>
         {uploadError && <p className="text-xs text-red-500 mt-2 px-4 pb-3">{uploadError}</p>}
+      </div>
+      <div className="flex flex-col gap-0.5 text-[11px] text-gray-400 dark:text-slate-500 px-1">
+        <p>📷 Banner — recommended 1500 × 500 px · JPG or PNG · max 15 MB</p>
+        <p>🖼️ Logo — recommended 400 × 400 px · JPG or PNG · max 15 MB</p>
       </div>
       <div><label className={labelCls}>Shop Name</label><input className={inputCls} maxLength={60} value={name} onChange={(e) => setName(e.target.value)} /></div>
       <div>

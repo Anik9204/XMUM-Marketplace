@@ -174,7 +174,7 @@ export default function ShopPublicPage() {
             if (window.history.length > 1) {
               window.history.back();
             } else {
-              navigate("/market");
+              navigate("/campus-market");
             }
           }}
           className="absolute top-4 left-4 bg-black/40 backdrop-blur-sm text-white p-2.5 rounded-full hover:bg-black/60 transition shadow-lg"
