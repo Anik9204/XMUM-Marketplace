@@ -107,8 +107,24 @@ export default function ShopPublicPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 size={28} className="animate-spin text-[#003366] dark:text-blue-400" />
+      <div className="min-h-screen bg-gray-50 dark:bg-slate-950">
+        <div className="h-44 sm:h-64 lg:h-72 w-full bg-gray-200 dark:bg-slate-800 animate-pulse" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
+          <div className="lg:grid lg:grid-cols-[320px_1fr] lg:gap-8">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl h-64 animate-pulse" />
+            <div className="mt-6 lg:mt-0 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="bg-white dark:bg-slate-900 rounded-xl overflow-hidden animate-pulse">
+                  <div className="aspect-square bg-gray-100 dark:bg-slate-800" />
+                  <div className="p-3 space-y-2">
+                    <div className="h-3 bg-gray-100 dark:bg-slate-800 rounded w-3/4" />
+                    <div className="h-3 bg-gray-100 dark:bg-slate-800 rounded w-1/2" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -140,10 +156,10 @@ export default function ShopPublicPage() {
   const canManage = isOwner || isEditor;
 
   return (
-    <div className="max-w-2xl mx-auto pb-28 min-h-screen bg-gray-50 dark:bg-slate-950">
-      {/* Banner */}
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 pb-20">
+      {/* Full-width Banner */}
       <div
-        className="relative h-44 sm:h-56 w-full"
+        className="relative h-44 sm:h-64 lg:h-72 w-full"
         style={{
           background: shop.bannerUrl ? undefined : "linear-gradient(135deg, #003366 0%, #0055aa 60%, #0077cc 100%)",
         }}
@@ -167,139 +183,170 @@ export default function ShopPublicPage() {
         </button>
       </div>
 
-      {/* Shop info card */}
-      <div className="px-4">
-        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg -mt-10 relative z-10 p-5">
-          <div className="flex items-start gap-4">
-            <div className="w-[72px] h-[72px] rounded-2xl border-2 border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 overflow-hidden shadow-sm shrink-0 -mt-10">
-              {shop.logoUrl ? (
-                <img src={shop.logoUrl} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#003366] to-blue-500">
-                  <Store size={30} className="text-white" />
-                </div>
-              )}
-            </div>
+      {/* Content area */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Two-column grid */}
+        <div className="flex flex-col lg:grid lg:grid-cols-[320px_1fr] lg:gap-8 lg:items-start">
 
-            <div className="flex-1 min-w-0 pt-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-xl font-display font-bold text-gray-900 dark:text-slate-100 leading-tight">{shop.name}</h1>
-                <span className="text-xs bg-[#003366]/10 dark:bg-blue-900/30 text-[#003366] dark:text-blue-400 font-semibold px-2.5 py-1 rounded-full shrink-0">
-                  {shop.category}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <ShopBio bio={shop.bio} />
-
-          <div className="flex gap-5 mt-4 text-xs text-gray-500 dark:text-slate-400">
-            <span>
-              <strong className="text-gray-800 dark:text-slate-200 text-sm">{shop.totalListings}</strong>
-              {" "}listing{shop.totalListings !== 1 ? "s" : ""}
-            </span>
-          </div>
-
-          {(shop.whatsapp || shop.wechat) && (
-            <div className="mt-4 pt-4 border-t border-gray-100 dark:border-slate-700">
-              {user ? (
-                <div className="flex flex-wrap gap-2">
-                  {shop.whatsapp && (
-                    <a
-                      href={`https://wa.me/${shop.whatsapp.replace(/[^0-9]/g, "")}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 bg-green-500 text-white text-xs font-semibold px-4 py-2.5 rounded-xl hover:bg-green-600 transition shadow-sm"
-                    >
-                      <SiWhatsapp size={13} /> WhatsApp
-                    </a>
-                  )}
-                  {shop.wechat && (
-                    <div className="flex items-center gap-1.5 bg-[#07C160] text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-sm">
-                      <SiWechat size={13} /> {shop.wechat}
+          {/* LEFT COLUMN — shop info + management panel */}
+          <div className="lg:sticky lg:top-[72px] order-1">
+            {/* Shop info card */}
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg -mt-12 lg:-mt-16 relative z-10 p-5">
+              <div className="flex items-start gap-4">
+                <div className="w-[72px] h-[72px] lg:w-20 lg:h-20 rounded-2xl border-2 border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 overflow-hidden shadow-sm shrink-0 -mt-14 lg:-mt-16">
+                  {shop.logoUrl ? (
+                    <img src={shop.logoUrl} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#003366] to-blue-500">
+                      <Store size={30} className="text-white" />
                     </div>
                   )}
                 </div>
-              ) : (
-                <p className="text-xs text-gray-500 dark:text-slate-400">
-                  <button
-                    onClick={() => setShowAuth(true)}
-                    className="text-[#003366] dark:text-blue-400 font-semibold underline"
-                  >
-                    Sign in
-                  </button>
-                  {" "}to see contact details
-                </p>
+
+                <div className="flex-1 min-w-0 pt-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h1 className="text-xl font-display font-bold text-gray-900 dark:text-slate-100 leading-tight">{shop.name}</h1>
+                    <span className="text-xs bg-[#003366]/10 dark:bg-blue-900/30 text-[#003366] dark:text-blue-400 font-semibold px-2.5 py-1 rounded-full shrink-0">
+                      {shop.category}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <ShopBio bio={shop.bio} />
+
+              <div className="flex flex-wrap gap-5 mt-4 text-xs text-gray-500 dark:text-slate-400">
+                <span>
+                  <strong className="text-gray-800 dark:text-slate-200 text-sm">{shop.totalListings}</strong>
+                  {" "}listing{shop.totalListings !== 1 ? "s" : ""}
+                </span>
+                <span>
+                  <strong className="text-gray-800 dark:text-slate-200 text-sm">{shop.totalInquiries}</strong>
+                  {" "}inquir{shop.totalInquiries !== 1 ? "ies" : "y"}
+                </span>
+                {shop.rating != null && shop.reviewCount != null && shop.reviewCount > 0 && (
+                  <span>
+                    ⭐ <strong className="text-gray-800 dark:text-slate-200 text-sm">{shop.rating.toFixed(1)}</strong>
+                    {" "}({shop.reviewCount})
+                  </span>
+                )}
+              </div>
+
+              {(shop.whatsapp || shop.wechat) && (
+                <div className="mt-4 pt-4 border-t border-gray-100 dark:border-slate-700">
+                  {user ? (
+                    <div className="flex flex-col gap-2">
+                      {shop.whatsapp && (
+                        <a
+                          href={`https://wa.me/${shop.whatsapp.replace(/[^0-9]/g, "")}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-full flex items-center justify-center gap-1.5 bg-green-500 text-white text-xs font-semibold px-4 py-2.5 rounded-xl hover:bg-green-600 transition shadow-sm"
+                        >
+                          <SiWhatsapp size={13} /> WhatsApp
+                        </a>
+                      )}
+                      {shop.wechat && (
+                        <div className="w-full flex items-center justify-center gap-1.5 bg-[#07C160] text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-sm">
+                          <SiWechat size={13} /> {shop.wechat}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-500 dark:text-slate-400">
+                      <button
+                        onClick={() => setShowAuth(true)}
+                        className="text-[#003366] dark:text-blue-400 font-semibold underline"
+                      >
+                        Sign in
+                      </button>
+                      {" "}to see contact details
+                    </p>
+                  )}
+                </div>
               )}
             </div>
-          )}
-        </div>
-      </div>
 
-      {/* Listings grid */}
-      <div className="px-4 mt-6">
-        <h2 className="section-header mb-3">
-          🛍️ Listings
-          <span className="ml-2 text-xs font-normal text-gray-400 dark:text-slate-500">({listings.length})</span>
-        </h2>
-        {listings.length === 0 ? (
-          <div className="text-center py-12 bg-white dark:bg-slate-900 rounded-2xl">
-            <Package size={32} className="mx-auto mb-2 text-gray-300 dark:text-slate-600" />
-            <p className="text-sm text-gray-400 dark:text-slate-500">No listings yet.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {listings.map((l) => (
-              <Link
-                key={l.id}
-                href={`/shop-listing/${l.id}`}
-                className="card-base overflow-hidden text-left hover:scale-[1.02] transition-all duration-200 active:scale-[0.98] block"
-              >
-                {l.photos[0] ? (
-                  <img src={l.photos[0]} alt="" className="w-full aspect-square object-cover" />
-                ) : (
-                  <div className="w-full aspect-square bg-gradient-to-br from-gray-100 to-gray-200 dark:from-slate-700 dark:to-slate-600 flex items-center justify-center">
-                    <Package size={28} className="text-gray-300 dark:text-slate-500" />
+            {/* Management panel — in left column (desktop + mobile) */}
+            {canManage && (
+              <div className="mt-6" ref={managementPanelRef}>
+                <div className="border-t-2 border-dashed border-gray-200 dark:border-slate-700 pt-5 mb-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Settings2 size={16} className="text-[#003366] dark:text-blue-400" />
+                    <h2 className="section-header">⚙️ Shop Management</h2>
+                    <span className="text-xs text-gray-400 dark:text-slate-500 font-normal">
+                      ({isOwner ? "Owner" : "Editor"})
+                    </span>
                   </div>
-                )}
-                <div className="p-3">
-                  <p className="text-xs font-semibold text-gray-900 dark:text-slate-100 line-clamp-2 mb-1">{l.title}</p>
-                  <PriceLabel listing={l} />
-                  <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5 truncate">{shop.name}</p>
+                  <p className="text-xs text-gray-400 dark:text-slate-500">Only you can see this section.</p>
                 </div>
-              </Link>
-            ))}
+                <ShopManagementPanel
+                  shopId={shop.id}
+                  initialShop={shop}
+                  isOwner={isOwner}
+                  isEditor={isEditor}
+                  onShopDeleted={() => navigate("/profile")}
+                  onShopUpdated={(updated) => setShop(updated)}
+                />
+              </div>
+            )}
           </div>
-        )}
+
+          {/* RIGHT COLUMN — listings grid */}
+          <div className="order-2 mt-6 lg:mt-0">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="section-header">
+                🛍️ Listings
+                <span className="ml-2 text-xs font-normal text-gray-400 dark:text-slate-500">({listings.length})</span>
+              </h2>
+              {listings.length > 0 && (
+                <span className="text-xs text-gray-400 dark:text-slate-500">
+                  {listings.length} item{listings.length !== 1 ? "s" : ""}
+                </span>
+              )}
+            </div>
+
+            {listings.length === 0 ? (
+              <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800">
+                <div className="text-5xl mb-3">🛍️</div>
+                <p className="text-base font-semibold text-gray-700 dark:text-slate-300 mb-1">No listings yet</p>
+                <p className="text-sm text-gray-400 dark:text-slate-500">
+                  {canManage ? "Add your first listing using the panel on the left." : "Check back soon!"}
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+                {listings.map((l) => (
+                  <Link
+                    key={l.id}
+                    href={`/shop-listing/${l.id}`}
+                    className="card-base overflow-hidden text-left hover:scale-[1.02] hover:shadow-md transition-all duration-200 active:scale-[0.98] block"
+                  >
+                    {l.photos[0] ? (
+                      <img src={l.photos[0]} alt="" className="w-full aspect-square object-cover" />
+                    ) : (
+                      <div className="w-full aspect-square bg-gradient-to-br from-gray-100 to-gray-200 dark:from-slate-700 dark:to-slate-600 flex items-center justify-center">
+                        <Package size={28} className="text-gray-300 dark:text-slate-500" />
+                      </div>
+                    )}
+                    <div className="p-3">
+                      <p className="text-xs font-semibold text-gray-900 dark:text-slate-100 line-clamp-2 mb-1">{l.title}</p>
+                      {l.description && (
+                        <p className="line-clamp-2 text-[11px] text-gray-500 dark:text-slate-400 mb-1">{l.description}</p>
+                      )}
+                      <PriceLabel listing={l} />
+                      <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5 truncate">{shop.name}</p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+
+        </div>
       </div>
 
-      {/* Management Section — owners and editors only */}
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
-
-      {canManage && (
-        <div className="px-4 mt-8" ref={managementPanelRef}>
-          <div className="border-t-2 border-dashed border-gray-200 dark:border-slate-700 pt-6 mb-5">
-            <div className="flex items-center gap-2 mb-1">
-              <Settings2 size={16} className="text-[#003366] dark:text-blue-400" />
-              <h2 className="section-header">
-                ⚙️ Shop Management
-              </h2>
-              <span className="text-xs text-gray-400 dark:text-slate-500 font-normal">
-                ({isOwner ? "Owner" : "Editor"})
-              </span>
-            </div>
-            <p className="text-xs text-gray-400 dark:text-slate-500">Only you can see this section.</p>
-          </div>
-          <ShopManagementPanel
-            shopId={shop.id}
-            initialShop={shop}
-            isOwner={isOwner}
-            isEditor={isEditor}
-            onShopDeleted={() => navigate("/profile")}
-            onShopUpdated={(updated) => setShop(updated)}
-          />
-        </div>
-      )}
     </div>
   );
 }

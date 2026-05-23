@@ -1,0 +1,221 @@
+# Replit Prompt — Shop Page Full Desktop + Mobile Redesign
+
+Paste this entire block into Replit.
+
+---
+
+```
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+```
+
+---
+
+## TASK: Redesign ShopPublicPage.tsx for desktop + mobile (Carousell/Mudah-style)
+
+### WHAT'S WRONG NOW
+The shop page (`artifacts/xmum-market/src/pages/ShopPublicPage.tsx`) uses `max-w-2xl mx-auto` which caps it at ~672px even on a 1440px monitor. It wastes the entire left and right screen area on desktop. The result is a narrow centered column that looks like a mobile app running in a browser window — exactly what we see in the screenshot.
+
+The management panel (`artifacts/xmum-market/src/components/ShopManagementPanel.tsx`) is appended below the public content in a single column, also constrained.
+
+We want a layout like **Carousell** or **Mudah.my**: a wide shop header banner, then a 2-column desktop layout where the LEFT column is the shop info + contact + management tabs, and the RIGHT column (wider) is the listings grid. On mobile it stacks back to a single column as it does now.
+
+---
+
+### FILES TO CHANGE
+
+**Primary file:** `artifacts/xmum-market/src/pages/ShopPublicPage.tsx`
+
+**Secondary file:** `artifacts/xmum-market/src/components/ShopManagementPanel.tsx`
+- Only change the outer wrapper `<div>` at the bottom of that file (the `return (` block of `ShopManagementPanel`) to remove any `max-w` constraint so it fills its parent column fully. Do NOT touch any tab logic, form logic, or Firebase calls.
+
+---
+
+### EXACT LAYOUT SPEC — ShopPublicPage.tsx
+
+Replace the entire JSX `return (...)` block in `ShopPublicPage` with the following structure. Do NOT change any state, effects, helper functions, or imports above the return statement.
+
+**New outer wrapper:**
+```tsx
+<div className="min-h-screen bg-gray-50 dark:bg-slate-950">
+```
+(Remove the old `max-w-2xl mx-auto pb-28`)
+
+**1. FULL-WIDTH BANNER** — keep existing banner code but change height:
+- Mobile: `h-44` → stay `h-44`  
+- Desktop: `sm:h-64 lg:h-72` (taller on desktop, fills full width — no max-w on banner)
+- Keep the back button, gradient overlay, and existing banner/fallback gradient exactly as-is.
+
+**2. CONTENT AREA** — below the banner, use this wrapper:
+```tsx
+<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+```
+
+**3. TWO-COLUMN GRID** — inside the content area:
+```tsx
+<div className="lg:grid lg:grid-cols-[320px_1fr] lg:gap-8 lg:items-start">
+```
+- On mobile (< lg): single column stacked (left then right)
+- On desktop (≥ lg): left sidebar 320px fixed width, right column takes remaining space
+
+**LEFT COLUMN** (sidebar, sticky on desktop):
+```tsx
+<div className="lg:sticky lg:top-[72px]">
+```
+Contains:
+- The shop info card (logo, name, category badge, bio, stats, contact buttons)
+- If `canManage === true`: the subscription/status banner AND the ShopManagementPanel tabs (Listings, Analytics, Settings)
+
+The shop info card should get this treatment on desktop:
+- Logo: enlarge to `w-20 h-20` on `lg:` breakpoint, keep `w-[72px] h-[72px]` on mobile
+- The logo should overlap the banner by `-mt-12` on mobile, `-mt-14 lg:-mt-16` on desktop
+- Add a subtle stat row below the bio: show `shop.totalListings` listings, `shop.totalInquiries` inquiries, and if `shop.rating` and `shop.reviewCount` exist: show ⭐ rating (1 decimal) and review count
+- The WhatsApp / WeChat buttons: on desktop make them full-width `w-full` inside the card
+
+**RIGHT COLUMN** (main content area):
+```tsx
+<div className="mt-6 lg:mt-0">
+```
+Contains:
+- The listings grid header ("🛍️ Listings" + count)
+- The listings grid itself
+
+**Listings grid breakpoints:**
+- Mobile: `grid-cols-2`  
+- sm: `grid-cols-3`  
+- lg: `grid-cols-3`  
+- xl: `grid-cols-4`  
+
+So the full grid class: `grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3`
+
+**Listing cards** (the `<Link>` items in the grid) — keep existing structure but:
+- Image: keep `aspect-square`
+- On `lg:` screens: show listing `description` (if it exists on ShopListing type) as a `line-clamp-2 text-[11px] text-gray-500` below the title — only add this if `l.description` exists in the ShopListing type, otherwise skip it
+- Add a subtle hover shadow: add `hover:shadow-md` to the existing `card-base` link
+
+**4. MANAGEMENT PANEL — owner/editor view on desktop:**
+
+When `canManage === true`, on DESKTOP the management panel should NOT be below the listings. Instead it should be in the LEFT COLUMN, below the shop info card.
+
+On MOBILE it should stay below the listings (append-below behavior as it is now).
+
+To achieve this without duplicating JSX, use a CSS approach:
+- Render `<ShopManagementPanel .../>` once, inside the LEFT COLUMN, wrapped in `<div className="mt-6 hidden lg:block">` for desktop
+- Render it again inside a `<div className="mt-8 lg:hidden">` block after the right column for mobile
+
+Wait — rendering it twice would cause double Firebase subscriptions. Instead, use a single render with responsive positioning:
+
+Use CSS order with flexbox on the outer wrapper on mobile:
+```tsx
+<div className="flex flex-col lg:grid lg:grid-cols-[320px_1fr] lg:gap-8 lg:items-start">
+  {/* LEFT */}
+  <div className="lg:sticky lg:top-[72px] order-1">
+    {/* shop info card */}
+    {canManage && (
+      <div className="mt-6">
+        <ShopManagementPanel ... />
+      </div>
+    )}
+  </div>
+  {/* RIGHT */}
+  <div className="order-2 mt-6 lg:mt-0">
+    {/* listings grid */}
+  </div>
+</div>
+```
+
+On mobile, `flex-col` + `order-1` / `order-2` means left renders first (shop info), then right (listings). The management panel is inside order-1, so on mobile it appears between the shop info card and listings — which is actually fine and correct UX (management always near shop info).
+
+**5. SECTION HEADER for listings column (desktop enhancement):**
+On desktop, add a thin filter/sort bar above the grid:
+```tsx
+<div className="flex items-center justify-between mb-4">
+  <h2 className="section-header">
+    🛍️ Listings
+    <span className="ml-2 text-xs font-normal text-gray-400 dark:text-slate-500">({listings.length})</span>
+  </h2>
+  {/* Only show if listings.length > 0 */}
+  {listings.length > 0 && (
+    <span className="text-xs text-gray-400 dark:text-slate-500">
+      {listings.length} item{listings.length !== 1 ? "s" : ""}
+    </span>
+  )}
+</div>
+```
+
+**6. EMPTY STATE for listings — improve it:**
+Replace the current generic empty state with:
+```tsx
+<div className="text-center py-16 bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800">
+  <div className="text-5xl mb-3">🛍️</div>
+  <p className="text-base font-semibold text-gray-700 dark:text-slate-300 mb-1">No listings yet</p>
+  <p className="text-sm text-gray-400 dark:text-slate-500">
+    {canManage ? "Add your first listing using the panel on the left." : "Check back soon!"}
+  </p>
+</div>
+```
+
+**7. LOADING STATE — improve it:**
+Replace the single spinner with a skeleton layout that matches the new 2-column structure. Add this skeleton:
+```tsx
+if (loading) {
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950">
+      <div className="h-44 sm:h-64 lg:h-72 w-full bg-gray-200 dark:bg-slate-800 animate-pulse" />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
+        <div className="lg:grid lg:grid-cols-[320px_1fr] lg:gap-8">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl h-64 animate-pulse" />
+          <div className="mt-6 lg:mt-0 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="bg-white dark:bg-slate-900 rounded-xl overflow-hidden animate-pulse">
+                <div className="aspect-square bg-gray-100 dark:bg-slate-800" />
+                <div className="p-3 space-y-2">
+                  <div className="h-3 bg-gray-100 dark:bg-slate-800 rounded w-3/4" />
+                  <div className="h-3 bg-gray-100 dark:bg-slate-800 rounded w-1/2" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+---
+
+### WHAT NOT TO CHANGE
+- Do NOT touch any Firebase calls, `useEffect` hooks, state variables, or helper functions.
+- Do NOT change `ShopManagementPanel` tab logic, form logic, `ListingRow`, `ListingsTab`, `AnalyticsTab`, `SettingsTab`, or any sub-components inside `ShopManagementPanel.tsx`.
+- Do NOT change `ShopBio`, `PriceLabel`, `relativeTime` helper functions.
+- Do NOT change routing, auth checks (`isOwner`, `isEditor`, `canManage`), or the `managementPanelRef` scroll behavior.
+- Do NOT change the `AuthModal` import or usage.
+- Do NOT change any other page or component.
+- The `max-w-2xl` wrapper and `pb-28` should be removed from the shop page outer div, but `pb-20` should be kept on mobile to avoid content being hidden behind the bottom nav bar.
+
+---
+
+### SHOPMANAGEMENTPANEL.TSX — ONLY CHANGE
+
+In `ShopManagementPanel.tsx`, find the `export default function ShopManagementPanel(...)` return statement. The outermost `<div>` is currently just `<div>`. Change it to:
+```tsx
+<div className="w-full">
+```
+That is literally the only change to this file. Nothing else.
+
+---
+
+### AFTER CHANGES — VERIFY
+1. Run `pnpm --filter xmum-market run build` — must pass with zero errors.
+2. Visually confirm: on a wide screen the layout is 2-column (shop info left, listings right).
+3. Visually confirm: on mobile (375px) it is single column stacked.
+4. Confirm: management panel appears in left sidebar on desktop, stacked below shop info card on mobile.
+5. Confirm: banner is full-width on all screen sizes.
+```

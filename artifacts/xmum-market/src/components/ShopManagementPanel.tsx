@@ -904,7 +904,7 @@ export default function ShopManagementPanel({
   ];
 
   return (
-    <div>
+    <div className="w-full">
       {shop.isSuspended && (
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800
                         rounded-2xl p-4 mb-4 flex items-start gap-3">
