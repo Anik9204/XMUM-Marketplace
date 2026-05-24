@@ -1,0 +1,29 @@
+The Design Refresh Prompt
+"Please redesign the Listing Details page to give it a professional, marketplace-grade look that works beautifully on both desktop and mobile.
+
+1. The 'Two-Column' Desktop Layout:
+On desktop screens, stop the content from stretching to the full width. Instead, split the page into two distinct columns:
+
+The Image Gallery (Left Column): Make the product image the hero. Give it a generous, clean space with rounded corners. It should look like a professional catalog shot.
+
+The Action Panel (Right Column): Place the title, price, and all 'Contact Seller' buttons here. This should stay neatly organized in a card-like layout that is easy to read without overwhelming the user.
+
+2. Premium Typography & Hierarchy:
+
+Title & Price: Give the product title a larger, bolder font. Make the price stand out clearly—use a premium, high-contrast look that feels 'marketplace-official.'
+
+Action Buttons: Make the 'Contact Seller' buttons (WhatsApp/WeChat/Instagram) look like modern, pill-shaped action buttons with clear icons. Give them a subtle hover effect so they feel interactive and clickable.
+
+3. The 'Student-Verified' Trust Badge:
+
+Integrate a small, clean 'Verified Student' badge right below the seller’s name. This should feel like a mark of trust, keeping the community feel but adding a professional touch.
+
+4. Optimized Spacing & Breathing Room:
+
+Give the page 'breathing room' by adding consistent padding around the edges. On mobile, everything should stack nicely into a single, clean column. On desktop, ensure the margins are balanced so the content sits comfortably in the center of the screen, rather than hitting the edges of the monitor.
+
+5. The 'Sticky' Feel:
+
+If possible, make the 'Action Panel' (the right column with the contact buttons) feel slightly 'sticky' on desktop, so that as the user scrolls through the description, the contact options remain easily accessible without them having to scroll all the way back up.
+
+Goal: The final result should feel spacious, clean, and trustworthy—like a site where I would feel 100% safe making a transaction."
