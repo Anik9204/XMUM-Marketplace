@@ -3,6 +3,7 @@ import { Star, X, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { leaveShopReview } from "@/lib/shops";
 import { ShopOrder } from "@/lib/types";
+import { moderateContent } from "@/lib/aiModerate";
 
 interface ReviewModalProps {
   order: ShopOrder;
@@ -41,6 +42,14 @@ export default function ReviewModal({ order, onClose, onSubmitted }: ReviewModal
     e.preventDefault();
     if (rating === 0 || submitting) return;
     setError("");
+    // Only check if comment has meaningful content (reviews are optional text)
+    if (comment.trim().length > 10) {
+      const aiResult = await moderateContent(comment, "review");
+      if (aiResult.result === "BLOCKED") {
+        setError(aiResult.suggestion ? `${aiResult.reason} ${aiResult.suggestion}` : (aiResult.reason || "Review content flagged. Please keep it respectful."));
+        return;
+      }
+    }
     setSubmitting(true);
     try {
       await leaveShopReview({

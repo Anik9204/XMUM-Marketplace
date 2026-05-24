@@ -1,0 +1,522 @@
+# Replit Prompt — AI Moderation (All 6 Locations)
+
+Paste this entire block into Replit.
+
+---
+
+```
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed.
+3. Do NOT remove any existing function, prop, import, or JSX element unless explicitly told to.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me the impact first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors: pnpm --filter xmum-market run build
+
+---
+
+## OVERVIEW
+
+Add a lenient, student-friendly AI moderation layer using Google Gemini 2.0 Flash (free tier).
+It checks content before it gets saved to Firestore across 6 locations.
+
+The AI must NEVER block legitimate student activity.
+It only hard-blocks obvious scams and clearly prohibited items.
+Everything grey-area gets auto-flagged for admin review but still posts.
+Poor English, Manglish, short descriptions, low prices — always SAFE.
+
+---
+
+## STEP 1 — Create the Vercel serverless function
+
+Create a NEW file: `artifacts/xmum-market/api/moderate.ts`
+
+```typescript
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_URL =
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+
+const SYSTEM_PROMPT = `You are a lenient, student-friendly content moderator for XMUM Market — a university student marketplace at Xiamen University Malaysia.
+
+Your job is NOT to be strict. When in doubt, always return SAFE.
+
+You will receive content in one of these contexts:
+- "listing": a regular marketplace listing (buy-sell, lost-found, jobs, assistance, rental)
+- "shop-listing": a product/service listed inside a student campus shop
+- "shop-profile": a shop name and bio
+- "inquiry": a message a student sends to a shop owner
+- "review": a review comment left by a student about a shop
+
+ONLY return BLOCKED for content that is OBVIOUSLY and CLEARLY one of these:
+1. Scam patterns: asking for upfront deposits via personal transfer, advance fee fraud, "send money first", phishing links
+2. Clearly illegal items: weapons, drugs, counterfeit IDs, pirated goods
+3. Adult/sexual services or content
+4. MLM or pyramid scheme recruitment
+
+Return FLAGGED (posts but admin sees it) for:
+- Possible scam job listings (e.g. "earn RM500/day work from home")
+- Unusual pricing that might indicate fraud (e.g. iPhone 15 for RM50)
+- Vague "services" that could be inappropriate
+
+Return SAFE for absolutely everything else, including:
+- Poor grammar, Manglish, broken English
+- Very short or vague descriptions
+- Low prices (student selling cheap is normal)
+- Negative but honest reviews
+- Students venting frustration in reviews
+- Any content you are not highly confident about
+
+Respond ONLY with a valid JSON object, no markdown, no explanation, exactly this shape:
+{
+  "result": "SAFE" | "FLAGGED" | "BLOCKED",
+  "reason": "one short sentence, friendly tone, only if FLAGGED or BLOCKED",
+  "suggestion": "one short friendly suggestion for the student to fix it, only if BLOCKED"
+}`;
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  if (!GEMINI_API_KEY) {
+    // If key not configured, fail open — never block students due to missing config
+    return res.status(200).json({ result: "SAFE", reason: "", suggestion: "" });
+  }
+
+  const { content, context } = req.body as {
+    content: string;
+    context: "listing" | "shop-listing" | "shop-profile" | "inquiry" | "review";
+  };
+
+  if (!content || typeof content !== "string" || content.trim().length < 3) {
+    return res.status(200).json({ result: "SAFE", reason: "", suggestion: "" });
+  }
+
+  const userPrompt = `Context: ${context}\n\nContent to check:\n${content.slice(0, 1500)}`;
+
+  try {
+    const geminiRes = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        contents: [{ parts: [{ text: userPrompt }] }],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 120,
+          responseMimeType: "application/json",
+        },
+      }),
+    });
+
+    if (!geminiRes.ok) {
+      // Fail open — API error should never block a student
+      return res.status(200).json({ result: "SAFE", reason: "", suggestion: "" });
+    }
+
+    const data = await geminiRes.json();
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+
+    let parsed: { result: string; reason?: string; suggestion?: string };
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      return res.status(200).json({ result: "SAFE", reason: "", suggestion: "" });
+    }
+
+    const result = ["SAFE", "FLAGGED", "BLOCKED"].includes(parsed.result)
+      ? parsed.result
+      : "SAFE";
+
+    return res.status(200).json({
+      result,
+      reason: parsed.reason ?? "",
+      suggestion: parsed.suggestion ?? "",
+    });
+  } catch {
+    // Fail open — network error should never block a student
+    return res.status(200).json({ result: "SAFE", reason: "", suggestion: "" });
+  }
+}
+```
+
+---
+
+## STEP 2 — Update vercel.json to add the API function and CSP
+
+File: `artifacts/xmum-market/vercel.json`
+
+Find the `"rewrites"` array. It currently has:
+```json
+{ "source": "/(.*)", "destination": "/index.html" }
+```
+
+Replace the entire `"rewrites"` array with:
+```json
+"rewrites": [
+  { "source": "/api/(.*)", "destination": "/api/$1" },
+  { "source": "/(.*)", "destination": "/index.html" }
+]
+```
+
+Then find the Content-Security-Policy header value string. Find this substring inside it:
+```
+https://*.ingest.sentry.io
+```
+And add `https://generativelanguage.googleapis.com` right after it, like:
+```
+https://*.ingest.sentry.io https://generativelanguage.googleapis.com
+```
+
+Also add the `/api` endpoint itself to connect-src. Find:
+```
+connect-src 'self'
+```
+Change to:
+```
+connect-src 'self' /api
+```
+(Just insert ` /api` after `'self'` in the connect-src directive.)
+
+---
+
+## STEP 3 — Create a shared client-side helper
+
+Create NEW file: `artifacts/xmum-market/src/lib/aiModerate.ts`
+
+```typescript
+// Client-side helper that calls the /api/moderate Vercel function.
+// Always fails open — if the API is unavailable, returns SAFE so students
+// are never blocked due to a network or configuration issue.
+
+export type ModerationContext =
+  | "listing"
+  | "shop-listing"
+  | "shop-profile"
+  | "inquiry"
+  | "review";
+
+export interface ModerationResult {
+  result: "SAFE" | "FLAGGED" | "BLOCKED";
+  reason: string;
+  suggestion: string;
+}
+
+const FAIL_OPEN: ModerationResult = { result: "SAFE", reason: "", suggestion: "" };
+
+export async function moderateContent(
+  content: string,
+  context: ModerationContext
+): Promise<ModerationResult> {
+  if (!content || content.trim().length < 3) return FAIL_OPEN;
+  try {
+    const res = await fetch("/api/moderate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content, context }),
+      signal: AbortSignal.timeout(8000), // 8 second timeout — never block the UI
+    });
+    if (!res.ok) return FAIL_OPEN;
+    const data = await res.json();
+    if (!["SAFE", "FLAGGED", "BLOCKED"].includes(data.result)) return FAIL_OPEN;
+    return data as ModerationResult;
+  } catch {
+    return FAIL_OPEN;
+  }
+}
+```
+
+---
+
+## STEP 4 — Integrate into PostPage.tsx (regular listings)
+
+File: `artifacts/xmum-market/src/pages/PostPage.tsx`
+
+**4a — Add import** at the top alongside other imports:
+```typescript
+import { moderateContent } from "@/lib/aiModerate";
+```
+
+**4b — Add state** inside the `PostPage` function, after the existing state declarations (find the block of `useState` calls and add after the last one before the `useEffect` calls):
+```typescript
+const [aiChecking, setAiChecking] = useState(false);
+```
+
+**4c — Modify `handleSubmit`** — find this exact block inside `handleSubmit`:
+```typescript
+    // FIX 4: Content filter with flaggedTerms
+    const filterResult = checkContent(title, description);
+    if (!filterResult.passed) {
+```
+AFTER the closing brace of that entire `if (!filterResult.passed)` block (i.e. after its `}`), insert:
+```typescript
+    // AI moderation — runs after client-side filter passes
+    setAiChecking(true);
+    const aiResult = await moderateContent(
+      `Title: ${title}\nDescription: ${description}`,
+      "listing"
+    );
+    setAiChecking(false);
+    if (aiResult.result === "BLOCKED") {
+      setError(
+        aiResult.suggestion
+          ? `${aiResult.reason} ${aiResult.suggestion}`
+          : (aiResult.reason || "Your listing was flagged. Please review the content and try again.")
+      );
+      setLoading(false);
+      return;
+    }
+    // FLAGGED listings post normally but will be auto-flagged for admin review
+    // (admin flagging is handled server-side via Firestore rules / Cloud Function — not here)
+```
+
+**4d — Update the submit button** to show an AI-checking state. Find the submit button's loading content:
+```tsx
+            {loading ? (
+              <><Loader2 size={20} className="animate-spin" /> {t.submitting}</>
+            ) : (
+              t.postItem
+            )}
+```
+Replace with:
+```tsx
+            {aiChecking ? (
+              <><Loader2 size={20} className="animate-spin" /> Checking content…</>
+            ) : loading ? (
+              <><Loader2 size={20} className="animate-spin" /> {t.submitting}</>
+            ) : (
+              t.postItem
+            )}
+```
+
+Also update the button's `disabled` prop from:
+```tsx
+            disabled={loading}
+```
+to:
+```tsx
+            disabled={loading || aiChecking}
+```
+
+---
+
+## STEP 5 — Integrate into ShopManagementPanel.tsx (shop listings — add and edit)
+
+File: `artifacts/xmum-market/src/components/ShopManagementPanel.tsx`
+
+**5a — Add import** at the top:
+```typescript
+import { moderateContent } from "@/lib/aiModerate";
+```
+
+**5b — AddListingForm: modify `handleSubmit`**
+
+Find the `handleSubmit` async function inside `AddListingForm`. It currently starts with:
+```typescript
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (!title.trim()) { setError("Title is required."); return; }
+    setLoading(true);
+```
+Change it to:
+```typescript
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (!title.trim()) { setError("Title is required."); return; }
+    setLoading(true);
+    // AI moderation
+    const aiResult = await moderateContent(
+      `Title: ${title}\nDescription: ${description}`,
+      "shop-listing"
+    );
+    if (aiResult.result === "BLOCKED") {
+      setError(aiResult.suggestion ? `${aiResult.reason} ${aiResult.suggestion}` : (aiResult.reason || "Listing flagged. Please review the content."));
+      setLoading(false);
+      return;
+    }
+```
+
+**5c — EditListingForm: modify `handleSave`**
+
+Find the `handleSave` async function inside `EditListingForm`. It currently starts with:
+```typescript
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim()) { setError("Title is required."); return; }
+    setLoading(true); setError("");
+```
+Change it to:
+```typescript
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim()) { setError("Title is required."); return; }
+    setLoading(true); setError("");
+    // AI moderation
+    const aiResult = await moderateContent(
+      `Title: ${title}\nDescription: ${description}`,
+      "shop-listing"
+    );
+    if (aiResult.result === "BLOCKED") {
+      setError(aiResult.suggestion ? `${aiResult.reason} ${aiResult.suggestion}` : (aiResult.reason || "Listing flagged. Please review the content."));
+      setLoading(false);
+      return;
+    }
+```
+
+---
+
+## STEP 6 — Integrate into CreateShopPage.tsx (shop name + bio on creation)
+
+File: `artifacts/xmum-market/src/pages/CreateShopPage.tsx`
+
+**6a — Add import** at the top:
+```typescript
+import { moderateContent } from "@/lib/aiModerate";
+```
+
+**6b — Modify `handleSubmit`**
+
+Find this block inside `handleSubmit`:
+```typescript
+    setLoading(true);
+    try {
+      const shopId = await createShop(user.uid, user.email, {
+```
+Insert BEFORE `setLoading(true)`:
+```typescript
+    // AI moderation on shop name + bio
+    const shopContent = `Shop name: ${name}\nBio: ${bio}`;
+    const aiResult = await moderateContent(shopContent, "shop-profile");
+    if (aiResult.result === "BLOCKED") {
+      setError(aiResult.suggestion ? `${aiResult.reason} ${aiResult.suggestion}` : (aiResult.reason || "Shop content flagged. Please review and try again."));
+      return;
+    }
+```
+
+---
+
+## STEP 7 — Integrate into ShopManagementPanel SettingsTab (shop name + bio on update)
+
+File: `artifacts/xmum-market/src/components/ShopManagementPanel.tsx`
+
+Find the `handleSave` function inside `SettingsTab` (it's the one that calls `onSave()`). It currently starts:
+```typescript
+  const handleSave = async () => {
+    if (!whatsapp.trim() && !wechat.trim() && !instagram.trim()) {
+      setUploadError("At least one contact method (WhatsApp, WeChat, or Instagram) is required.");
+      return;
+    }
+    setUploadError("");
+    await onSave();
+```
+Change it to:
+```typescript
+  const handleSave = async () => {
+    if (!whatsapp.trim() && !wechat.trim() && !instagram.trim()) {
+      setUploadError("At least one contact method (WhatsApp, WeChat, or Instagram) is required.");
+      return;
+    }
+    setUploadError("");
+    // AI moderation on shop name + bio
+    const aiResult = await moderateContent(
+      `Shop name: ${settingsName}\nBio: ${editorContent}`,
+      "shop-profile"
+    );
+    if (aiResult.result === "BLOCKED") {
+      setUploadError(aiResult.suggestion ? `${aiResult.reason} ${aiResult.suggestion}` : (aiResult.reason || "Content flagged. Please review your shop name or bio."));
+      return;
+    }
+    await onSave();
+```
+
+Note: `settingsName` and `editorContent` are already available as props/state in `SettingsTab`. Verify their exact variable names by reading the SettingsTab props interface before applying this change. If the variable names differ, use the correct ones.
+
+---
+
+## STEP 8 — Integrate into ReviewModal.tsx (shop reviews)
+
+File: `artifacts/xmum-market/src/components/ReviewModal.tsx`
+
+**8a — Add import** at the top:
+```typescript
+import { moderateContent } from "@/lib/aiModerate";
+```
+
+**8b — Modify `handleSubmit`**
+
+Find inside `handleSubmit`:
+```typescript
+    if (rating === 0 || submitting) return;
+    setError("");
+    setSubmitting(true);
+    try {
+      await leaveShopReview({
+```
+Change to:
+```typescript
+    if (rating === 0 || submitting) return;
+    setError("");
+    // Only check if comment has meaningful content (reviews are optional text)
+    if (comment.trim().length > 10) {
+      const aiResult = await moderateContent(comment, "review");
+      if (aiResult.result === "BLOCKED") {
+        setError(aiResult.suggestion ? `${aiResult.reason} ${aiResult.suggestion}` : (aiResult.reason || "Review content flagged. Please keep it respectful."));
+        return;
+      }
+    }
+    setSubmitting(true);
+    try {
+      await leaveShopReview({
+```
+
+---
+
+## STEP 9 — Add GEMINI_API_KEY to Vercel environment variables
+
+Do NOT hardcode the API key anywhere in the codebase.
+
+After all code changes are made, tell me:
+"Please add GEMINI_API_KEY to your Vercel environment variables for the xmum-market project. Go to Vercel Dashboard → xmum-marketplace-xmum-market → Settings → Environment Variables → Add: Name: GEMINI_API_KEY, Value: [your key from Google AI Studio at aistudio.google.com]"
+
+The key must be added to Production, Preview, AND Development environments.
+
+---
+
+## WHAT NOT TO CHANGE
+
+- Do NOT touch any Firebase calls, Firestore reads/writes, or auth logic anywhere.
+- Do NOT touch the existing `checkContent` function in `contentFilter.ts` — it still runs first as a fast client-side pre-filter. AI runs after it.
+- Do NOT touch any routing, navigation, or layout.
+- Do NOT touch `OrderFormPage.tsx` — the inquiry `note` field there is a structured order form, not free text content that needs moderation.
+- Do NOT touch `MessagesPage.tsx` — direct messages between users are private and not moderated.
+- Do NOT change any existing error message strings that are already working.
+- Do NOT add `@vercel/node` as a dependency — it is available automatically in Vercel serverless functions.
+
+---
+
+## IMPORTANT BEHAVIOUR NOTES
+
+1. **Fail open always**: every `catch` block and every non-200 response returns `SAFE`. Students are NEVER blocked due to API errors, slow connections, or missing config.
+
+2. **FLAGGED posts go through**: a `FLAGGED` result means the content posts normally. Admins see it in the reports queue. Do NOT show any warning to the student for FLAGGED content — it would confuse them unnecessarily.
+
+3. **The AI check adds ~1-2 seconds** to the submit flow. The "Checking content…" spinner in PostPage covers this for regular listings. For shop listings and other locations the existing loading state covers it since the AI check runs while `setLoading(true)` is already active.
+
+4. **Token usage**: each moderation call uses ~400-600 tokens. Gemini 2.0 Flash free tier gives 1 million tokens/day. At XMUM's scale this is completely free.
+
+---
+
+## AFTER ALL CHANGES — VERIFY
+
+1. Run `pnpm --filter xmum-market run build` — must pass with zero TypeScript errors.
+2. Check that `artifacts/xmum-market/api/moderate.ts` exists.
+3. Check that `artifacts/xmum-market/src/lib/aiModerate.ts` exists.
+4. Check that all 5 files that were modified have the `moderateContent` import added correctly.
+5. Confirm the existing `checkContent` import in PostPage.tsx is still there and unchanged.
+6. Confirm the build output has no new warnings about missing types or unresolved imports.
+```

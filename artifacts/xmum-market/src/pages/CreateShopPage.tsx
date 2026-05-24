@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { createShop, slugify, isSlugAvailable } from "@/lib/shops";
+import { moderateContent } from "@/lib/aiModerate";
 import { ShopCategory } from "@/lib/types";
 import AuthModal from "@/components/AuthModal";
 import { Store, CheckCircle2, XCircle, Loader2, AlertCircle, Edit2 } from "lucide-react";
@@ -172,6 +173,13 @@ export default function CreateShopPage() {
       return;
     }
 
+    // AI moderation on shop name + bio
+    const shopContent = `Shop name: ${name}\nBio: ${bio}`;
+    const aiResult = await moderateContent(shopContent, "shop-profile");
+    if (aiResult.result === "BLOCKED") {
+      setError(aiResult.suggestion ? `${aiResult.reason} ${aiResult.suggestion}` : (aiResult.reason || "Shop content flagged. Please review and try again."));
+      return;
+    }
     setLoading(true);
     try {
       const shopId = await createShop(user.uid, user.email, {

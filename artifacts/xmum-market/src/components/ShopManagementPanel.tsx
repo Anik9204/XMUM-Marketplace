@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { moderateContent } from "@/lib/aiModerate";
 import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -184,6 +185,16 @@ function AddListingForm({ shopId, shop, onClose, onCreated }: { shopId: string; 
     setError("");
     if (!title.trim()) { setError("Title is required."); return; }
     setLoading(true);
+    // AI moderation
+    const aiResult = await moderateContent(
+      `Title: ${title}\nDescription: ${description}`,
+      "shop-listing"
+    );
+    if (aiResult.result === "BLOCKED") {
+      setError(aiResult.suggestion ? `${aiResult.reason} ${aiResult.suggestion}` : (aiResult.reason || "Listing flagged. Please review the content."));
+      setLoading(false);
+      return;
+    }
     try {
       const photoUrls: string[] = [];
       for (let i = 0; i < photos.length; i++) {
@@ -319,6 +330,16 @@ function EditShopListingForm({ listing, shopId, shop, onCancel, onSaved }: { lis
     e.preventDefault();
     if (!title.trim()) { setError("Title is required."); return; }
     setLoading(true); setError("");
+    // AI moderation
+    const aiResult = await moderateContent(
+      `Title: ${title}\nDescription: ${description}`,
+      "shop-listing"
+    );
+    if (aiResult.result === "BLOCKED") {
+      setError(aiResult.suggestion ? `${aiResult.reason} ${aiResult.suggestion}` : (aiResult.reason || "Listing flagged. Please review the content."));
+      setLoading(false);
+      return;
+    }
     try {
       await Promise.allSettled(removedPhotoUrls.map((url) => { const path = storagePathFromUrl(url); return path ? deleteObject(ref(storage, path)).catch(() => {}) : Promise.resolve(); }));
       const newUrls: string[] = [];
@@ -697,6 +718,15 @@ function SettingsTab({
       return;
     }
     setUploadError("");
+    // AI moderation on shop name + bio
+    const aiResult = await moderateContent(
+      `Shop name: ${name}\nBio: ${bio}`,
+      "shop-profile"
+    );
+    if (aiResult.result === "BLOCKED") {
+      setUploadError(aiResult.suggestion ? `${aiResult.reason} ${aiResult.suggestion}` : (aiResult.reason || "Content flagged. Please review your shop name or bio."));
+      return;
+    }
     await onSave();
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);

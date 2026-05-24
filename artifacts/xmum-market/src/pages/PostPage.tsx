@@ -4,6 +4,7 @@ import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { uploadPhoto, createListing, writeRentalTcAuditLog } from "@/lib/listings";
 import { checkContent } from "@/lib/contentFilter";
+import { moderateContent } from "@/lib/aiModerate";
 import { auth, db } from "@/lib/firebase";
 import { doc, updateDoc, increment, getCountFromServer, collection, query, where } from "firebase/firestore";
 import { ListingType, Condition, Listing } from "@/lib/types";
@@ -258,6 +259,8 @@ export default function PostPage() {
     createdAt: Date.now(), isArchived: false, status: "active",
   });
   const previewDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  const [aiChecking, setAiChecking] = useState(false);
 
   // FIX 4: Content filter UX
   const [fieldError, setFieldError] = useState<"content" | null>(null);
@@ -596,6 +599,24 @@ export default function PostPage() {
       setLoading(false);
       return;
     }
+
+    // AI moderation — runs after client-side filter passes
+    setAiChecking(true);
+    const aiResult = await moderateContent(
+      `Title: ${title}\nDescription: ${description}`,
+      "listing"
+    );
+    setAiChecking(false);
+    if (aiResult.result === "BLOCKED") {
+      setError(
+        aiResult.suggestion
+          ? `${aiResult.reason} ${aiResult.suggestion}`
+          : (aiResult.reason || "Your listing was flagged. Please review the content and try again.")
+      );
+      setLoading(false);
+      return;
+    }
+    // FLAGGED listings post normally but will be auto-flagged for admin review
 
     const hasContact = whatsapp.trim() || wechat.trim() || teams.trim();
     if (!hasContact) {
@@ -1229,10 +1250,12 @@ export default function PostPage() {
           <div className="pointer-events-none absolute -top-6 left-0 right-0 h-6 bg-gradient-to-t from-white dark:from-slate-900 to-transparent md:hidden" />
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || aiChecking}
             className="btn-primary w-full min-h-[56px] text-base disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.97] flex items-center justify-center gap-2"
           >
-            {loading ? (
+            {aiChecking ? (
+              <><Loader2 size={20} className="animate-spin" /> Checking content…</>
+            ) : loading ? (
               <><Loader2 size={20} className="animate-spin" /> {t.submitting}</>
             ) : (
               t.postItem
