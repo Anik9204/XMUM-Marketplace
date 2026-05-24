@@ -496,10 +496,10 @@ export default function ListingDetailPage() {
         )}
 
         {/* ── 2-column grid: Image (left) + Details (right) ──────────────── */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-4 py-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-4 py-6 md:items-start">
 
           {/* LEFT COLUMN — Photo Gallery */}
-          <div>
+          <div className="md:sticky md:top-[100px] md:self-start">
             <div
               className="relative bg-black rounded-2xl overflow-hidden select-none"
               onTouchStart={handleTouchStart}

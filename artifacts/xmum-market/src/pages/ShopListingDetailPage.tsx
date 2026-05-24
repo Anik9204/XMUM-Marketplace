@@ -163,7 +163,7 @@ export default function ShopListingDetailPage() {
         <div className="lg:grid lg:grid-cols-[1fr_360px] lg:gap-8 lg:items-start">
 
           {/* ── LEFT: Image Gallery ─────────────────────────────────── */}
-          <div>
+          <div className="lg:sticky lg:top-[80px] lg:self-start">
             <div className="relative bg-white dark:bg-slate-900 rounded-2xl overflow-hidden border border-gray-100 dark:border-slate-800 shadow-sm aspect-square sm:aspect-[4/3]">
               {photos.length > 0 ? (
                 <img src={photos[photoIdx]} alt={listing.title} className="w-full h-full object-cover" />
@@ -219,7 +219,7 @@ export default function ShopListingDetailPage() {
           </div>
 
           {/* ── RIGHT: Action Panel ─────────────────────────────────── */}
-          <div className="mt-5 lg:mt-0 lg:sticky lg:top-[72px]">
+          <div className="mt-5 lg:mt-0">
             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm p-6 space-y-5">
 
               {/* Category badge */}
