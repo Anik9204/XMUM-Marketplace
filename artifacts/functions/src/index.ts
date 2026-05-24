@@ -1,5 +1,7 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
+import { HttpsError, onCall } from "firebase-functions/v2/https";
+import * as vision from "@google-cloud/vision";
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -312,3 +314,167 @@ export const dailySoldListingCleanup = functions
 
     return null;
   });
+
+// ── HTTPS Callable — AI content moderation (text + images) ───────────────────
+
+export const moderateContent = onCall(
+  {
+    region: "asia-southeast1",
+    secrets: ["GEMINI_API_KEY"],
+    timeoutSeconds: 30,
+    invoker: "public",
+  },
+  async (request) => {
+    const { text, context, photoUrls = [] } = request.data as {
+      text: string;
+      context: string;
+      photoUrls?: string[];
+    };
+
+    if (!text || text.trim().length < 3) {
+      return { result: "SAFE", reason: "", suggestion: "" };
+    }
+
+    const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+    const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent";
+
+    const SYSTEM_PROMPT = `You are a lenient, student-friendly content moderator for XMUM Market — a university student marketplace at Xiamen University Malaysia.
+
+Your job is NOT to be strict. When in doubt, always return SAFE.
+
+You will receive content in one of these contexts:
+- "listing": a regular marketplace listing (buy-sell, lost-found, jobs, assistance, rental)
+- "shop-listing": a product/service listed inside a student campus shop
+- "shop-profile": a shop name and bio
+- "inquiry": a message a student sends to a shop owner
+- "review": a review comment left by a student about a shop
+
+ONLY return BLOCKED for content that is OBVIOUSLY and CLEARLY one of these:
+1. Scam patterns: asking for upfront deposits via personal transfer, advance fee fraud, "send money first", phishing links
+2. Clearly illegal items: weapons, drugs, counterfeit IDs, pirated goods — including deliberate obfuscation like "fi-re ar-ms", "dr-ugs", "w3apons", "g-u-n-s"
+3. Adult/sexual services or content
+4. MLM or pyramid scheme recruitment
+
+Return FLAGGED (posts but admin sees it) for:
+- Possible scam job listings (e.g. "earn RM500/day work from home")
+- Unusual pricing that might indicate fraud (e.g. iPhone 15 for RM50)
+- Vague "services" that could be inappropriate
+
+Return SAFE for absolutely everything else, including:
+- Poor grammar, Manglish, broken English
+- Very short or vague descriptions
+- Low prices (student selling cheap is normal)
+- Negative but honest reviews
+- Students venting frustration in reviews
+- Any content you are not highly confident about
+
+Respond ONLY with a valid JSON object, no markdown, no explanation, exactly this shape:
+{"result": "SAFE" | "FLAGGED" | "BLOCKED", "reason": "one short sentence, friendly tone, only if FLAGGED or BLOCKED", "suggestion": "one short friendly suggestion for the student to fix it, only if BLOCKED"}`;
+
+    // ── 1. Text moderation via Gemini ─────────────────────────────
+    let textResult: { result: string; reason: string; suggestion: string } = {
+      result: "SAFE", reason: "", suggestion: "",
+    };
+
+    if (GEMINI_API_KEY) {
+      try {
+        const geminiRes = await fetch(
+          `${GEMINI_URL}?key=${GEMINI_API_KEY}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+              contents: [{ parts: [{ text: `Context: ${context}\n\nContent to check:\n${text.slice(0, 1500)}` }] }],
+              generationConfig: {
+                temperature: 0.1,
+                maxOutputTokens: 120,
+                responseMimeType: "application/json",
+              },
+            }),
+          }
+        );
+
+        if (geminiRes.ok) {
+          const data = await geminiRes.json();
+          const raw: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+          try {
+            const parsed = JSON.parse(raw);
+            if (["SAFE", "FLAGGED", "BLOCKED"].includes(parsed.result)) {
+              textResult = {
+                result: parsed.result,
+                reason: parsed.reason ?? "",
+                suggestion: parsed.suggestion ?? "",
+              };
+            }
+          } catch { /* keep SAFE */ }
+        } else if (geminiRes.status === 429) {
+          textResult = {
+            result: "BLOCKED",
+            reason: "Our content check is temporarily busy. Please wait a moment and try again.",
+            suggestion: "Wait 30 seconds and resubmit your listing.",
+          };
+        }
+      } catch { /* fail open */ }
+    }
+
+    // If text is already BLOCKED, return immediately — skip image scan
+    if (textResult.result === "BLOCKED") {
+      return textResult;
+    }
+
+    // ── 2. Image moderation via Cloud Vision SafeSearch ──────────
+    let imageResult: { result: string; reason: string; suggestion: string } = {
+      result: "SAFE", reason: "", suggestion: "",
+    };
+
+    const urlsToCheck = (photoUrls as string[]).slice(0, 5);
+    if (urlsToCheck.length > 0) {
+      try {
+        const visionClient = new vision.ImageAnnotatorClient();
+        const checks = urlsToCheck.map((url) =>
+          visionClient.safeSearchDetection(url).catch(() => [null])
+        );
+        const results = await Promise.all(checks);
+
+        const LIKELY = new Set(["LIKELY", "VERY_LIKELY"]);
+        const POSSIBLE = new Set(["POSSIBLE"]);
+
+        for (const [response] of results) {
+          if (!response) continue;
+          const s = (response as any).safeSearchAnnotation;
+          if (!s) continue;
+
+          const hasViolation = LIKELY.has(s.adult) || LIKELY.has(s.violence) || LIKELY.has(s.racy);
+          const hasPossible = POSSIBLE.has(s.adult) || POSSIBLE.has(s.violence) || POSSIBLE.has(s.racy);
+
+          if (hasViolation) {
+            imageResult = {
+              result: "BLOCKED",
+              reason: "One or more photos contain inappropriate content that violates our community guidelines.",
+              suggestion: "Please remove the flagged photo and replace it with an appropriate one.",
+            };
+            break;
+          }
+          if (hasPossible && imageResult.result !== "BLOCKED") {
+            imageResult = {
+              result: "FLAGGED",
+              reason: "One or more photos may contain inappropriate content and will be reviewed by our team.",
+              suggestion: "",
+            };
+          }
+        }
+      } catch (err) {
+        console.warn("[moderateContent] Vision SafeSearch failed, skipping:", err);
+        // fail open — do not block if Vision is unavailable
+      }
+    }
+
+    // ── 3. Return worst result of text + image ────────────────────
+    const rank: Record<string, number> = { SAFE: 0, FLAGGED: 1, BLOCKED: 2 };
+    if ((rank[imageResult.result] ?? 0) > (rank[textResult.result] ?? 0)) {
+      return imageResult;
+    }
+    return textResult;
+  }
+);

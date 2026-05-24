@@ -1,0 +1,13 @@
+{
+  "firestore": {
+    "rules": "xmum-market/firestore.rules",
+    "indexes": "xmum-market/firestore.indexes.json"
+  },
+  "storage": {
+    "rules": "xmum-market/storage.rules"
+  },
+  "functions": {
+    "source": "functions",
+    "runtime": "nodejs20"
+  }
+}
