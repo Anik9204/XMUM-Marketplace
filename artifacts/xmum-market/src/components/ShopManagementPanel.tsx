@@ -22,7 +22,7 @@ import {
   BarChart2,
 } from "lucide-react";
 import ReportHoldModal from "@/components/ReportHoldModal";
-import { SiWhatsapp } from "react-icons/si";
+import { SiWhatsapp, SiInstagram } from "react-icons/si";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -672,15 +672,15 @@ function ShopBioEditorModal({ value, onChange, onClose }: ShopBioEditorModalProp
 // ── SettingsTab ────────────────────────────────────────────────────────────────
 
 function SettingsTab({
-  shop, isOwner, name, bio, category, whatsapp, wechat,
-  setName, setBio, setCategory, setWhatsApp, setWeChat,
+  shop, isOwner, name, bio, category, whatsapp, wechat, instagram,
+  setName, setBio, setCategory, setWhatsApp, setWeChat, setInstagram,
   loading, showDeleteConfirm, setShowDeleteConfirm,
   bannerInputRef, logoInputRef, editorContent, onSave, onBannerUpload, onLogoUpload, onDelete,
 }: {
   shop: Shop; isOwner: boolean;
-  name: string; bio: string; category: ShopCategory; whatsapp: string; wechat: string;
+  name: string; bio: string; category: ShopCategory; whatsapp: string; wechat: string; instagram: string;
   setName: (v: string) => void; setBio: (v: string) => void; setCategory: (v: ShopCategory) => void;
-  setWhatsApp: (v: string) => void; setWeChat: (v: string) => void;
+  setWhatsApp: (v: string) => void; setWeChat: (v: string) => void; setInstagram: (v: string) => void;
   loading: boolean; showDeleteConfirm: boolean; setShowDeleteConfirm: (v: boolean) => void;
   bannerInputRef: React.RefObject<HTMLInputElement | null>; logoInputRef: React.RefObject<HTMLInputElement | null>;
   editorContent?: React.ReactNode;
@@ -692,8 +692,8 @@ function SettingsTab({
   const [logoUploading, setLogoUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const handleSave = async () => {
-    if (!whatsapp.trim() && !wechat.trim()) {
-      setUploadError("At least one contact method (WhatsApp or WeChat) is required.");
+    if (!whatsapp.trim() && !wechat.trim() && !instagram.trim()) {
+      setUploadError("At least one contact method (WhatsApp, WeChat, or Instagram) is required.");
       return;
     }
     setUploadError("");
@@ -783,6 +783,13 @@ function SettingsTab({
       </div>
       <div><label className={labelCls}>WhatsApp</label><input className={inputCls} placeholder="+60123456789" value={whatsapp} onChange={(e) => setWhatsApp(e.target.value)} /></div>
       <div><label className={labelCls}>WeChat ID</label><input className={inputCls} placeholder="your_wechat_id" value={wechat} onChange={(e) => setWeChat(e.target.value)} /></div>
+      <div>
+        <label className={labelCls}>Instagram (optional)</label>
+        <div className="relative">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 dark:text-slate-500 select-none">@</span>
+          <input className={`${inputCls} pl-7`} placeholder="your_instagram_handle" value={instagram} onChange={(e) => setInstagram(e.target.value.replace(/^@/, ""))} />
+        </div>
+      </div>
       <button onClick={handleSave} disabled={loading} className="w-full min-h-[48px] bg-[#003366] dark:bg-blue-600 text-white font-semibold text-sm rounded-xl hover:bg-[#002244] disabled:opacity-50 transition flex items-center justify-center gap-2">
         {loading ? <><Loader2 size={15} className="animate-spin" /> Saving…</> : saved ? <><CheckCircle2 size={15} /> Saved!</> : "Save Changes"}
       </button>
@@ -847,6 +854,7 @@ export default function ShopManagementPanel({
   const [settingsCategory, setSettingsCategory] = useState<ShopCategory>(shop.category);
   const [settingsWhatsApp, setSettingsWhatsApp] = useState(shop.whatsapp ?? "");
   const [settingsWeChat, setSettingsWeChat] = useState(shop.wechat ?? "");
+  const [settingsInstagram, setSettingsInstagram] = useState(shop.instagram ?? "");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const bannerInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
@@ -859,6 +867,7 @@ export default function ShopManagementPanel({
     setSettingsCategory(initialShop.category);
     setSettingsWhatsApp(initialShop.whatsapp ?? "");
     setSettingsWeChat(initialShop.wechat ?? "");
+    setSettingsInstagram(initialShop.instagram ?? "");
   }, [initialShop.id]);
 
 
@@ -1084,11 +1093,13 @@ export default function ShopManagementPanel({
           category={settingsCategory}
           whatsapp={settingsWhatsApp}
           wechat={settingsWeChat}
+          instagram={settingsInstagram}
           setName={setSettingsName}
           setBio={setSettingsBio}
           setCategory={setSettingsCategory}
           setWhatsApp={setSettingsWhatsApp}
           setWeChat={setSettingsWeChat}
+          setInstagram={setSettingsInstagram}
           loading={settingsLoading}
           showDeleteConfirm={showDeleteConfirm}
           setShowDeleteConfirm={setShowDeleteConfirm}
@@ -1128,8 +1139,8 @@ export default function ShopManagementPanel({
           onSave={async () => {
             setSettingsLoading(true);
             try {
-              await updateShop(shopId, { name: settingsName, bio: settingsBio, category: settingsCategory, whatsapp: settingsWhatsApp, wechat: settingsWeChat });
-              updateShopState({ name: settingsName, bio: settingsBio, category: settingsCategory, whatsapp: settingsWhatsApp, wechat: settingsWeChat });
+              await updateShop(shopId, { name: settingsName, bio: settingsBio, category: settingsCategory, whatsapp: settingsWhatsApp, wechat: settingsWeChat, instagram: settingsInstagram });
+              updateShopState({ name: settingsName, bio: settingsBio, category: settingsCategory, whatsapp: settingsWhatsApp, wechat: settingsWeChat, instagram: settingsInstagram });
             } finally { setSettingsLoading(false); }
           }}
           onBannerUpload={async (file) => {

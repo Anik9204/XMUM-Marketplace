@@ -27,6 +27,7 @@ export interface Shop {
   logoUrl?: string;
   whatsapp?: string;
   wechat?: string;
+  instagram?: string;
   createdAt: number;
   isActive: boolean;
   isSuspended?: boolean;

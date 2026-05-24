@@ -8,7 +8,7 @@ import { Shop, ShopListing } from "@/lib/types";
 import {
   ArrowLeft, Store, Loader2, Package, Settings2, Link2, Check,
 } from "lucide-react";
-import { SiWhatsapp, SiWechat } from "react-icons/si";
+import { SiWhatsapp, SiWechat, SiInstagram } from "react-icons/si";
 import ShopManagementPanel from "@/components/ShopManagementPanel";
 import AuthModal from "@/components/AuthModal";
 
@@ -298,6 +298,16 @@ export default function ShopPublicPage() {
                         <div className="w-full flex items-center justify-center gap-1.5 bg-[#07C160] text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-sm">
                           <SiWechat size={13} /> {shop.wechat}
                         </div>
+                      )}
+                      {shop.instagram && (
+                        <a
+                          href={`https://instagram.com/${shop.instagram}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-full flex items-center justify-center gap-1.5 bg-gradient-to-r from-purple-500 via-pink-500 to-orange-400 text-white text-xs font-semibold px-4 py-2.5 rounded-xl hover:opacity-90 transition shadow-sm"
+                        >
+                          <SiInstagram size={13} /> @{shop.instagram}
+                        </a>
                       )}
                     </div>
                   ) : (

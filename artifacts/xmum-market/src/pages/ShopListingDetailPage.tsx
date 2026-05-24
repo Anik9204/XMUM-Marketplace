@@ -13,7 +13,7 @@ import {
   ArrowLeft, ChevronLeft, ChevronRight, Package,
   Loader2, Store, MessageSquare, Edit2, Trash2, MoreHorizontal, Flag,
 } from "lucide-react";
-import { SiWhatsapp, SiWechat } from "react-icons/si";
+import { SiWhatsapp, SiWechat, SiInstagram } from "react-icons/si";
 
 function PriceLabel({ listing }: { listing: ShopListing }) {
   if (listing.pricingModel === "negotiable")
@@ -258,7 +258,7 @@ export default function ShopListingDetailPage() {
         )}
 
         {/* Contact buttons */}
-        {user && shop && (shop.whatsapp || shop.wechat) && (
+        {user && shop && (shop.whatsapp || shop.wechat || shop.instagram) && (
           <div className="mt-3 rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 flex flex-col gap-2">
             <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Contact Seller</p>
             {shop.whatsapp && (
@@ -278,6 +278,16 @@ export default function ShopListingDetailPage() {
               >
                 <SiWechat size={16} /> WeChat: {shop.wechat}
               </button>
+            )}
+            {shop.instagram && (
+              <a
+                href={`https://instagram.com/${shop.instagram}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-sm font-semibold text-pink-600 dark:text-pink-400 hover:underline"
+              >
+                <SiInstagram size={16} /> @{shop.instagram}
+              </a>
             )}
           </div>
         )}

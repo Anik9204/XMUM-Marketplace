@@ -86,6 +86,7 @@ export default function CreateShopPage() {
   const [showBioEditor, setShowBioEditor] = useState(false);
   const [whatsapp, setWhatsapp] = useState("");
   const [wechat, setWechat] = useState("");
+  const [instagram, setInstagram] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
@@ -180,6 +181,7 @@ export default function CreateShopPage() {
         category,
         whatsapp,
         wechat,
+        instagram,
       });
       setSubmitted(true);
       setCreatedShopId(shopId);
@@ -319,6 +321,19 @@ export default function CreateShopPage() {
             value={wechat}
             onChange={(e) => setWechat(e.target.value)}
           />
+        </div>
+
+        <div>
+          <label className={labelCls}>Instagram (optional)</label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 dark:text-slate-500 select-none">@</span>
+            <input
+              className={`${inputCls} pl-7`}
+              placeholder="your_instagram_handle"
+              value={instagram}
+              onChange={(e) => setInstagram(e.target.value.replace(/^@/, ""))}
+            />
+          </div>
         </div>
 
         <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">

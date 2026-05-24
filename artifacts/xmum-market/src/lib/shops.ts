@@ -42,7 +42,7 @@ export async function isSlugAvailable(slug: string): Promise<boolean> {
 export async function createShop(
   ownerId: string,
   ownerEmail: string,
-  data: { name: string; slug: string; bio: string; category: string; whatsapp?: string; wechat?: string }
+  data: { name: string; slug: string; bio: string; category: string; whatsapp?: string; wechat?: string; instagram?: string }
 ): Promise<string> {
   const docRef = await addDoc(collection(db, "shops"), {
     ownerId,
@@ -53,6 +53,7 @@ export async function createShop(
     category: data.category,
     whatsapp: data.whatsapp ?? "",
     wechat: data.wechat ?? "",
+    instagram: data.instagram ?? "",
     createdAt: Date.now(),
     isActive: false,
     approvalStatus: "pending",
