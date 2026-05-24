@@ -6,6 +6,7 @@ import {
   Firestore,
 } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
+import { getFunctions } from "firebase/functions";
 
 const requiredEnvVars = [
   "VITE_FIREBASE_API_KEY",
@@ -58,4 +59,5 @@ export { db };
 
 
 export const storage = getStorage(app);
+export const functions = getFunctions(app, "asia-southeast1");
 export default app;

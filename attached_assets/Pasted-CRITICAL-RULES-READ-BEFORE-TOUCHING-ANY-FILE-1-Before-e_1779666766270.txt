@@ -1,0 +1,82 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+
+---
+
+TASK: Replace client-side Gemini moderation with a call to the new Firebase Cloud Function `moderateContent`. This touches exactly 2 files: `aiModerate.ts` and `firebase.ts` in xmum-market. Do NOT touch PostPage, EditListingPage, ShopManagementPanel, CreateShopPage, or ReviewModal — their call signatures stay identical.
+
+STEP A — Update artifacts/xmum-market/src/lib/firebase.ts
+Add Firebase Functions initialization. At the bottom of the file, after `export const storage = getStorage(app);`, add:
+
+import { getFunctions } from "firebase/functions";
+export const functions = getFunctions(app, "asia-southeast1");
+
+Make sure "firebase/functions" is imported at the top alongside the existing firebase imports.
+
+STEP B — Rewrite artifacts/xmum-market/src/lib/aiModerate.ts
+Replace the entire file content with this:
+
+import { httpsCallable } from "firebase/functions";
+import { functions } from "@/lib/firebase";
+
+export type ModerationContext =
+  | "listing"
+  | "shop-listing"
+  | "shop-profile"
+  | "inquiry"
+  | "review";
+
+export interface ModerationResult {
+  result: "SAFE" | "FLAGGED" | "BLOCKED";
+  reason: string;
+  suggestion: string;
+}
+
+const FAIL_OPEN: ModerationResult = { result: "SAFE", reason: "", suggestion: "" };
+
+const _moderateFn = httpsCallable
+  { text: string; context: string; photoUrls?: string[] },
+  ModerationResult
+>(functions, "moderateContent");
+
+export async function moderateContent(
+  content: string,
+  context: ModerationContext,
+  photoUrls?: string[]
+): Promise<ModerationResult> {
+  if (!content || content.trim().length < 3) return FAIL_OPEN;
+
+  try {
+    const res = await _moderateFn({
+      text: content,
+      context,
+      photoUrls: photoUrls ?? [],
+    });
+    const data = res.data;
+    if (!data || !["SAFE", "FLAGGED", "BLOCKED"].includes(data.result)) {
+      return FAIL_OPEN;
+    }
+    return data;
+  } catch (err: any) {
+    // If the function is unavailable, fail open so students are not blocked
+    console.warn("[aiModerate] Cloud Function call failed, failing open:", err?.message);
+    return FAIL_OPEN;
+  }
+}
+
+STEP C — Verify firebase package has functions included
+Check artifacts/xmum-market/package.json to confirm "firebase" is listed as a dependency (it should already be). No version change needed — getFunctions and httpsCallable are part of the existing firebase SDK package.
+
+STEP D — Build and verify
+Run: pnpm --filter xmum-market run build
+
+If it fails with a missing module error for "firebase/functions", add it explicitly:
+pnpm --filter xmum-market add firebase
+
+Show me the full build output — success or failure.
