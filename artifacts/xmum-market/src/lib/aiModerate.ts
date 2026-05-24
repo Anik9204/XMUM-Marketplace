@@ -14,7 +14,7 @@ export interface ModerationResult {
 const FAIL_OPEN: ModerationResult = { result: "SAFE", reason: "", suggestion: "" };
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`;
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent`;
 
 const SYSTEM_PROMPT = `You are a lenient, student-friendly content moderator for XMUM Market — a university student marketplace at Xiamen University Malaysia.
 
