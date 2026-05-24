@@ -41,6 +41,7 @@ export default function ShopListingDetailPage() {
   const [loading, setLoading] = useState(true);
   const [photoIdx, setPhotoIdx] = useState(0);
   const [showAuth, setShowAuth] = useState(false);
+  const [descExpanded, setDescExpanded] = useState(false);
 
   const [deletingListing, setDeletingListing] = useState(false);
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
@@ -215,9 +216,17 @@ export default function ShopListingDetailPage() {
             <h3 className="text-sm font-semibold text-gray-700 dark:text-slate-300 mb-1">
               Description
             </h3>
-            <p className="text-sm text-gray-600 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
+            <p className={`text-sm text-gray-600 dark:text-slate-300 leading-relaxed whitespace-pre-wrap ${!descExpanded && listing.description.length > 200 ? "line-clamp-4" : ""}`}>
               {listing.description}
             </p>
+            {listing.description.length > 200 && (
+              <button
+                onClick={() => setDescExpanded((v) => !v)}
+                className="mt-1 text-xs font-semibold text-[#003366] dark:text-blue-400 hover:opacity-75 transition-opacity"
+              >
+                {descExpanded ? "Read less" : "Read more"}
+              </button>
+            )}
           </div>
         )}
 
