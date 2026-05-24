@@ -1,0 +1,88 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it.
+2. Do NOT rewrite a file from scratch. Make surgical edits only.
+3. Confirm the app builds: pnpm --filter xmum-market run build
+
+---
+
+## TASK: Fix AI moderation — api folder and vercel.json are in wrong locations
+
+### ROOT CAUSE
+The real vercel.json that Vercel reads is at the MONOREPO ROOT:
+`vercel.json` (root level, NOT inside artifacts/xmum-market/)
+
+The api/moderate.ts file is currently at:
+`artifacts/xmum-market/api/moderate.ts`
+
+But since Vercel's root is the monorepo root, the api folder must be at:
+`api/moderate.ts` (monorepo root level)
+
+### FIX 1 — Move the api folder to monorepo root
+
+Create a NEW file at the monorepo root level: `api/moderate.ts`
+
+Copy the EXACT content from `artifacts/xmum-market/api/moderate.ts` into this new file.
+Do NOT delete `artifacts/xmum-market/api/moderate.ts` yet — leave it in place.
+
+### FIX 2 — Update the ROOT vercel.json
+
+File: `vercel.json` (the one at MONOREPO ROOT — NOT the one inside artifacts/xmum-market/)
+
+Make these 3 surgical changes:
+
+**Change 2a — Add api rewrite BEFORE the existing SPA rewrite:**
+Find:
+```json
+"rewrites": [
+  { "source": "/(.*)", "destination": "/index.html" }
+]
+```
+Replace with:
+```json
+"rewrites": [
+  { "source": "/api/(.*)", "destination": "/api/$1" },
+  { "source": "/(.*)", "destination": "/index.html" }
+]
+```
+
+**Change 2b — Add generativelanguage.googleapis.com to connect-src in headers:**
+The root vercel.json currently has NO Content-Security-Policy header. Add a new headers entry for it. Find the closing `]` of the headers array and add before it:
+```json
+{
+  "source": "/(.*)",
+  "headers": [
+    {
+      "key": "Content-Security-Policy",
+      "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.firebaseapp.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' /api https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firebasestorage.googleapis.com https://*.firebaseapp.com https://*.sentry.io https://*.ingest.sentry.io https://generativelanguage.googleapis.com; frame-src 'self' https://*.firebaseapp.com; frame-ancestors 'none';"
+    }
+  ]
+}
+```
+
+### FIX 3 — Install @vercel/node types at monorepo root
+
+Run this command:
+pnpm add -D @vercel/node -w
+The `-w` flag installs it at the workspace root so the api/moderate.ts file can import the types.
+
+### FIX 4 — Update aiModerate.ts to use absolute URL in production
+
+File: `artifacts/xmum-market/src/lib/aiModerate.ts`
+
+The current fetch uses `/api/moderate` (relative URL). This works on Vercel but we need to make sure it's correct.
+
+Find:
+```typescript
+    const res = await fetch("/api/moderate", {
+```
+No change needed here — relative URL is correct for Vercel. Leave as-is.
+
+### FIX 5 — Verify build passes
+Run: `pnpm --filter xmum-market run build`
+Must pass with zero errors.
+
+### AFTER CHANGES — tell me:
+1. Confirm `api/moderate.ts` now exists at the MONOREPO ROOT (not inside artifacts/)
+2. Confirm the root `vercel.json` now has the `/api/(.*)` rewrite as the FIRST rewrite
+3. Confirm `@vercel/node` was installed successfully
+4. Push to GitHub so Vercel redeploys automatically
