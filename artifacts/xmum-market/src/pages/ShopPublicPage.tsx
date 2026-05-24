@@ -62,10 +62,12 @@ export default function ShopPublicPage() {
 
   const [shop, setShop] = useState<Shop | null>(null);
   const managementPanelRef = useRef<HTMLDivElement>(null);
+  const shopCardRef = useRef<HTMLDivElement>(null);
   const [listings, setListings] = useState<ShopListing[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAuth, setShowAuth] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showStickyName, setShowStickyName] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -78,6 +80,16 @@ export default function ShopPublicPage() {
       window.scrollTo({ top: 0, behavior: "instant" });
     }
   }, [slug]);
+
+  useEffect(() => {
+    const onScroll = () => {
+      if (!shopCardRef.current) return;
+      const rect = shopCardRef.current.getBoundingClientRect();
+      setShowStickyName(rect.bottom < 56);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   useEffect(() => {
     if (!slug) return;
@@ -158,6 +170,27 @@ export default function ShopPublicPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-950 pb-20">
+      {/* Sticky shop name bar — visitors only, appears when info card scrolls out of view */}
+      {!canManage && (
+        <div
+          className={`fixed top-14 left-0 right-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-gray-200 dark:border-slate-700 shadow-sm transition-all duration-200 ${
+            showStickyName ? "translate-y-0 opacity-100" : "-translate-y-full opacity-0 pointer-events-none"
+          }`}
+        >
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-11 flex items-center gap-3">
+            {shop.logoUrl ? (
+              <img src={shop.logoUrl} alt="" className="w-7 h-7 rounded-lg object-cover shrink-0 border border-gray-100 dark:border-slate-700" />
+            ) : (
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#003366] to-blue-500 flex items-center justify-center shrink-0">
+                <Store size={13} className="text-white" />
+              </div>
+            )}
+            <span className="text-sm font-bold text-gray-900 dark:text-slate-100 truncate">{shop.name}</span>
+            <span className="text-xs text-gray-400 dark:text-slate-500 shrink-0">{shop.category}</span>
+          </div>
+        </div>
+      )}
+
       {/* Full-width Banner */}
       <div
         className="relative h-44 sm:h-64 lg:h-72 w-full"
@@ -182,6 +215,20 @@ export default function ShopPublicPage() {
         >
           <ArrowLeft size={18} />
         </button>
+
+        <button
+          onClick={() => {
+            navigator.clipboard.writeText(window.location.href).then(() => {
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2000);
+            });
+          }}
+          title="Copy shop link"
+          className="absolute top-4 right-4 flex items-center gap-1.5 text-xs font-medium bg-black/40 backdrop-blur-sm text-white hover:bg-black/60 px-3 py-2 rounded-full transition shadow-lg"
+        >
+          {copied ? <Check size={13} className="text-green-300" /> : <Link2 size={13} />}
+          <span>{copied ? "Copied!" : "Share"}</span>
+        </button>
       </div>
 
       {/* Content area */}
@@ -192,20 +239,7 @@ export default function ShopPublicPage() {
           {/* LEFT COLUMN — shop info + management panel */}
           <div className="lg:sticky lg:top-[72px] order-1">
             {/* Shop info card */}
-            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg mt-4 lg:-mt-16 relative z-10 p-5">
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(window.location.href).then(() => {
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 2000);
-                  });
-                }}
-                title="Copy shop link"
-                className="absolute top-3 right-3 flex items-center gap-1.5 text-xs text-gray-400 dark:text-slate-500 hover:text-[#003366] dark:hover:text-blue-400 bg-gray-100 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/30 px-2.5 py-1.5 rounded-lg transition-colors"
-              >
-                {copied ? <Check size={13} className="text-green-500" /> : <Link2 size={13} />}
-                <span>{copied ? "Copied!" : "Share"}</span>
-              </button>
+            <div ref={shopCardRef} className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg mt-4 lg:-mt-16 relative z-10 p-5">
               <div className="flex items-start gap-4">
                 <div className="w-[72px] h-[72px] lg:w-20 lg:h-20 rounded-2xl border-2 border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 overflow-hidden shadow-sm shrink-0 lg:-mt-16">
                   {shop.logoUrl ? (
