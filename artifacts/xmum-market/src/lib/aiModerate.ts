@@ -82,7 +82,12 @@ export async function moderateContent(
       signal: AbortSignal.timeout(8000),
     });
 
-    if (!geminiRes.ok) return FAIL_OPEN;
+    if (!geminiRes.ok) {
+      if (geminiRes.status === 429) {
+        return { result: "BLOCKED", reason: "Our content check is temporarily busy. Please wait a moment and try again.", suggestion: "Wait 30 seconds and resubmit your listing." };
+      }
+      return FAIL_OPEN;
+    }
 
     const data = await geminiRes.json();
     const text: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
