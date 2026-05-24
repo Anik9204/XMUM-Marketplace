@@ -6,7 +6,7 @@ import {
 } from "@/lib/shops";
 import { Shop, ShopListing } from "@/lib/types";
 import {
-  ArrowLeft, Store, Loader2, Package, Settings2,
+  ArrowLeft, Store, Loader2, Package, Settings2, Link2, Check,
 } from "lucide-react";
 import { SiWhatsapp, SiWechat } from "react-icons/si";
 import ShopManagementPanel from "@/components/ShopManagementPanel";
@@ -65,6 +65,7 @@ export default function ShopPublicPage() {
   const [listings, setListings] = useState<ShopListing[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAuth, setShowAuth] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -192,6 +193,19 @@ export default function ShopPublicPage() {
           <div className="lg:sticky lg:top-[72px] order-1">
             {/* Shop info card */}
             <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg mt-4 lg:-mt-16 relative z-10 p-5">
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(window.location.href).then(() => {
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  });
+                }}
+                title="Copy shop link"
+                className="absolute top-3 right-3 flex items-center gap-1.5 text-xs text-gray-400 dark:text-slate-500 hover:text-[#003366] dark:hover:text-blue-400 bg-gray-100 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/30 px-2.5 py-1.5 rounded-lg transition-colors"
+              >
+                {copied ? <Check size={13} className="text-green-500" /> : <Link2 size={13} />}
+                <span>{copied ? "Copied!" : "Share"}</span>
+              </button>
               <div className="flex items-start gap-4">
                 <div className="w-[72px] h-[72px] lg:w-20 lg:h-20 rounded-2xl border-2 border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 overflow-hidden shadow-sm shrink-0 lg:-mt-16">
                   {shop.logoUrl ? (
