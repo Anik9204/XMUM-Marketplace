@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { moderateContent } from "@/lib/aiModerate";
+import { writeAiFlag } from "@/lib/aiFlag";
 import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -195,6 +196,21 @@ function AddListingForm({ shopId, shop, onClose, onCreated }: { shopId: string; 
       setLoading(false);
       return;
     }
+    if (aiResult.result === "FLAGGED") {
+      void writeAiFlag({
+        context: "shop-listing",
+        reason: aiResult.reason,
+        content: `Title: ${title}\nDescription: ${description}`,
+        listingTitle: title,
+        shopId: shopId,
+        shopName: shop.name,
+        shopSlug: shop.slug,
+        userId: shop.ownerId,
+        userEmail: "",
+        createdAt: Date.now(),
+        status: "pending",
+      });
+    }
     try {
       const photoUrls: string[] = [];
       for (let i = 0; i < photos.length; i++) {
@@ -339,6 +355,21 @@ function EditShopListingForm({ listing, shopId, shop, onCancel, onSaved }: { lis
       setError(aiResult.suggestion ? `${aiResult.reason} ${aiResult.suggestion}` : (aiResult.reason || "Listing flagged. Please review the content."));
       setLoading(false);
       return;
+    }
+    if (aiResult.result === "FLAGGED") {
+      void writeAiFlag({
+        context: "shop-listing",
+        reason: aiResult.reason,
+        content: `Title: ${title}\nDescription: ${description}`,
+        listingTitle: title,
+        shopId: shopId,
+        shopName: shop.name,
+        shopSlug: shop.slug,
+        userId: shop.ownerId,
+        userEmail: "",
+        createdAt: Date.now(),
+        status: "pending",
+      });
     }
     try {
       await Promise.allSettled(removedPhotoUrls.map((url) => { const path = storagePathFromUrl(url); return path ? deleteObject(ref(storage, path)).catch(() => {}) : Promise.resolve(); }));
@@ -726,6 +757,19 @@ function SettingsTab({
     if (aiResult.result === "BLOCKED") {
       setUploadError(aiResult.suggestion ? `${aiResult.reason} ${aiResult.suggestion}` : (aiResult.reason || "Content flagged. Please review your shop name or bio."));
       return;
+    }
+    if (aiResult.result === "FLAGGED") {
+      void writeAiFlag({
+        context: "shop-profile",
+        reason: aiResult.reason,
+        content: `Shop name: ${name}\nBio: ${bio}`,
+        shopId: shop.id,
+        shopName: name,
+        userId: shop.ownerId,
+        userEmail: "",
+        createdAt: Date.now(),
+        status: "pending",
+      });
     }
     await onSave();
     setSaved(true);

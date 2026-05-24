@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Flag, Users, Megaphone, FileText,
   List, BarChart2, LogOut,
   Store, Newspaper, Moon, Sun, Menu, X, ShieldAlert, ClipboardList, SlidersHorizontal,
-  Bell,
+  Bell, Bot,
 } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth, db } from "../lib/firebase";
@@ -43,6 +43,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   const { adminUser, isAdmin } = useAuth();
   const [pendingReports, setPendingReports]               = useState(0);
   const [pendingShopApprovals, setPendingShopApprovals]   = useState(0);
+  const [pendingAiFlags, setPendingAiFlags]               = useState(0);
   const { dark, toggle } = useDarkMode();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -67,6 +68,12 @@ export default function Layout({ children }: { children: ReactNode }) {
       (snap) => setPendingShopApprovals(snap.size),
       () => {}
     );
+    return unsub;
+  }, []);
+
+  useEffect(() => {
+    const qry = query(collection(db, "aiFlags"), where("status", "==", "pending"));
+    const unsub = onSnapshot(qry, (snap) => setPendingAiFlags(snap.size), () => {});
     return unsub;
   }, []);
 
@@ -144,6 +151,7 @@ export default function Layout({ children }: { children: ReactNode }) {
     { href: "/shop-ads",      label: "Shop Ads",      icon: Newspaper },
     { href: "/audit-log",          label: "Audit Log",        icon: ShieldAlert },
     { href: "/subscription-config", label: "Subscription Config", icon: SlidersHorizontal },
+    { href: "/ai-flagged",          label: "AI Flagged",        icon: Bot },
   ];
 
   // Notification bell button — reused in both mobile bar and sidebar
@@ -278,6 +286,13 @@ export default function Layout({ children }: { children: ReactNode }) {
                                      rounded-full min-w-[18px] h-[18px] flex items-center
                                      justify-center px-1">
                       {pendingShopApprovals > 99 ? "99+" : pendingShopApprovals}
+                    </span>
+                  )}
+                  {label === "AI Flagged" && pendingAiFlags > 0 && (
+                    <span className="ml-auto bg-purple-500 text-white text-[9px] font-bold
+                                     rounded-full min-w-[18px] h-[18px] flex items-center
+                                     justify-center px-1">
+                      {pendingAiFlags > 99 ? "99+" : pendingAiFlags}
                     </span>
                   )}
                 </a>

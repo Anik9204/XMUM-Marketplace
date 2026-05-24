@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { createShop, slugify, isSlugAvailable } from "@/lib/shops";
 import { moderateContent } from "@/lib/aiModerate";
+import { writeAiFlag } from "@/lib/aiFlag";
 import { ShopCategory } from "@/lib/types";
 import AuthModal from "@/components/AuthModal";
 import { Store, CheckCircle2, XCircle, Loader2, AlertCircle, Edit2 } from "lucide-react";
@@ -179,6 +180,18 @@ export default function CreateShopPage() {
     if (aiResult.result === "BLOCKED") {
       setError(aiResult.suggestion ? `${aiResult.reason} ${aiResult.suggestion}` : (aiResult.reason || "Shop content flagged. Please review and try again."));
       return;
+    }
+    if (aiResult.result === "FLAGGED") {
+      void writeAiFlag({
+        context: "shop-profile",
+        reason: aiResult.reason,
+        content: `Shop name: ${name}\nBio: ${bio}`,
+        shopName: name,
+        userId: user?.uid ?? "",
+        userEmail: user?.email ?? "",
+        createdAt: Date.now(),
+        status: "pending",
+      });
     }
     setLoading(true);
     try {

@@ -16,6 +16,7 @@ const ShopAdsPage           = lazy(() => import("./pages/ShopAdsPage"));
 const AuditLogPage          = lazy(() => import("./pages/AuditLogPage"));
 const ShopApprovalsPage     = lazy(() => import("./pages/ShopApprovalsPage"));
 const SubscriptionConfigPage = lazy(() => import("./pages/SubscriptionConfigPage"));
+const AiFlaggedPage          = lazy(() => import("./pages/AiFlaggedPage"));
 
 export default function App() {
   const { user, isEditor, loading } = useAuth();
@@ -48,6 +49,7 @@ export default function App() {
         <Route path="/audit-log"      component={AuditLogPage} />
         <Route path="/shop-approvals"      component={ShopApprovalsPage} />
         <Route path="/subscription-config" component={SubscriptionConfigPage} />
+        <Route path="/ai-flagged"          component={AiFlaggedPage} />
         <Route>
           <Redirect to="/" />
         </Route>

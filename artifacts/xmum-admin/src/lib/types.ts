@@ -102,6 +102,27 @@ export interface AdminShop {
 
 export type ShopAdStatus = "pending" | "approved" | "rejected";
 
+export type AiFlagContext = "listing" | "shop-listing" | "shop-profile" | "inquiry" | "review";
+export type AiFlagStatus = "pending" | "dismissed" | "deleted";
+
+export interface AiFlag {
+  id: string;
+  context: AiFlagContext;
+  reason: string;
+  content: string;
+  listingId?: string;
+  listingTitle?: string;
+  shopId?: string;
+  shopName?: string;
+  shopSlug?: string;
+  userId: string;
+  userEmail: string;
+  createdAt: number;
+  status: AiFlagStatus;
+  reviewedBy?: string;
+  reviewedAt?: number;
+}
+
 export interface ShopAd {
   id: string;
   shopId: string;

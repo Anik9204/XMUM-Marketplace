@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { leaveShopReview } from "@/lib/shops";
 import { ShopOrder } from "@/lib/types";
 import { moderateContent } from "@/lib/aiModerate";
+import { writeAiFlag } from "@/lib/aiFlag";
 
 interface ReviewModalProps {
   order: ShopOrder;
@@ -48,6 +49,19 @@ export default function ReviewModal({ order, onClose, onSubmitted }: ReviewModal
       if (aiResult.result === "BLOCKED") {
         setError(aiResult.suggestion ? `${aiResult.reason} ${aiResult.suggestion}` : (aiResult.reason || "Review content flagged. Please keep it respectful."));
         return;
+      }
+      if (aiResult.result === "FLAGGED") {
+        void writeAiFlag({
+          context: "review",
+          reason: aiResult.reason,
+          content: comment,
+          shopId: order.shopId,
+          shopName: order.shopName,
+          userId: user?.uid ?? "",
+          userEmail: user?.email ?? "",
+          createdAt: Date.now(),
+          status: "pending",
+        });
       }
     }
     setSubmitting(true);

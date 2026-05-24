@@ -269,6 +269,14 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // ── AI Flags ──────────────────────────────────────────────────────────────
+    match /aiFlags/{flagId} {
+      allow read: if false; // Only admin app reads via service — never expose to users
+      allow create: if isXmuEmail(); // Market app writes flags
+      allow update: if false;
+      allow delete: if false;
+    }
+
     // ── Admin Audit Logs ──────────────────────────────────────────────────────
     match /adminAuditLogs/{logId} {
       // Only admin-role users can read the audit trail

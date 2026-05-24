@@ -5,6 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { uploadPhoto, createListing, writeRentalTcAuditLog } from "@/lib/listings";
 import { checkContent } from "@/lib/contentFilter";
 import { moderateContent } from "@/lib/aiModerate";
+import { writeAiFlag } from "@/lib/aiFlag";
 import { auth, db } from "@/lib/firebase";
 import { doc, updateDoc, increment, getCountFromServer, collection, query, where } from "firebase/firestore";
 import { ListingType, Condition, Listing } from "@/lib/types";
@@ -616,7 +617,19 @@ export default function PostPage() {
       setLoading(false);
       return;
     }
-    // FLAGGED listings post normally but will be auto-flagged for admin review
+    if (aiResult.result === "FLAGGED") {
+      // Post goes through normally — write a flag for admin review silently
+      void writeAiFlag({
+        context: "listing",
+        reason: aiResult.reason,
+        content: `Title: ${title}\nDescription: ${description}`,
+        listingTitle: title,
+        userId: user?.uid ?? "",
+        userEmail: user?.email ?? "",
+        createdAt: Date.now(),
+        status: "pending",
+      });
+    }
 
     const hasContact = whatsapp.trim() || wechat.trim() || teams.trim();
     if (!hasContact) {
