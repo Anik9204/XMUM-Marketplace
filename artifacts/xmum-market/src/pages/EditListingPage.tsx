@@ -5,6 +5,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { uploadPhoto, updateListing, getListing } from "@/lib/listings";
 import ReportHoldModal from "@/components/ReportHoldModal";
 import { checkContent } from "@/lib/contentFilter";
+import { moderateContent } from "@/lib/aiModerate";
+import { writeAiFlag } from "@/lib/aiFlag";
 import { auth } from "@/lib/firebase";
 import { ListingType, Condition } from "@/lib/types";
 import { validateWhatsApp, suggestMalaysianFormat } from "@/lib/validation";
@@ -382,6 +384,34 @@ export default function EditListingPage() {
       setError(t.contactRequired);
       setLoading(false);
       return;
+    }
+
+    // AI moderation — pass existing Firebase Storage URLs; new files aren't uploaded yet
+    const existingPhotoUrls = allPhotos
+      .filter((item) => item.kind === "existing")
+      .map((item) => item.src);
+    const aiResult = await moderateContent(
+      `Title: ${title}\nDescription: ${description}`,
+      "listing",
+      existingPhotoUrls
+    );
+    if (aiResult.result === "BLOCKED") {
+      setError(aiResult.suggestion ? `${aiResult.reason} ${aiResult.suggestion}` : (aiResult.reason || "Content flagged. Please review and try again."));
+      setLoading(false);
+      return;
+    }
+    if (aiResult.result === "FLAGGED") {
+      void writeAiFlag({
+        context: "listing",
+        reason: aiResult.reason,
+        content: `Title: ${title}\nDescription: ${description}`,
+        listingId: id,
+        listingTitle: title,
+        userId: user!.uid,
+        userEmail: user?.email ?? "",
+        createdAt: Date.now(),
+        status: "pending",
+      });
     }
 
     try {

@@ -189,7 +189,8 @@ function AddListingForm({ shopId, shop, onClose, onCreated }: { shopId: string; 
     // AI moderation
     const aiResult = await moderateContent(
       `Title: ${title}\nDescription: ${description}`,
-      "shop-listing"
+      "shop-listing",
+      []
     );
     if (aiResult.result === "BLOCKED") {
       setError(aiResult.suggestion ? `${aiResult.reason} ${aiResult.suggestion}` : (aiResult.reason || "Listing flagged. Please review the content."));
@@ -349,7 +350,8 @@ function EditShopListingForm({ listing, shopId, shop, onCancel, onSaved }: { lis
     // AI moderation
     const aiResult = await moderateContent(
       `Title: ${title}\nDescription: ${description}`,
-      "shop-listing"
+      "shop-listing",
+      existingPhotos
     );
     if (aiResult.result === "BLOCKED") {
       setError(aiResult.suggestion ? `${aiResult.reason} ${aiResult.suggestion}` : (aiResult.reason || "Listing flagged. Please review the content."));
@@ -752,7 +754,8 @@ function SettingsTab({
     // AI moderation on shop name + bio
     const aiResult = await moderateContent(
       `Shop name: ${name}\nBio: ${bio}`,
-      "shop-profile"
+      "shop-profile",
+      []
     );
     if (aiResult.result === "BLOCKED") {
       setUploadError(aiResult.suggestion ? `${aiResult.reason} ${aiResult.suggestion}` : (aiResult.reason || "Content flagged. Please review your shop name or bio."));

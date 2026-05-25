@@ -1,0 +1,41 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+
+---
+
+TASK: Update the 4 call sites that submit photos to pass photoUrls into moderateContent(), so images get scanned by Cloud Vision. Also update EditListingPage which was missing moderation entirely. Do NOT change any UI, layout, or non-moderation logic.
+
+IMPORTANT CONTEXT:
+- moderateContent(content, context, photoUrls?) — third param is optional string[]
+- In PostPage, photos are File objects (not yet uploaded when moderation runs). For now pass [] — photo scanning for PostPage will be handled separately in a later step.
+- In EditListingPage, existing photos are already Firebase Storage URLs — pass those.
+- In ShopManagementPanel, shop listing photos are already URLs — pass those.
+- In CreateShopPage, logo/banner are already URLs if uploaded — pass those.
+- ReviewModal has no photos — already passing [], no change needed.
+
+STEP A — artifacts/xmum-market/src/pages/EditListingPage.tsx
+1. Read the full file first.
+2. Find the existing moderateContent() call.
+3. Update it to pass the current photo URLs as third argument. The existing photo URLs are in the allPhotos state array — filter for kind === "existing" and map to .src, then also include any already-uploaded new photo URLs in the same array.
+4. Add import for moderateContent if not already imported (check first).
+
+STEP B — artifacts/xmum-market/src/components/ShopManagementPanel.tsx
+1. Read the full file first.
+2. There are 3 moderateContent() calls in this file. For each one, identify what photo URLs are available in scope at that point and pass them as the third argument. If no photos are in scope for a particular call, pass [].
+3. Do NOT change any other logic.
+
+STEP C — artifacts/xmum-market/src/pages/CreateShopPage.tsx
+1. Read the full file first.
+2. Find the moderateContent() call.
+3. Pass any available logo/banner URLs as the third argument. If none are uploaded yet at moderation time, pass [].
+4. Do NOT change any other logic.
+
+STEP D — Build and verify
+Run: pnpm --filter xmum-market run build
+Show full output.

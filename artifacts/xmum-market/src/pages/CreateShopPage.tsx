@@ -176,7 +176,7 @@ export default function CreateShopPage() {
 
     // AI moderation on shop name + bio
     const shopContent = `Shop name: ${name}\nBio: ${bio}`;
-    const aiResult = await moderateContent(shopContent, "shop-profile");
+    const aiResult = await moderateContent(shopContent, "shop-profile", []);
     if (aiResult.result === "BLOCKED") {
       setError(aiResult.suggestion ? `${aiResult.reason} ${aiResult.suggestion}` : (aiResult.reason || "Shop content flagged. Please review and try again."));
       return;
