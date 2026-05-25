@@ -1,0 +1,168 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+
+---
+
+TASK: Step 7 — Reorder photo upload and moderation in PostPage.tsx
+
+FILE TO EDIT: artifacts/xmum-market/src/pages/PostPage.tsx
+
+CONTEXT:
+Currently in handleSubmit, the order is:
+  1. Run AI moderation on text only (no photoUrls)
+  2. Upload photos to Firebase Storage
+  3. Save listing
+
+We need to change it so:
+  1. Upload photos to Firebase Storage FIRST → get URLs
+  2. Run AI moderation with BOTH text AND those URLs
+  3. If result is BLOCKED → delete the uploaded photos from Storage and abort with error
+  4. If result is SAFE or FLAGGED → continue saving the listing as normal (same as today)
+
+IMPORTANT CONSTRAINTS:
+- The `moderateContent` function signature is already: moderateContent(text, context, photoUrls?)
+  — it already accepts an optional string[] third parameter. No changes needed to aiModerate.ts.
+- The `uploadPhoto` function is in listings.ts and returns Promise<string>.
+  — It uploads to: listings/{userId}/{Date.now()}.{ext}
+- To delete uploaded photos on BLOCKED: use `deleteObject` and `ref` from firebase/storage,
+  imported via `storage` from "@/lib/firebase". 
+  — The storage ref path is directly constructible from the download URL using the existing
+    `extractStoragePath` helper already in listings.ts. BUT since we are in PostPage.tsx
+    and don't want to import that internal helper, use this approach instead:
+    import { ref as storageRef, deleteObject } from "firebase/storage";
+    import { storage } from "@/lib/firebase";
+    — For each URL in uploadedUrls, construct the ref like:
+      const path = decodeURIComponent(url.split("/o/")[1].split("?")[0]);
+      deleteObject(storageRef(storage, path)).catch(() => {});  // fire-and-forget, non-fatal
+
+- The `aiChecking` state and its UI (the "Checking content…" spinner on the submit button)
+  must continue to work. The spinner should show during BOTH photo upload AND moderation.
+  Rename the `aiChecking` state to cover this — or simply keep `aiChecking` true from the
+  start of photo upload through the end of moderation.
+
+- The `loading` state must still be set true at the start of handleSubmit and false in finally.
+- The FLAGGED branch must still call writeAiFlag — but now also pass photoUrls in the content
+  field if desired. Actually: leave the writeAiFlag call exactly as it is today. No changes needed there.
+- Do NOT change any of the validation logic above the photo upload block.
+- Do NOT change anything in the JSX/render section.
+- Do NOT touch any other file.
+
+EXACT CHANGE REQUIRED — only inside handleSubmit, surgical replacement of two blocks:
+
+REMOVE this existing block (the AI moderation block that runs BEFORE photo upload):
+// AI moderation — runs after client-side filter passes
+setAiChecking(true);
+const aiResult = await moderateContent(
+  `Title: ${title}\nDescription: ${description}`,
+  "listing"
+);
+setAiChecking(false);
+if (aiResult.result === "BLOCKED") {
+  setError(
+    aiResult.suggestion
+      ? `${aiResult.reason} ${aiResult.suggestion}`
+      : (aiResult.reason || "Your listing was flagged. Please review the content and try again.")
+  );
+  setLoading(false);
+  return;
+}
+if (aiResult.result === "FLAGGED") {
+  // Post goes through normally — write a flag for admin review silently
+  void writeAiFlag({
+    context: "listing",
+    reason: aiResult.reason,
+    content: `Title: ${title}\nDescription: ${description}`,
+    listingTitle: title,
+    userId: user?.uid ?? "",
+    userEmail: user?.email ?? "",
+    createdAt: Date.now(),
+    status: "pending",
+  });
+}
+
+AND REMOVE the existing photo upload block inside the try{} (which currently comes AFTER moderation):
+  const urls: string[] = [];
+  for (const f of photos) {
+    const url = await withTimeout(uploadPhoto(f, user.uid), 30_000, "photo-upload");
+    urls.push(url);
+  }
+
+REPLACE BOTH with this single new block, inserted at the point where the AI moderation block used to be (i.e., after the contact validation and before the try block). The try block remains, just without the photo upload loop inside it:
+// Step 1: Upload photos first so we can pass URLs to AI moderation
+const uploadedUrls: string[] = [];
+setAiChecking(true);
+try {
+  await withTimeout(auth.currentUser?.getIdToken(true) ?? Promise.resolve(""), 10_000, "token-refresh");
+  for (const f of photos) {
+    const url = await withTimeout(uploadPhoto(f, user.uid), 30_000, "photo-upload");
+    uploadedUrls.push(url);
+  }
+} catch (err: any) {
+  setAiChecking(false);
+  setLoading(false);
+  const msg: string = err?.message ?? "";
+  if (msg.startsWith("timeout:token-refresh")) setError("Session refresh timed out. Please sign out and sign back in.");
+  else if (msg.startsWith("timeout:photo-upload")) setError("A photo upload timed out. Try a smaller image or check your connection.");
+  else setError(err?.message ? `Error: ${err.message}` : t.errorOccurred);
+  return;
+}
+
+// Step 2: Run AI moderation with text + uploaded photo URLs
+const aiResult = await moderateContent(
+  `Title: ${title}\nDescription: ${description}`,
+  "listing",
+  uploadedUrls.length > 0 ? uploadedUrls : undefined
+);
+setAiChecking(false);
+
+if (aiResult.result === "BLOCKED") {
+  // Delete the already-uploaded photos before aborting
+  for (const url of uploadedUrls) {
+    try {
+      const path = decodeURIComponent(url.split("/o/")[1].split("?")[0]);
+      deleteObject(storageRef(storage, path)).catch(() => {});
+    } catch {
+      // Non-fatal — best effort cleanup
+    }
+  }
+  setError(
+    aiResult.suggestion
+      ? `${aiResult.reason} ${aiResult.suggestion}`
+      : (aiResult.reason || "Your listing was flagged. Please review the content and try again.")
+  );
+  setLoading(false);
+  return;
+}
+if (aiResult.result === "FLAGGED") {
+  void writeAiFlag({
+    context: "listing",
+    reason: aiResult.reason,
+    content: `Title: ${title}\nDescription: ${description}`,
+    listingTitle: title,
+    userId: user?.uid ?? "",
+    userEmail: user?.email ?? "",
+    createdAt: Date.now(),
+    status: "pending",
+  });
+}
+
+Then inside the existing try{} block (which now starts right after the above), replace the ONLY remaining reference to `urls` with `uploadedUrls`. Specifically:
+- The line `const urls: string[] = [];` and the photo upload loop are already removed above.
+- Change `photos: urls,` to `photos: uploadedUrls,` in the baseData object.
+- The token refresh (`await withTimeout(auth.currentUser?.getIdToken(true)...)`) that was at the TOP of the try{} block is now handled in the new upload block above — REMOVE it from inside the try{} so it doesn't run twice.
+
+Also add these two imports at the top of PostPage.tsx (after the existing firebase imports):
+import { ref as storageRef, deleteObject } from "firebase/storage";
+import { storage } from "@/lib/firebase";
+Check first: if `storage` is already imported from "@/lib/firebase" in PostPage.tsx, do NOT add a duplicate import — only add what is missing.
+
+After making all changes, verify:
+1. pnpm --filter xmum-market run build passes with zero errors
+2. The submit flow is: validate → upload photos → moderate (with URLs) → BLOCKED cleans up & aborts → SAFE/FLAGGED continues → save listing
+3. No other files were touched

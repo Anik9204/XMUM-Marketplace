@@ -6,7 +6,8 @@ import { uploadPhoto, createListing, writeRentalTcAuditLog } from "@/lib/listing
 import { checkContent } from "@/lib/contentFilter";
 import { moderateContent } from "@/lib/aiModerate";
 import { writeAiFlag } from "@/lib/aiFlag";
-import { auth, db } from "@/lib/firebase";
+import { auth, db, storage } from "@/lib/firebase";
+import { ref as storageRef, deleteObject } from "firebase/storage";
 import { doc, updateDoc, increment, getCountFromServer, collection, query, where } from "firebase/firestore";
 import { ListingType, Condition, Listing } from "@/lib/types";
 import { validateWhatsApp, suggestMalaysianFormat } from "@/lib/validation";
@@ -601,14 +602,43 @@ export default function PostPage() {
       return;
     }
 
-    // AI moderation — runs after client-side filter passes
+    // Step 1: Upload photos first so we can pass URLs to AI moderation
+    const uploadedUrls: string[] = [];
     setAiChecking(true);
+    try {
+      await withTimeout(auth.currentUser?.getIdToken(true) ?? Promise.resolve(""), 10_000, "token-refresh");
+      for (const f of photos) {
+        const url = await withTimeout(uploadPhoto(f, user.uid), 30_000, "photo-upload");
+        uploadedUrls.push(url);
+      }
+    } catch (err: any) {
+      setAiChecking(false);
+      setLoading(false);
+      const msg: string = err?.message ?? "";
+      if (msg.startsWith("timeout:token-refresh")) setError("Session refresh timed out. Please sign out and sign back in.");
+      else if (msg.startsWith("timeout:photo-upload")) setError("A photo upload timed out. Try a smaller image or check your connection.");
+      else setError(err?.message ? `Error: ${err.message}` : t.errorOccurred);
+      return;
+    }
+
+    // Step 2: Run AI moderation with text + uploaded photo URLs
     const aiResult = await moderateContent(
       `Title: ${title}\nDescription: ${description}`,
-      "listing"
+      "listing",
+      uploadedUrls.length > 0 ? uploadedUrls : undefined
     );
     setAiChecking(false);
+
     if (aiResult.result === "BLOCKED") {
+      // Delete the already-uploaded photos before aborting
+      for (const url of uploadedUrls) {
+        try {
+          const path = decodeURIComponent(url.split("/o/")[1].split("?")[0]);
+          deleteObject(storageRef(storage, path)).catch(() => {});
+        } catch {
+          // Non-fatal — best effort cleanup
+        }
+      }
       setError(
         aiResult.suggestion
           ? `${aiResult.reason} ${aiResult.suggestion}`
@@ -618,7 +648,6 @@ export default function PostPage() {
       return;
     }
     if (aiResult.result === "FLAGGED") {
-      // Post goes through normally — write a flag for admin review silently
       void writeAiFlag({
         context: "listing",
         reason: aiResult.reason,
@@ -639,18 +668,10 @@ export default function PostPage() {
     }
 
     try {
-      await withTimeout(auth.currentUser?.getIdToken(true) ?? Promise.resolve(""), 10_000, "token-refresh");
-
-      const urls: string[] = [];
-      for (const f of photos) {
-        const url = await withTimeout(uploadPhoto(f, user.uid), 30_000, "photo-upload");
-        urls.push(url);
-      }
-
       const now = Date.now();
       const baseData: Record<string, unknown> = {
         type, title, description,
-        category, condition, photos: urls,
+        category, condition, photos: uploadedUrls,
         userId: user.uid, userEmail: user.email ?? "",
         userName: userProfile?.fullName ? getLastName(userProfile.fullName) : (user.email?.split("@")[0] ?? ""),
         whatsapp, wechat, teams,
