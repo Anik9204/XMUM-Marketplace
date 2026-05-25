@@ -1,0 +1,176 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+
+Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+
+TASK: Redesign CampusMarketPage layout for desktop
+File: artifacts/xmum-market/src/pages/CampusMarketPage.tsx
+Do NOT touch any logic, state, hooks, Firebase calls, or data fetching. Only change JSX structure and Tailwind classes as described. Every existing handler, variable, and sub-component stays exactly as-is.
+
+Change 1 — Widen the page container
+Find:
+jsx<div className="max-w-2xl mx-auto pb-32">
+Replace with:
+jsx<div className="max-w-6xl mx-auto pb-32 px-4">
+
+Change 2 — Hero: make it full-width and two-column on desktop
+Inside HeroBanner, find the default hero (the one with className="relative rounded-2xl overflow-hidden mx-4 mb-4"). Change it to:
+jsxclassName="relative rounded-2xl overflow-hidden mb-4"
+(remove mx-4 — the parent now has px-4)
+Inside that hero div, wrap the existing text content in a two-column layout:
+jsx<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between px-6 py-8 sm:py-10 gap-6">
+  <div className="flex-1">
+    {/* all existing text content: label, h1, p, button */}
+  </div>
+  <div className="hidden lg:block lg:w-64 lg:h-40 rounded-xl overflow-hidden opacity-90 shrink-0 border border-white/20 bg-white/10">
+    <div className="w-full h-full flex items-center justify-center text-white/30 text-sm">Preview</div>
+  </div>
+</div>
+Keep all existing animation styles and text exactly as they are — only wrap them in this flex layout.
+
+Change 3 — Category chips: remove mx-4, add "Filters" label on right
+Find:
+jsx<div className="flex gap-2 overflow-x-auto scrollbar-hide px-4 mb-5 pb-1 pt-1">
+Replace with:
+jsx<div className="flex items-center gap-2 mb-5">
+  <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 pt-1 flex-1">
+And close the inner div after the last chip button, then add before closing the outer div:
+jsx  </div>
+  <span className="text-xs text-gray-400 dark:text-slate-500 shrink-0 font-medium pr-1">Filters</span>
+</div>
+
+Change 4 — My Shop card: add Manage + View buttons
+Inside MyShopCard, it currently renders as a <Link> wrapping a div. Change it so it is NOT a link wrapper — instead make it a plain div, and add two buttons at the end:
+Replace the entire MyShopCard component with:
+jsxfunction MyShopCard({ shop, pendingCount }: { shop: Shop; pendingCount: number }) {
+  return (
+    <div className="flex items-center gap-3 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-2xl px-4 py-3 shadow-sm">
+      <div className="w-12 h-12 rounded-xl bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 overflow-hidden shrink-0 flex items-center justify-center">
+        {shop.logoUrl ? (
+          <img src={shop.logoUrl} alt="" className="w-full h-full object-cover" />
+        ) : (
+          <Store size={22} className="text-[#003366] dark:text-blue-400" />
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-bold text-gray-900 dark:text-slate-100 truncate">{shop.name}</p>
+        <p className="text-xs text-gray-400 dark:text-slate-500 truncate">{shop.category}</p>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        {pendingCount > 0 && (
+          <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full leading-none">
+            {pendingCount} pending
+          </span>
+        )}
+        <Link href={`/shop-dashboard/${shop.id}`}>
+          <button className="text-xs font-semibold border border-gray-200 dark:border-slate-600 text-gray-700 dark:text-slate-300 px-3 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition">
+            Manage Shop
+          </button>
+        </Link>
+        <Link href={`/shop/${shop.slug}`}>
+          <button className="text-xs font-semibold bg-[#003366] dark:bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-[#002244] dark:hover:bg-blue-700 transition">
+            View Public Page
+          </button>
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+Change 5 — Featured Shops: switch from pill scroll to grid cards with cover image
+Replace the entire ShopCard component with:
+jsxfunction ShopCard({ shop }: { shop: Shop }) {
+  return (
+    <Link href={`/shop/${shop.slug}`}>
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden shadow-sm hover:shadow-md transition-all cursor-pointer group">
+        <div className="h-28 bg-gradient-to-br from-[#003366] to-[#0066cc] overflow-hidden flex items-center justify-center relative">
+          {shop.logoUrl ? (
+            <img src={shop.logoUrl} alt="" className="w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-300" />
+          ) : (
+            <Store size={36} className="text-white/40" />
+          )}
+          <div className="absolute top-2 left-2">
+            <span className="text-[10px] font-bold text-white bg-black/30 px-2 py-0.5 rounded-full uppercase tracking-wide">
+              {shop.category.split(" ")[0]}
+            </span>
+          </div>
+        </div>
+        <div className="p-3">
+          <p className="text-sm font-bold text-gray-900 dark:text-slate-100 truncate">{shop.name}</p>
+          <p className="text-xs text-gray-400 dark:text-slate-500 truncate mt-0.5">{shop.totalListings} Listing{shop.totalListings !== 1 ? "s" : ""}</p>
+          {(shop.reviewCount ?? 0) > 0 && (
+            <p className="text-xs text-amber-500 font-semibold mt-0.5">★ {(shop.rating ?? 0).toFixed(1)}</p>
+          )}
+        </div>
+      </div>
+    </Link>
+  );
+}
+Then change the Featured Shops scroll container from a horizontal scroll to a grid:
+Find:
+jsx<div className="flex gap-4 overflow-x-auto scrollbar-hide px-4">
+  {shops.map((s) => <ShopCard key={s.id} shop={s} />)}
+</div>
+Replace with:
+jsx<div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+  {shops.slice(0, 8).map((s) => <ShopCard key={s.id} shop={s} />)}
+</div>
+Also update the skeleton loader to match:
+Find:
+jsx<div className="flex gap-4 overflow-x-auto scrollbar-hide px-4">
+  {[...Array(5)].map((_, i) => (
+    <div key={i} className="flex flex-col items-center w-[100px] shrink-0 animate-pulse">
+      <div className="w-16 h-16 rounded-2xl bg-gray-100 dark:bg-slate-700 mb-2" />
+      <div className="h-2.5 bg-gray-100 dark:bg-slate-700 rounded w-16 mb-1" />
+      <div className="h-2 bg-gray-100 dark:bg-slate-700 rounded w-12" />
+    </div>
+  ))}
+</div>
+Replace with:
+jsx<div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+  {[...Array(4)].map((_, i) => (
+    <div key={i} className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden animate-pulse">
+      <div className="h-28 bg-gray-100 dark:bg-slate-700" />
+      <div className="p-3 space-y-2">
+        <div className="h-3 bg-gray-100 dark:bg-slate-700 rounded w-3/4" />
+        <div className="h-2 bg-gray-100 dark:bg-slate-700 rounded w-1/2" />
+      </div>
+    </div>
+  ))}
+</div>
+
+Change 6 — Listings grid: 4 columns on desktop
+Find:
+jsx<div className="grid grid-cols-2 gap-3">
+  {visibleListings.map((l) => <ListingCard key={l.id} listing={l} />)}
+</div>
+Replace with:
+jsx<div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+  {visibleListings.map((l) => <ListingCard key={l.id} listing={l} />)}
+</div>
+
+Change 7 — Remove px-4 from Featured Shops and Listings sections
+Since the parent container now has px-4, remove the px-4 from:
+
+The <div className="mb-6"> Featured Shops section inner divs
+The <div ref={listingsRef} className="px-4"> — change to <div ref={listingsRef}>
+The My Shop section <div className="px-4 mb-5"> — change to <div className="mb-5">
+
+
+Do NOT touch:
+
+HeroBanner ad rotation logic (idx state, setInterval)
+PriceTag component
+ListingCard component
+ListingSkeleton component
+All state variables and Firebase data fetching
+handleLoadMore function
+The floating "Open Your Shop" CTA button
+The MyShopCard pending count logic
+
+After changes, confirm zero build errors: pnpm --filter xmum-market run build

@@ -56,7 +56,7 @@ function HeroBanner({ ads }: { ads: ShopAd[] }) {
         }
       `}</style>
       <div
-        className="relative rounded-2xl overflow-hidden mx-4 mb-4"
+        className="relative rounded-2xl overflow-hidden mb-4"
         style={{ background: "linear-gradient(135deg, #003366 0%, #0066cc 60%, #0099ff 100%)" }}
       >
         <div
@@ -67,29 +67,34 @@ function HeroBanner({ ads }: { ads: ShopAd[] }) {
             animation: "heroShimmer 3.5s ease-in-out infinite",
           }}
         />
-        <div className="px-6 py-8 sm:py-10">
-          <p
-            className="hero-fade-up text-white/70 text-xs font-semibold uppercase tracking-widest mb-1"
-            style={{ animationDuration: "350ms", animationDelay: "0ms", animationFillMode: "both" }}
-          >Campus Market</p>
-          <h1
-            className="hero-fade-up text-white text-2xl sm:text-3xl font-black leading-tight mb-2"
-            style={{ animationDuration: "500ms", animationDelay: "80ms", animationFillMode: "both" }}
-          >
-            Shop from fellow<br />XMUM students
-          </h1>
-          <p
-            className="hero-fade-up text-white/70 text-sm mb-4"
-            style={{ animationDuration: "500ms", animationDelay: "180ms", animationFillMode: "both" }}
-          >Discover food, services, and more — right on campus.</p>
-          <Link href="/create-shop">
-            <button
-              className="hero-fade-up bg-white text-[#003366] text-xs font-bold px-4 py-2 rounded-xl hover:bg-gray-100 transition"
-              style={{ animationDuration: "400ms", animationDelay: "280ms", animationFillMode: "both" }}
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between px-6 py-8 sm:py-10 gap-6">
+          <div className="flex-1">
+            <p
+              className="hero-fade-up text-white/70 text-xs font-semibold uppercase tracking-widest mb-1"
+              style={{ animationDuration: "350ms", animationDelay: "0ms", animationFillMode: "both" }}
+            >Campus Market</p>
+            <h1
+              className="hero-fade-up text-white text-2xl sm:text-3xl font-black leading-tight mb-2"
+              style={{ animationDuration: "500ms", animationDelay: "80ms", animationFillMode: "both" }}
             >
-              Open Your Shop →
-            </button>
-          </Link>
+              Shop from fellow<br />XMUM students
+            </h1>
+            <p
+              className="hero-fade-up text-white/70 text-sm mb-4"
+              style={{ animationDuration: "500ms", animationDelay: "180ms", animationFillMode: "both" }}
+            >Discover food, services, and more — right on campus.</p>
+            <Link href="/create-shop">
+              <button
+                className="hero-fade-up bg-white text-[#003366] text-xs font-bold px-4 py-2 rounded-xl hover:bg-gray-100 transition"
+                style={{ animationDuration: "400ms", animationDelay: "280ms", animationFillMode: "both" }}
+              >
+                Open Your Shop →
+              </button>
+            </Link>
+          </div>
+          <div className="hidden lg:block lg:w-64 lg:h-40 rounded-xl overflow-hidden opacity-90 shrink-0 border border-white/20 bg-white/10">
+            <div className="w-full h-full flex items-center justify-center text-white/30 text-sm">Preview</div>
+          </div>
         </div>
         <div className="absolute right-4 bottom-0 opacity-10 text-[120px] leading-none select-none pointer-events-none">🛍️</div>
       </div>
@@ -134,16 +139,26 @@ function HeroBanner({ ads }: { ads: ShopAd[] }) {
 function ShopCard({ shop }: { shop: Shop }) {
   return (
     <Link href={`/shop/${shop.slug}`}>
-      <div className="flex flex-col items-center w-[100px] shrink-0 cursor-pointer group">
-        <div className="w-16 h-16 rounded-2xl bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 overflow-hidden shadow-sm group-hover:shadow-md transition-shadow flex items-center justify-center mb-2">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden shadow-sm hover:shadow-md transition-all cursor-pointer group">
+        <div className="h-28 bg-gradient-to-br from-[#003366] to-[#0066cc] overflow-hidden flex items-center justify-center relative">
           {shop.logoUrl ? (
-            <img src={shop.logoUrl} alt="" className="w-full h-full object-cover" />
+            <img src={shop.logoUrl} alt="" className="w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-300" />
           ) : (
-            <Store size={28} className="text-[#003366] dark:text-blue-400" />
+            <Store size={36} className="text-white/40" />
+          )}
+          <div className="absolute top-2 left-2">
+            <span className="text-[10px] font-bold text-white bg-black/30 px-2 py-0.5 rounded-full uppercase tracking-wide">
+              {shop.category.split(" ")[0]}
+            </span>
+          </div>
+        </div>
+        <div className="p-3">
+          <p className="text-sm font-bold text-gray-900 dark:text-slate-100 truncate">{shop.name}</p>
+          <p className="text-xs text-gray-400 dark:text-slate-500 truncate mt-0.5">{shop.totalListings} Listing{shop.totalListings !== 1 ? "s" : ""}</p>
+          {(shop.reviewCount ?? 0) > 0 && (
+            <p className="text-xs text-amber-500 font-semibold mt-0.5">★ {(shop.rating ?? 0).toFixed(1)}</p>
           )}
         </div>
-        <p className="text-xs font-semibold text-gray-800 dark:text-slate-200 text-center line-clamp-1 w-full">{shop.name}</p>
-        <p className="text-[10px] text-gray-400 dark:text-slate-500 text-center truncate w-full">{shop.category}</p>
       </div>
     </Link>
   );
@@ -196,29 +211,36 @@ function ListingSkeleton() {
 // ── My Shop card ──────────────────────────────────────────────────────────────
 function MyShopCard({ shop, pendingCount }: { shop: Shop; pendingCount: number }) {
   return (
-    <Link href={`/shop/${shop.slug}`}>
-      <div className="flex items-center gap-3 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-2xl px-4 py-3 shadow-sm hover:shadow-md transition-shadow active:scale-[0.98] cursor-pointer">
-        <div className="w-12 h-12 rounded-xl bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 overflow-hidden shrink-0 flex items-center justify-center">
-          {shop.logoUrl ? (
-            <img src={shop.logoUrl} alt="" className="w-full h-full object-cover" />
-          ) : (
-            <Store size={22} className="text-[#003366] dark:text-blue-400" />
-          )}
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-gray-900 dark:text-slate-100 truncate">{shop.name}</p>
-          <p className="text-xs text-gray-400 dark:text-slate-500 truncate">{shop.category}</p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {pendingCount > 0 && (
-            <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full leading-none">
-              {pendingCount} pending
-            </span>
-          )}
-          <Settings2 size={14} className="text-gray-400 dark:text-slate-500" />
-        </div>
+    <div className="flex items-center gap-3 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-2xl px-4 py-3 shadow-sm">
+      <div className="w-12 h-12 rounded-xl bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 overflow-hidden shrink-0 flex items-center justify-center">
+        {shop.logoUrl ? (
+          <img src={shop.logoUrl} alt="" className="w-full h-full object-cover" />
+        ) : (
+          <Store size={22} className="text-[#003366] dark:text-blue-400" />
+        )}
       </div>
-    </Link>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-bold text-gray-900 dark:text-slate-100 truncate">{shop.name}</p>
+        <p className="text-xs text-gray-400 dark:text-slate-500 truncate">{shop.category}</p>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        {pendingCount > 0 && (
+          <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full leading-none">
+            {pendingCount} pending
+          </span>
+        )}
+        <Link href={`/shop-dashboard/${shop.id}`}>
+          <button className="text-xs font-semibold border border-gray-200 dark:border-slate-600 text-gray-700 dark:text-slate-300 px-3 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition">
+            Manage Shop
+          </button>
+        </Link>
+        <Link href={`/shop/${shop.slug}`}>
+          <button className="text-xs font-semibold bg-[#003366] dark:bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-[#002244] dark:hover:bg-blue-700 transition">
+            View Public Page
+          </button>
+        </Link>
+      </div>
+    </div>
   );
 }
 
@@ -303,14 +325,15 @@ export default function CampusMarketPage() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto pb-32">
+    <div className="max-w-6xl mx-auto pb-32 px-4">
       {/* Hero */}
       <div className="pt-4">
         <HeroBanner ads={ads} />
       </div>
 
       {/* Category chips */}
-      <div className="flex gap-2 overflow-x-auto scrollbar-hide px-4 mb-5 pb-1 pt-1">
+      <div className="flex items-center gap-2 mb-5">
+        <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 pt-1 flex-1">
         {["All", ...SHOP_CATEGORIES].map((cat) => (
           <button
             key={cat}
@@ -329,11 +352,13 @@ export default function CampusMarketPage() {
             {cat}
           </button>
         ))}
+        </div>
+        <span className="text-xs text-gray-400 dark:text-slate-500 shrink-0 font-medium pr-1">Filters</span>
       </div>
 
       {/* My Shop section — visible only for owners/editors */}
       {user && myShops.length > 0 && (
-        <div className="px-4 mb-5">
+        <div className="mb-5">
           <div className="flex items-center justify-between mb-2">
             <h2 className="section-header">⚙️ My Shop</h2>
           </div>
@@ -347,35 +372,37 @@ export default function CampusMarketPage() {
 
       {/* Featured Shops */}
       <div className="mb-6">
-        <div className="flex items-center justify-between px-4 mb-3">
+        <div className="flex items-center justify-between mb-3">
           <h2 className="section-header">🏪 Featured Shops</h2>
           <Link href="/campus-market" className="text-xs text-[#003366] dark:text-blue-400 font-semibold flex items-center gap-0.5">
             See all <ChevronRight size={12} />
           </Link>
         </div>
         {loadingShops ? (
-          <div className="flex gap-4 overflow-x-auto scrollbar-hide px-4">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="flex flex-col items-center w-[100px] shrink-0 animate-pulse">
-                <div className="w-16 h-16 rounded-2xl bg-gray-100 dark:bg-slate-700 mb-2" />
-                <div className="h-2.5 bg-gray-100 dark:bg-slate-700 rounded w-16 mb-1" />
-                <div className="h-2 bg-gray-100 dark:bg-slate-700 rounded w-12" />
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden animate-pulse">
+                <div className="h-28 bg-gray-100 dark:bg-slate-700" />
+                <div className="p-3 space-y-2">
+                  <div className="h-3 bg-gray-100 dark:bg-slate-700 rounded w-3/4" />
+                  <div className="h-2 bg-gray-100 dark:bg-slate-700 rounded w-1/2" />
+                </div>
               </div>
             ))}
           </div>
         ) : shops.length === 0 ? (
-          <div className="px-4 py-4 text-center text-xs text-gray-400 dark:text-slate-500">
+          <div className="py-4 text-center text-xs text-gray-400 dark:text-slate-500">
             No shops yet — be the first to open one!
           </div>
         ) : (
-          <div className="flex gap-4 overflow-x-auto scrollbar-hide px-4">
-            {shops.map((s) => <ShopCard key={s.id} shop={s} />)}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {shops.slice(0, 8).map((s) => <ShopCard key={s.id} shop={s} />)}
           </div>
         )}
       </div>
 
       {/* Listings grid */}
-      <div ref={listingsRef} className="px-4">
+      <div ref={listingsRef}>
         <div className="flex items-center justify-between mb-3">
           <h2 className="section-header">
             🛍️ {selectedCategory === "All" ? "All Listings" : selectedCategory}
@@ -402,7 +429,7 @@ export default function CampusMarketPage() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
               {visibleListings.map((l) => <ListingCard key={l.id} listing={l} />)}
             </div>
             {hasMore && (
