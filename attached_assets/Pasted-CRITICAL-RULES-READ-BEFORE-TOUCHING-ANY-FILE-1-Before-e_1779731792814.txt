@@ -1,0 +1,61 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only.
+3. Do NOT remove any existing function, prop, import, or JSX element unless explicitly told to.
+4. After every change, mentally verify: "Does this break anything that was working before?"
+5. Confirm the app builds with zero errors: pnpm --filter xmum-market run build
+
+PROBLEM: When an admin deletes a flagged listing from the AI Flagged panel, the listing is NOT deleted from Firestore. This is because writeAiFlag() is called BEFORE the listing document is created, so flag.listingId is always undefined. The deleteContent() function in AiFlaggedPage.tsx checks `if (flag.listingId)` before deleting — since it's undefined, it skips the deletion entirely.
+
+FILE TO EDIT: artifacts/xmum-market/src/pages/PostPage.tsx
+
+Find the FLAGGED block that looks like this (around line 650):
+
+    if (aiResult.result === "FLAGGED") {
+      void writeAiFlag({
+        context: "listing",
+        reason: aiResult.reason,
+        content: `Title: ${title}\nDescription: ${description}`,
+        listingTitle: title,
+        userId: user?.uid ?? "",
+        userEmail: user?.email ?? "",
+        createdAt: Date.now(),
+        status: "pending",
+      });
+    }
+
+Do NOT change this block. Instead, find where the listing document is created with addDoc (it will be something like `const docRef = await addDoc(collection(db, "listings"), baseData)`). 
+
+After that addDoc line, add a second writeAiFlag call that includes the listingId. The result should look like:
+
+    const docRef = await addDoc(collection(db, "listings"), baseData);
+
+    // If this post was AI-flagged, update the flag with the real listingId now that we have it
+    if (aiResult.result === "FLAGGED") {
+      void writeAiFlag({
+        context: "listing",
+        reason: aiResult.reason,
+        content: `Title: ${title}\nDescription: ${description}`,
+        listingId: docRef.id,
+        listingTitle: title,
+        userId: user?.uid ?? "",
+        userEmail: user?.email ?? "",
+        createdAt: Date.now(),
+        status: "pending",
+      });
+    }
+
+Then DELETE the original writeAiFlag block that was before the addDoc (the one without listingId), since we are now writing it after with the correct listingId.
+
+Also confirm that artifacts/xmum-market/src/lib/aiFlag.ts has listingId as an optional field in AiFlagData — it should already be there, do not change it if so.
+
+After the edit, confirm the build passes: pnpm --filter xmum-market run build
+
+Also remind me to redeploy Firestore rules after confirming the aiFlags rule currently reads:
+    match /aiFlags/{flagId} {
+      allow read: if isAdmin() || isEditorRole();
+      allow create: if isXmuEmail();
+      allow update: if isAdmin() || isEditorRole();
+      allow delete: if false;
+    }
+If it still says `allow read: if false` or `allow update: if false`, update those two lines as shown above and run: firebase deploy --only firestore:rules --project xmum--market

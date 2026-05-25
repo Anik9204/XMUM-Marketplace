@@ -647,19 +647,6 @@ export default function PostPage() {
       setLoading(false);
       return;
     }
-    if (aiResult.result === "FLAGGED") {
-      void writeAiFlag({
-        context: "listing",
-        reason: aiResult.reason,
-        content: `Title: ${title}\nDescription: ${description}`,
-        listingTitle: title,
-        userId: user?.uid ?? "",
-        userEmail: user?.email ?? "",
-        createdAt: Date.now(),
-        status: "pending",
-      });
-    }
-
     const hasContact = whatsapp.trim() || wechat.trim() || teams.trim();
     if (!hasContact) {
       setError(t.contactRequired);
@@ -714,6 +701,21 @@ export default function PostPage() {
       }
 
       const listingId = await withTimeout(createListing(baseData as Parameters<typeof createListing>[0]), 12_000, "create-listing");
+
+      // If AI-flagged, write the flag now that we have the real listingId
+      if (aiResult.result === "FLAGGED") {
+        void writeAiFlag({
+          context: "listing",
+          reason: aiResult.reason,
+          content: `Title: ${title}\nDescription: ${description}`,
+          listingId,
+          listingTitle: title,
+          userId: user?.uid ?? "",
+          userEmail: user?.email ?? "",
+          createdAt: Date.now(),
+          status: "pending",
+        });
+      }
 
       // Increment activeListingCount
       try {
