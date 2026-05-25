@@ -1,0 +1,169 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only.
+3. Do NOT remove any existing function, prop, import, or JSX element unless explicitly told to.
+4. After every change, mentally verify: "Does this break anything that was working before?"
+5. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless directly part of the fix.
+6. Confirm the app builds with zero errors: pnpm --filter xmum-market run build
+
+---
+
+There are 4 bugs to fix. Do them in order.
+
+---
+
+BUG 1 — EditListingPage: new photos added during edit bypass AI moderation
+File: artifacts/xmum-market/src/pages/EditListingPage.tsx
+
+Find this block (around line 390):
+```typescript
+const existingPhotoUrls = allPhotos
+  .filter((item) => item.kind === "existing")
+  .map((item) => item.src);
+const aiResult = await moderateContent(
+  `Title: ${title}\nDescription: ${description}`,
+  "listing",
+  existingPhotoUrls
+);
+```
+
+Replace with:
+```typescript
+// Upload new photos first so their URLs can be passed to AI moderation
+const newPhotoUrls: string[] = [];
+for (const item of allPhotos) {
+  if (item.kind === "new") {
+    try {
+      const url = await withTimeout(uploadPhoto(item.file, user!.uid), 30_000, "photo-upload");
+      newPhotoUrls.push(url);
+    } catch (photoErr: any) {
+      setError(photoErr?.message ?? "Photo upload failed.");
+      setLoading(false);
+      return;
+    }
+  }
+}
+const existingPhotoUrls = allPhotos
+  .filter((item) => item.kind === "existing")
+  .map((item) => item.src);
+const allPhotoUrlsForModeration = [...existingPhotoUrls, ...newPhotoUrls];
+const aiResult = await moderateContent(
+  `Title: ${title}\nDescription: ${description}`,
+  "listing",
+  allPhotoUrlsForModeration
+);
+```
+
+Then find the section AFTER the aiResult checks where new photos are uploaded again in the try block:
+```typescript
+for (const item of allPhotos) {
+  if (item.kind === "existing") {
+    finalUrls.push(item.src);
+  } else {
+    try {
+      const url = await withTimeout(uploadPhoto(item.file, user!.uid), 30_000, "photo-upload");
+      finalUrls.push(url);
+    } catch (photoErr: any) {
+      console.warn("[EditListingPage] Photo skipped:", photoErr?.message);
+    }
+  }
+}
+```
+
+Replace it with:
+```typescript
+for (const item of allPhotos) {
+  if (item.kind === "existing") {
+    finalUrls.push(item.src);
+  } else {
+    // Already uploaded above for moderation — reuse the URL
+    const alreadyUploaded = newPhotoUrls.shift();
+    if (alreadyUploaded) finalUrls.push(alreadyUploaded);
+  }
+}
+```
+
+Also: if aiResult.result === "BLOCKED", delete the newPhotoUrls before returning, the same way PostPage.tsx does it. Add this cleanup right before the existing BLOCKED error display:
+```typescript
+for (const url of newPhotoUrls) {
+  try {
+    const path = decodeURIComponent(url.split("/o/")[1].split("?")[0]);
+    deleteObject(storageRef(storage, path)).catch(() => {});
+  } catch { }
+}
+```
+
+Make sure deleteObject and storageRef are already imported in EditListingPage.tsx — check the imports at the top. If not, add them from "firebase/storage" the same way PostPage.tsx imports them.
+
+---
+
+BUG 2 — Firestore rules: editor role cannot post to shop listings
+File: artifacts/xmum-market/firestore.rules
+
+Find this line:
+allow create: if isXmuEmail() && isShopMember(request.resource.data.shopId);
+
+Replace with:
+allow create: if (isXmuEmail() && isShopMember(request.resource.data.shopId)) || isEditorRole();
+
+Do not change any other rule.
+
+After this change, deploy the rules via:
+firebase deploy --only firestore:rules --project xmum--market
+
+---
+
+BUG 3 & 4 — System prompt: human trafficking not caught, firearms photo not blocked
+File: artifacts/functions/src/index.ts
+
+Find the WEAPONS section inside SYSTEM_PROMPT:
+WEAPONS:
+
+Any listing or image showing firearms, ammunition, or explosive devices for sale
+Bladed weapons (parangs, machetes, tactical knives) for sale — NOT kitchen knives or tools
+Person holding or displaying a weapon in a threatening or sales context
+
+
+Replace with:
+WEAPONS:
+
+Any listing or image showing firearms, ammunition, or explosive devices — BLOCK regardless of what the title says. A photo of guns is prohibited content even if the title says "Buns" or "Electronics".
+Bladed weapons (parangs, machetes, tactical knives) for sale — NOT kitchen knives or tools
+Person holding or displaying a weapon in a threatening or sales context
+Multiple firearms displayed together in any photo — always BLOCK
+
+
+Then find the HATE & THREATS section:
+HATE & THREATS:
+
+Racial slurs or hate speech targeting any ethnicity or religion
+Direct threats or harassment targeting a specific person
+
+
+Replace with:
+HATE & THREATS:
+
+Racial slurs or hate speech targeting any ethnicity or religion
+Direct threats or harassment targeting a specific person
+
+HUMAN EXPLOITATION:
+
+Any listing that implies selling, renting, or trading a human being — even phrased casually or as a joke (e.g. "selling my friend", "friend for sale", "for sell" with a person's photo as the listing image)
+Listings that appear to offer companionship, relationships, or personal time for money
+Any content that resembles human trafficking, even indirectly
+If the primary photo is a person's face/selfie AND the title/description implies a transaction involving that person (e.g. "for sell", "cheap", "take it"), always BLOCK
+
+
+After editing the SYSTEM_PROMPT, build and deploy only the function:
+cd artifacts/functions && npx tsc --noEmit
+firebase deploy --only functions:moderateContent --project xmum--market
+
+---
+
+Build check after all changes:
+pnpm --filter xmum-market run build
+
+Report back with confirmation that:
+1. Build passes with zero errors
+2. Firestore rules deployed successfully
+3. moderateContent function deployed successfully

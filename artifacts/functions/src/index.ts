@@ -359,9 +359,10 @@ PART 1 — PROHIBITED CONTENT
 RETURN "BLOCKED" ONLY for listings that clearly violate university policy or Malaysian law:
 
 WEAPONS:
-- Any listing or image showing firearms, ammunition, or explosive devices for sale
+- Any listing or image showing firearms, ammunition, or explosive devices — BLOCK regardless of what the title says. A photo of guns is prohibited content even if the title says "Buns" or "Electronics".
 - Bladed weapons (parangs, machetes, tactical knives) for sale — NOT kitchen knives or tools
 - Person holding or displaying a weapon in a threatening or sales context
+- Multiple firearms displayed together in any photo — always BLOCK
 
 DRUGS & CONTROLLED SUBSTANCES:
 - Explicit sale of illegal drugs (weed, cocaine, meth, unprescribed pills, etc.)
@@ -388,6 +389,12 @@ MLM & PYRAMID SCHEMES:
 HATE & THREATS:
 - Racial slurs or hate speech targeting any ethnicity or religion
 - Direct threats or harassment targeting a specific person
+
+HUMAN EXPLOITATION:
+- Any listing that implies selling, renting, or trading a human being — even phrased casually or as a joke (e.g. "selling my friend", "friend for sale", "for sell" with a person's photo as the listing image)
+- Listings that appear to offer companionship, relationships, or personal time for money
+- Any content that resembles human trafficking, even indirectly
+- If the primary photo is a person's face/selfie AND the title/description implies a transaction involving that person (e.g. "for sell", "cheap", "take it"), always BLOCK
 
 ---
 

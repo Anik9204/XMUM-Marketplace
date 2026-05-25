@@ -121,7 +121,7 @@ service cloud.firestore {
     // ── Shop Listings ──────────────────────────────────────────────────────────
     match /shopListings/{listingId} {
       allow read: if true;
-      allow create: if isXmuEmail() && isShopMember(request.resource.data.shopId);
+      allow create: if (isXmuEmail() && isShopMember(request.resource.data.shopId)) || isEditorRole();
       allow update: if isXmuEmail() && (
         isShopMember(resource.data.shopId)
         || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['inquiryCount'])

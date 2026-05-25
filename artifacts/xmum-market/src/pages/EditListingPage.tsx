@@ -7,7 +7,8 @@ import ReportHoldModal from "@/components/ReportHoldModal";
 import { checkContent } from "@/lib/contentFilter";
 import { moderateContent } from "@/lib/aiModerate";
 import { writeAiFlag } from "@/lib/aiFlag";
-import { auth } from "@/lib/firebase";
+import { auth, storage } from "@/lib/firebase";
+import { ref as storageRef, deleteObject } from "firebase/storage";
 import { ListingType, Condition } from "@/lib/types";
 import { validateWhatsApp, suggestMalaysianFormat } from "@/lib/validation";
 import { Sentry } from "@/lib/sentry";
@@ -386,16 +387,36 @@ export default function EditListingPage() {
       return;
     }
 
-    // AI moderation — pass existing Firebase Storage URLs; new files aren't uploaded yet
+    // Upload new photos first so their URLs can be passed to AI moderation
+    const newPhotoUrls: string[] = [];
+    for (const item of allPhotos) {
+      if (item.kind === "new") {
+        try {
+          const url = await withTimeout(uploadPhoto(item.file, user!.uid), 30_000, "photo-upload");
+          newPhotoUrls.push(url);
+        } catch (photoErr: any) {
+          setError(photoErr?.message ?? "Photo upload failed.");
+          setLoading(false);
+          return;
+        }
+      }
+    }
     const existingPhotoUrls = allPhotos
       .filter((item) => item.kind === "existing")
       .map((item) => item.src);
+    const allPhotoUrlsForModeration = [...existingPhotoUrls, ...newPhotoUrls];
     const aiResult = await moderateContent(
       `Title: ${title}\nDescription: ${description}`,
       "listing",
-      existingPhotoUrls
+      allPhotoUrlsForModeration
     );
     if (aiResult.result === "BLOCKED") {
+      for (const url of newPhotoUrls) {
+        try {
+          const path = decodeURIComponent(url.split("/o/")[1].split("?")[0]);
+          deleteObject(storageRef(storage, path)).catch(() => {});
+        } catch { }
+      }
       setError(aiResult.suggestion ? `${aiResult.reason} ${aiResult.suggestion}` : (aiResult.reason || "Content flagged. Please review and try again."));
       setLoading(false);
       return;
@@ -417,18 +438,15 @@ export default function EditListingPage() {
     try {
       await withTimeout(auth.currentUser?.reload() ?? Promise.resolve(), 5_000, "token-refresh");
 
-      // Upload new photos, keep existing URLs
+      // Build final URL list — existing photos kept as-is, new photos already uploaded above for moderation
       const finalUrls: string[] = [];
       for (const item of allPhotos) {
         if (item.kind === "existing") {
           finalUrls.push(item.src);
         } else {
-          try {
-            const url = await withTimeout(uploadPhoto(item.file, user!.uid), 30_000, "photo-upload");
-            finalUrls.push(url);
-          } catch (photoErr: any) {
-            console.warn("[EditListingPage] Photo skipped:", photoErr?.message);
-          }
+          // Already uploaded above for moderation — reuse the URL
+          const alreadyUploaded = newPhotoUrls.shift();
+          if (alreadyUploaded) finalUrls.push(alreadyUploaded);
         }
       }
 
