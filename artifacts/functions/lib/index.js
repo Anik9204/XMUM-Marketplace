@@ -260,6 +260,14 @@ exports.moderateContent = (0, https_1.onCall)({
     secrets: ["GEMINI_API_KEY"],
     timeoutSeconds: 30,
     invoker: "public",
+    cors: [
+        "https://www.xmummarket.com",
+        "https://xmummarket.com",
+        "https://admin.xmummarket.com",
+        /https:\/\/xmum-marketplace.*\.vercel\.app$/,
+        "http://localhost:5000",
+        "http://localhost:5001",
+    ],
 }, async (request) => {
     var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
     const { text, context, photoUrls = [] } = request.data;
