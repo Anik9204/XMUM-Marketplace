@@ -276,9 +276,9 @@ service cloud.firestore {
 
     // ── AI Flags ──────────────────────────────────────────────────────────────
     match /aiFlags/{flagId} {
-      allow read: if false; // Only admin app reads via service — never expose to users
+      allow read: if isAdmin() || isEditorRole();
       allow create: if isXmuEmail(); // Market app writes flags
-      allow update: if false;
+      allow update: if isAdmin() || isEditorRole();
       allow delete: if false;
     }
 
