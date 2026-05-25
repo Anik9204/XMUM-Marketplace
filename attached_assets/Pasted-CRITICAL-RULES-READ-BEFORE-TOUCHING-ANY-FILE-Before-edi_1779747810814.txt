@@ -1,0 +1,56 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+
+Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+
+TASK: Redesign ProfilePage layout for desktop — based on Stitch design
+File: artifacts/xmum-market/src/pages/ProfilePage.tsx
+Do NOT touch any logic, state, handlers, Firebase calls, or modals. Only change the outer JSX layout structure and Tailwind classes as described below. Every existing variable, function, and component stays exactly as-is.
+The change: Convert the current single-column max-w-2xl layout into a two-column desktop layout (lg:grid-cols-12) with a sticky left sidebar and a main content area on the right. On mobile everything stays single column exactly as before.
+Step 1 — Replace the outer wrapper:
+Find:
+jsx<div className="max-w-2xl mx-auto pb-28 sm:pb-8 animate-in fade-in duration-200">
+Replace with:
+jsx<div className="max-w-6xl mx-auto px-4 pb-28 sm:pb-8 animate-in fade-in duration-200">
+  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+And close this new inner grid div just before the existing modals section (before {deleteTarget && ().
+Step 2 — Wrap the profile header + My Shops in a sticky left sidebar:
+Wrap the entire profile header block (the <div className="relative mb-4"> block) AND the My Shops section (the <div className="mt-8"> block) together in:
+jsx<aside className="lg:col-span-4 lg:sticky lg:top-20 space-y-4">
+  {/* profile header block goes here */}
+  {/* my shops block goes here — remove the mt-8 from it */}
+</aside>
+Step 3 — Wrap the listings section in the main content column:
+Wrap the main tabs block, sub-tabs, expiry banner, and listings grid (everything in the current <div className="px-4"> that is NOT My Shops) in:
+jsx<section className="lg:col-span-8 space-y-4">
+  {/* tabs, sub-tabs, expiry banner, listings grid go here */}
+</section>
+Remove the outer <div className="px-4"> wrapper — padding is no longer needed since the parent has px-4.
+Step 4 — Profile header card: on desktop make it look like a proper sidebar card
+On the white card inside the profile header (bg-white dark:bg-slate-800 mx-0 rounded-none sm:rounded-2xl sm:mx-4), update the responsive classes to also apply the card style on lg:
+bg-white dark:bg-slate-800 mx-0 rounded-none sm:rounded-2xl sm:mx-0 lg:rounded-2xl border-x-0 sm:border border-gray-100 dark:border-slate-700 px-4 pb-4 shadow-sm
+Step 5 — Stats grid: change from 4-column to 2x2 on desktop sidebar
+Find the stats grid:
+jsx<div className="grid grid-cols-4 gap-2 mt-4 pt-3 border-t border-gray-100 dark:border-slate-700">
+Change to:
+jsx<div className="grid grid-cols-4 lg:grid-cols-2 gap-2 mt-4 pt-3 border-t border-gray-100 dark:border-slate-700">
+This makes the 4 stats show as a 2×2 bento grid on desktop sidebar (matching the Stitch design) while staying as a 4-column row on mobile.
+Do NOT touch:
+
+OwnerListingRow component
+SuccessToast component
+All state variables and hooks
+All handler functions (handleDelete, handleMarkAsSold)
+The delete confirm modal
+ReportHoldModal
+The unauthenticated state (if (!user))
+The expiry reminder logic
+The saved listings logic
+Any Firebase or navigation logic
+
+After changes, confirm zero build errors: pnpm --filter xmum-market run build

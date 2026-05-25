@@ -429,15 +429,17 @@ export default function ProfilePage() {
     <>
       {successToast && <SuccessToast message={successToast} onDone={() => setSuccessToast("")} />}
 
-      <div className="max-w-2xl mx-auto pb-28 sm:pb-8 animate-in fade-in duration-200">
+      <div className="max-w-6xl mx-auto px-4 pb-28 sm:pb-8 animate-in fade-in duration-200">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 
+        <aside className="lg:col-span-4 lg:sticky lg:top-20 space-y-4">
         {/* ── PROFILE HEADER ─────────────────────────────────────── */}
         <div className="relative mb-4">
           {/* Gradient banner */}
           <div className="h-28 bg-gradient-to-br from-[#003366] via-[#004a99] to-[#0066cc] rounded-b-none" />
 
           {/* White card */}
-          <div className="bg-white dark:bg-slate-800 mx-0 rounded-none sm:rounded-2xl sm:mx-4 border-x-0 sm:border border-gray-100 dark:border-slate-700 px-4 pb-4 shadow-sm">
+          <div className="bg-white dark:bg-slate-800 mx-0 rounded-none sm:rounded-2xl sm:mx-0 lg:rounded-2xl border-x-0 sm:border border-gray-100 dark:border-slate-700 px-4 pb-4 shadow-sm">
             {/* Avatar + sign out row */}
             <div className="flex items-start justify-between -mt-10 mb-2">
               <div className="relative">
@@ -485,7 +487,7 @@ export default function ProfilePage() {
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-4 gap-2 mt-4 pt-3 border-t border-gray-100 dark:border-slate-700">
+            <div className="grid grid-cols-4 lg:grid-cols-2 gap-2 mt-4 pt-3 border-t border-gray-100 dark:border-slate-700">
               {[
                 { icon: <Package size={14} className="text-[#003366] dark:text-blue-400" />, value: activeCount, label: "Active" },
                 { icon: <BadgeCheck size={14} className="text-green-500" />, value: soldCount, label: "Sold" },
@@ -507,8 +509,63 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* ── MAIN TABS ──────────────────────────────────────────── */}
-        <div className="px-4">
+        {/* ── MY SHOPS ─────────────────────────────────────────── */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="section-header">🏪 {t.myShops}</h2>
+            <Link href="/campus-market" className="text-xs text-[#003366] dark:text-blue-400 font-semibold flex items-center gap-0.5">
+              Browse <ChevronRight size={12} />
+            </Link>
+          </div>
+          {shopsLoading ? (
+            <div className="space-y-2">
+              {[1, 2].map(i => <div key={i} className="h-16 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 animate-pulse" />)}
+            </div>
+          ) : myShops.length === 0 ? (
+            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-dashed border-gray-200 dark:border-slate-700 p-5 text-center">
+              <Store size={28} className="mx-auto text-gray-200 dark:text-slate-600 mb-2" />
+              <p className="text-xs text-gray-500 dark:text-slate-400 mb-3">You don't have a shop yet.</p>
+              <Link href="/create-shop">
+                <button className="flex items-center gap-1.5 mx-auto bg-[#003366] dark:bg-blue-600 text-white text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-[#002244] transition">
+                  <Plus size={12} /> {t.openYourShop}
+                </button>
+              </Link>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {myShops.map((shop) => (
+                <div key={shop.id} className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-3 flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-xl bg-gray-100 dark:bg-slate-700 overflow-hidden flex items-center justify-center shrink-0">
+                    {shop.logoUrl ? <img src={shop.logoUrl} alt="" className="w-full h-full object-cover" /> : <Store size={18} className="text-[#003366] dark:text-blue-400" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-gray-900 dark:text-slate-100 truncate">{shop.name}</p>
+                    <div className="flex items-center gap-2 text-[10px] text-gray-400 dark:text-slate-500">
+                      <span>{shop.totalListings} listing{shop.totalListings !== 1 ? "s" : ""}</span>
+                    </div>
+                  </div>
+                  <div className="flex gap-1.5 shrink-0">
+                    <Link href={`/shop-dashboard/${shop.id}`}>
+                      <button className="text-[11px] font-semibold bg-[#003366] dark:bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-[#002244] transition">Manage</button>
+                    </Link>
+                    <Link href={`/shop/${shop.slug}`}>
+                      <button className="text-[11px] font-semibold border border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300 px-3 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition">View</button>
+                    </Link>
+                  </div>
+                </div>
+              ))}
+              <Link href="/create-shop">
+                <button className="w-full flex items-center justify-center gap-1.5 border border-dashed border-gray-200 dark:border-slate-700 text-gray-400 dark:text-slate-500 text-xs font-semibold py-3 rounded-2xl hover:border-[#003366] hover:text-[#003366] dark:hover:border-blue-500 dark:hover:text-blue-400 transition">
+                  <Plus size={12} /> {t.createShop}
+                </button>
+              </Link>
+            </div>
+          )}
+        </div>
+
+        </aside>
+
+        <section className="lg:col-span-8 space-y-4">
           <div className="flex gap-2 mb-4 overflow-x-auto scrollbar-hide">
             <button className={`chip chip-active`}>
               {t.myListings}
@@ -654,61 +711,8 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {/* ── MY SHOPS ─────────────────────────────────────────── */}
-          <div className="mt-8">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="section-header">🏪 {t.myShops}</h2>
-              <Link href="/campus-market" className="text-xs text-[#003366] dark:text-blue-400 font-semibold flex items-center gap-0.5">
-                Browse <ChevronRight size={12} />
-              </Link>
-            </div>
-            {shopsLoading ? (
-              <div className="space-y-2">
-                {[1, 2].map(i => <div key={i} className="h-16 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 animate-pulse" />)}
-              </div>
-            ) : myShops.length === 0 ? (
-              <div className="bg-white dark:bg-slate-800 rounded-2xl border border-dashed border-gray-200 dark:border-slate-700 p-5 text-center">
-                <Store size={28} className="mx-auto text-gray-200 dark:text-slate-600 mb-2" />
-                <p className="text-xs text-gray-500 dark:text-slate-400 mb-3">You don't have a shop yet.</p>
-                <Link href="/create-shop">
-                  <button className="flex items-center gap-1.5 mx-auto bg-[#003366] dark:bg-blue-600 text-white text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-[#002244] transition">
-                    <Plus size={12} /> {t.openYourShop}
-                  </button>
-                </Link>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {myShops.map((shop) => (
-                  <div key={shop.id} className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-3 flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-xl bg-gray-100 dark:bg-slate-700 overflow-hidden flex items-center justify-center shrink-0">
-                      {shop.logoUrl ? <img src={shop.logoUrl} alt="" className="w-full h-full object-cover" /> : <Store size={18} className="text-[#003366] dark:text-blue-400" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-gray-900 dark:text-slate-100 truncate">{shop.name}</p>
-                      <div className="flex items-center gap-2 text-[10px] text-gray-400 dark:text-slate-500">
-                        <span>{shop.totalListings} listing{shop.totalListings !== 1 ? "s" : ""}</span>
-                      </div>
-                    </div>
-                    <div className="flex gap-1.5 shrink-0">
-                      <Link href={`/shop-dashboard/${shop.id}`}>
-                        <button className="text-[11px] font-semibold bg-[#003366] dark:bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-[#002244] transition">Manage</button>
-                      </Link>
-                      <Link href={`/shop/${shop.slug}`}>
-                        <button className="text-[11px] font-semibold border border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300 px-3 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition">View</button>
-                      </Link>
-                    </div>
-                  </div>
-                ))}
-                <Link href="/create-shop">
-                  <button className="w-full flex items-center justify-center gap-1.5 border border-dashed border-gray-200 dark:border-slate-700 text-gray-400 dark:text-slate-500 text-xs font-semibold py-3 rounded-2xl hover:border-[#003366] hover:text-[#003366] dark:hover:border-blue-500 dark:hover:text-blue-400 transition">
-                    <Plus size={12} /> {t.createShop}
-                  </button>
-                </Link>
-              </div>
-            )}
-          </div>
-
-        </div>{/* /px-4 */}
+        </section>
+        </div>{/* end grid */}
       </div>
 
       {/* Modals */}
