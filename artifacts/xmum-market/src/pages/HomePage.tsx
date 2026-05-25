@@ -389,7 +389,7 @@ export default function HomePage() {
     : listings.filter((l) => l.category === categoryFilter);
 
   const SkeletonGrid = () => (
-    <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
       {[...Array(6)].map((_, i) => (
         <div key={i} className="bg-white dark:bg-[#1E293B] rounded-xl border border-[#E2E8F0] dark:border-slate-700 overflow-hidden animate-pulse">
           <div className="aspect-[4/3] bg-[#F8FAFC] dark:bg-slate-700" />
@@ -425,7 +425,7 @@ export default function HomePage() {
           .shop-picks-wrapper { min-height: unset; }
         }
       `}</style>
-      <div key={activeTab} className="relative overflow-hidden bg-gradient-to-br from-[#003366] via-[#004488] to-[#0055CC] text-white px-4 pt-8 pb-10">
+      <div key={activeTab} className="relative overflow-hidden bg-gradient-to-br from-[#003366] via-[#004488] to-[#0055CC] text-white px-4 pt-10 pb-12 lg:pt-14 lg:pb-16">
         <div
           className="pointer-events-none absolute inset-0 opacity-20"
           style={{
@@ -434,25 +434,49 @@ export default function HomePage() {
             animation: "heroShimmer 3.5s ease-in-out infinite",
           }}
         />
-        <div className="max-w-5xl mx-auto">
-          {user && userProfile && (
-            <p
-              className="hero-fade-up text-sm text-white/70 mb-1"
-              style={{ animationDuration: "400ms", animationDelay: "0ms", animationFillMode: "both" }}
+        <div className="max-w-6xl mx-auto flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8">
+          <div className="flex-1">
+            {user && userProfile && (
+              <p
+                className="hero-fade-up text-sm text-white/70 mb-1"
+                style={{ animationDuration: "400ms", animationDelay: "0ms", animationFillMode: "both" }}
+              >
+                Good day, {getLastName(userProfile.fullName || userProfile.displayName)} 👋
+              </p>
+            )}
+            <h1
+              className="hero-fade-up text-xl sm:text-2xl lg:text-3xl font-bold mt-1 leading-tight"
+              style={{ animationDuration: "500ms", animationDelay: "80ms", animationFillMode: "both" }}
             >
-              Good day, {getLastName(userProfile.fullName || userProfile.displayName)} 👋
-            </p>
-          )}
-          <h1
-            className="hero-fade-up text-xl sm:text-2xl lg:text-3xl font-bold mt-1 leading-tight"
-            style={{ animationDuration: "500ms", animationDelay: "80ms", animationFillMode: "both" }}
-          >
-            {t.hero1}<br />{t.hero2}
-          </h1>
-          <p
-            className="hero-fade-up text-white/70 text-sm mt-2 max-w-sm"
-            style={{ animationDuration: "500ms", animationDelay: "180ms", animationFillMode: "both" }}
-          >{t.heroSub}</p>
+              {t.hero1}<br />{t.hero2}
+            </h1>
+            <p
+              className="hero-fade-up text-white/70 text-sm mt-2 max-w-sm"
+              style={{ animationDuration: "500ms", animationDelay: "180ms", animationFillMode: "both" }}
+            >{t.heroSub}</p>
+            <div
+              className="hero-fade-up flex flex-wrap gap-3 mt-5"
+              style={{ animationDuration: "400ms", animationDelay: "280ms", animationFillMode: "both" }}
+            >
+              <Link href="/post">
+                <button className="bg-white text-[#003366] text-sm font-bold px-5 py-2.5 rounded-xl hover:bg-gray-100 transition-all active:scale-95 shadow-sm">
+                  + Post a Listing
+                </button>
+              </Link>
+              <Link href="/campus-market">
+                <button className="bg-white/10 border border-white/20 text-white text-sm font-semibold px-5 py-2.5 rounded-xl hover:bg-white/20 transition-all active:scale-95">
+                  Browse Shops →
+                </button>
+              </Link>
+            </div>
+          </div>
+          <div className="hidden lg:flex lg:shrink-0 lg:w-72 lg:h-44 items-center justify-center rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm">
+            <div className="text-center">
+              <div className="text-5xl mb-2">🛍️</div>
+              <p className="text-white/60 text-sm font-medium">Campus Marketplace</p>
+              <p className="text-white/40 text-xs mt-0.5">XMUM Students Only</p>
+            </div>
+          </div>
         </div>
       </div>
       {/* ── Sticky group: search + tabs + chips ── */}
@@ -488,7 +512,7 @@ export default function HomePage() {
 
         {/* Tab bar */}
         <div className="border-b border-[#E2E8F0] dark:border-slate-700">
-          <div className="max-w-5xl mx-auto flex items-center gap-2 px-4 overflow-x-auto scrollbar-hide pb-2 pt-2">
+          <div className="max-w-6xl mx-auto flex items-center gap-2 px-4 overflow-x-auto scrollbar-hide pb-2 pt-2">
             {ALL_TABS.map((tab) => {
               const count = tabCounts[tab];
               const isActive = activeTab === tab;
@@ -522,7 +546,7 @@ export default function HomePage() {
             )}
             <div
               ref={chipRowRef}
-              className="max-w-5xl mx-auto flex gap-2 overflow-x-auto scrollbar-hide px-4 pt-1 pb-2"
+              className="max-w-6xl mx-auto flex gap-2 overflow-x-auto scrollbar-hide px-4 pt-1 pb-2"
             >
               {["all", ...getCategoriesForTab(activeTab)].map((cat) => (
                 <button
@@ -549,14 +573,14 @@ export default function HomePage() {
       </div>
       {/* ── End sticky group ── */}
       {/* "Near You" location context — mobile only */}
-      <div className="md:hidden max-w-5xl mx-auto px-4 pt-3 pb-0">
+      <div className="md:hidden max-w-6xl mx-auto px-4 pt-3 pb-0">
         <p className="text-xs text-gray-400 dark:text-slate-500 italic">
           📍 XMUM Campus, Sepang
         </p>
       </div>
       {/* Signup nudge — unauthenticated users only */}
       {!user && (
-        <div className="max-w-5xl mx-auto px-4 mt-3">
+        <div className="max-w-6xl mx-auto px-4 mt-3">
           <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-xl px-4 py-3 flex items-center justify-between">
             <span className="text-sm text-blue-700 dark:text-blue-300">
               🎓 Exclusive to XMUM students
@@ -571,14 +595,14 @@ export default function HomePage() {
         </div>
       )}
       {ads.length > 0 && (
-        <div className="max-w-5xl mx-auto px-4 mt-4">
+        <div className="max-w-6xl mx-auto px-4 mt-4">
           <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1">Sponsored</p>
           <SponsoredAdCard ad={ads[0]} />
         </div>
       )}
       {/* ── Campus Market Discovery ─────────────────────────────────────────── */}
       {(loadingShops || featuredShops.length > 0 || recentShopListings.length > 0) && (
-        <div className="max-w-5xl mx-auto px-4 mt-5">
+        <div className="max-w-6xl mx-auto px-4 mt-5">
 
           {/* Section header */}
           <div className="flex items-center justify-between mb-3">
@@ -593,16 +617,16 @@ export default function HomePage() {
 
           {/* Horizontally scrollable shop pills */}
           {loadingShops ? (
-            <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
-              {[...Array(6)].map((_, i) => (
-                <div key={i} className="flex flex-col items-center w-[80px] shrink-0 animate-pulse">
+            <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-3">
+              {[...Array(8)].map((_, i) => (
+                <div key={i} className="flex flex-col items-center animate-pulse">
                   <div className="w-14 h-14 rounded-2xl bg-gray-200 dark:bg-slate-700 mb-1.5" />
                   <div className="h-2.5 bg-gray-200 dark:bg-slate-700 rounded w-14" />
                 </div>
               ))}
             </div>
           ) : featuredShops.length > 0 ? (
-            <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
+            <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-3">
               {featuredShops.map((shop) => (
                 <ShopPillCard key={shop.id} shop={shop} />
               ))}
@@ -644,7 +668,7 @@ export default function HomePage() {
                 >
                   <div
                     key={shopListingPage}
-                    className="grid grid-cols-3 sm:grid-cols-6 gap-2.5"
+                    className="grid grid-cols-3 sm:grid-cols-6 lg:grid-cols-6 gap-2.5"
                     style={{ animation: "shopSlideIn 0.35s cubic-bezier(0.25,0.46,0.45,0.94) both" }}
                   >
                     {pageListings.map((listing) => (
@@ -678,11 +702,17 @@ export default function HomePage() {
       )}
       {/* ── End Campus Market Discovery ─────────────────────────────────────── */}
       {/* Listings grid */}
-      <div ref={listingsRef} className="max-w-5xl mx-auto px-4 pt-4 pb-5">
-        <div className="flex items-center gap-2 mb-4">
-          <div className="h-px flex-1 bg-[#E2E8F0] dark:bg-slate-700" />
-          <span className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-slate-500 whitespace-nowrap">👥 Student Listings</span>
-          <div className="h-px flex-1 bg-[#E2E8F0] dark:bg-slate-700" />
+      <div ref={listingsRef} className="max-w-6xl mx-auto px-4 pt-4 pb-5">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-base font-bold text-gray-900 dark:text-slate-100">👥 Student Listings</h2>
+            <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">Fresh posts from XMUM students</p>
+          </div>
+          <Link href="/post">
+            <button className="text-xs font-semibold bg-[#003366] dark:bg-blue-600 text-white px-3 py-2 rounded-xl hover:bg-[#002244] dark:hover:bg-blue-700 transition-colors hidden sm:block">
+              + Post
+            </button>
+          </Link>
         </div>
         {newItemsBuffer.length > 0 && (
           <button
@@ -728,7 +758,7 @@ export default function HomePage() {
                 {categoryFilter !== "all" && ` in ${t.categories[categoryFilter as keyof typeof t.categories] ?? categoryFilter}`}
               </p>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
               {displayedListings.map((listing, i) => (
                 <Fragment key={listing.id}>
                   <ListingCard listing={listing} showSaveButton />
@@ -748,7 +778,7 @@ export default function HomePage() {
                   <button
                     onClick={handleLoadMore}
                     disabled={loadingMore}
-                    className="btn-ghost flex items-center gap-2 px-8 min-h-[44px] disabled:opacity-50"
+                    className="btn-ghost flex items-center gap-2 px-12 min-h-[44px] disabled:opacity-50 text-sm font-semibold"
                   >
                     {loadingMore ? (
                       <><Loader2 size={15} className="animate-spin" /> {t.loading}</>

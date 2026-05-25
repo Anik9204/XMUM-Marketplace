@@ -1,0 +1,165 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+
+Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+
+
+TASK: HomePage Desktop Layout Upgrade
+File: artifacts/xmum-market/src/pages/HomePage.tsx
+Do NOT touch any logic, state, hooks, Firebase calls, real-time listeners, carousel logic, or modals. Do NOT touch SkeletonGrid, ShopListingMiniCard, StarRowSmall, or any handler function. Only change the 7 specific things listed below, nothing else.
+
+CHANGE 1 — Hero: make it full-width with two-column layout on desktop
+Find the hero outer div (it starts with):
+jsx<div key={activeTab} className="relative overflow-hidden bg-gradient-to-br from-[#003366] via-[#004488] to-[#0055CC] text-white px-4 pt-8 pb-10">
+Change it to:
+jsx<div key={activeTab} className="relative overflow-hidden bg-gradient-to-br from-[#003366] via-[#004488] to-[#0055CC] text-white px-4 pt-10 pb-12 lg:pt-14 lg:pb-16">
+Then find the inner content wrapper:
+jsx<div className="max-w-5xl mx-auto">
+Change it to:
+jsx<div className="max-w-6xl mx-auto flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8">
+Wrap all the existing text content (the greeting <p>, the <h1>, the subtitle <p>) in:
+jsx<div className="flex-1">
+  {/* existing greeting, h1, subtitle stay exactly here */}
+</div>
+After closing that div, add this decorative right panel (desktop only, purely visual, no logic):
+jsx<div className="hidden lg:flex lg:shrink-0 lg:w-72 lg:h-44 items-center justify-center rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm">
+  <div className="text-center">
+    <div className="text-5xl mb-2">🛍️</div>
+    <p className="text-white/60 text-sm font-medium">Campus Marketplace</p>
+    <p className="text-white/40 text-xs mt-0.5">XMUM Students Only</p>
+  </div>
+</div>
+Also add two CTA buttons below the subtitle text, inside the <div className="flex-1">, after the subtitle <p> and before closing the flex-1 div:
+jsx<div
+  className="hero-fade-up flex flex-wrap gap-3 mt-5"
+  style={{ animationDuration: "400ms", animationDelay: "280ms", animationFillMode: "both" }}
+>
+  <Link href="/post">
+    <button className="bg-white text-[#003366] text-sm font-bold px-5 py-2.5 rounded-xl hover:bg-gray-100 transition-all active:scale-95 shadow-sm">
+      + Post a Listing
+    </button>
+  </Link>
+  <Link href="/campus-market">
+    <button className="bg-white/10 border border-white/20 text-white text-sm font-semibold px-5 py-2.5 rounded-xl hover:bg-white/20 transition-all active:scale-95">
+      Browse Shops →
+    </button>
+  </Link>
+</div>
+
+CHANGE 2 — Widen all content containers from max-w-5xl to max-w-6xl
+There are multiple max-w-5xl divs in the page. Change ALL of them to max-w-6xl. They appear in:
+
+The sticky subheader tab bar inner div
+The sticky subheader chip row inner div
+The "Near You" location context div
+The signup nudge div
+The sponsored ad div
+The Campus Market Discovery section div
+The listings grid div (ref={listingsRef})
+
+Change every max-w-5xl to max-w-6xl. Do not change anything else on those lines.
+
+CHANGE 3 — Campus Shops section: switch from pill scroll to grid on desktop
+Find the shop pills container:
+jsx<div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
+  {featuredShops.map((shop) => (
+    <ShopPillCard key={shop.id} shop={shop} />
+  ))}
+</div>
+Replace with:
+jsx<div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-3">
+  {featuredShops.map((shop) => (
+    <ShopPillCard key={shop.id} shop={shop} />
+  ))}
+</div>
+Also update the shop pills skeleton to match:
+jsx<div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
+  {[...Array(6)].map((_, i) => (
+    <div key={i} className="flex flex-col items-center w-[80px] shrink-0 animate-pulse">
+      <div className="w-14 h-14 rounded-2xl bg-gray-200 dark:bg-slate-700 mb-1.5" />
+      <div className="h-2.5 bg-gray-200 dark:bg-slate-700 rounded w-14" />
+    </div>
+  ))}
+</div>
+Replace with:
+jsx<div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-3">
+  {[...Array(8)].map((_, i) => (
+    <div key={i} className="flex flex-col items-center animate-pulse">
+      <div className="w-14 h-14 rounded-2xl bg-gray-200 dark:bg-slate-700 mb-1.5" />
+      <div className="h-2.5 bg-gray-200 dark:bg-slate-700 rounded w-14" />
+    </div>
+  ))}
+</div>
+
+CHANGE 4 — Campus Market Picks carousel: 4 columns on desktop
+Find:
+jsxclassName="grid grid-cols-3 sm:grid-cols-6 gap-2.5"
+Change to:
+jsxclassName="grid grid-cols-3 sm:grid-cols-6 lg:grid-cols-6 gap-2.5"
+(No visible change on desktop — this just makes it explicit and prevents Replit from touching it further.)
+
+CHANGE 5 — Student Listings grid: 4 columns on desktop
+Find:
+jsx<div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+Change to:
+jsx<div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+Also update SkeletonGrid to match:
+jsx<div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+Change to:
+jsx<div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+
+CHANGE 6 — "Student Listings" section header: make it a proper section title
+Find the centered divider label:
+jsx<div className="flex items-center gap-2 mb-4">
+  <div className="h-px flex-1 bg-[#E2E8F0] dark:bg-slate-700" />
+  <span className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-slate-500 whitespace-nowrap">👥 Student Listings</span>
+  <div className="h-px flex-1 bg-[#E2E8F0] dark:bg-slate-700" />
+</div>
+Replace with:
+jsx<div className="flex items-center justify-between mb-4">
+  <div>
+    <h2 className="text-base font-bold text-gray-900 dark:text-slate-100">👥 Student Listings</h2>
+    <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">Fresh posts from XMUM students</p>
+  </div>
+  <Link href="/post">
+    <button className="text-xs font-semibold bg-[#003366] dark:bg-blue-600 text-white px-3 py-2 rounded-xl hover:bg-[#002244] dark:hover:bg-blue-700 transition-colors hidden sm:block">
+      + Post
+    </button>
+  </Link>
+</div>
+
+CHANGE 7 — Load More button: make it wider and more prominent
+Find:
+jsx<button
+  onClick={handleLoadMore}
+  disabled={loadingMore}
+  className="btn-ghost flex items-center gap-2 px-8 min-h-[44px] disabled:opacity-50"
+>
+Change to:
+jsx<button
+  onClick={handleLoadMore}
+  disabled={loadingMore}
+  className="btn-ghost flex items-center gap-2 px-12 min-h-[44px] disabled:opacity-50 text-sm font-semibold"
+>
+
+DO NOT TOUCH under any circumstances:
+
+Any state variable, useEffect, useCallback, useRef
+loadFirst, handleLoadMore, handleChipScroll, handleTabChange, handleShopPageChange, handleSearchKey, handleSearchFocus
+The sticky subheader structure, z-index, or data-sticky-subheader attribute
+The real-time onSnapshot listener
+newItemsBuffer and the "new listings" toast button
+The tab bar and category chips logic
+ShopListingMiniCard, StarRowSmall, SkeletonGrid internals
+The About section at the bottom
+The Legal modal
+AuthModal
+SponsoredAdCard
+Any import statement
+
+After all changes, run: pnpm --filter xmum-market run build — confirm zero errors before finishing.
