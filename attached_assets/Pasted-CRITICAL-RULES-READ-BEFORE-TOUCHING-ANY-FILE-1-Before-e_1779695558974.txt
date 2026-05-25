@@ -1,0 +1,105 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Build must pass: cd artifacts/functions && npm run build (zero TypeScript errors)
+
+---
+
+TASK: Step 10 — Upgrade firebase-functions SDK from v4.9.0 to v5
+
+CONTEXT:
+The functions package currently has "firebase-functions": "^4.0.0" in dependencies.
+There are 3 exported functions in artifacts/functions/src/index.ts:
+1. dailySubscriptionCheck — uses functions.region().pubsub.schedule().timeZone().onRun()  (v1 API)
+2. dailySoldListingCleanup — uses functions.region().pubsub.schedule().timeZone().onRun()  (v1 API)
+3. moderateContent — already uses onCall from "firebase-functions/v2/https"  (v2 API — no change needed)
+
+firebase-functions v5 drops the v1 namespace (functions.pubsub, functions.https, etc).
+The two scheduled functions must be migrated from v1 to v2 before upgrading the SDK.
+
+STEP A — Migrate the two scheduled functions from v1 to v2 API (do this BEFORE installing v5)
+
+In artifacts/functions/src/index.ts, make these surgical changes:
+
+1. Add this new import at the top (after the existing imports):
+   import { onSchedule } from "firebase-functions/v2/scheduler";
+
+2. Replace the dailySubscriptionCheck export. Change this:
+   export const dailySubscriptionCheck = functions
+     .region("asia-southeast1")
+     .pubsub.schedule("0 8 * * *")
+     .timeZone("Asia/Kuala_Lumpur")
+     .onRun(async () => {
+   To this:
+   export const dailySubscriptionCheck = onSchedule(
+     { schedule: "0 8 * * *", timeZone: "Asia/Kuala_Lumpur", region: "asia-southeast1" },
+     async () => {
+   And remove the closing `return null;` and replace it with just a closing `});`
+   
+   Specifically: the function body stays 100% identical. Only the wrapper changes.
+   The old wrapper ends with `.onRun(async () => {` and closes with `return null;\n  });`
+   The new wrapper ends with `async () => {` and closes with `});`
+   The `return null;` line inside must be removed (onSchedule handlers return void, not null).
+
+3. Do the exact same replacement for dailySoldListingCleanup:
+   Change from:
+   export const dailySoldListingCleanup = functions
+     .region("asia-southeast1")
+     .pubsub.schedule("0 3 * * *")
+     .timeZone("Asia/Kuala_Lumpur")
+     .onRun(async () => {
+   To:
+   export const dailySoldListingCleanup = onSchedule(
+     { schedule: "0 3 * * *", timeZone: "Asia/Kuala_Lumpur", region: "asia-southeast1" },
+     async () => {
+   And remove its `return null;` line too.
+
+4. The top-level import `import * as functions from "firebase-functions";` is now unused.
+   Remove that line entirely.
+
+5. moderateContent already uses v2 API (onCall from "firebase-functions/v2/https") — do NOT touch it at all.
+
+After making these edits, run: cd artifacts/functions && npm run build
+It must compile with zero TypeScript errors before proceeding to Step B.
+
+---
+
+STEP B — Upgrade the firebase-functions package to v5
+
+Only after Step A builds cleanly, run:
+cd artifacts/functions && npm install --save firebase-functions@latest
+
+Then run the build again: npm run build
+Confirm zero errors.
+
+---
+
+STEP C — Update package.json dependency string
+
+After the install, open artifacts/functions/package.json and verify that
+"firebase-functions" now shows a v5.x version (e.g. "^5.1.0" or higher).
+If it still shows "^4.x.x", manually update it to "^5.0.0".
+
+---
+
+STEP D — Commit, push, and deploy
+
+1. Commit all changes with message: "chore: upgrade firebase-functions to v5, migrate scheduled functions to v2 API"
+2. Push to GitHub (this triggers Vercel redeploy of both apps — that is fine, frontend is unaffected)
+3. Then deploy the functions from the Replit Shell:
+   cd artifacts && firebase deploy --only functions --project xmum--market
+
+The deploy output should show all three functions deploying (not skipped), and NO Node 20 warning and NO firebase-functions outdated warning.
+
+---
+
+IMPORTANT CONSTRAINTS:
+- Only touch artifacts/functions/src/index.ts and artifacts/functions/package.json
+- Do NOT touch any frontend files (xmum-market or xmum-admin)
+- Do NOT touch firebase.json, firestore.rules, or any other config file
+- The moderateContent function signature, body, secrets config, and everything else stays identical
+- The internal logic of dailySubscriptionCheck and dailySoldListingCleanup stays 100% identical — only the export wrapper changes

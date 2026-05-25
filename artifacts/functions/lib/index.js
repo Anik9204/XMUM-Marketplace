@@ -1,9 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.moderateContent = exports.dailySoldListingCleanup = exports.dailySubscriptionCheck = void 0;
-const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const https_1 = require("firebase-functions/v2/https");
+const scheduler_1 = require("firebase-functions/v2/scheduler");
 const vision = require("@google-cloud/vision");
 admin.initializeApp();
 const db = admin.firestore();
@@ -58,11 +58,7 @@ function fmtDate(ms) {
     });
 }
 // ── Scheduled function — runs daily at 08:00 Malaysia time ───────────────────
-exports.dailySubscriptionCheck = functions
-    .region("asia-southeast1")
-    .pubsub.schedule("0 8 * * *")
-    .timeZone("Asia/Kuala_Lumpur")
-    .onRun(async () => {
+exports.dailySubscriptionCheck = (0, scheduler_1.onSchedule)({ schedule: "0 8 * * *", timeZone: "Asia/Kuala_Lumpur", region: "asia-southeast1" }, async () => {
     var _a, _b, _c, _d, _e, _f, _g, _h;
     try {
         const now = Date.now();
@@ -187,14 +183,9 @@ exports.dailySubscriptionCheck = functions
     catch (err) {
         console.error("[dailySubscriptionCheck] fatal error:", err);
     }
-    return null;
 });
 // ── Scheduled function — runs daily at 03:00 Malaysia time ───────────────────
-exports.dailySoldListingCleanup = functions
-    .region("asia-southeast1")
-    .pubsub.schedule("0 3 * * *")
-    .timeZone("Asia/Kuala_Lumpur")
-    .onRun(async () => {
+exports.dailySoldListingCleanup = (0, scheduler_1.onSchedule)({ schedule: "0 3 * * *", timeZone: "Asia/Kuala_Lumpur", region: "asia-southeast1" }, async () => {
     try {
         const now = Date.now();
         const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -262,7 +253,6 @@ exports.dailySoldListingCleanup = functions
     catch (err) {
         console.error("[dailySoldListingCleanup] fatal error:", err);
     }
-    return null;
 });
 // ── HTTPS Callable — AI content moderation (text + images) ───────────────────
 exports.moderateContent = (0, https_1.onCall)({

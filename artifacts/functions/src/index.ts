@@ -1,6 +1,6 @@
-import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as vision from "@google-cloud/vision";
 
 admin.initializeApp();
@@ -68,11 +68,9 @@ function fmtDate(ms: number): string {
 
 // ── Scheduled function — runs daily at 08:00 Malaysia time ───────────────────
 
-export const dailySubscriptionCheck = functions
-  .region("asia-southeast1")
-  .pubsub.schedule("0 8 * * *")
-  .timeZone("Asia/Kuala_Lumpur")
-  .onRun(async () => {
+export const dailySubscriptionCheck = onSchedule(
+  { schedule: "0 8 * * *", timeZone: "Asia/Kuala_Lumpur", region: "asia-southeast1" },
+  async () => {
     try {
       const now    = Date.now();
       const config = await getConfig();
@@ -219,17 +217,13 @@ export const dailySubscriptionCheck = functions
     } catch (err) {
       console.error("[dailySubscriptionCheck] fatal error:", err);
     }
-
-    return null;
   });
 
 // ── Scheduled function — runs daily at 03:00 Malaysia time ───────────────────
 
-export const dailySoldListingCleanup = functions
-  .region("asia-southeast1")
-  .pubsub.schedule("0 3 * * *")
-  .timeZone("Asia/Kuala_Lumpur")
-  .onRun(async () => {
+export const dailySoldListingCleanup = onSchedule(
+  { schedule: "0 3 * * *", timeZone: "Asia/Kuala_Lumpur", region: "asia-southeast1" },
+  async () => {
     try {
       const now = Date.now();
       const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -311,8 +305,6 @@ export const dailySoldListingCleanup = functions
     } catch (err) {
       console.error("[dailySoldListingCleanup] fatal error:", err);
     }
-
-    return null;
   });
 
 // ── HTTPS Callable — AI content moderation (text + images) ───────────────────
