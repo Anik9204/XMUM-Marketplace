@@ -1,0 +1,27 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+
+Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+
+TASK: Fix SettingsPage desktop layout — use space on both sides
+File: artifacts/xmum-market/src/pages/SettingsPage.tsx
+The page currently has one wrapper div:
+<div className="max-w-lg mx-auto px-4 py-5 pb-28 sm:pb-8 animate-in fade-in duration-200">
+This locks all content to ~512px wide on desktop, wasting the full side areas. Do not change any logic, state, handlers, modals, or inner card JSX. Only change the outer layout structure as described below.
+Step 1 — Replace that one wrapper div's className with a wider container:
+<div className="max-w-5xl mx-auto px-4 py-5 pb-28 sm:pb-8 animate-in fade-in duration-200">
+Step 2 — Move the tab bar (the <div className="flex border-b ..."> block) outside and above the two-column grid, so it spans full width.
+Step 3 — Wrap the three cards (Profile card, Security card, Account card) in a two-column desktop grid:
+<div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+
+Left column: the Profile card only
+Right column: the Security card + Account card stacked (wrapped in a <div className="space-y-3">)
+
+On mobile (grid-cols-1) everything stacks exactly as before. On desktop (lg:grid-cols-2) Profile sits left, Security + Account sit right. items-start ensures the columns don't stretch to match each other's height.
+Do not touch: SuccessToast, SectionHeader, Divider, InlineToggle, SkeletonCard, AvatarCropModal, ReportHoldModal, the delete modal, the unauthenticated state, the loading state, or any handler function.
+After the change, confirm the build passes: pnpm --filter xmum-market run build

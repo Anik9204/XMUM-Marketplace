@@ -321,7 +321,7 @@ export default function SettingsPage() {
         />
       )}
 
-      <div className="max-w-lg mx-auto px-4 py-5 pb-28 sm:pb-8 animate-in fade-in duration-200">
+      <div className="max-w-5xl mx-auto px-4 py-5 pb-28 sm:pb-8 animate-in fade-in duration-200">
 
         {/* Page tab bar */}
         <div className="flex border-b border-gray-200 dark:border-slate-700 mb-5">
@@ -336,6 +336,8 @@ export default function SettingsPage() {
             {t.accountSettings}
           </button>
         </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
 
         {/* ── PROFILE CARD ─────────────────────────────────── */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 mb-3 overflow-hidden">
@@ -482,6 +484,8 @@ export default function SettingsPage() {
           <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarFileSelect} />
         </div>
 
+        <div className="space-y-3">
+
         {/* ── SECURITY CARD ────────────────────────────────── */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 mb-3 overflow-hidden">
           <SectionHeader icon={<Lock size={13} />} label="Security" />
@@ -617,6 +621,9 @@ export default function SettingsPage() {
             </button>
           </div>
         </div>
+
+        </div>{/* end space-y-3 */}
+        </div>{/* end grid */}
 
       </div>
 
