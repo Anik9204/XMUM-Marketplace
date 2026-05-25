@@ -1,0 +1,385 @@
+# XMUM Marketplace — Master Project Overview & Handoff Document
+
+> **IMPORTANT FOR ANY AI ASSISTANT READING THIS:**
+> This project is actively developed. Changes are made regularly — sometimes daily. The developer works primarily in **Replit** and deploys via GitHub → Vercel. A ZIP of the latest codebase is always attached alongside this document. **Read every file in the ZIP thoroughly before responding.** Do not assume anything from this document alone — the code is the source of truth. If something in this document contradicts what you see in the ZIP, trust the ZIP.
+>
+> You must be proficient in: **Replit** (primary IDE), **Vercel** (deployment), **Firebase** (Auth, Firestore, Storage, Functions, Secret Manager), **Google Cloud Console** (Cloud Run, IAM, Vision API, Logs Explorer), **Cloudflare** (DNS), **Resend** (transactional email), and **Sentry** (error monitoring). You will be asked to write Replit prompts, debug deployment issues, and reason across all of these services simultaneously.
+
+---
+
+## 1. What This Project Is
+
+**XMUM Market** is a student-only online marketplace platform for **Xiamen University Malaysia (XMUM)**. Only students with a verified `@xmu.edu.my` email address can sign up, post listings, or interact with the platform.
+
+The project consists of **two separate frontend apps** sharing one Firebase backend:
+
+| App | Purpose | URL |
+|---|---|---|
+| **XMUM Market** | Main consumer-facing marketplace for students | `https://www.xmummarket.com` |
+| **XMUM Admin** | Internal admin/editor panel for moderating the marketplace | `https://admin.xmummarket.com` |
+
+The platform is **live and actively used by students**. Avoid breaking changes. Vercel handles zero-downtime redeployments.
+
+---
+
+## 2. Tech Stack
+
+### Both Apps
+- **Framework:** React 19 + Vite + TypeScript
+- **Styling:** Tailwind CSS v4 + custom CSS variables
+- **Routing:** `wouter` — NOT react-router-dom. Navigation uses `useLocation()`, `useRoute()`, `<Link href="...">`. URL params via `new URLSearchParams(window.location.search)`
+- **Backend:** Firebase (Firestore + Auth + Storage) — ONE shared Firebase project on Blaze plan
+- **Error monitoring:** Sentry (separate Sentry projects per app)
+- **Deployment:** Vercel (two separate Vercel projects)
+- **Package manager:** `pnpm` monorepo workspace
+- **Animations:** Tailwind or plain CSS `@keyframes` only — no framer-motion, no GSAP
+
+### XMUM Market (main app)
+- **Path:** `artifacts/xmum-market/`
+- **UI components:** Shadcn/ui (full component library in `src/components/ui/`)
+- **Key libraries:** `@tanstack/react-query`, `react-hook-form`, `zod`, `recharts`, `lucide-react`, `sonner`, `wouter`, `firebase ^12.12.1`
+
+### XMUM Admin
+- **Path:** `artifacts/xmum-admin/`
+- **No Shadcn** — uses plain Tailwind + custom components
+- **Key libraries:** `wouter`, `firebase` (same version as market)
+
+### Cloud Functions
+- **Path:** `artifacts/functions/`
+- **Runtime:** Node.js 22, Firebase Functions v7, Gen 2
+- **Region:** `asia-southeast1` (all functions)
+- **Key dependencies:** `firebase-admin ^12`, `firebase-functions ^7`, `@google-cloud/vision ^4`
+
+### API Server (lightweight companion)
+- **Path:** `artifacts/api-server/`
+- **Purpose:** Health check and auxiliary routes — minimal usage
+
+---
+
+## 3. Repository & Workflow
+
+- **Source code:** GitHub repo `Anik9204/XMUM-Marketplace`
+- **Primary IDE:** Replit (connected to GitHub)
+- **Deployment pipeline:** Replit (edit) → GitHub push → Vercel auto-deploys both apps
+- **Functions deployment:** Manual — `firebase deploy --only functions --project xmum--market` (Vercel does NOT deploy Cloud Functions)
+- **Firestore/Storage rules:** Manual — deploy via Firebase Console or `firebase deploy --only firestore:rules`
+
+> **Critical:** Pushing to GitHub only redeploys the two Vercel frontends. Cloud Functions must always be redeployed separately via Firebase CLI.
+
+---
+
+## 4. Live URLs
+
+| Resource | URL |
+|---|---|
+| Main app (production) | `https://www.xmummarket.com` |
+| Main app (redirect) | `https://xmummarket.com` → redirects to www |
+| Admin panel | `https://admin.xmummarket.com` |
+| Vercel fallback (market) | `https://xmum-marketplace-xmum-market.vercel.app` |
+
+---
+
+## 5. Firebase Project
+
+**Project ID:** `xmum--market`
+
+**Services in use:** Auth, Firestore, Storage, Cloud Functions, Secret Manager
+
+### Firestore Collections
+`listings`, `shops`, `shopListings`, `shopAds`, `shopOrders`, `shopReviews`, `shopInquiries`, `users`, `reports`, `adminAuditLogs`, `appConfig`, `conversations`, `rentalAuditLogs`, `rentalArchivedListings`, `sellerTcAuditLogs`, `platformActivityFeed`, `ads`, `analytics`, `aiFlaggedContent`
+
+### Storage Buckets
+- `listings/{userId}/` — listing photos
+- `shopBanners/{shopId}/` — shop banner images
+- `shopLogos/{shopId}/` — shop logo images
+- `shopListingPhotos/{shopId}/` — shop listing photos
+- `studentIdPhotos/{userId}/` — student ID verification photos
+- `avatars/{userId}/` — user profile avatars
+
+### Cloud Functions (all Gen 2, asia-southeast1, Node 22)
+
+| Function | Trigger | Purpose |
+|---|---|---|
+| `moderateContent` | HTTPS Callable | AI content moderation (text + images) — see Section 9 |
+| `dailySubscriptionCheck` | Scheduled (08:00 MY time daily) | Checks shop subscription status, sends reminders/expiry notifications |
+| `dailySoldListingCleanup` | Scheduled (03:00 MY time daily) | Cleans up old sold listings |
+
+---
+
+## 6. Architecture Notes
+
+1. **Shared Firebase project** — both apps read/write the same Firestore and Storage
+2. **Routing is wouter** — never suggest react-router-dom
+3. **`HomeTab = "all" | ListingType`** — `"all"` is local UI state only, never added to `ListingType` in `types.ts`
+4. **Firebase HMR guard** in both `firebase.ts` files: `const app = getApps().length ? getApp() : initializeApp(firebaseConfig)`
+5. **`PAGE_SIZE = 30`** in `listings.ts`
+6. **All multi-line description fields** use a fullscreen modal editor pattern — NOT inline textarea
+7. **Email restriction** — only `@xmu.edu.my` emails can sign up and post. Enforced in both Firestore rules (`isXmuEmail()`) and client-side
+8. **`isXmuEmail()`** in Firestore rules requires BOTH matching email domain AND `email_verified == true`
+9. **`authDomain`** in `.env` files must always stay as `xmum--market.firebaseapp.com` — never change to custom domain
+10. **Offline persistence is disabled** — writes fail fast, no local caching. This is intentional.
+11. **Sentry initialized only in production** (`MODE === 'production'`) — zero overhead in dev/preview
+12. **`experimentalForceLongPolling: true`** in Firestore config — required for Replit's proxy environment
+13. **No framer-motion or GSAP** — all animations use Tailwind or plain CSS `@keyframes`
+
+---
+
+## 7. Environment Variables
+
+Both Vercel projects have these set:
+
+| Variable | Notes |
+|---|---|
+| `VITE_FIREBASE_API_KEY` | Firebase web API key |
+| `VITE_FIREBASE_AUTH_DOMAIN` | Always `xmum--market.firebaseapp.com` — never change |
+| `VITE_FIREBASE_PROJECT_ID` | `xmum--market` |
+| `VITE_FIREBASE_STORAGE_BUCKET` | Firebase storage bucket |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID` | FCM sender ID |
+| `VITE_FIREBASE_APP_ID` | Firebase app ID |
+| `VITE_SENTRY_DSN` | Different value per app |
+| `SENTRY_AUTH_TOKEN` | Same value for both apps |
+| `VITE_FIREBASE_MEASUREMENT_ID` | Optional, Analytics |
+
+**Cloud Functions secrets** (Firebase Secret Manager, NOT env vars):
+- `GEMINI_API_KEY` — used by `moderateContent` for AI text moderation
+
+---
+
+## 8. Firestore Security Rules — Key Points
+
+File: `artifacts/xmum-market/firestore.rules`
+
+- `isXmuEmail()` = signed in + `@xmu.edu.my` email + email verified
+- `isSignedIn()` = any authenticated user
+- `isAdmin()` / `isEditorRole()` = checks `role` field in `users/{uid}`
+- **Listings:** public read, `isXmuEmail()` to create/update, owner + `isSignedIn()` to delete
+- **Reports:** only `isEditorRole()` can read — regular users cannot query reports
+- **Users:** `isSignedIn()` to read, owner or admin to update/delete
+- **Conversations/messages:** only participants can read/write
+- **Report hold:** if `isReportHeld: true` on a listing, user cannot edit, delete the listing, or delete their account until admin resolves it
+
+Deploy rules: Firebase Console → Firestore → Rules → paste and Publish, OR:
+```bash
+firebase deploy --only firestore:rules --project xmum--market
+```
+
+---
+
+## 9. AI Content Moderation System
+
+This is the most recently built and debugged system. Read carefully.
+
+### How it works
+
+**Flow:** Photos upload → URLs passed to `moderateContent` Cloud Function → Gemini analyzes text + images → result returned → if BLOCKED, photos deleted and post aborted.
+
+**File:** `artifacts/xmum-market/src/lib/aiModerate.ts`
+- Calls `moderateContent` via Firebase `httpsCallable`
+- Functions region: `asia-southeast1`
+- On any error, **fails open** (returns SAFE) — students are never hard-blocked by a function outage
+- Supports contexts: `listing`, `shop-listing`, `shop-profile`, `inquiry`, `review`
+
+**File:** `artifacts/functions/src/index.ts` — `moderateContent` function
+- **AI model:** `gemini-3.1-flash-lite` via direct REST API call
+- **Image moderation:** Google Cloud Vision SafeSearch API (enabled and working)
+- **Secret:** `GEMINI_API_KEY` from Firebase Secret Manager
+- **CORS:** Explicitly configured to allow `xmummarket.com`, `admin.xmummarket.com`, Vercel preview URLs, localhost
+- **IAM:** Cloud Run service set to "Allow public access" (required for Gen 2 callable CORS to work)
+- Returns: `{ result: "SAFE" | "FLAGGED" | "BLOCKED", reason: string, suggestion: string }`
+
+### Moderation levels
+- **BLOCKED** — post rejected, photos deleted, error shown to student
+- **FLAGGED** — post goes through, written to `aiFlaggedContent` collection, visible in Admin → AI Flagged tab
+- **SAFE** — post goes through normally
+
+### What is moderated
+- Weapons, drugs, sexual content, scams, MLM, hate speech → BLOCKED
+- Suspicious job posts, weapon photos with innocent text, price fraud patterns → FLAGGED
+- Text-image inconsistency (e.g. title says "book" but photo shows a car) → FLAGGED or BLOCKED based on severity
+- Everything else → SAFE
+
+### CSP configuration (important)
+Both `artifacts/xmum-market/vercel.json` and `artifacts/xmum-market/index.html` have `https://*.cloudfunctions.net` in their `connect-src` CSP directive. This was required to allow the browser to call the Cloud Function. Do not remove it.
+
+### Deployment note
+Deploying `moderateContent` requires:
+```bash
+firebase deploy --only functions:moderateContent --project xmum--market
+```
+NOT a GitHub push. Vercel does not deploy functions.
+
+---
+
+## 10. User Roles
+
+Stored in `users/{uid}.role` field in Firestore:
+
+| Role | Access |
+|---|---|
+| (none / student) | Regular marketplace user |
+| `editor` | Can manage listings, reports, ads in admin panel |
+| `admin` | Full access including user management, audit logs, destructive actions |
+
+---
+
+## 11. Key Features — XMUM Market
+
+### Listings
+- Types: `buy-sell`, `lost-found`, `jobs`, `assistance`, `rental`
+- Photos upload to Firebase Storage before AI moderation
+- Fullscreen modal editor for descriptions
+- Report system with report hold (locks listing + blocks account deletion until resolved)
+
+### Shops (Campus Market)
+- Students apply to open a campus market shop
+- Shop listings, inquiries, orders, reviews
+- Shop subscription system with trial period, grace period, daily automated checks
+- Shop ads (sponsored placements)
+
+### Other Features
+- Messaging system (`conversations` collection, real-time)
+- Platform ads (`ads` collection)
+- In-app notifications
+- Student ID verification flow
+- Rental listings with T&C audit trail (`rentalAuditLogs`, `sellerTcAuditLogs`)
+- Dark mode
+- i18n language support (English + Mandarin at minimum)
+- PWA manifest, lazy loading, chunk splitting
+- Full SEO: OG tags, Twitter cards, JSON-LD structured data, `robots.txt`, `sitemap.xml`
+- Google Search Console verified, sitemap submitted
+
+---
+
+## 12. Key Features — XMUM Admin
+
+| Page | Route | Purpose |
+|---|---|---|
+| Dashboard | `/` | Analytics overview |
+| Listings | `/listings` | View, delete, report hold/lift listings |
+| Users | `/users` | View, blacklist, assign roles |
+| Reports | `/reports` | Review student-submitted reports |
+| Rental Audit | `/rental-audit` | Rental listing audit trail |
+| Ads | `/ads` | Platform ads management |
+| Analytics | `/analytics` | Detailed analytics |
+| Shops | `/shops` | Shop management |
+| Shop Ads | `/shop-ads` | Shop-level sponsored ads |
+| Audit Log | `/audit-log` | Tamper-evident append-only admin action log |
+| Shop Approvals | `/shop-approvals` | Approve/reject pending shop applications |
+| Subscription Config | `/subscription-config` | Configure trial/subscription/grace periods |
+| AI Flagged | `/ai-flagged` | Review AI-flagged listings |
+
+---
+
+## 13. Email & Domain Setup
+
+| Item | Value |
+|---|---|
+| Domain registrar/DNS | Cloudflare (`xmummarket.com`) |
+| Transactional email provider | Resend (`smtp.resend.com`, port 465, username `resend`) |
+| Sender address | `noreply@xmummarket.com` |
+| Firebase SMTP | Configured in Authentication → Templates → SMTP settings |
+| Firebase Auth action URL | `https://www.xmummarket.com/__/auth/action` |
+| Vercel domains | Auto-configured via Cloudflare integration |
+
+**Firebase Authorized Domains:**
+`localhost`, `xmum--market.firebaseapp.com`, `xmum--market.web.app`, `xmummarket.com`, `www.xmummarket.com`, `admin.xmummarket.com`
+
+---
+
+## 14. Sentry Error Monitoring
+
+| Item | Value |
+|---|---|
+| Org slug | `xmum` |
+| Market project | `javascript-react` |
+| Admin project | `xmum-admin` |
+| Market DSN | Vercel env `VITE_SENTRY_DSN` (market project) |
+| Admin DSN | Vercel env `VITE_SENTRY_DSN` (admin project) |
+| Auth token | Vercel env `SENTRY_AUTH_TOKEN` (both projects) |
+| Source maps | Uploaded automatically on every Vercel deploy via `sentryVitePlugin` |
+| Sentry files | `artifacts/xmum-market/src/lib/sentry.ts` and `artifacts/xmum-admin/src/lib/sentry.ts` |
+
+Config: `tracesSampleRate: 0.2`, `replaysSessionSampleRate: 0.1`, `replaysOnErrorSampleRate: 1.0`
+
+Each deploy creates a new Sentry release tagged to the Git commit hash.
+
+---
+
+## 15. Content Security Policy
+
+Both apps have CSP headers set in two places each (must be kept in sync):
+1. `vercel.json` → `headers` array (enforced in production by Vercel)
+2. `index.html` → `<meta http-equiv="Content-Security-Policy">` tag (dev + fallback)
+
+**XMUM Market `connect-src` includes:**
+`'self'`, `/api`, `https://*.googleapis.com`, `https://*.firebaseio.com`, `wss://*.firebaseio.com`, `https://identitytoolkit.googleapis.com`, `https://securetoken.googleapis.com`, `https://firebasestorage.googleapis.com`, `https://*.firebaseapp.com`, `https://*.sentry.io`, `https://*.ingest.sentry.io`, `https://*.cloudfunctions.net`
+
+> If you add a new external API call in the frontend, you MUST add its domain to both CSP locations or the browser will silently block it.
+
+---
+
+## 16. Build Commands
+
+```bash
+# Build market app
+pnpm --filter xmum-market run build
+
+# Build admin app
+pnpm --filter xmum-admin run build
+
+# Type-check functions (no separate build step needed for deploy)
+cd artifacts/functions && npx tsc --noEmit
+
+# Deploy only moderateContent function
+firebase deploy --only functions:moderateContent --project xmum--market
+
+# Deploy all functions
+firebase deploy --only functions --project xmum--market
+
+# Deploy Firestore rules
+firebase deploy --only firestore:rules --project xmum--market
+```
+
+---
+
+## 17. Rules for All Replit Prompts
+
+Every prompt sent to Replit must begin with:
+
+```
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build (use pnpm --filter xmum-admin run build for admin-side changes)
+```
+
+---
+
+## 18. Completed Setup History
+
+1. ✅ Firebase project created and configured
+2. ✅ Both apps deployed to Vercel with custom domains
+3. ✅ Cloudflare DNS configured for `xmummarket.com`
+4. ✅ Firebase SMTP switched to Resend (`smtp.resend.com`, port 465)
+5. ✅ Firebase Auth action URL set to `https://www.xmummarket.com/__/auth/action`
+6. ✅ Firebase app nickname set to `XMUM Market`
+7. ✅ SEO — full OG tags, Twitter cards, JSON-LD, `robots.txt`, `sitemap.xml`
+8. ✅ Google Search Console verified, sitemap submitted
+9. ✅ Sentry integrated into both apps with source map upload on every deploy
+10. ✅ Cloud Functions upgraded to Node 22, Gen 2, firebase-functions v7
+11. ✅ `dailySubscriptionCheck` and `dailySoldListingCleanup` migrated to Gen 2 `onSchedule` API
+12. ✅ `moderateContent` built as Gen 2 `onCall` with Gemini + Cloud Vision
+13. ✅ Post flow reordered: photos upload first → URLs passed to moderation → BLOCKED aborts and deletes photos
+14. ✅ CSP updated in both `vercel.json` and `index.html` to allow `*.cloudfunctions.net`
+15. ✅ CORS configured on `moderateContent` for all production and preview domains
+16. ✅ Cloud Run IAM set to "Allow public access" for `moderateContent`
+17. ✅ Cloud Vision API enabled for image moderation (SafeSearch)
+18. ✅ AI moderation system fully live and tested — blocks prohibited content, flags suspicious content
+19. 🔄 More features and fixes ongoing
+
+---
+
