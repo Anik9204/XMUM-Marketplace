@@ -461,7 +461,7 @@ Tone: friendly, non-accusatory, student-appropriate. Always assume good faith un
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
-              contents: [{ parts: [{ text: `Context: ${context}\n\nContent to check:\n${text.slice(0, 1500)}` }] }],
+              contents: [{ parts: [{ text: `Context: ${context}\n\nContent to check:\n${text.slice(0, 3200)}` }] }],
               generationConfig: {
                 temperature: 0.1,
                 maxOutputTokens: 120,
