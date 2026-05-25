@@ -1,0 +1,44 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+
+---
+
+FILE TO EDIT: artifacts/xmum-market/src/components/ShopManagementPanel.tsx
+
+BUG: Shop listings bypass image AI moderation. In the `AddListingForm` component's `handleSubmit` function, `moderateContent` is called with an empty array `[]` for photoUrls — so photos are NEVER checked by the AI. The photos are only uploaded AFTER moderation runs, so explicit images get through freely. The screenshot shows a nude photo published on a shop listing as proof.
+
+FIX — reorder the operations in `handleSubmit` inside `AddListingForm` ONLY. Do NOT touch `handleSave` in `EditListingForm` or any other function:
+
+STEP 1 — Upload photos FIRST (before moderation). Move the photo upload loop to run before the `moderateContent` call. Store the uploaded URLs in a local array (e.g. `uploadedUrls`).
+
+STEP 2 — Pass the uploaded URLs to moderation. Change the `moderateContent` call from:
+moderateContent(Title: ${title}\nDescription: ${description}, "shop-listing", [])
+to:
+moderateContent(Title: ${title}\nDescription: ${description}, "shop-listing", uploadedUrls)
+
+STEP 3 — If result is BLOCKED, delete the already-uploaded photos before aborting. Use the same pattern as PostPage.tsx:
+```typescript
+for (const url of uploadedUrls) {
+  try {
+    const path = decodeURIComponent(url.split("/o/")[1].split("?")[0]);
+    deleteObject(ref(storage, path)).catch(() => {});
+  } catch { /* non-fatal */ }
+}
+```
+Then set the error and return. Do NOT call `createShopListing`.
+
+STEP 4 — If result is FLAGGED or SAFE, proceed to `createShopListing` using `uploadedUrls` as the photos array (they're already uploaded).
+
+STEP 5 — In the `try` block, remove the old photo upload loop since photos are now uploaded before the try block. The `try` block should only contain `createShopListing(...)` and `onCreated()`.
+
+IMPORTANT: `deleteObject` and `ref` are already imported at the top of the file from `firebase/storage`. `storage` is already imported from `@/lib/firebase`. Do NOT add any new imports.
+
+Also fix the same issue in `handleSave` inside `EditListingForm`: currently it passes `existingPhotos` to moderation but uploads new photos AFTER. Change it so that new photo files are uploaded FIRST, then moderation runs with `[...existingPhotos, ...newlyUploadedUrls]`. If BLOCKED, delete only the newly uploaded URLs (not existing ones). The existing `removedPhotoUrls` deletion can happen before or after as it does today.
+
+After both fixes, confirm the build passes: pnpm --filter xmum-market run build

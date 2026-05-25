@@ -186,13 +186,32 @@ function AddListingForm({ shopId, shop, onClose, onCreated }: { shopId: string; 
     setError("");
     if (!title.trim()) { setError("Title is required."); return; }
     setLoading(true);
-    // AI moderation
+    // Upload photos first so their URLs can be passed to AI moderation
+    const uploadedUrls: string[] = [];
+    try {
+      for (let i = 0; i < photos.length; i++) {
+        const url = await uploadShopListingPhoto(shopId, photos[i], i);
+        uploadedUrls.push(url);
+      }
+    } catch (err: any) {
+      setError(err.message ?? "Photo upload failed.");
+      setLoading(false);
+      return;
+    }
+    // AI moderation — now includes the actual uploaded photo URLs
     const aiResult = await moderateContent(
       `Title: ${title}\nDescription: ${description}`,
       "shop-listing",
-      []
+      uploadedUrls
     );
     if (aiResult.result === "BLOCKED") {
+      // Delete already-uploaded photos before aborting
+      for (const url of uploadedUrls) {
+        try {
+          const path = decodeURIComponent(url.split("/o/")[1].split("?")[0]);
+          deleteObject(ref(storage, path)).catch(() => {});
+        } catch { /* non-fatal */ }
+      }
       setError(aiResult.suggestion ? `${aiResult.reason} ${aiResult.suggestion}` : (aiResult.reason || "Listing flagged. Please review the content."));
       setLoading(false);
       return;
@@ -213,11 +232,6 @@ function AddListingForm({ shopId, shop, onClose, onCreated }: { shopId: string; 
       });
     }
     try {
-      const photoUrls: string[] = [];
-      for (let i = 0; i < photos.length; i++) {
-        const url = await uploadShopListingPhoto(shopId, photos[i], i);
-        photoUrls.push(url);
-      }
       await createShopListing({
         shopId,
         shopName: shop.name,
@@ -228,7 +242,7 @@ function AddListingForm({ shopId, shop, onClose, onCreated }: { shopId: string; 
         price: price ? parseFloat(price) : undefined,
         pricingModel,
         category,
-        photos: photoUrls,
+        photos: uploadedUrls,
         isActive: true,
       });
       onCreated();
@@ -347,13 +361,32 @@ function EditShopListingForm({ listing, shopId, shop, onCancel, onSaved }: { lis
     e.preventDefault();
     if (!title.trim()) { setError("Title is required."); return; }
     setLoading(true); setError("");
-    // AI moderation
+    // Upload new photos first so their URLs can be passed to AI moderation
+    const newlyUploadedUrls: string[] = [];
+    try {
+      for (let i = 0; i < newPhotoFiles.length; i++) {
+        const url = await uploadShopListingPhoto(shopId, newPhotoFiles[i], existingPhotos.length + i);
+        newlyUploadedUrls.push(url);
+      }
+    } catch (err: any) {
+      setError(err.message ?? "Photo upload failed.");
+      setLoading(false);
+      return;
+    }
+    // AI moderation — includes existing + newly uploaded photo URLs
     const aiResult = await moderateContent(
       `Title: ${title}\nDescription: ${description}`,
       "shop-listing",
-      existingPhotos
+      [...existingPhotos, ...newlyUploadedUrls]
     );
     if (aiResult.result === "BLOCKED") {
+      // Delete only the newly uploaded photos before aborting — leave existing ones untouched
+      for (const url of newlyUploadedUrls) {
+        try {
+          const path = decodeURIComponent(url.split("/o/")[1].split("?")[0]);
+          deleteObject(ref(storage, path)).catch(() => {});
+        } catch { /* non-fatal */ }
+      }
       setError(aiResult.suggestion ? `${aiResult.reason} ${aiResult.suggestion}` : (aiResult.reason || "Listing flagged. Please review the content."));
       setLoading(false);
       return;
@@ -375,12 +408,7 @@ function EditShopListingForm({ listing, shopId, shop, onCancel, onSaved }: { lis
     }
     try {
       await Promise.allSettled(removedPhotoUrls.map((url) => { const path = storagePathFromUrl(url); return path ? deleteObject(ref(storage, path)).catch(() => {}) : Promise.resolve(); }));
-      const newUrls: string[] = [];
-      for (let i = 0; i < newPhotoFiles.length; i++) {
-        const url = await uploadShopListingPhoto(shopId, newPhotoFiles[i], existingPhotos.length + i);
-        newUrls.push(url);
-      }
-      await updateShopListing(listing.id, { title: title.trim(), description: description.trim(), price: price ? parseFloat(price) : undefined, pricingModel, category, isActive, photos: [...existingPhotos, ...newUrls] });
+      await updateShopListing(listing.id, { title: title.trim(), description: description.trim(), price: price ? parseFloat(price) : undefined, pricingModel, category, isActive, photos: [...existingPhotos, ...newlyUploadedUrls] });
       onSaved();
     } catch (err: any) { setError(err.message ?? "Failed to save."); } finally { setLoading(false); }
   };
