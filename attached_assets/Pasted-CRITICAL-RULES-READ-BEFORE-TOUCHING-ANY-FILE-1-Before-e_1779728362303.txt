@@ -1,0 +1,65 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+
+---
+
+Fix two related "Missing or insufficient permissions" bugs affecting shop editors (users whose UID is in a shop's editorIds array, but who have no platform role field).
+
+ROOT CAUSE: The `shops` collection `allow update` rule in firestore.rules does not permit shop editors to increment `totalListings`. When an editor creates or deletes a shop listing, `createShopListing()` and `deleteShopListing()` in shops.ts both call updateDoc on the shops document to update totalListings. This write succeeds for owners but throws a Firestore permission error for editors. On create, the listing itself posts fine but the permission error propagates out of createShopListing() into AddListingForm's catch block, showing "Missing or insufficient permissions" in red to the user. On delete, the listing is soft-deleted successfully but the permission error is caught in ShopListingDetailPage's catch block which only handles "report-hold" — so navigate() is never called, the page stays stuck, and the error is silently logged.
+
+Make exactly these TWO changes and nothing else:
+
+---
+
+CHANGE 1 — artifacts/xmum-market/firestore.rules
+
+Inside match /shops/{shopId}, find:
+      allow update: if isShopOwner(shopId) || isAdmin() || (
+        isXmuEmail()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['totalInquiries'])
+      );
+
+Replace with:
+      allow update: if isShopOwner(shopId) || isAdmin() || (
+        isXmuEmail()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['totalInquiries'])
+      ) || (
+        isSignedIn()
+        && isShopMember(shopId)
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['totalListings'])
+      );
+
+---
+
+CHANGE 2 — artifacts/xmum-market/src/lib/shops.ts
+
+In createShopListing, find:
+  const docRef = await addDoc(collection(db, "shopListings"), payload);
+  await updateDoc(doc(db, "shops", data.shopId), { totalListings: increment(1) });
+  return docRef.id;
+
+Replace with:
+  const docRef = await addDoc(collection(db, "shopListings"), payload);
+  updateDoc(doc(db, "shops", data.shopId), { totalListings: increment(1) }).catch(() => {});
+  return docRef.id;
+
+In deleteShopListing, find:
+  await updateDoc(doc(db, "shopListings", listingId), { isActive: false });
+  await updateDoc(doc(db, "shops", shopId), { totalListings: increment(-1) });
+
+Replace with:
+  await updateDoc(doc(db, "shopListings", listingId), { isActive: false });
+  updateDoc(doc(db, "shops", shopId), { totalListings: increment(-1) }).catch(() => {});
+
+---
+
+After both changes, confirm pnpm --filter xmum-market run build passes with zero errors.

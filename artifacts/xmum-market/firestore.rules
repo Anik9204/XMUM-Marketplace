@@ -114,6 +114,11 @@ service cloud.firestore {
         isXmuEmail()
         && request.resource.data.diff(resource.data).affectedKeys()
              .hasOnly(['totalInquiries'])
+      ) || (
+        isSignedIn()
+        && isShopMember(shopId)
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['totalListings'])
       );
       allow delete: if isShopOwner(shopId) || isAdmin();
     }

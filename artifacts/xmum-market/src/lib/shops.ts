@@ -150,7 +150,7 @@ export async function createShopListing(data: Omit<ShopListing, "id" | "viewCoun
   });
   if (payload.orderQuestions) payload.orderQuestions = cleanQuestions(payload.orderQuestions);
   const docRef = await addDoc(collection(db, "shopListings"), payload);
-  await updateDoc(doc(db, "shops", data.shopId), { totalListings: increment(1) });
+  updateDoc(doc(db, "shops", data.shopId), { totalListings: increment(1) }).catch(() => {});
   return docRef.id;
 }
 
@@ -314,7 +314,7 @@ export async function deleteShopListing(listingId: string, shopId: string): Prom
     );
   }
   await updateDoc(doc(db, "shopListings", listingId), { isActive: false });
-  await updateDoc(doc(db, "shops", shopId), { totalListings: increment(-1) });
+  updateDoc(doc(db, "shops", shopId), { totalListings: increment(-1) }).catch(() => {});
 }
 
 export async function incrementShopListingView(listingId: string, shopId?: string, visitorId?: string): Promise<void> {
