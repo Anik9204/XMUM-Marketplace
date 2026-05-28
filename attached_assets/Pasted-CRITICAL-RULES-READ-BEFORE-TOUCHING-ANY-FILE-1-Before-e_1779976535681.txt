@@ -1,0 +1,118 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it.
+2. Do NOT rewrite files from scratch. Surgical edits only.
+3. Do NOT remove any existing function, handler, import, or logic.
+4. Never change routing, Firestore security rules, or Firebase function calls.
+5. Confirm zero build errors: pnpm --filter xmum-market run build
+
+---
+
+## TASK: Fix the shop listing count showing negative/wrong values
+
+### ROOT CAUSE
+
+`shop.totalListings` is a denormalized Firestore counter on the `shops` document.
+It is incremented in `createShopListing()` and decremented in `deleteShopListing()` in
+`artifacts/xmum-market/src/lib/shops.ts`.
+
+The counter is currently corrupted (showing -3) because listings were deleted through
+paths that bypass the `deleteShopListing()` function — such as direct Firestore console
+edits or admin tools that set `isActive: false` without calling `increment(-1)`.
+
+Additionally, the admin-side deletion in `artifacts/xmum-admin/src/lib/firebase.ts`
+sets `isActive: false` on shop listings but NEVER decrements `totalListings`.
+
+### FIX — TWO PARTS
+
+---
+
+### PART 1: Self-healing display in ShopPublicPage.tsx
+
+File: `artifacts/xmum-market/src/pages/ShopPublicPage.tsx`
+
+The shop public page already fetches `listings` from `getShopListings(shopId)` — this
+returns the real live count of active listings. Use the actual fetched listings array
+length for display instead of the stale `shop.totalListings` counter.
+
+Find the line that renders the listing count. It currently reads:
+{shop.totalListings}
+with the text "listing" / "listings" next to it (around line 268).
+
+Change it to use the real-time listings array length instead:
+```jsx
+{listings.length}
+```
+
+Where `listings` is the state variable holding the fetched shop listings array.
+Verify the variable name by checking what `useState` or query result holds the
+fetched listings in ShopPublicPage — use that exact variable name.
+
+This is the primary fix. The display will now always show the true live count
+regardless of what the `totalListings` counter says.
+
+DO NOT remove or change the `totalListings` field on the shop document — it may
+be used elsewhere (analytics, admin panel). Just stop using it for the public display.
+
+---
+
+### PART 2: Fix the admin deletion path to keep the counter accurate going forward
+
+File: `artifacts/xmum-admin/src/lib/firebase.ts`
+
+Find the function that deletes or deactivates a shop listing by setting
+`isActive: false` on a `shopListings` document (around line 386).
+
+After the `updateDoc` that sets `isActive: false`, add a fire-and-forget
+`totalListings` decrement on the parent shop document:
+
+```typescript
+// Decrement shop's totalListings counter — fire and forget
+const { increment } = await import("firebase/firestore");
+updateDoc(doc(db, "shops", shopId), {
+  totalListings: increment(-1),
+}).catch(() => {});
+```
+
+Make sure `shopId` is available in that function's scope. If the function receives
+`listingId` but not `shopId`, first fetch the listing doc to get `shopId`:
+```typescript
+const listingSnap = await getDoc(doc(db, "shopListings", listingId));
+const shopId = listingSnap.data()?.shopId;
+if (shopId) {
+  updateDoc(doc(db, "shops", shopId), {
+    totalListings: increment(-1),
+  }).catch(() => {});
+}
+```
+
+Only add this if `increment` is not already imported — check existing imports first.
+
+---
+
+### WHAT MUST NOT CHANGE
+
+- The `deleteShopListing()` function in `shops.ts` — do not touch it
+- The `createShopListing()` function in `shops.ts` — do not touch it
+- The `totalListings` field on the shop Firestore document — do not reset or remove it
+- Any other display or logic in ShopPublicPage beyond the single count number
+- All other admin functions in `firebase.ts`
+- Shop listings fetch logic
+
+---
+
+### BUILD VERIFICATION
+
+pnpm --filter xmum-market run build
+pnpm --filter xmum-admin run build
+
+Both must pass with zero errors.
+
+---
+
+### SUMMARY
+
+- ShopPublicPage.tsx: render `listings.length` instead of `shop.totalListings` for the
+  public-facing count — this is self-healing and always accurate
+- xmum-admin/src/lib/firebase.ts: add `increment(-1)` on `shops/{shopId}.totalListings`
+  in the admin listing deletion path so the counter stays accurate going forward
+- The existing -3 count will no longer be visible to users after Part 1 is applied

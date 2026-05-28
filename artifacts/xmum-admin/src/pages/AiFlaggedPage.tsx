@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   collection, query, orderBy, onSnapshot,
-  updateDoc, doc, deleteDoc, getDoc,
+  updateDoc, doc, deleteDoc, getDoc, increment,
 } from "firebase/firestore";
 import { ref, deleteObject } from "firebase/storage";
 import { db, storage, writeAuditLog } from "../lib/firebase";
@@ -103,7 +103,14 @@ export default function AiFlaggedPage() {
           await deleteDoc(doc(db, "listings", flag.listingId));
         }
       } else if (flag.context === "shop-listing" && flag.listingId) {
+        const listingSnap = await getDoc(doc(db, "shopListings", flag.listingId));
+        const shopId = listingSnap.data()?.shopId;
         await deleteDoc(doc(db, "shopListings", flag.listingId));
+        if (shopId) {
+          updateDoc(doc(db, "shops", shopId), {
+            totalListings: increment(-1),
+          }).catch(() => {});
+        }
       }
       await updateDoc(doc(db, "aiFlags", flag.id), {
         status: "deleted" as AiFlagStatus,

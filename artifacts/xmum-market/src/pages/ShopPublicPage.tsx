@@ -265,8 +265,8 @@ export default function ShopPublicPage() {
 
               <div className="flex flex-wrap gap-5 mt-4 text-xs text-gray-500 dark:text-slate-400">
                 <span>
-                  <strong className="text-gray-800 dark:text-slate-200 text-sm">{shop.totalListings}</strong>
-                  {" "}listing{shop.totalListings !== 1 ? "s" : ""}
+                  <strong className="text-gray-800 dark:text-slate-200 text-sm">{listings.length}</strong>
+                  {" "}listing{listings.length !== 1 ? "s" : ""}
                 </span>
                 <span>
                   <strong className="text-gray-800 dark:text-slate-200 text-sm">{shop.totalInquiries}</strong>
