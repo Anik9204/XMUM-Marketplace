@@ -1,0 +1,476 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed.
+3. Do NOT remove any existing function, state variable, prop, handler, import, or JSX element unless explicitly told to. All business logic, AI moderation, draft system, validation, and Firebase calls stay 100% intact.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. Never change any routing, data flow, Firestore logic, Storage logic, AI moderation calls, or Firebase function calls.
+6. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+
+---
+
+## TASK: Redesign PostPage and ShopManagementPanel AddListingForm UI
+
+### WHAT YOU ARE DOING
+
+You are redesigning the visual layout of two form UIs to match the reference screenshot style (numbered step sections, clean card layout, prominent photo uploader with grid slots, side-by-side desktop layout). This is a PURE UI CHANGE. Zero logic changes.
+
+---
+
+### FILE 1: artifacts/xmum-market/src/pages/PostPage.tsx
+
+**Goal:** On desktop (md+), use a two-column layout that fills the full page width. On mobile, use numbered step cards that match the reference screenshot.
+
+**Current problem:** The entire page is wrapped in `max-w-lg mx-auto px-4 py-5 pb-28 sm:pb-8` — too narrow on desktop, looks like a phone form squished into a big screen.
+
+**New layout structure:**
+
+Replace the outermost wrapper div:
+```
+// OLD:
+<div className="relative max-w-lg mx-auto px-4 py-5 pb-28 sm:pb-8 animate-in fade-in duration-200">
+
+// NEW:
+<div className="relative w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-28 md:pb-8 animate-in fade-in duration-200">
+```
+
+**Inside the form, wrap the content in a two-column desktop grid:**
+
+The form's children need to be reorganized into this structure. The `<form>` tag itself stays. Inside the form, after the draft banner, wrap all content in:
+
+```jsx
+{/* Desktop two-column layout */}
+<div className="md:grid md:grid-cols-[280px_1fr] md:gap-8 md:items-start">
+  {/* LEFT COLUMN — sticky type selector + preview card (desktop only) */}
+  <div className="hidden md:block">
+    <div className="sticky top-20 space-y-4">
+      {/* Type selector — vertical on desktop */}
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-4 shadow-sm">
+        <p className="text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide mb-3">Category</p>
+        <div className="flex flex-col gap-1.5">
+          {ALL_TABS.map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => handleTypeChange(tab)}
+              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all text-left ${
+                type === tab
+                  ? "bg-[#003366] dark:bg-blue-600 text-white shadow-sm"
+                  : "text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700/60"
+              }`}
+            >
+              <span className="text-base">{tab === "buy-sell" ? "🛍️" : tab === "lost-found" ? "🔍" : tab === "jobs" ? "💼" : tab === "assistance" ? "🤝" : "🚗"}</span>
+              {tabLabel(tab)}
+            </button>
+          ))}
+        </div>
+      </div>
+      {/* Live preview card */}
+      {(title || previews.length > 0) && (
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-4 shadow-sm">
+          <p className="text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide mb-3">Preview</p>
+          <ListingCard listing={previewListing} />
+        </div>
+      )}
+    </div>
+  </div>
+
+  {/* RIGHT COLUMN — the form fields */}
+  <div className="space-y-4">
+    {/* existing form content goes here */}
+  </div>
+</div>
+```
+
+**Mobile type selector stays** (the existing `flex gap-2 overflow-x-auto scrollbar-hide` chip row) — add `md:hidden` to it so it only shows on mobile.
+
+**Step card sections — wrap each major section in a numbered card:**
+
+Each logical group of fields should be wrapped in a card div:
+
+```jsx
+{/* Step card wrapper */}
+<div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-5 shadow-sm">
+  <div className="flex items-center gap-2.5 mb-4">
+    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-[#003366] dark:bg-blue-600 text-white text-xs font-bold shrink-0">1</span>
+    <h2 className="text-sm font-bold text-gray-800 dark:text-slate-200">Photos</h2>
+    <span className="text-xs text-gray-400 dark:text-slate-500 ml-auto">
+      {type === "rental" ? "Min 2, max 5 · 5MB each" : "Up to 3 · Max 5MB each"}
+    </span>
+  </div>
+  {/* photo uploader content */}
+</div>
+```
+
+**Wrap these groups as numbered step cards:**
+- **Step 1 — Photos**: The entire photo upload section (drop zone + thumbnails)
+- **Step 2 — Item Details**: Title, description, category, condition, and all type-specific fields (jobs subtype, remote toggle, vehicle details, pricing, availability, meetup spot)
+- **Step 3 — Contact Information**: The contact info card (WhatsApp, WeChat, Teams)
+
+The error message and submit button stay OUTSIDE the step cards, at the bottom.
+
+**Photo uploader — upgrade to grid slots (matching reference screenshot):**
+
+Replace the existing drop zone + thumbnail row with a combined grid-based uploader:
+
+```jsx
+{/* Photo grid — matches reference: first slot is always the "add" trigger, remaining are thumbnails */}
+<div className="grid grid-cols-3 gap-3">
+  {/* Slot 0: If no photo at index 0, show add button. If photo exists, show it. */}
+  {Array.from({ length: maxPhotos }).map((_, i) => {
+    const hasPhoto = i < previews.length;
+    const isAddSlot = i === photos.length && photos.length < maxPhotos;
+    if (hasPhoto) {
+      return (
+        <div
+          key={i}
+          draggable
+          onDragStart={() => handleThumbDragStart(i)}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={() => handleThumbDrop(i)}
+          className="relative aspect-square rounded-xl overflow-hidden border border-gray-200 dark:border-slate-600 cursor-grab active:cursor-grabbing group"
+        >
+          <img src={previews[i]} alt="" className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); removePhoto(i); }}
+            className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+          >
+            <X size={12} />
+          </button>
+          {i === 0 && <span className="absolute bottom-1.5 left-1.5 text-[9px] font-bold text-white bg-black/50 rounded px-1.5 py-0.5">MAIN</span>}
+        </div>
+      );
+    }
+    if (isAddSlot) {
+      return (
+        <button
+          key={i}
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          onDragEnter={(e) => { e.preventDefault(); setDragOverZone(true); }}
+          onDragOver={(e) => { e.preventDefault(); setDragOverZone(true); }}
+          onDragLeave={() => setDragOverZone(false)}
+          onDrop={(e) => { e.preventDefault(); setDragOverZone(false); handleDrop(e); }}
+          className={`aspect-square rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-1.5 transition-all ${
+            dragOverZone
+              ? "border-blue-400 bg-blue-50 dark:bg-slate-700"
+              : "border-gray-300 dark:border-slate-600 hover:border-[#003366] dark:hover:border-blue-500 bg-gray-50 dark:bg-slate-800/50"
+          }`}
+        >
+          <ImagePlus size={22} className="text-gray-400 dark:text-slate-500" />
+          <span className="text-[10px] text-gray-400 dark:text-slate-500 font-medium">Add Photo</span>
+        </button>
+      );
+    }
+    // Empty placeholder slot
+    return (
+      <div
+        key={i}
+        className="aspect-square rounded-xl border border-dashed border-gray-200 dark:border-slate-700 flex items-center justify-center bg-gray-50/50 dark:bg-slate-800/20"
+      >
+        <ImagePlus size={18} className="text-gray-200 dark:text-slate-700" />
+      </div>
+    );
+  })}
+</div>
+```
+
+**Important:** After adding the grid slots, keep the `<input ref={fileRef} type="file" ... />` hidden input. Remove the old drop zone div and the old thumbnail row — they are replaced by the grid above.
+
+**Submit button area — update for desktop:**
+
+```jsx
+<div className="sticky bottom-0 z-20 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-700 px-4 pt-3 pb-4 md:static md:bg-transparent md:border-0 md:p-0 md:mt-6 -mx-4 md:mx-0">
+```
+
+The existing gradient fade div `pointer-events-none absolute -top-6` inside this div stays as-is (it only shows on mobile due to `md:hidden`).
+
+**Header area — add subtitle on desktop:**
+
+```jsx
+<div className="flex items-center justify-between mb-4 md:mb-6">
+  <div>
+    <h1 className="text-xl md:text-2xl font-display font-bold text-gray-900 dark:text-slate-100">{t.postItem}</h1>
+    <p className="hidden md:block text-sm text-gray-500 dark:text-slate-400 mt-0.5">Reach thousands of students instantly.</p>
+  </div>
+  {/* existing Preview toggle button stays */}
+</div>
+```
+
+On mobile, the Preview toggle button is hidden (add `hidden md:hidden`... actually keep it on mobile too, just keep it as is).
+
+---
+
+### FILE 2: artifacts/xmum-market/src/components/ShopManagementPanel.tsx
+
+**Goal:** When the shop owner/editor clicks "Add Listing", instead of showing an inline blue card form, open a fullscreen modal overlay that looks like a polished posting form — similar to the PostPage design.
+
+**Current behavior:** `setShowAdd(true)` renders `<AddListingForm>` inline inside the ListingsTab.
+
+**New behavior:** Wrap the `AddListingForm` in a fullscreen modal overlay.
+
+**Step 1: Modify the `AddListingForm` return JSX only.**
+
+Change the outermost wrapper from:
+```jsx
+// OLD — inline blue card
+<div className="bg-blue-50 dark:bg-slate-800/60 border border-blue-100 dark:border-slate-700 rounded-2xl p-4 mb-4">
+```
+
+To a fullscreen modal overlay:
+```jsx
+<div className="fixed inset-0 z-[80] flex flex-col bg-white dark:bg-slate-900 overflow-y-auto animate-in fade-in duration-200">
+```
+
+**Step 2: Redesign the interior layout of AddListingForm.**
+
+Replace everything inside the `return (...)` of `AddListingForm` with this structure (all existing state, handlers, `handleSubmit`, photo handling, AI moderation calls, etc. stay completely untouched — only the JSX return changes):
+
+```jsx
+return (
+  <div className="fixed inset-0 z-[80] flex flex-col bg-white dark:bg-slate-900 overflow-y-auto">
+    {/* Modal header */}
+    <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 px-4 sm:px-6 py-4 flex items-center justify-between shadow-sm">
+      <div>
+        <h2 className="text-lg font-display font-bold text-gray-900 dark:text-slate-100">Add Listing</h2>
+        <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{shop.name}</p>
+      </div>
+      <button
+        type="button"
+        onClick={onClose}
+        className="flex items-center justify-center w-9 h-9 rounded-xl text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
+      >
+        <X size={18} />
+      </button>
+    </div>
+
+    {/* Content */}
+    <div className="flex-1 w-full max-w-2xl mx-auto px-4 sm:px-6 py-6 pb-28">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {error && (
+          <div className="flex items-start gap-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl px-3 py-2.5">
+            <AlertCircle size={14} className="text-red-500 dark:text-red-400 shrink-0 mt-0.5" />
+            <p className="text-xs text-red-700 dark:text-red-300">{error}</p>
+          </div>
+        )}
+
+        {/* Step 1 — Photos */}
+        <div className="bg-gray-50 dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-5">
+          <div className="flex items-center gap-2.5 mb-4">
+            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-[#003366] dark:bg-blue-600 text-white text-xs font-bold shrink-0">1</span>
+            <h3 className="text-sm font-bold text-gray-800 dark:text-slate-200">Photos</h3>
+            <span className="text-xs text-gray-400 dark:text-slate-500 ml-auto">Up to 4 · Max 5MB each</span>
+          </div>
+          <div className="grid grid-cols-4 gap-2.5">
+            {Array.from({ length: 4 }).map((_, i) => {
+              const hasPhoto = i < previews.length;
+              const isAddSlot = i === photos.length && photos.length < 4;
+              if (hasPhoto) {
+                return (
+                  <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-gray-200 dark:border-slate-600 group">
+                    <img src={previews[i]} alt="" className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
+                    <button
+                      type="button"
+                      onClick={() => { setPhotos((a) => a.filter((_, j) => j !== i)); setPreviews((a) => a.filter((_, j) => j !== i)); }}
+                      className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                    >
+                      <X size={10} />
+                    </button>
+                    {i === 0 && <span className="absolute bottom-1 left-1 text-[8px] font-bold text-white bg-black/50 rounded px-1 py-0.5">MAIN</span>}
+                  </div>
+                );
+              }
+              if (isAddSlot) {
+                return (
+                  <button key={i} type="button" onClick={() => fileRef.current?.click()}
+                    className="aspect-square rounded-xl border-2 border-dashed border-gray-300 dark:border-slate-600 flex flex-col items-center justify-center gap-1 hover:border-[#003366] dark:hover:border-blue-500 transition-colors bg-white dark:bg-slate-800/50">
+                    <ImagePlus size={18} className="text-gray-400 dark:text-slate-500" />
+                    <span className="text-[9px] text-gray-400 dark:text-slate-500 font-medium">Add</span>
+                  </button>
+                );
+              }
+              return (
+                <div key={i} className="aspect-square rounded-xl border border-dashed border-gray-200 dark:border-slate-700 flex items-center justify-center bg-gray-50/50 dark:bg-slate-800/20">
+                  <ImagePlus size={14} className="text-gray-200 dark:text-slate-700" />
+                </div>
+              );
+            })}
+          </div>
+          <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => handlePhotos(e.target.files)} />
+        </div>
+
+        {/* Step 2 — Listing Details */}
+        <div className="bg-gray-50 dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-5">
+          <div className="flex items-center gap-2.5 mb-4">
+            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-[#003366] dark:bg-blue-600 text-white text-xs font-bold shrink-0">2</span>
+            <h3 className="text-sm font-bold text-gray-800 dark:text-slate-200">Listing Details</h3>
+          </div>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm font-display font-semibold text-gray-700 dark:text-slate-300 mb-1">
+                Title <span className="text-red-500">*</span>
+              </label>
+              <input
+                className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-200 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-[#003366]/30 dark:focus:ring-blue-400/30 focus:border-[#003366] dark:focus:border-blue-400 transition min-h-[44px] shadow-sm"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g. Nasi Lemak Set"
+                maxLength={80}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-display font-semibold text-gray-700 dark:text-slate-300 mb-1">Description</label>
+              <button
+                type="button"
+                onClick={() => setShowDescModal(true)}
+                className={`w-full text-left border rounded-xl px-3 py-2.5 text-sm min-h-[80px] bg-white dark:bg-slate-700 ${
+                  description ? "text-gray-900 dark:text-slate-100" : "text-gray-400 dark:text-slate-500"
+                } border-gray-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-[#003366]/30 focus:border-[#003366] transition shadow-sm`}
+              >
+                {description ? (
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="line-clamp-3 leading-relaxed whitespace-pre-wrap">{description}</span>
+                    <Edit2 size={14} className="text-gray-400 dark:text-slate-500 shrink-0 mt-0.5" />
+                  </div>
+                ) : (
+                  <span>Describe your listing — what it is, condition, any details customers should know…</span>
+                )}
+              </button>
+              {description && (
+                <p className={`text-right text-xs mt-1 font-medium ${description.length > 2700 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
+                  {description.length} / 3000
+                </p>
+              )}
+              {showDescModal && (
+                <ListingDescEditorModal
+                  value={description}
+                  onChange={setDescription}
+                  onClose={() => setShowDescModal(false)}
+                />
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-display font-semibold text-gray-700 dark:text-slate-300 mb-1">Price (RM)</label>
+                <input
+                  className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-200 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-[#003366]/30 focus:border-[#003366] transition min-h-[44px] shadow-sm"
+                  type="number" min="0" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-display font-semibold text-gray-700 dark:text-slate-300 mb-1">Pricing Model</label>
+                <select
+                  className="w-full bg-white text-gray-900 border border-gray-200 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600 dark:[color-scheme:dark] focus:outline-none focus:ring-2 focus:ring-[#003366]/30 focus:border-[#003366] transition min-h-[44px] shadow-sm"
+                  value={pricingModel} onChange={(e) => setPricingModel(e.target.value as ShopListing["pricingModel"])}
+                >
+                  <option value="fixed">Fixed</option>
+                  <option value="per_hour">Per Hour</option>
+                  <option value="per_day">Per Day</option>
+                  <option value="negotiable">Negotiable</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-display font-semibold text-gray-700 dark:text-slate-300 mb-1">Category</label>
+              <select
+                className="w-full bg-white text-gray-900 border border-gray-200 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600 dark:[color-scheme:dark] focus:outline-none focus:ring-2 focus:ring-[#003366]/30 focus:border-[#003366] transition min-h-[44px] shadow-sm"
+                value={category} onChange={(e) => setCategory(e.target.value as ShopCategory)}
+              >
+                {SHOP_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Submit button — sticky on mobile */}
+        <div className="sticky bottom-0 z-20 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-700 px-4 pt-3 pb-4 md:static md:bg-transparent md:border-0 md:p-0 md:mt-2 -mx-4 md:mx-0">
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full min-h-[52px] bg-[#003366] dark:bg-blue-600 text-white font-bold text-sm rounded-xl hover:brightness-110 disabled:opacity-50 transition flex items-center justify-center gap-2 shadow-sm"
+          >
+            {loading ? <><Loader2 size={16} className="animate-spin" /> Uploading…</> : "Publish Listing"}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+);
+```
+
+**Step 3: Add `AlertCircle` and `Edit2` to the imports in ShopManagementPanel.tsx** (check if they're already imported — only add if missing).
+
+Verify current imports at the top of ShopManagementPanel.tsx — if `AlertCircle` is not there, add it to the lucide-react import line. `Edit2` is already used in the existing form, confirm it's imported.
+
+---
+
+### WHAT MUST NOT CHANGE
+
+In PostPage.tsx:
+- ALL state variables and their initializations
+- ALL useEffect hooks
+- ALL event handlers (handleSubmit, handlePhotoChange, handleDrop, handleTypeChange, handleThumbDrag*, removePhoto, saveDraft, restoreDraft, addFiles, withTimeout)
+- The DescriptionEditorModal component definition
+- The RentalTcModal usage
+- The AuthModal usage
+- The SuccessToast component
+- The CentsInput component
+- ALL rental-specific fields
+- ALL jobs-specific fields
+- ALL assistance-specific fields
+- The unsaved changes guard
+- The draft banner and draft system
+- The AI checking state and loader
+- The preview system (just move it to the left column on desktop)
+- The "← Cancel" back button
+
+In ShopManagementPanel.tsx:
+- The handleSubmit function in AddListingForm
+- The handlePhotos function in AddListingForm  
+- The AI moderation call (moderateContent) and writeAiFlag call
+- The photo upload loop
+- All state variables in AddListingForm
+- The ListingDescEditorModal usage
+- The EditShopListingForm component (do not touch it)
+- The ListingsTab component structure (only change how AddListingForm renders)
+- All other tabs (analytics, settings, editors, inquiries, orders, reviews)
+
+---
+
+### RESPONSIVE REQUIREMENTS
+
+PostPage:
+- Mobile (< md): Single column, numbered step cards, same flow as before but with step card wrappers and the new grid photo uploader. Type selector remains horizontal scrolling chips row.
+- Desktop (md+): Two-column grid — left 280px sticky panel (vertical category nav + preview), right column with step cards.
+
+AddListingForm modal:
+- All screen sizes: Fullscreen overlay (fixed inset-0). Content centered in max-w-2xl. Header sticky at top. Submit button sticky at bottom on mobile, static on desktop.
+
+---
+
+### BUILD VERIFICATION
+
+After all changes:
+```
+pnpm --filter xmum-market run build
+```
+Must produce zero TypeScript errors and zero build errors. Fix any type issues before finishing.
+
+---
+
+### SUMMARY OF CHANGES
+
+**PostPage.tsx:**
+- Outermost container: `max-w-lg` → `max-w-5xl`
+- On desktop: two-column layout with sticky left sidebar (type nav + preview card) and right form column
+- On mobile: existing single-column layout, now with numbered step card wrappers
+- Photo section: replace drop-zone + separate thumbnail row with unified 3-slot grid
+- Type selector: add `md:hidden` to mobile chip row (desktop uses the left sidebar nav)
+- Header: add subtitle text on desktop
+
+**ShopManagementPanel.tsx:**
+- AddListingForm: inline blue card → fullscreen modal overlay
+- Interior redesign: numbered step cards (Photos, Listing Details), consistent styling with PostPage
+- All logic 100% preserved

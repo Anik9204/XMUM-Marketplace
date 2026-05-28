@@ -771,14 +771,14 @@ export default function PostPage() {
   const currentYear = new Date().getFullYear();
 
   return (
-    <div className="relative max-w-lg mx-auto px-4 py-5 pb-28 sm:pb-8 animate-in fade-in duration-200">
+    <div className="relative w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-28 md:pb-8 animate-in fade-in duration-200">
       {toast && <SuccessToast message={toast} onDone={() => navigate("/profile")} />}
 
       {showTcModal && (
         <RentalTcModal onAccept={handleTcAccepted} onCancel={handleTcCancelled} />
       )}
 
-      {/* FIX 2: Live preview floating panel */}
+      {/* FIX 2: Live preview floating panel — mobile only */}
       {showPreview && (
         <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-40 w-[180px] pointer-events-none">
           <ListingCard listing={previewListing} />
@@ -797,8 +797,11 @@ export default function PostPage() {
       </button>
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-display font-bold text-gray-900 dark:text-slate-100">{t.postItem}</h1>
+      <div className="flex items-center justify-between mb-4 md:mb-6">
+        <div>
+          <h1 className="text-xl md:text-2xl font-display font-bold text-gray-900 dark:text-slate-100">{t.postItem}</h1>
+          <p className="hidden md:block text-sm text-gray-500 dark:text-slate-400 mt-0.5">Reach thousands of students instantly.</p>
+        </div>
         {/* FIX 2: Preview toggle */}
         <button
           type="button"
@@ -814,8 +817,8 @@ export default function PostPage() {
         </button>
       </div>
 
-      {/* Type selector */}
-      <div className="flex gap-2 overflow-x-auto scrollbar-hide mb-5 pb-1">
+      {/* Type selector — mobile only */}
+      <div className="flex gap-2 overflow-x-auto scrollbar-hide mb-5 pb-1 md:hidden">
         {ALL_TABS.map((tab) => (
           <button
             key={tab}
@@ -858,421 +861,477 @@ export default function PostPage() {
           </div>
         )}
 
-        {/* FIX 1: Drag-and-drop photo uploader */}
-        <div>
-          <label className={labelCls}>
-            {type === "rental" ? `Photos (min 2, max 5) *` : t.photos}
-          </label>
-          {type === "rental" && (
-            <p className="text-xs text-amber-600 dark:text-amber-400 mb-2">{t.rentalPhotosNote}</p>
-          )}
+        {/* Desktop two-column layout */}
+        <div className="md:grid md:grid-cols-[280px_1fr] md:gap-8 md:items-start">
 
-          {/* Drop zone */}
-          <div
-            className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors ${
-              dragOverZone
-                ? "border-blue-400 bg-blue-50 dark:bg-slate-800"
-                : "border-gray-300 dark:border-slate-600 hover:border-[#003366] dark:hover:border-blue-500"
-            }`}
-            onClick={() => fileRef.current?.click()}
-            onDragEnter={(e) => { e.preventDefault(); setDragOverZone(true); }}
-            onDragOver={(e) => { e.preventDefault(); setDragOverZone(true); }}
-            onDragLeave={() => setDragOverZone(false)}
-            onDrop={handleDrop}
-          >
-            <ImagePlus size={24} className="mx-auto text-gray-400 dark:text-slate-500 mb-1" />
-            <p className="text-xs text-gray-500 dark:text-slate-400">Drag photos here or tap to upload</p>
-            <p className="text-[10px] text-gray-300 dark:text-slate-600 mt-0.5">
-              {type === "rental" ? "Min 2 · Max 5 · 5 MB each" : "Up to 3 · Max 5 MB each"}
-            </p>
-          </div>
-
-          {/* Photo error */}
-          {photoError && (
-            <p className="text-xs text-red-500 dark:text-red-400 mt-1.5">{photoError}</p>
-          )}
-
-          {/* Thumbnail row */}
-          {previews.length > 0 && (
-            <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
-              {previews.map((src, i) => (
-                <div
-                  key={i}
-                  draggable
-                  onDragStart={() => handleThumbDragStart(i)}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={() => handleThumbDrop(i)}
-                  className="relative shrink-0 w-[72px] h-[72px] rounded-lg overflow-hidden border border-gray-200 dark:border-slate-600 cursor-grab active:cursor-grabbing"
-                >
-                  <img src={src} alt="" className="w-full h-full object-cover" />
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); removePhoto(i); }}
-                    className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center"
-                  >
-                    <X size={10} />
-                  </button>
+          {/* LEFT COLUMN — sticky type selector + preview card (desktop only) */}
+          <div className="hidden md:block">
+            <div className="sticky top-20 space-y-4">
+              <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-4 shadow-sm">
+                <p className="text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide mb-3">Category</p>
+                <div className="flex flex-col gap-1.5">
+                  {ALL_TABS.map((tab) => (
+                    <button
+                      key={tab}
+                      type="button"
+                      onClick={() => handleTypeChange(tab)}
+                      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all text-left ${
+                        type === tab
+                          ? "bg-[#003366] dark:bg-blue-600 text-white shadow-sm"
+                          : "text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700/60"
+                      }`}
+                    >
+                      <span className="text-base">{tab === "buy-sell" ? "🛍️" : tab === "lost-found" ? "🔍" : tab === "jobs" ? "💼" : tab === "assistance" ? "🤝" : "🚗"}</span>
+                      {tabLabel(tab)}
+                    </button>
+                  ))}
                 </div>
-              ))}
-              {photos.length < maxPhotos && (
-                <button
-                  type="button"
-                  onClick={() => fileRef.current?.click()}
-                  className="shrink-0 w-[72px] h-[72px] rounded-lg border-2 border-dashed border-gray-300 dark:border-slate-600 flex items-center justify-center text-gray-400 dark:text-slate-500 hover:border-[#003366] dark:hover:border-blue-500 transition-colors text-xl"
-                >
-                  ➕
-                </button>
+              </div>
+              {(title || previews.length > 0) && (
+                <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-4 shadow-sm">
+                  <p className="text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide mb-3">Preview</p>
+                  <ListingCard listing={previewListing} />
+                </div>
               )}
             </div>
-          )}
-
-          {previews.length > 0 && (
-            <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-1">
-              Photo {Math.min(previews.length, maxPhotos)} of {maxPhotos}
-            </p>
-          )}
-
-          <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoChange} />
-        </div>
-
-        {/* Title */}
-        <div>
-          <label className={labelCls}>
-            {(type === "jobs" || type === "assistance") ? t.serviceTitle : type === "rental" ? "Listing Title *" : t.title} *
-          </label>
-          <input
-            ref={titleRef}
-            type="text"
-            value={title}
-            onChange={(e) => { setTitle(e.target.value); setIsDirty(true); setFieldError(null); }}
-            onBlur={saveDraft}
-            required
-            maxLength={80}
-            placeholder={
-              type === "jobs" ? "e.g. Math Tutor Available" :
-              type === "assistance" ? "e.g. Help Moving Dorm Room" :
-              type === "rental" ? "e.g. 2020 Honda City Available for Rent" :
-              ""
-            }
-            className={`${inputCls} ${fieldError === "content" ? "ring-2 ring-red-400" : ""}`}
-          />
-          <div className={`text-right text-xs mt-1 font-medium ${title.length > 70 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
-            {title.length} / 80
           </div>
-        </div>
 
-        {/* Jobs: subtype selector */}
-        {type === "jobs" && (
-          <div>
-            <label className={labelCls}>{t.jobSubtypeLabel}</label>
-            <div className="flex gap-2">
-              {(["offering", "seeking"] as const).map((sub) => (
-                <button
-                  key={sub}
-                  type="button"
-                  onClick={() => { setJobSubtype(sub); setIsDirty(true); }}
-                  className={`flex-1 min-h-[44px] py-2.5 rounded-xl text-sm font-semibold border transition-colors ${
-                    jobSubtype === sub
-                      ? "bg-[#003366] dark:bg-blue-600 text-white border-[#003366] dark:border-blue-600"
-                      : "bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600 hover:border-[#003366] dark:hover:border-blue-500"
-                  }`}
-                >
-                  {sub === "offering" ? `▶ ${t.jobSubtypeOffering}` : `◀ ${t.jobSubtypeSeeking}`}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+          {/* RIGHT COLUMN — the form fields */}
+          <div className="space-y-4">
 
-        {/* Remote toggle for jobs */}
-        {type === "jobs" && (
-          <div className="flex items-center justify-between bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-3 min-h-[56px]">
-            <div>
-              <p className="text-sm font-semibold text-gray-700 dark:text-slate-200">{t.availableRemotely}</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => { setIsRemote(!isRemote); setIsDirty(true); }}
-              className={`relative w-11 h-6 rounded-full transition-colors ${isRemote ? "bg-[#003366] dark:bg-blue-600" : "bg-gray-200 dark:bg-slate-500"}`}
-            >
-              <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${isRemote ? "left-6" : "left-1"}`} />
-            </button>
-          </div>
-        )}
-
-        {/* Description */}
-        <div>
-          <label className={labelCls}>
-            {t.descriptionLabel} *
-          </label>
-          <button
-            type="button"
-            onClick={() => setShowDescEditor(true)}
-            className={`w-full text-left border rounded-xl px-3 py-2.5 text-sm min-h-[80px] bg-white dark:bg-slate-700 ${
-              description ? "text-gray-900 dark:text-slate-100" : "text-gray-400 dark:text-slate-500"
-            } ${fieldError === "content" ? "border-red-400 ring-2 ring-red-400" : "border-gray-300 dark:border-slate-600"}`}
-          >
-            {description ? (
-              <div className="flex items-start justify-between gap-2">
-                <span className="line-clamp-3 leading-relaxed whitespace-pre-wrap">{description}</span>
-                <Edit2 size={14} className="text-gray-400 dark:text-slate-500 shrink-0 mt-0.5" />
+            {/* Step 1 — Photos */}
+            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-5 shadow-sm">
+              <div className="flex items-center gap-2.5 mb-4">
+                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-[#003366] dark:bg-blue-600 text-white text-xs font-bold shrink-0">1</span>
+                <h2 className="text-sm font-bold text-gray-800 dark:text-slate-200">Photos</h2>
+                <span className="text-xs text-gray-400 dark:text-slate-500 ml-auto">
+                  {type === "rental" ? "Min 2, max 5 · 5MB each" : "Up to 3 · Max 5MB each"}
+                </span>
               </div>
-            ) : (
-              <span>{t.descriptionPlaceholder}</span>
-            )}
-          </button>
-          {description && (
-            <div className={`text-right text-xs mt-1 font-medium ${description.length > 2700 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
-              {description.length} / 3000
-            </div>
-          )}
-        </div>
-        {showDescEditor && (
-          <DescriptionEditorModal
-            value={description}
-            onChange={(val) => { setDescription(val); setIsDirty(true); setFieldError(null); }}
-            onClose={() => setShowDescEditor(false)}
-          />
-        )}
-
-        {/* Category */}
-        <div>
-          <label className={labelCls}>{t.category}</label>
-          <select value={category} onChange={(e) => { setCategory(e.target.value); setIsDirty(true); }} className={selectCls}>
-            {categories.map((cat) => (
-              <option key={cat} value={cat}>
-                {(t.categories as any)[cat] ?? cat}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Rental: Vehicle details */}
-        {type === "rental" && (
-          <>
-            <div>
-              <label className={labelCls}>Vehicle Type *</label>
-              <div className="grid grid-cols-5 gap-1.5">
-                {RENTAL_VEHICLE_TYPES.map((vt) => (
-                  <button
-                    key={vt}
-                    type="button"
-                    onClick={() => { setVehicleType(vt); setIsDirty(true); }}
-                    className={`py-2 rounded-xl text-xs font-semibold border min-h-[44px] flex flex-col items-center justify-center gap-0.5 transition-colors ${
-                      vehicleType === vt
-                        ? "bg-[#003366] dark:bg-blue-600 text-white border-transparent"
-                        : "bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600"
-                    }`}
-                  >
-                    <span className="text-lg">{vt === "car" ? "🚗" : vt === "bicycle" ? "🚲" : vt === "electric-bike" ? "⚡" : "🏍️"}</span>
-                    <span className="text-[9px] capitalize">{vt}</span>
-                  </button>
-                ))}
+              {type === "rental" && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mb-3">{t.rentalPhotosNote}</p>
+              )}
+              <div className="grid grid-cols-3 gap-3">
+                {Array.from({ length: maxPhotos }).map((_, i) => {
+                  const hasPhoto = i < previews.length;
+                  const isAddSlot = i === photos.length && photos.length < maxPhotos;
+                  if (hasPhoto) {
+                    return (
+                      <div
+                        key={i}
+                        draggable
+                        onDragStart={() => handleThumbDragStart(i)}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={() => handleThumbDrop(i)}
+                        className="relative aspect-square rounded-xl overflow-hidden border border-gray-200 dark:border-slate-600 cursor-grab active:cursor-grabbing group"
+                      >
+                        <img src={previews[i]} alt="" className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); removePhoto(i); }}
+                          className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                        >
+                          <X size={12} />
+                        </button>
+                        {i === 0 && <span className="absolute bottom-1.5 left-1.5 text-[9px] font-bold text-white bg-black/50 rounded px-1.5 py-0.5">MAIN</span>}
+                      </div>
+                    );
+                  }
+                  if (isAddSlot) {
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => fileRef.current?.click()}
+                        onDragEnter={(e) => { e.preventDefault(); setDragOverZone(true); }}
+                        onDragOver={(e) => { e.preventDefault(); setDragOverZone(true); }}
+                        onDragLeave={() => setDragOverZone(false)}
+                        onDrop={(e) => { e.preventDefault(); setDragOverZone(false); handleDrop(e); }}
+                        className={`aspect-square rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-1.5 transition-all ${
+                          dragOverZone
+                            ? "border-blue-400 bg-blue-50 dark:bg-slate-700"
+                            : "border-gray-300 dark:border-slate-600 hover:border-[#003366] dark:hover:border-blue-500 bg-gray-50 dark:bg-slate-800/50"
+                        }`}
+                      >
+                        <ImagePlus size={22} className="text-gray-400 dark:text-slate-500" />
+                        <span className="text-[10px] text-gray-400 dark:text-slate-500 font-medium">Add Photo</span>
+                      </button>
+                    );
+                  }
+                  return (
+                    <div
+                      key={i}
+                      className="aspect-square rounded-xl border border-dashed border-gray-200 dark:border-slate-700 flex items-center justify-center bg-gray-50/50 dark:bg-slate-800/20"
+                    >
+                      <ImagePlus size={18} className="text-gray-200 dark:text-slate-700" />
+                    </div>
+                  );
+                })}
               </div>
+              {photoError && (
+                <p className="text-xs text-red-500 dark:text-red-400 mt-2">{photoError}</p>
+              )}
+              <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoChange} />
             </div>
-            {vehicleType !== "bicycle" && vehicleType !== "electric-bike" && (
-              <div className="grid grid-cols-2 gap-3">
+
+            {/* Step 2 — Item Details */}
+            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-5 shadow-sm">
+              <div className="flex items-center gap-2.5 mb-4">
+                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-[#003366] dark:bg-blue-600 text-white text-xs font-bold shrink-0">2</span>
+                <h2 className="text-sm font-bold text-gray-800 dark:text-slate-200">Item Details</h2>
+              </div>
+              <div className="space-y-4">
+
+                {/* Title */}
                 <div>
-                  <label className={labelCls}>{t.rentalBrandLabel} *</label>
-                  <input type="text" value={vehicleBrand} onChange={(e) => { setVehicleBrand(e.target.value); setIsDirty(true); }} placeholder="e.g. Honda" className={inputCls} />
-                </div>
-                <div>
-                  <label className={labelCls}>{t.rentalModelLabel} *</label>
-                  <input type="text" value={vehicleModel} onChange={(e) => { setVehicleModel(e.target.value); setIsDirty(true); }} placeholder="e.g. City" className={inputCls} />
-                </div>
-                <div>
-                  <label className={labelCls}>{t.rentalYearLabel}</label>
-                  <input type="number" value={vehicleYear} onChange={(e) => { setVehicleYear(Number(e.target.value)); setIsDirty(true); }} min={1990} max={currentYear + 1} className={inputCls} />
-                </div>
-                <div>
-                  <label className={labelCls}>{t.rentalPlateNumber} *</label>
-                  <input type="text" value={plateNumber} onChange={(e) => { setPlateNumber(e.target.value.toUpperCase()); setIsDirty(true); }} placeholder="e.g. PBJ 1234" className={`${inputCls} uppercase font-mono tracking-widest`} />
-                </div>
-              </div>
-            )}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={labelCls}>Per Day (RM) <span className="text-gray-400 font-normal text-xs">(required if no hourly)</span></label>
-                <CentsInput value={rentalPricePerDayCents} onChange={(v) => { setRentalPricePerDayCents(v); setIsDirty(true); }} />
-              </div>
-              <div>
-                <label className={labelCls}>Per Hour (RM) <span className="text-gray-400 font-normal text-xs">(required if no daily)</span></label>
-                <CentsInput value={rentalPricePerHourCents} onChange={(v) => { setRentalPricePerHourCents(v); setIsDirty(true); }} />
-              </div>
-              <div>
-                <label className={labelCls}>{t.rentalDeposit} (RM) <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
-                <CentsInput value={depositCents} onChange={(v) => { setDepositCents(v); setIsDirty(true); }} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={labelCls}>{t.rentalAvailableFromLabel} <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
-                <input type="date" value={availableFrom} onChange={(e) => { setAvailableFrom(e.target.value); setIsDirty(true); }} className={inputCls} min={new Date().toISOString().split("T")[0]} />
-              </div>
-              <div>
-                <label className={labelCls}>{t.rentalAvailableToLabel} <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
-                <input type="date" value={availableTo} onChange={(e) => { setAvailableTo(e.target.value); setIsDirty(true); }} className={inputCls} min={availableFrom || new Date().toISOString().split("T")[0]} />
-              </div>
-            </div>
-            {(vehicleType === "car" || vehicleType === "motorcycle") && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-3 min-h-[52px]">
-                  <div>
-                    <p className="text-sm font-semibold text-gray-700 dark:text-slate-200">{t.rentalLicenceRequired}</p>
-                    <p className="text-xs text-gray-400 dark:text-slate-500">For Renter</p>
+                  <label className={labelCls}>
+                    {(type === "jobs" || type === "assistance") ? t.serviceTitle : type === "rental" ? "Listing Title *" : t.title} *
+                  </label>
+                  <input
+                    ref={titleRef}
+                    type="text"
+                    value={title}
+                    onChange={(e) => { setTitle(e.target.value); setIsDirty(true); setFieldError(null); }}
+                    onBlur={saveDraft}
+                    required
+                    maxLength={80}
+                    placeholder={
+                      type === "jobs" ? "e.g. Math Tutor Available" :
+                      type === "assistance" ? "e.g. Help Moving Dorm Room" :
+                      type === "rental" ? "e.g. 2020 Honda City Available for Rent" :
+                      ""
+                    }
+                    className={`${inputCls} ${fieldError === "content" ? "ring-2 ring-red-400" : ""}`}
+                  />
+                  <div className={`text-right text-xs mt-1 font-medium ${title.length > 70 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
+                    {title.length} / 80
                   </div>
-                  <button type="button" onClick={() => { setRequiresLicense(!requiresLicense); setIsDirty(true); }} className={`relative w-11 h-6 rounded-full transition-colors ${requiresLicense ? "bg-[#003366] dark:bg-blue-600" : "bg-gray-200 dark:bg-slate-500"}`}>
-                    <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${requiresLicense ? "left-6" : "left-1"}`} />
-                  </button>
                 </div>
-                <div className="flex items-center justify-between bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-3 min-h-[52px]">
-                  <p className="text-sm font-semibold text-gray-700 dark:text-slate-200">{t.rentalInsuranceRequired}</p>
-                  <button type="button" onClick={() => { setRequiresInsuranceProof(!requiresInsuranceProof); setIsDirty(true); }} className={`relative w-11 h-6 rounded-full transition-colors ${requiresInsuranceProof ? "bg-[#003366] dark:bg-blue-600" : "bg-gray-200 dark:bg-slate-500"}`}>
-                    <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${requiresInsuranceProof ? "left-6" : "left-1"}`} />
-                  </button>
-                </div>
-              </div>
-            )}
-            <div>
-              <label className={labelCls}>{t.rentalSellerTerms} <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
-              <textarea value={rentalTerms} onChange={(e) => { setRentalTerms(e.target.value.slice(0, 500)); setIsDirty(true); }} rows={3} className={`${inputCls} resize-none`} placeholder={t.rentalCustomTermsPlaceholder} />
-            </div>
-          </>
-        )}
 
-        {/* Condition — Buy & Sell only */}
-        {type === "buy-sell" && (
-          <div>
-            <label className={labelCls}>{t.condition}</label>
-            <div className="flex gap-2">
-              {(["used", "new"] as Condition[]).map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => { setCondition(c); setIsDirty(true); }}
-                  className={`flex-1 min-h-[44px] py-2.5 rounded-xl text-sm font-semibold border transition-colors ${
-                    condition === c
-                      ? "bg-[#003366] dark:bg-blue-600 text-white border-[#003366] dark:border-blue-600"
-                      : "bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600 hover:border-[#003366] dark:hover:border-blue-500"
-                  }`}
-                >
-                  {c === "new" ? t.conditionNew : t.conditionUsed}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+                {/* Jobs: subtype selector */}
+                {type === "jobs" && (
+                  <div>
+                    <label className={labelCls}>{t.jobSubtypeLabel}</label>
+                    <div className="flex gap-2">
+                      {(["offering", "seeking"] as const).map((sub) => (
+                        <button
+                          key={sub}
+                          type="button"
+                          onClick={() => { setJobSubtype(sub); setIsDirty(true); }}
+                          className={`flex-1 min-h-[44px] py-2.5 rounded-xl text-sm font-semibold border transition-colors ${
+                            jobSubtype === sub
+                              ? "bg-[#003366] dark:bg-blue-600 text-white border-[#003366] dark:border-blue-600"
+                              : "bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600 hover:border-[#003366] dark:hover:border-blue-500"
+                          }`}
+                        >
+                          {sub === "offering" ? `▶ ${t.jobSubtypeOffering}` : `◀ ${t.jobSubtypeSeeking}`}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-        {/* Price */}
-        {(type === "buy-sell" || type === "assistance") && (
-          <div>
-            <label className={labelCls}>
-              {type === "buy-sell" ? t.price : "Service Rate (RM)"}
-              {type === "buy-sell" && <span className="ml-1 text-xs text-gray-400 font-normal">(enter 0 for free)</span>}
-            </label>
-            {type === "assistance" && (
-              <div className="flex gap-2 mb-2">
-                {(["per_hour", "per_day", "per_month", "fixed"] as const).map((model) => (
+                {/* Remote toggle for jobs */}
+                {type === "jobs" && (
+                  <div className="flex items-center justify-between bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-3 min-h-[56px]">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-700 dark:text-slate-200">{t.availableRemotely}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { setIsRemote(!isRemote); setIsDirty(true); }}
+                      className={`relative w-11 h-6 rounded-full transition-colors ${isRemote ? "bg-[#003366] dark:bg-blue-600" : "bg-gray-200 dark:bg-slate-500"}`}
+                    >
+                      <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${isRemote ? "left-6" : "left-1"}`} />
+                    </button>
+                  </div>
+                )}
+
+                {/* Description */}
+                <div>
+                  <label className={labelCls}>
+                    {t.descriptionLabel} *
+                  </label>
                   <button
-                    key={model}
                     type="button"
-                    onClick={() => { setPricingModel(model); setIsDirty(true); }}
-                    className={`flex-1 min-h-[40px] py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-                      pricingModel === model
-                        ? "bg-orange-500 text-white border-orange-500"
-                        : "bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600"
-                    }`}
+                    onClick={() => setShowDescEditor(true)}
+                    className={`w-full text-left border rounded-xl px-3 py-2.5 text-sm min-h-[80px] bg-white dark:bg-slate-700 ${
+                      description ? "text-gray-900 dark:text-slate-100" : "text-gray-400 dark:text-slate-500"
+                    } ${fieldError === "content" ? "border-red-400 ring-2 ring-red-400" : "border-gray-300 dark:border-slate-600"}`}
                   >
-                    {(t as any)[`${model}Label`] ?? model}
+                    {description ? (
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="line-clamp-3 leading-relaxed whitespace-pre-wrap">{description}</span>
+                        <Edit2 size={14} className="text-gray-400 dark:text-slate-500 shrink-0 mt-0.5" />
+                      </div>
+                    ) : (
+                      <span>{t.descriptionPlaceholder}</span>
+                    )}
                   </button>
-                ))}
+                  {description && (
+                    <div className={`text-right text-xs mt-1 font-medium ${description.length > 2700 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
+                      {description.length} / 3000
+                    </div>
+                  )}
+                </div>
+                {showDescEditor && (
+                  <DescriptionEditorModal
+                    value={description}
+                    onChange={(val) => { setDescription(val); setIsDirty(true); setFieldError(null); }}
+                    onClose={() => setShowDescEditor(false)}
+                  />
+                )}
+
+                {/* Category */}
+                <div>
+                  <label className={labelCls}>{t.category}</label>
+                  <select value={category} onChange={(e) => { setCategory(e.target.value); setIsDirty(true); }} className={selectCls}>
+                    {categories.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {(t.categories as any)[cat] ?? cat}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Rental: Vehicle details */}
+                {type === "rental" && (
+                  <>
+                    <div>
+                      <label className={labelCls}>Vehicle Type *</label>
+                      <div className="grid grid-cols-5 gap-1.5">
+                        {RENTAL_VEHICLE_TYPES.map((vt) => (
+                          <button
+                            key={vt}
+                            type="button"
+                            onClick={() => { setVehicleType(vt); setIsDirty(true); }}
+                            className={`py-2 rounded-xl text-xs font-semibold border min-h-[44px] flex flex-col items-center justify-center gap-0.5 transition-colors ${
+                              vehicleType === vt
+                                ? "bg-[#003366] dark:bg-blue-600 text-white border-transparent"
+                                : "bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600"
+                            }`}
+                          >
+                            <span className="text-lg">{vt === "car" ? "🚗" : vt === "bicycle" ? "🚲" : vt === "electric-bike" ? "⚡" : "🏍️"}</span>
+                            <span className="text-[9px] capitalize">{vt}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {vehicleType !== "bicycle" && vehicleType !== "electric-bike" && (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className={labelCls}>{t.rentalBrandLabel} *</label>
+                          <input type="text" value={vehicleBrand} onChange={(e) => { setVehicleBrand(e.target.value); setIsDirty(true); }} placeholder="e.g. Honda" className={inputCls} />
+                        </div>
+                        <div>
+                          <label className={labelCls}>{t.rentalModelLabel} *</label>
+                          <input type="text" value={vehicleModel} onChange={(e) => { setVehicleModel(e.target.value); setIsDirty(true); }} placeholder="e.g. City" className={inputCls} />
+                        </div>
+                        <div>
+                          <label className={labelCls}>{t.rentalYearLabel}</label>
+                          <input type="number" value={vehicleYear} onChange={(e) => { setVehicleYear(Number(e.target.value)); setIsDirty(true); }} min={1990} max={currentYear + 1} className={inputCls} />
+                        </div>
+                        <div>
+                          <label className={labelCls}>{t.rentalPlateNumber} *</label>
+                          <input type="text" value={plateNumber} onChange={(e) => { setPlateNumber(e.target.value.toUpperCase()); setIsDirty(true); }} placeholder="e.g. PBJ 1234" className={`${inputCls} uppercase font-mono tracking-widest`} />
+                        </div>
+                      </div>
+                    )}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelCls}>Per Day (RM) <span className="text-gray-400 font-normal text-xs">(required if no hourly)</span></label>
+                        <CentsInput value={rentalPricePerDayCents} onChange={(v) => { setRentalPricePerDayCents(v); setIsDirty(true); }} />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Per Hour (RM) <span className="text-gray-400 font-normal text-xs">(required if no daily)</span></label>
+                        <CentsInput value={rentalPricePerHourCents} onChange={(v) => { setRentalPricePerHourCents(v); setIsDirty(true); }} />
+                      </div>
+                      <div>
+                        <label className={labelCls}>{t.rentalDeposit} (RM) <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
+                        <CentsInput value={depositCents} onChange={(v) => { setDepositCents(v); setIsDirty(true); }} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelCls}>{t.rentalAvailableFromLabel} <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
+                        <input type="date" value={availableFrom} onChange={(e) => { setAvailableFrom(e.target.value); setIsDirty(true); }} className={inputCls} min={new Date().toISOString().split("T")[0]} />
+                      </div>
+                      <div>
+                        <label className={labelCls}>{t.rentalAvailableToLabel} <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
+                        <input type="date" value={availableTo} onChange={(e) => { setAvailableTo(e.target.value); setIsDirty(true); }} className={inputCls} min={availableFrom || new Date().toISOString().split("T")[0]} />
+                      </div>
+                    </div>
+                    {(vehicleType === "car" || vehicleType === "motorcycle") && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-3 min-h-[52px]">
+                          <div>
+                            <p className="text-sm font-semibold text-gray-700 dark:text-slate-200">{t.rentalLicenceRequired}</p>
+                            <p className="text-xs text-gray-400 dark:text-slate-500">For Renter</p>
+                          </div>
+                          <button type="button" onClick={() => { setRequiresLicense(!requiresLicense); setIsDirty(true); }} className={`relative w-11 h-6 rounded-full transition-colors ${requiresLicense ? "bg-[#003366] dark:bg-blue-600" : "bg-gray-200 dark:bg-slate-500"}`}>
+                            <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${requiresLicense ? "left-6" : "left-1"}`} />
+                          </button>
+                        </div>
+                        <div className="flex items-center justify-between bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-3 min-h-[52px]">
+                          <p className="text-sm font-semibold text-gray-700 dark:text-slate-200">{t.rentalInsuranceRequired}</p>
+                          <button type="button" onClick={() => { setRequiresInsuranceProof(!requiresInsuranceProof); setIsDirty(true); }} className={`relative w-11 h-6 rounded-full transition-colors ${requiresInsuranceProof ? "bg-[#003366] dark:bg-blue-600" : "bg-gray-200 dark:bg-slate-500"}`}>
+                            <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${requiresInsuranceProof ? "left-6" : "left-1"}`} />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    <div>
+                      <label className={labelCls}>{t.rentalSellerTerms} <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
+                      <textarea value={rentalTerms} onChange={(e) => { setRentalTerms(e.target.value.slice(0, 500)); setIsDirty(true); }} rows={3} className={`${inputCls} resize-none`} placeholder={t.rentalCustomTermsPlaceholder} />
+                    </div>
+                  </>
+                )}
+
+                {/* Condition — Buy & Sell only */}
+                {type === "buy-sell" && (
+                  <div>
+                    <label className={labelCls}>{t.condition}</label>
+                    <div className="flex gap-2">
+                      {(["used", "new"] as Condition[]).map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => { setCondition(c); setIsDirty(true); }}
+                          className={`flex-1 min-h-[44px] py-2.5 rounded-xl text-sm font-semibold border transition-colors ${
+                            condition === c
+                              ? "bg-[#003366] dark:bg-blue-600 text-white border-[#003366] dark:border-blue-600"
+                              : "bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600 hover:border-[#003366] dark:hover:border-blue-500"
+                          }`}
+                        >
+                          {c === "new" ? t.conditionNew : t.conditionUsed}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Price */}
+                {(type === "buy-sell" || type === "assistance") && (
+                  <div>
+                    <label className={labelCls}>
+                      {type === "buy-sell" ? t.price : "Service Rate (RM)"}
+                      {type === "buy-sell" && <span className="ml-1 text-xs text-gray-400 font-normal">(enter 0 for free)</span>}
+                    </label>
+                    {type === "assistance" && (
+                      <div className="flex gap-2 mb-2">
+                        {(["per_hour", "per_day", "per_month", "fixed"] as const).map((model) => (
+                          <button
+                            key={model}
+                            type="button"
+                            onClick={() => { setPricingModel(model); setIsDirty(true); }}
+                            className={`flex-1 min-h-[40px] py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                              pricingModel === model
+                                ? "bg-orange-500 text-white border-orange-500"
+                                : "bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600"
+                            }`}
+                          >
+                            {(t as any)[`${model}Label`] ?? model}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <CentsInput value={priceCents} onChange={(v) => { setPriceCents(v); setIsDirty(true); }} onBlur={saveDraft} />
+                    {priceCents > 50_000_000 && (
+                      <p className="mt-1.5 text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                        ⚠ Double-check — this is an unusually high price for a student marketplace.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Jobs: rate (optional) */}
+                {type === "jobs" && (
+                  <div>
+                    <label className={labelCls}>{t.pricePerHour} <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
+                    <CentsInput value={priceCents} onChange={(v) => { setPriceCents(v); setIsDirty(true); }} onBlur={saveDraft} />
+                    {priceCents > 50_000_000 && (
+                      <p className="mt-1.5 text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                        ⚠ Double-check — this is an unusually high price for a student marketplace.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Availability (Assistance) */}
+                {type === "assistance" && (
+                  <div>
+                    <label className={labelCls}>{t.availability} <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
+                    <input type="text" value={availability} onChange={(e) => { setAvailability(e.target.value); setIsDirty(true); }} placeholder={t.availabilityPlaceholder} className={inputCls} />
+                  </div>
+                )}
+
+                {/* Meetup spot */}
+                {(type !== "rental" && !(type === "jobs" && isRemote)) && (
+                  <div>
+                    <label className={labelCls}>
+                      {t.meetupSpot} <span className="text-gray-400 font-normal text-xs">(optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={meetupSpot}
+                      onChange={(e) => { setMeetupSpot(e.target.value); setIsDirty(true); }}
+                      onBlur={saveDraft}
+                      placeholder={type === "jobs" || type === "assistance" ? "e.g. Library, Block A, etc." : t.meetupSpotPlaceholder}
+                      className={inputCls}
+                    />
+                  </div>
+                )}
+
               </div>
-            )}
-            <CentsInput value={priceCents} onChange={(v) => { setPriceCents(v); setIsDirty(true); }} onBlur={saveDraft} />
-            {priceCents > 50_000_000 && (
-              <p className="mt-1.5 text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                ⚠ Double-check — this is an unusually high price for a student marketplace.
-              </p>
-            )}
-          </div>
-        )}
+            </div>
 
-        {/* Jobs: rate (optional) */}
-        {type === "jobs" && (
-          <div>
-            <label className={labelCls}>{t.pricePerHour} <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
-            <CentsInput value={priceCents} onChange={(v) => { setPriceCents(v); setIsDirty(true); }} onBlur={saveDraft} />
-            {priceCents > 50_000_000 && (
-              <p className="mt-1.5 text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                ⚠ Double-check — this is an unusually high price for a student marketplace.
-              </p>
-            )}
-          </div>
-        )}
+            {/* Step 3 — Contact Information */}
+            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-5 shadow-sm">
+              <div className="flex items-center gap-2.5 mb-4">
+                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-[#003366] dark:bg-blue-600 text-white text-xs font-bold shrink-0">3</span>
+                <h2 className="text-sm font-bold text-gray-800 dark:text-slate-200">Contact Information</h2>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <label className={labelCls}>
+                    WhatsApp {type === "rental" ? <span className="text-red-500">*</span> : <span className="text-gray-400 font-normal">(optional)</span>}
+                  </label>
+                  <input
+                    type="text"
+                    value={whatsapp}
+                    onChange={(e) => { setWhatsapp(e.target.value); setWhatsappError(""); setIsDirty(true); }}
+                    onBlur={() => {
+                      saveDraft();
+                      if (!whatsapp.trim()) return;
+                      const result = validateWhatsApp(whatsapp);
+                      if (!result.valid) {
+                        const suggested = suggestMalaysianFormat(whatsapp);
+                        setWhatsappError(suggested !== whatsapp ? result.error + ` Did you mean ${suggested}?` : result.error);
+                      }
+                    }}
+                    placeholder="+60123456789"
+                    className={inputCls}
+                  />
+                  {whatsappError ? (
+                    <p className="text-xs text-red-500 mt-1 flex items-center gap-1"><AlertCircle size={12} /> {whatsappError}</p>
+                  ) : (
+                    <p className="text-xs text-slate-400 mt-1">Include country code, e.g. +60 for Malaysia</p>
+                  )}
+                </div>
+                <div>
+                  <label className={labelCls}>WeChat ID <span className="text-gray-400 font-normal">(optional)</span></label>
+                  <input type="text" value={wechat} onChange={(e) => { setWechat(e.target.value); setIsDirty(true); }} onBlur={saveDraft} placeholder="WeChat ID" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Microsoft Teams <span className="text-gray-400 font-normal">(optional)</span></label>
+                  <input type="text" value={teams} onChange={(e) => { setTeams(e.target.value); setIsDirty(true); }} placeholder="your@xmu.edu.my" className={inputCls} />
+                </div>
+              </div>
+            </div>
 
-        {/* Availability (Assistance) */}
-        {type === "assistance" && (
-          <div>
-            <label className={labelCls}>{t.availability} <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
-            <input type="text" value={availability} onChange={(e) => { setAvailability(e.target.value); setIsDirty(true); }} placeholder={t.availabilityPlaceholder} className={inputCls} />
-          </div>
-        )}
-
-        {/* Meetup spot */}
-        {(type !== "rental" && !(type === "jobs" && isRemote)) && (
-          <div>
-            <label className={labelCls}>
-              {t.meetupSpot} <span className="text-gray-400 font-normal text-xs">(optional)</span>
-            </label>
-            <input
-              type="text"
-              value={meetupSpot}
-              onChange={(e) => { setMeetupSpot(e.target.value); setIsDirty(true); }}
-              onBlur={saveDraft}
-              placeholder={type === "jobs" || type === "assistance" ? "e.g. Library, Block A, etc." : t.meetupSpotPlaceholder}
-              className={inputCls}
-            />
-          </div>
-        )}
-
-        {/* Contact info */}
-        <div className="bg-white dark:bg-slate-700/50 border border-gray-200 dark:border-slate-600 rounded-2xl p-4 space-y-3">
-          <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">{t.contactInfo}</p>
-          <div>
-            <label className={labelCls}>
-              WhatsApp {type === "rental" ? <span className="text-red-500">*</span> : <span className="text-gray-400 font-normal">(optional)</span>}
-            </label>
-            <input
-              type="text"
-              value={whatsapp}
-              onChange={(e) => { setWhatsapp(e.target.value); setWhatsappError(""); setIsDirty(true); }}
-              onBlur={() => {
-                saveDraft();
-                if (!whatsapp.trim()) return;
-                const result = validateWhatsApp(whatsapp);
-                if (!result.valid) {
-                  const suggested = suggestMalaysianFormat(whatsapp);
-                  setWhatsappError(suggested !== whatsapp ? result.error + ` Did you mean ${suggested}?` : result.error);
-                }
-              }}
-              placeholder="+60123456789"
-              className={inputCls}
-            />
-            {whatsappError ? (
-              <p className="text-xs text-red-500 mt-1 flex items-center gap-1"><AlertCircle size={12} /> {whatsappError}</p>
-            ) : (
-              <p className="text-xs text-slate-400 mt-1">Include country code, e.g. +60 for Malaysia</p>
-            )}
-          </div>
-          <div>
-            <label className={labelCls}>WeChat ID <span className="text-gray-400 font-normal">(optional)</span></label>
-            <input type="text" value={wechat} onChange={(e) => { setWechat(e.target.value); setIsDirty(true); }} onBlur={saveDraft} placeholder="WeChat ID" className={inputCls} />
-          </div>
-          <div>
-            <label className={labelCls}>Microsoft Teams <span className="text-gray-400 font-normal">(optional)</span></label>
-            <input type="text" value={teams} onChange={(e) => { setTeams(e.target.value); setIsDirty(true); }} placeholder="your@xmu.edu.my" className={inputCls} />
-          </div>
-        </div>
+          </div>{/* end right column */}
+        </div>{/* end two-column grid */}
 
         {error && (
           <div className="flex items-start gap-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl px-3 py-2.5">
@@ -1282,7 +1341,7 @@ export default function PostPage() {
         )}
 
         {/* FIX 6: Sticky submit button */}
-        <div className="sticky bottom-0 z-20 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-700 px-4 pt-3 pb-4 md:static md:bg-transparent md:border-0 md:p-0 md:mt-6 -mx-4">
+        <div className="sticky bottom-0 z-20 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-700 px-4 pt-3 pb-4 md:static md:bg-transparent md:border-0 md:p-0 md:mt-6 -mx-4 md:mx-0">
           <div className="pointer-events-none absolute -top-6 left-0 right-0 h-6 bg-gradient-to-t from-white dark:from-slate-900 to-transparent md:hidden" />
           <button
             type="submit"

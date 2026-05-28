@@ -21,7 +21,7 @@ import {
 import {
   Loader2, Plus, Trash2, Edit2, CheckCircle2, Package, MessageSquare, Users,
   Settings, ImagePlus, X, Store, UserMinus, UserPlus, Camera, Send,
-  BarChart2,
+  BarChart2, AlertCircle,
 } from "lucide-react";
 import ReportHoldModal from "@/components/ReportHoldModal";
 import { SiWhatsapp, SiInstagram } from "react-icons/si";
@@ -254,82 +254,173 @@ function AddListingForm({ shopId, shop, onClose, onCreated }: { shopId: string; 
   };
 
   return (
-    <div className="bg-blue-50 dark:bg-slate-800/60 border border-blue-100 dark:border-slate-700 rounded-2xl p-4 mb-4">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-bold text-gray-900 dark:text-slate-100">New Listing</h3>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-300"><X size={16} /></button>
+    <div className="fixed inset-0 z-[80] flex flex-col bg-white dark:bg-slate-900 overflow-y-auto animate-in fade-in duration-200">
+      {/* Modal header */}
+      <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 px-4 sm:px-6 py-4 flex items-center justify-between shadow-sm">
+        <div>
+          <h2 className="text-lg font-display font-bold text-gray-900 dark:text-slate-100">Add Listing</h2>
+          <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{shop.name}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex items-center justify-center w-9 h-9 rounded-xl text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
+        >
+          <X size={18} />
+        </button>
       </div>
-      <form onSubmit={handleSubmit} className="space-y-3">
-        {error && <p className="text-xs text-red-500">{error}</p>}
-        <div><label className={labelCls}>Title <span className="text-red-500">*</span></label><input className={inputCls} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Nasi Lemak Set" maxLength={80} /></div>
-        <div>
-          <label className={labelCls}>Description</label>
-          <button
-            type="button"
-            onClick={() => setShowDescModal(true)}
-            className={`w-full text-left border rounded-xl px-3 py-2.5 text-sm min-h-[60px] bg-white dark:bg-slate-700 ${
-              description ? "text-gray-900 dark:text-slate-100" : "text-gray-400 dark:text-slate-500"
-            } border-gray-300 dark:border-slate-600`}
-          >
-            {description ? (
-              <div className="flex items-start justify-between gap-2">
-                <span className="line-clamp-2 leading-relaxed whitespace-pre-wrap">{description}</span>
-                <Edit2 size={14} className="text-gray-400 dark:text-slate-500 shrink-0 mt-0.5" />
-              </div>
-            ) : (
-              <span>Add a description (optional)</span>
-            )}
-          </button>
-          {description && (
-            <p className={`text-right text-xs mt-1 font-medium ${description.length > 2700 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
-              {description.length} / 3000
-            </p>
+
+      {/* Content */}
+      <div className="flex-1 w-full max-w-2xl mx-auto px-4 sm:px-6 py-6 pb-28">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div className="flex items-start gap-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl px-3 py-2.5">
+              <AlertCircle size={14} className="text-red-500 dark:text-red-400 shrink-0 mt-0.5" />
+              <p className="text-xs text-red-700 dark:text-red-300">{error}</p>
+            </div>
           )}
-          {showDescModal && (
-            <ListingDescEditorModal
-              value={description}
-              onChange={setDescription}
-              onClose={() => setShowDescModal(false)}
-            />
-          )}
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <div><label className={labelCls}>Price (RM)</label><input className={inputCls} type="number" min="0" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00" /></div>
-          <div>
-            <label className={labelCls}>Pricing</label>
-            <select className="w-full bg-white text-gray-900 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600 dark:[color-scheme:dark] focus:outline-none focus:ring-2 focus:ring-blue-500 transition min-h-[44px]" value={pricingModel} onChange={(e) => setPricingModel(e.target.value as ShopListing["pricingModel"])}>
-              <option value="fixed">Fixed</option>
-              <option value="per_hour">Per Hour</option>
-              <option value="per_day">Per Day</option>
-              <option value="negotiable">Negotiable</option>
-            </select>
-          </div>
-        </div>
-        <div>
-          <label className={labelCls}>Category</label>
-          <select className="w-full bg-white text-gray-900 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600 dark:[color-scheme:dark] focus:outline-none focus:ring-2 focus:ring-blue-500 transition min-h-[44px]" value={category} onChange={(e) => setCategory(e.target.value as ShopCategory)}>
-            {SHOP_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className={labelCls}>Photos (up to 4)</label>
-          <div className="flex flex-wrap gap-2">
-            {previews.map((p, i) => (
-              <div key={i} className="relative w-16 h-16">
-                <img src={p} className="w-16 h-16 object-cover rounded-lg" alt="" />
-                <button type="button" onClick={() => { setPhotos((a) => a.filter((_, j) => j !== i)); setPreviews((a) => a.filter((_, j) => j !== i)); }} className="absolute -top-1 -right-1 bg-red-500 rounded-full p-0.5 text-white"><X size={10} /></button>
-              </div>
-            ))}
-            {photos.length < 4 && (
-              <button type="button" onClick={() => fileRef.current?.click()} className="w-16 h-16 border-2 border-dashed border-gray-300 dark:border-slate-600 rounded-lg flex items-center justify-center text-gray-400 hover:border-[#003366] hover:text-[#003366] transition"><ImagePlus size={18} /></button>
-            )}
+
+          {/* Step 1 — Photos */}
+          <div className="bg-gray-50 dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-5">
+            <div className="flex items-center gap-2.5 mb-4">
+              <span className="flex items-center justify-center w-6 h-6 rounded-full bg-[#003366] dark:bg-blue-600 text-white text-xs font-bold shrink-0">1</span>
+              <h3 className="text-sm font-bold text-gray-800 dark:text-slate-200">Photos</h3>
+              <span className="text-xs text-gray-400 dark:text-slate-500 ml-auto">Up to 4 · Max 5MB each</span>
+            </div>
+            <div className="grid grid-cols-4 gap-2.5">
+              {Array.from({ length: 4 }).map((_, i) => {
+                const hasPhoto = i < previews.length;
+                const isAddSlot = i === photos.length && photos.length < 4;
+                if (hasPhoto) {
+                  return (
+                    <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-gray-200 dark:border-slate-600 group">
+                      <img src={previews[i]} alt="" className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
+                      <button
+                        type="button"
+                        onClick={() => { setPhotos((a) => a.filter((_, j) => j !== i)); setPreviews((a) => a.filter((_, j) => j !== i)); }}
+                        className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                      >
+                        <X size={10} />
+                      </button>
+                      {i === 0 && <span className="absolute bottom-1 left-1 text-[8px] font-bold text-white bg-black/50 rounded px-1 py-0.5">MAIN</span>}
+                    </div>
+                  );
+                }
+                if (isAddSlot) {
+                  return (
+                    <button key={i} type="button" onClick={() => fileRef.current?.click()}
+                      className="aspect-square rounded-xl border-2 border-dashed border-gray-300 dark:border-slate-600 flex flex-col items-center justify-center gap-1 hover:border-[#003366] dark:hover:border-blue-500 transition-colors bg-white dark:bg-slate-800/50">
+                      <ImagePlus size={18} className="text-gray-400 dark:text-slate-500" />
+                      <span className="text-[9px] text-gray-400 dark:text-slate-500 font-medium">Add</span>
+                    </button>
+                  );
+                }
+                return (
+                  <div key={i} className="aspect-square rounded-xl border border-dashed border-gray-200 dark:border-slate-700 flex items-center justify-center bg-gray-50/50 dark:bg-slate-800/20">
+                    <ImagePlus size={14} className="text-gray-200 dark:text-slate-700" />
+                  </div>
+                );
+              })}
+            </div>
             <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => handlePhotos(e.target.files)} />
           </div>
-        </div>
-        <button type="submit" disabled={loading} className="w-full min-h-[44px] bg-[#003366] dark:bg-blue-600 text-white font-semibold text-sm rounded-xl hover:bg-[#002244] disabled:opacity-50 transition flex items-center justify-center gap-2">
-          {loading ? <><Loader2 size={15} className="animate-spin" /> Uploading…</> : "Add Listing"}
-        </button>
-      </form>
+
+          {/* Step 2 — Listing Details */}
+          <div className="bg-gray-50 dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-5">
+            <div className="flex items-center gap-2.5 mb-4">
+              <span className="flex items-center justify-center w-6 h-6 rounded-full bg-[#003366] dark:bg-blue-600 text-white text-xs font-bold shrink-0">2</span>
+              <h3 className="text-sm font-bold text-gray-800 dark:text-slate-200">Listing Details</h3>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-display font-semibold text-gray-700 dark:text-slate-300 mb-1">
+                  Title <span className="text-red-500">*</span>
+                </label>
+                <input
+                  className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-200 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-[#003366]/30 dark:focus:ring-blue-400/30 focus:border-[#003366] dark:focus:border-blue-400 transition min-h-[44px] shadow-sm"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g. Nasi Lemak Set"
+                  maxLength={80}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-display font-semibold text-gray-700 dark:text-slate-300 mb-1">Description</label>
+                <button
+                  type="button"
+                  onClick={() => setShowDescModal(true)}
+                  className={`w-full text-left border rounded-xl px-3 py-2.5 text-sm min-h-[80px] bg-white dark:bg-slate-700 ${
+                    description ? "text-gray-900 dark:text-slate-100" : "text-gray-400 dark:text-slate-500"
+                  } border-gray-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-[#003366]/30 focus:border-[#003366] transition shadow-sm`}
+                >
+                  {description ? (
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="line-clamp-3 leading-relaxed whitespace-pre-wrap">{description}</span>
+                      <Edit2 size={14} className="text-gray-400 dark:text-slate-500 shrink-0 mt-0.5" />
+                    </div>
+                  ) : (
+                    <span>Describe your listing — what it is, condition, any details customers should know…</span>
+                  )}
+                </button>
+                {description && (
+                  <p className={`text-right text-xs mt-1 font-medium ${description.length > 2700 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
+                    {description.length} / 3000
+                  </p>
+                )}
+                {showDescModal && (
+                  <ListingDescEditorModal
+                    value={description}
+                    onChange={setDescription}
+                    onClose={() => setShowDescModal(false)}
+                  />
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-display font-semibold text-gray-700 dark:text-slate-300 mb-1">Price (RM)</label>
+                  <input
+                    className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-200 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-[#003366]/30 focus:border-[#003366] transition min-h-[44px] shadow-sm"
+                    type="number" min="0" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-display font-semibold text-gray-700 dark:text-slate-300 mb-1">Pricing Model</label>
+                  <select
+                    className="w-full bg-white text-gray-900 border border-gray-200 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600 dark:[color-scheme:dark] focus:outline-none focus:ring-2 focus:ring-[#003366]/30 focus:border-[#003366] transition min-h-[44px] shadow-sm"
+                    value={pricingModel} onChange={(e) => setPricingModel(e.target.value as ShopListing["pricingModel"])}
+                  >
+                    <option value="fixed">Fixed</option>
+                    <option value="per_hour">Per Hour</option>
+                    <option value="per_day">Per Day</option>
+                    <option value="negotiable">Negotiable</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-display font-semibold text-gray-700 dark:text-slate-300 mb-1">Category</label>
+                <select
+                  className="w-full bg-white text-gray-900 border border-gray-200 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600 dark:[color-scheme:dark] focus:outline-none focus:ring-2 focus:ring-[#003366]/30 focus:border-[#003366] transition min-h-[44px] shadow-sm"
+                  value={category} onChange={(e) => setCategory(e.target.value as ShopCategory)}
+                >
+                  {SHOP_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Submit button — sticky on mobile */}
+          <div className="sticky bottom-0 z-20 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-700 px-4 pt-3 pb-4 md:static md:bg-transparent md:border-0 md:p-0 md:mt-2 -mx-4 md:mx-0">
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full min-h-[52px] bg-[#003366] dark:bg-blue-600 text-white font-bold text-sm rounded-xl hover:brightness-110 disabled:opacity-50 transition flex items-center justify-center gap-2 shadow-sm"
+            >
+              {loading ? <><Loader2 size={16} className="animate-spin" /> Uploading…</> : "Publish Listing"}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
