@@ -14,6 +14,7 @@ import {
   Loader2, Store, MessageSquare, Edit2, Trash2, MoreHorizontal, Flag,
 } from "lucide-react";
 import { SiWhatsapp, SiWechat, SiInstagram } from "react-icons/si";
+import { RichTextDisplay } from "@/lib/richText";
 
 function PriceLabel({ listing }: { listing: ShopListing }) {
   if (listing.pricingModel === "negotiable")
@@ -241,9 +242,10 @@ export default function ShopListingDetailPage() {
               {listing.description && (
                 <div>
                   <p className="text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wider mb-2">Description</p>
-                  <p className={`text-sm text-gray-600 dark:text-slate-300 leading-relaxed whitespace-pre-wrap ${!descExpanded && listing.description.length > 200 ? "line-clamp-4" : ""}`}>
-                    {listing.description}
-                  </p>
+                  <RichTextDisplay
+                    text={listing.description}
+                    className={`text-sm text-gray-600 dark:text-slate-300 ${!descExpanded && listing.description.length > 200 ? "line-clamp-4" : ""}`}
+                  />
                   {listing.description.length > 200 && (
                     <button
                       onClick={() => setDescExpanded((v) => !v)}

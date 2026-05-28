@@ -1,0 +1,538 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files first.
+2. Do NOT rewrite any file from scratch. Surgical edits only.
+3. Do NOT remove any existing function, state, prop, handler, import, or JSX element unless told to.
+4. Never change any routing, Firestore logic, Storage logic, AI moderation calls, or Firebase calls.
+5. Never introduce framer-motion, GSAP, Quill, TipTap, ProseMirror, or any new npm package.
+6. Confirm zero errors: pnpm --filter xmum-market run build
+
+---
+
+## TASK: Add rich text formatting (bold, italic, font size) to all description editors
+
+### ARCHITECTURE DECISION — READ CAREFULLY
+
+We are NOT using a heavyweight rich text library (no Quill, TipTap, ProseMirror, Slate, Draft.js).
+We are NOT storing HTML in Firestore (XSS risk, AI moderation reads dirty text).
+
+We ARE using a lightweight markdown-subset approach:
+- Text is stored as plain-text with simple markers: `**bold**`, `*italic*`, `++large++`
+- A tiny parser renders these markers into React spans at display time
+- The toolbar buttons wrap selected text in these markers using the textarea selection API
+- Zero new npm dependencies required
+
+Font size options: Normal (default) and Large (`++text++`) only.
+No arbitrary sizes — keeps it simple and mobile-safe.
+
+---
+
+### STEP 1: Create the shared rich text utility
+
+Create a NEW file: `artifacts/xmum-market/src/lib/richText.ts`
+
+```typescript
+// Lightweight rich-text renderer for XMUM Market descriptions.
+// Storage format: plain text with markers **bold**, *italic*, ++large++
+// These markers are intentionally human-readable for AI moderation.
+
+import React from "react";
+
+export interface RichSegment {
+  text: string;
+  bold?: boolean;
+  italic?: boolean;
+  large?: boolean;
+}
+
+/** Strip all rich-text markers — used for plain-text previews (ListingCard, etc.) */
+export function stripRichText(text: string): string {
+  return text
+    .replace(/\*\*(.+?)\*\*/gs, "$1")
+    .replace(/\*(.+?)\*/gs, "$1")
+    .replace(/\+\+(.+?)\+\+/gs, "$1");
+}
+
+/** Parse rich-text markers into segments for rendering */
+export function parseRichText(text: string): RichSegment[] {
+  const segments: RichSegment[] = [];
+  // Combined regex: **bold**, *italic*, ++large++
+  const re = /(\*\*(.+?)\*\*|\*(.+?)\*|\+\+(.+?)\+\+)/gs;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = re.exec(text)) !== null) {
+    // Plain text before this match
+    if (match.index > lastIndex) {
+      segments.push({ text: text.slice(lastIndex, match.index) });
+    }
+    const full = match[0];
+    if (full.startsWith("**")) {
+      segments.push({ text: match[2], bold: true });
+    } else if (full.startsWith("++")) {
+      segments.push({ text: match[4], large: true });
+    } else {
+      segments.push({ text: match[3], italic: true });
+    }
+    lastIndex = re.lastIndex;
+  }
+
+  // Remaining plain text
+  if (lastIndex < text.length) {
+    segments.push({ text: text.slice(lastIndex) });
+  }
+
+  return segments;
+}
+
+/**
+ * Render rich-text segments into React elements.
+ * Preserves newlines using whitespace-pre-wrap on the container.
+ * Usage: <RichTextDisplay text={description} className="..." />
+ */
+export function RichTextDisplay({
+  text,
+  className = "",
+}: {
+  text: string;
+  className?: string;
+}): React.ReactElement {
+  const segments = parseRichText(text);
+
+  return React.createElement(
+    "p",
+    { className: `whitespace-pre-wrap leading-relaxed ${className}` },
+    ...segments.map((seg, i) => {
+      if (seg.bold && seg.italic) {
+        return React.createElement("strong", { key: i },
+          React.createElement("em", null, seg.text)
+        );
+      }
+      if (seg.bold) return React.createElement("strong", { key: i, className: "font-semibold" }, seg.text);
+      if (seg.italic) return React.createElement("em", { key: i }, seg.text);
+      if (seg.large) return React.createElement("span", { key: i, className: "text-base font-medium" }, seg.text);
+      return React.createElement(React.Fragment, { key: i }, seg.text);
+    })
+  );
+}
+```
+
+---
+
+### STEP 2: Create the shared RichTextEditor component
+
+Create a NEW file: `artifacts/xmum-market/src/components/RichTextEditor.tsx`
+
+```tsx
+import React, { useRef, useCallback } from "react";
+import { Bold, Italic, Type } from "lucide-react";
+
+interface RichTextEditorProps {
+  value: string;
+  onChange: (val: string) => void;
+  placeholder?: string;
+  maxLength?: number;
+  className?: string;
+  autoFocus?: boolean;
+}
+
+/**
+ * A plain textarea enhanced with a formatting toolbar.
+ * Wraps selected text with markdown-style markers:
+ *   **bold**   *italic*   ++large++
+ * No external dependencies. Works on mobile and desktop.
+ */
+export default function RichTextEditor({
+  value,
+  onChange,
+  placeholder = "Write something...",
+  maxLength = 3000,
+  className = "",
+  autoFocus = false,
+}: RichTextEditorProps) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const wrapSelection = useCallback(
+    (marker: string) => {
+      const el = textareaRef.current;
+      if (!el) return;
+
+      const start = el.selectionStart;
+      const end = el.selectionEnd;
+      const selected = value.slice(start, end);
+
+      // If nothing selected, insert placeholder markers and place cursor between them
+      if (!selected) {
+        const before = value.slice(0, start);
+        const after = value.slice(end);
+        const insert = `${marker}${marker}`;
+        const newVal = before + insert + after;
+        if (newVal.length > maxLength) return;
+        onChange(newVal);
+        // Place cursor between the markers
+        requestAnimationFrame(() => {
+          el.focus();
+          el.setSelectionRange(start + marker.length, start + marker.length);
+        });
+        return;
+      }
+
+      // Toggle: if selected text is already wrapped, unwrap it
+      const before = value.slice(0, start);
+      const after = value.slice(end);
+      const alreadyWrapped =
+        before.endsWith(marker) && after.startsWith(marker);
+
+      if (alreadyWrapped) {
+        const newVal =
+          before.slice(0, before.length - marker.length) +
+          selected +
+          after.slice(marker.length);
+        onChange(newVal);
+        requestAnimationFrame(() => {
+          el.focus();
+          el.setSelectionRange(
+            start - marker.length,
+            end - marker.length
+          );
+        });
+      } else {
+        const newVal = before + marker + selected + marker + after;
+        if (newVal.length > maxLength) return;
+        onChange(newVal);
+        requestAnimationFrame(() => {
+          el.focus();
+          el.setSelectionRange(
+            start + marker.length,
+            end + marker.length
+          );
+        });
+      }
+    },
+    [value, onChange, maxLength]
+  );
+
+  const handleBold = () => wrapSelection("**");
+  const handleItalic = () => wrapSelection("*");
+  const handleLarge = () => wrapSelection("++");
+
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    onChange(e.target.value.slice(0, maxLength));
+  };
+
+  return (
+    <div className={`flex flex-col gap-0 ${className}`}>
+      {/* Toolbar */}
+      <div className="flex items-center gap-0.5 px-2 py-1.5 border-b border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/60 rounded-t-xl">
+        <ToolbarButton
+          onClick={handleBold}
+          title="Bold (wraps selected text in **)"
+          label={<Bold size={14} strokeWidth={2.5} />}
+        />
+        <ToolbarButton
+          onClick={handleItalic}
+          title="Italic (wraps selected text in *)"
+          label={<Italic size={14} strokeWidth={2} />}
+        />
+        <div className="w-px h-4 bg-gray-200 dark:bg-slate-600 mx-1" />
+        <ToolbarButton
+          onClick={handleLarge}
+          title="Large text (wraps selected text in ++)"
+          label={
+            <span className="flex items-center gap-0.5">
+              <Type size={11} strokeWidth={2} />
+              <span className="text-[9px] font-bold leading-none">A</span>
+            </span>
+          }
+        />
+        <div className="flex-1" />
+        {/* Hint */}
+        <span className="text-[10px] text-gray-400 dark:text-slate-500 hidden sm:block pr-1">
+          Select text, then tap a button to format
+        </span>
+      </div>
+
+      {/* Textarea */}
+      <textarea
+        ref={textareaRef}
+        autoFocus={autoFocus}
+        value={value}
+        onChange={handleChange}
+        placeholder={placeholder}
+        className="flex-1 w-full resize-none bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 text-sm leading-relaxed placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none px-3 py-3 min-h-[180px] rounded-b-xl"
+        spellCheck
+      />
+    </div>
+  );
+}
+
+function ToolbarButton({
+  onClick,
+  title,
+  label,
+}: {
+  onClick: () => void;
+  title: string;
+  label: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onMouseDown={(e) => {
+        // Prevent textarea from losing focus/selection on mouse click
+        e.preventDefault();
+        onClick();
+      }}
+      title={title}
+      className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors text-sm font-bold"
+    >
+      {label}
+    </button>
+  );
+}
+```
+
+**Why `onMouseDown` with `e.preventDefault()` on toolbar buttons:** This prevents the textarea from losing its text selection when the user clicks a toolbar button. Without this, the selection is lost before the wrap logic runs. This is the standard correct approach for textarea-based rich text toolbars.
+
+---
+
+### STEP 3: Update all 5 description editor modals to use RichTextEditor
+
+There are exactly 5 editor modal components across 4 files. Update each one by:
+1. Adding `import RichTextEditor from "@/components/RichTextEditor"` at the top of the file (if not already there)
+2. Replacing the `<textarea ... />` inside each modal with `<RichTextEditor ... />`
+
+**The `<div className="flex flex-col flex-1 ...">` wrapper and character counter stay.**
+
+---
+
+#### File A: `artifacts/xmum-market/src/pages/PostPage.tsx`
+Component: `DescriptionEditorModal`
+
+Find the textarea inside `DescriptionEditorModal`:
+```tsx
+<textarea
+  autoFocus
+  value={draft}
+  onChange={(e) => setDraft(e.target.value.slice(0, 3000))}
+  maxLength={3000}
+  placeholder={t.descriptionPlaceholder}
+  className="flex-1 w-full resize-none bg-transparent text-gray-900 dark:text-slate-100 text-sm leading-relaxed placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none"
+/>
+```
+
+Replace with:
+```tsx
+<RichTextEditor
+  autoFocus
+  value={draft}
+  onChange={setDraft}
+  placeholder={t.descriptionPlaceholder}
+  maxLength={3000}
+  className="flex-1"
+/>
+```
+
+Also add the import at the top of PostPage.tsx:
+```tsx
+import RichTextEditor from "@/components/RichTextEditor";
+```
+
+---
+
+#### File B: `artifacts/xmum-market/src/pages/EditListingPage.tsx`
+Component: `DescriptionEditorModal`
+
+Same replacement as File A. The textarea is identical. Add the same import.
+
+---
+
+#### File C: `artifacts/xmum-market/src/components/ShopManagementPanel.tsx`
+Components: `ListingDescEditorModal` (used twice — AddListingForm and EditShopListingForm) AND `ShopBioEditorModal`
+
+All 3 have the same textarea pattern. Replace all 3.
+
+Add import at top of ShopManagementPanel.tsx:
+```tsx
+import RichTextEditor from "@/components/RichTextEditor";
+```
+
+---
+
+#### File D: `artifacts/xmum-market/src/pages/CreateShopPage.tsx`
+Component: `BioEditorModal`
+
+Same replacement. Add import.
+
+---
+
+### STEP 4: Update description render sites to use RichTextDisplay
+
+Import `{ RichTextDisplay, stripRichText }` from `"@/lib/richText"` in the files below and replace the raw `{listing.description}` / `{bio}` renders.
+
+---
+
+#### Render site 1: `artifacts/xmum-market/src/pages/ListingDetailPage.tsx`
+
+Find (around line 706–723):
+```tsx
+<p className="text-sm text-gray-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{listing.rentalTerms}</p>
+```
+— leave rentalTerms alone, it's not a rich-text field.
+
+Find the description render block (around line 712–725):
+```tsx
+<p className="text-sm text-gray-600 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
+  {isExpanded ? listing.description : listing.description.slice(0, 300) + "..."}
+</p>
+```
+
+Replace with:
+```tsx
+<RichTextDisplay
+  text={isExpanded ? listing.description : listing.description.slice(0, 300) + "..."}
+  className="text-sm text-gray-600 dark:text-slate-300"
+/>
+```
+
+Add import at the top: `import { RichTextDisplay } from "@/lib/richText";`
+
+---
+
+#### Render site 2: `artifacts/xmum-market/src/pages/ShopListingDetailPage.tsx`
+
+Find the description render (around line 241–246):
+```tsx
+<p className={`text-sm text-gray-600 dark:text-slate-300 leading-relaxed whitespace-pre-wrap ${!descExpanded && listing.description.length > 200 ? "line-clamp-4" : ""}`}>
+  {listing.description}
+</p>
+```
+
+Replace with:
+```tsx
+<RichTextDisplay
+  text={listing.description}
+  className={`text-sm text-gray-600 dark:text-slate-300 ${!descExpanded && listing.description.length > 200 ? "line-clamp-4" : ""}`}
+/>
+```
+
+Add import: `import { RichTextDisplay } from "@/lib/richText";`
+
+---
+
+#### Render site 3: `artifacts/xmum-market/src/pages/ShopPublicPage.tsx`
+
+Find (around line 44):
+```tsx
+<p className="whitespace-pre-wrap">{displayBio}</p>
+```
+
+Replace with:
+```tsx
+<RichTextDisplay text={displayBio} className="text-sm text-gray-600 dark:text-slate-400" />
+```
+
+Add import: `import { RichTextDisplay } from "@/lib/richText";`
+
+---
+
+#### Render site 4: `artifacts/xmum-market/src/components/ListingCard.tsx`
+
+Find (around line 287):
+```tsx
+<p className="text-xs text-[#64748B] dark:text-slate-400 line-clamp-2 mt-0.5 leading-relaxed">{listing.description}</p>
+```
+
+Replace with (plain text strip — no rich text formatting in card previews, markers look ugly truncated):
+```tsx
+<p className="text-xs text-[#64748B] dark:text-slate-400 line-clamp-2 mt-0.5 leading-relaxed">{stripRichText(listing.description ?? "")}</p>
+```
+
+Add import: `import { stripRichText } from "@/lib/richText";`
+
+Also check ShopManagementPanel.tsx around line 392–393 where shop listing descriptions appear in the management list:
+```tsx
+<p className="line-clamp-2 text-[11px] text-gray-500 dark:text-slate-400 mb-1">{l.description}</p>
+```
+Replace with:
+```tsx
+<p className="line-clamp-2 text-[11px] text-gray-500 dark:text-slate-400 mb-1">{stripRichText(l.description ?? "")}</p>
+```
+`stripRichText` is already imported since you added it to ShopManagementPanel earlier.
+
+---
+
+### STEP 5: Update the character counter in all 5 modals
+
+Currently each modal has:
+```tsx
+<div className={`text-right text-xs mt-2 font-medium ${draft.length > 2700 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
+  {draft.length} / 3000
+</div>
+```
+
+This counter should count the **visible text length** (markers stripped), not raw characters, so users aren't penalised for formatting markers. Update each counter to:
+
+```tsx
+<div className={`text-right text-xs mt-2 font-medium ${stripRichText(draft).length > 2700 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
+  {stripRichText(draft).length} / 3000
+</div>
+```
+
+Add `import { stripRichText } from "@/lib/richText"` in PostPage.tsx and EditListingPage.tsx (ShopManagementPanel and CreateShopPage already have it from Step 4).
+
+**Update the maxLength on each `<RichTextEditor>` to 3500 (raw storage)** so the markers themselves don't cause the textarea to silently cut off visible text. The visible-character limit of 3000 is enforced by the counter display above, not by the textarea itself.
+
+---
+
+### WHAT MUST NOT CHANGE
+
+- The `handleSave` / `onChange` / `onClose` flow in every modal — untouched
+- The `draft` state management in every modal — untouched  
+- The AI moderation calls — they receive the raw text string which now contains plain-text markers like **bold** — this is intentional and safe (markers are human-readable, not HTML)
+- The `description` field type in Firestore — stays as `string`
+- The `types.ts` type definitions — no changes needed
+- The Firestore security rules — no changes needed
+- Every other field in every form — untouched
+- The modal open/close behaviour, z-index, animations — untouched
+- Dark mode compatibility — RichTextEditor uses dark: classes throughout
+- rentalTerms field in ListingDetailPage — do not touch it
+
+---
+
+### BUILD VERIFICATION
+
+After all changes:
+```
+pnpm --filter xmum-market run build
+```
+
+Check for TypeScript errors, particularly:
+- `RichTextDisplay` return type must be `React.ReactElement` — use `React.createElement` not JSX if the file is `.ts` (not `.tsx`). Since we named it `richText.ts`, either rename to `richText.tsx` OR export `RichTextDisplay` as a function returning `JSX.Element` from a `.tsx` file.
+
+**Recommended: rename the utility file to `richText.tsx`** so JSX is valid inside it.
+
+Fix: Create `artifacts/xmum-market/src/lib/richText.tsx` (not .ts) and write the same content. Then all imports use `"@/lib/richText"` — no change to import paths needed since TypeScript resolves both.
+
+---
+
+### SUMMARY OF ALL CHANGES
+
+New files created (2):
+- `artifacts/xmum-market/src/lib/richText.tsx` — parser, stripRichText, RichTextDisplay component
+- `artifacts/xmum-market/src/components/RichTextEditor.tsx` — toolbar + textarea editor component
+
+Files modified (8):
+- `PostPage.tsx` — replace textarea in DescriptionEditorModal, add imports, update counter
+- `EditListingPage.tsx` — same as above
+- `ShopManagementPanel.tsx` — replace textarea in ListingDescEditorModal + ShopBioEditorModal, update counters, strip markers in management list preview
+- `CreateShopPage.tsx` — replace textarea in BioEditorModal, update counter
+- `ListingDetailPage.tsx` — use RichTextDisplay for description render
+- `ShopListingDetailPage.tsx` — use RichTextDisplay for description render
+- `ShopPublicPage.tsx` — use RichTextDisplay for bio render
+- `ListingCard.tsx` — use stripRichText for card preview
+
+Zero new npm packages installed.
+Zero Firestore schema changes.
+Zero breaking changes to existing data — old plain-text descriptions render perfectly (the parser finds no markers and returns plain text as-is).
+EOF
+echo "Done — $(wc -c < /mnt/user-data/outputs/replit_prompt_richtext.md) bytes"

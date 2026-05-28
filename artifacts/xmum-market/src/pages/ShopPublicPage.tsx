@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { SiWhatsapp, SiWechat, SiInstagram } from "react-icons/si";
 import ShopManagementPanel from "@/components/ShopManagementPanel";
+import { RichTextDisplay } from "@/lib/richText";
 import AuthModal from "@/components/AuthModal";
 
 function relativeTime(ms: number): string {
@@ -41,7 +42,7 @@ function ShopBio({ bio }: { bio?: string }) {
     : bio.trim();
   return (
     <div className="text-sm text-gray-600 dark:text-slate-300 mt-4 leading-relaxed border-t border-gray-100 dark:border-slate-700 pt-4">
-      <p className="whitespace-pre-wrap">{displayBio}</p>
+      <RichTextDisplay text={displayBio} className="text-sm text-gray-600 dark:text-slate-400" />
       {shouldTruncate && (
         <button
           onClick={() => setBioExpanded((v) => !v)}

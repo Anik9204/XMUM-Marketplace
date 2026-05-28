@@ -23,6 +23,8 @@ import {
   Settings, ImagePlus, X, Store, UserMinus, UserPlus, Camera, Send,
   BarChart2, AlertCircle,
 } from "lucide-react";
+import RichTextEditor from "@/components/RichTextEditor";
+import { stripRichText } from "@/lib/richText";
 import ReportHoldModal from "@/components/ReportHoldModal";
 import { SiWhatsapp, SiInstagram } from "react-icons/si";
 
@@ -139,16 +141,16 @@ function ListingDescEditorModal({ value, onChange, onClose }: ListingDescEditorM
         </button>
       </div>
       <div className="flex flex-col flex-1 px-4 py-3 overflow-hidden">
-        <textarea
+        <RichTextEditor
           autoFocus
           value={draft}
-          onChange={(e) => setDraft(e.target.value.slice(0, 3000))}
-          maxLength={3000}
+          onChange={setDraft}
           placeholder="Describe this listing — details, condition, availability..."
-          className="flex-1 w-full resize-none bg-transparent text-gray-900 dark:text-slate-100 text-sm leading-relaxed placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none"
+          maxLength={3500}
+          className="flex-1"
         />
-        <div className={`text-right text-xs mt-2 font-medium ${draft.length > 2700 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
-          {draft.length} / 3000
+        <div className={`text-right text-xs mt-2 font-medium ${stripRichText(draft).length > 2700 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
+          {stripRichText(draft).length} / 3000
         </div>
       </div>
     </div>
@@ -826,16 +828,16 @@ function ShopBioEditorModal({ value, onChange, onClose }: ShopBioEditorModalProp
         </button>
       </div>
       <div className="flex flex-col flex-1 px-4 py-3 overflow-hidden">
-        <textarea
+        <RichTextEditor
           autoFocus
           value={draft}
-          onChange={(e) => setDraft(e.target.value.slice(0, 3000))}
-          maxLength={3000}
+          onChange={setDraft}
           placeholder="Describe your shop — what you sell, how to order, operating hours, policies..."
-          className="flex-1 w-full resize-none bg-transparent text-gray-900 dark:text-slate-100 text-sm leading-relaxed placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none"
+          maxLength={3500}
+          className="flex-1"
         />
-        <div className={`text-right text-xs mt-2 font-medium ${draft.length > 2700 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
-          {draft.length} / 3000
+        <div className={`text-right text-xs mt-2 font-medium ${stripRichText(draft).length > 2700 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
+          {stripRichText(draft).length} / 3000
         </div>
       </div>
     </div>

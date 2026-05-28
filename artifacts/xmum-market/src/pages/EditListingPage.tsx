@@ -14,6 +14,8 @@ import { validateWhatsApp, suggestMalaysianFormat } from "@/lib/validation";
 import { Sentry } from "@/lib/sentry";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { ImagePlus, X, AlertCircle, CheckCircle2, Lock, Edit2, Loader2, Wifi, WifiOff } from "lucide-react";
+import RichTextEditor from "@/components/RichTextEditor";
+import { stripRichText } from "@/lib/richText";
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const MAX_PHOTOS = 3;
@@ -105,16 +107,16 @@ function DescriptionEditorModal({ value, onChange, onClose }: DescriptionEditorM
         </button>
       </div>
       <div className="flex flex-col flex-1 px-4 py-3 overflow-hidden">
-        <textarea
+        <RichTextEditor
           autoFocus
           value={draft}
-          onChange={(e) => setDraft(e.target.value.slice(0, 3000))}
-          maxLength={3000}
+          onChange={setDraft}
           placeholder={t.descriptionPlaceholder}
-          className="flex-1 w-full resize-none bg-transparent text-gray-900 dark:text-slate-100 text-sm leading-relaxed placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none"
+          maxLength={3500}
+          className="flex-1"
         />
-        <div className={`text-right text-xs mt-2 font-medium ${draft.length > 2700 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
-          {draft.length} / 3000
+        <div className={`text-right text-xs mt-2 font-medium ${stripRichText(draft).length > 2700 ? "text-red-500 dark:text-red-400" : "text-gray-400 dark:text-slate-500"}`}>
+          {stripRichText(draft).length} / 3000
         </div>
       </div>
     </div>

@@ -17,6 +17,7 @@ import {
   ArrowRight, Edit2, Trash2,
 } from "lucide-react";
 import { getOrCreateConversation } from "@/lib/messaging";
+import { RichTextDisplay } from "@/lib/richText";
 import { SiWhatsapp, SiWechat } from "react-icons/si";
 import { MdGroups } from "react-icons/md";
 import { useToast } from "@/hooks/use-toast";
@@ -710,17 +711,23 @@ export default function ListingDetailPage() {
           {/* Description */}
           <div>
             {listing.description && listing.description.length > 300 ? (
-              <p className="text-sm text-gray-600 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
-                {isExpanded ? listing.description : listing.description.slice(0, 300) + "..."}
+              <>
+                <RichTextDisplay
+                  text={isExpanded ? listing.description : listing.description.slice(0, 300) + "..."}
+                  className="text-sm text-gray-600 dark:text-slate-300"
+                />
                 <button
                   onClick={() => setIsExpanded((v) => !v)}
-                  className="text-blue-600 hover:text-blue-700 font-semibold text-sm ml-1 cursor-pointer transition-colors"
+                  className="text-blue-600 hover:text-blue-700 font-semibold text-sm cursor-pointer transition-colors mt-1"
                 >
                   {isExpanded ? "Read less" : "Read more"}
                 </button>
-              </p>
+              </>
             ) : (
-              <p className="text-sm text-gray-600 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{listing.description}</p>
+              <RichTextDisplay
+                text={listing.description}
+                className="text-sm text-gray-600 dark:text-slate-300"
+              />
             )}
           </div>
 

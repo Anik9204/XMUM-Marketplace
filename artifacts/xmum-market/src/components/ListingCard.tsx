@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { MapPin, Clock, Pencil, Wifi, Bookmark, BookmarkCheck, Eye, CheckCircle2 } from "lucide-react";
 import AuthModal from "@/components/AuthModal";
 import { saveListing, unsaveListing, isListingSaved } from "@/lib/savedListings";
+import { stripRichText } from "@/lib/richText";
 
 interface Props {
   listing: Listing;
@@ -284,7 +285,7 @@ export default function ListingCard({
               </span>
             )}
 
-            <p className="text-xs text-[#64748B] dark:text-slate-400 line-clamp-2 mt-0.5 leading-relaxed">{listing.description}</p>
+            <p className="text-xs text-[#64748B] dark:text-slate-400 line-clamp-2 mt-0.5 leading-relaxed">{stripRichText(listing.description ?? "")}</p>
 
             {isJobs && listing.jobSubtype && (
               <p className="mt-1 text-[11px] font-semibold text-purple-600 dark:text-purple-400">
