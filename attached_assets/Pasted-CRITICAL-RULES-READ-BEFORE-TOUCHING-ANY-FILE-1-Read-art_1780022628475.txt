@@ -1,0 +1,142 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Read artifacts/xmum-market/src/components/ShopManagementPanel.tsx fully before touching it.
+2. Parts 1–4 are complete. Do NOT undo, rewrite, or re-add anything from those parts.
+3. Do NOT remove any existing component, function, state, tab, or JSX.
+4. Do NOT touch any other file outside ShopManagementPanel.tsx.
+5. Do NOT change existing tab layout, subscription banners, or SettingsTab.
+6. Confirm zero build errors: pnpm --filter xmum-market run build
+
+---
+
+TASK: Two additions to artifacts/xmum-market/src/components/ShopManagementPanel.tsx
+
+ADDITION 1 — Add boost/urgent buttons to the existing ListingRow component.
+
+Find the existing ListingRow function. At the top of it, AFTER the existing state declarations (deleting, showHoldModal, holdModalAction), ADD these new state variables:
+  const [boosting, setBoosting] = useState(false);
+  const [urgenting, setUrgenting] = useState(false);
+  const [boostError, setBoostError] = useState("");
+  const isBoostedActive = !!(listing.isBoosted && listing.boostedUntil && listing.boostedUntil > Date.now());
+  const isUrgentActive = !!(listing.isUrgent && listing.urgentUntil && listing.urgentUntil > Date.now());
+
+Add this import at the top of the file (only if not already imported):
+  import { boostShopListing, markListingUrgent } from "@/lib/shops";
+
+In the ListingRow JSX return, find the existing Edit button:
+  <button
+    onClick={() => { ... onEdit() ... }}
+    className="p-2 text-blue-400 ..."
+    title="Edit"
+  >
+    <Edit2 size={14} />
+  </button>
+
+Insert these TWO buttons immediately BEFORE the Edit button:
+
+      <button
+        onClick={async () => {
+          if (isBoostedActive) return;
+          if (!confirm("Boost this listing for 24h? Costs 1 credit.")) return;
+          setBoosting(true);
+          setBoostError("");
+          try {
+            await boostShopListing(shopId, listing.id, listing.title);
+            onRefresh();
+          } catch (err: any) {
+            setBoostError(err.message ?? "Boost failed.");
+            setTimeout(() => setBoostError(""), 4000);
+          } finally {
+            setBoosting(false);
+          }
+        }}
+        disabled={boosting || isBoostedActive}
+        title={isBoostedActive ? "Already boosted (24h active)" : "Boost listing 24h — 1 credit"}
+        className={`p-2 rounded-lg transition ${
+          isBoostedActive
+            ? "text-blue-300 dark:text-blue-600 opacity-50 cursor-default"
+            : "text-blue-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+        }`}
+      >
+        {boosting ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
+      </button>
+
+      <button
+        onClick={async () => {
+          if (isUrgentActive) return;
+          if (!confirm("Mark this listing as Urgent for 3 days? Costs 2 credits.")) return;
+          setUrgenting(true);
+          setBoostError("");
+          try {
+            await markListingUrgent(shopId, listing.id, listing.title);
+            onRefresh();
+          } catch (err: any) {
+            setBoostError(err.message ?? "Failed to mark urgent.");
+            setTimeout(() => setBoostError(""), 4000);
+          } finally {
+            setUrgenting(false);
+          }
+        }}
+        disabled={urgenting || isUrgentActive}
+        title={isUrgentActive ? "Urgent badge active (3 days)" : "Mark urgent 3 days — 2 credits"}
+        className={`p-2 rounded-lg transition ${
+          isUrgentActive
+            ? "text-orange-300 dark:text-orange-600 opacity-50 cursor-default"
+            : "text-orange-400 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20"
+        }`}
+      >
+        {urgenting ? <Loader2 size={14} className="animate-spin" /> : <Clock size={14} />}
+      </button>
+
+Also, after the closing div of the ListingRow return (the outermost div), add the error message:
+  {boostError && (
+    <p className="text-xs text-red-500 dark:text-red-400 mt-1 px-1">{boostError}</p>
+  )}
+Note: this means wrapping the ListingRow return in a Fragment (<>) if it isn't already, so both the main div and the error p can be siblings.
+
+---
+
+ADDITION 2 — Add Credits tab to the TABS array and render the credits tab content.
+
+Find the existing TABS array in ShopManagementPanel. It currently looks like:
+  const TABS: { key: Tab; label: string; icon: React.ReactNode; badge?: number }[] = [
+    { key: "listings",  label: "Listings",  icon: <Package size={15} /> },
+    { key: "analytics", label: "Analytics", icon: <BarChart2 size={15} /> },
+    { key: "settings",  label: "Settings",  icon: <Settings size={15} /> },
+  ];
+
+Replace it with (note the badge type change from number to string | undefined):
+  const TABS: { key: Tab; label: string; icon: React.ReactNode; badge?: string }[] = [
+    { key: "listings",  label: "Listings",  icon: <Package size={15} /> },
+    { key: "analytics", label: "Analytics", icon: <BarChart2 size={15} /> },
+    { key: "credits",   label: "Credits",   icon: <CreditCard size={15} />, badge: (shop.creditBalance ?? 0) <= 2 ? "!" : undefined },
+    { key: "settings",  label: "Settings",  icon: <Settings size={15} /> },
+  ];
+
+In the tab button rendering (the .map over TABS), find where badge is rendered:
+  {t.badge ? <span className="ml-1 bg-red-500 ...">...</span> : null}
+Change the badge span color to amber so it's visually distinct from red notification badges:
+  {t.badge ? <span className="ml-1 bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none">{t.badge}</span> : null}
+
+After the existing {tab === "analytics" && ...} block, add:
+  {tab === "credits" && (
+    <div className="space-y-5">
+      <CreditBalanceWidget shop={shop} />
+      <div>
+        <h3 className="text-sm font-semibold text-gray-700 dark:text-slate-300 mb-3 flex items-center gap-1.5">
+          <History size={14} className="text-[#003366] dark:text-blue-400" />
+          Credit History
+        </h3>
+        <CreditHistoryTab shopId={shopId} />
+      </div>
+    </div>
+  )}
+
+Also add CreditBalanceWidget at the TOP of the ListingsTab render, before the count/add-button row. ListingsTab already receives shop as a prop, so just add:
+  <CreditBalanceWidget shop={shop} />
+as the very first element in ListingsTab's returned JSX.
+
+---
+
+Do NOT touch AnalyticsTab, SettingsTab, EditorsTab, or any other component in this file.
+Run pnpm --filter xmum-market run build and confirm zero errors.
+Report exactly what was added and confirm nothing existing was removed or changed.

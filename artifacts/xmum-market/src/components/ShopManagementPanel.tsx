@@ -9,6 +9,7 @@ import {
   addShopEditor, removeShopEditor, updateShop, uploadShopBanner, uploadShopLogo,
   saveAutoReply,
   deleteShopCompletely, getShopVisitorCount30Days, getListingViews30Days,
+  boostShopListing, markListingUrgent,
 } from "@/lib/shops";
 import { getOrCreateConversation } from "@/lib/messaging";
 import { collection, query, where, getDocs, limit, getDoc, doc } from "firebase/firestore";
@@ -191,6 +192,11 @@ function ListingRow({ listing, shopId, onRefresh, onEdit }: { listing: ShopListi
   const [deleting, setDeleting] = useState(false);
   const [showHoldModal, setShowHoldModal] = useState(false);
   const [holdModalAction, setHoldModalAction] = useState<"delete" | "edit">("delete");
+  const [boosting, setBoosting] = useState(false);
+  const [urgenting, setUrgenting] = useState(false);
+  const [boostError, setBoostError] = useState("");
+  const isBoostedActive = !!(listing.isBoosted && listing.boostedUntil && listing.boostedUntil > Date.now());
+  const isUrgentActive = !!(listing.isUrgent && listing.urgentUntil && listing.urgentUntil > Date.now());
   const handleDelete = async () => {
     if (!confirm("Remove this listing? This cannot be undone.")) return;
     setDeleting(true);
@@ -210,43 +216,100 @@ function ListingRow({ listing, shopId, onRefresh, onEdit }: { listing: ShopListi
     ? `RM ${listing.price.toFixed(2)}${listing.pricingModel && listing.pricingModel !== "fixed" ? ` / ${listing.pricingModel.replace("_", " ")}` : ""}`
     : "Price N/A";
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 p-3 flex items-center gap-3">
-      {listing.photos[0] ? (
-        <img src={listing.photos[0]} alt="" className="w-14 h-14 rounded-lg object-cover shrink-0" />
-      ) : (
-        <div className="w-14 h-14 rounded-lg bg-gray-100 dark:bg-slate-700 flex items-center justify-center shrink-0"><Package size={20} className="text-gray-300 dark:text-slate-500" /></div>
-      )}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <p className="text-sm font-semibold text-gray-900 dark:text-slate-100 truncate">{listing.title}</p>
-          {listing.isReportHeld && (
-            <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 uppercase tracking-wide">Under Review</span>
-          )}
+    <>
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 p-3 flex items-center gap-3">
+        {listing.photos[0] ? (
+          <img src={listing.photos[0]} alt="" className="w-14 h-14 rounded-lg object-cover shrink-0" />
+        ) : (
+          <div className="w-14 h-14 rounded-lg bg-gray-100 dark:bg-slate-700 flex items-center justify-center shrink-0"><Package size={20} className="text-gray-300 dark:text-slate-500" /></div>
+        )}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <p className="text-sm font-semibold text-gray-900 dark:text-slate-100 truncate">{listing.title}</p>
+            {listing.isReportHeld && (
+              <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 uppercase tracking-wide">Under Review</span>
+            )}
+          </div>
+          <p className="text-xs text-gray-500 dark:text-slate-400">{priceLabel}</p>
+          <p className="text-xs text-gray-400 dark:text-slate-500">{relativeTime(listing.createdAt)}</p>
         </div>
-        <p className="text-xs text-gray-500 dark:text-slate-400">{priceLabel}</p>
-        <p className="text-xs text-gray-400 dark:text-slate-500">{relativeTime(listing.createdAt)}</p>
+        <button
+          onClick={async () => {
+            if (isBoostedActive) return;
+            if (!confirm("Boost this listing for 24h? Costs 1 credit.")) return;
+            setBoosting(true);
+            setBoostError("");
+            try {
+              await boostShopListing(shopId, listing.id, listing.title);
+              onRefresh();
+            } catch (err: any) {
+              setBoostError(err.message ?? "Boost failed.");
+              setTimeout(() => setBoostError(""), 4000);
+            } finally {
+              setBoosting(false);
+            }
+          }}
+          disabled={boosting || isBoostedActive}
+          title={isBoostedActive ? "Already boosted (24h active)" : "Boost listing 24h — 1 credit"}
+          className={`p-2 rounded-lg transition ${
+            isBoostedActive
+              ? "text-blue-300 dark:text-blue-600 opacity-50 cursor-default"
+              : "text-blue-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+          }`}
+        >
+          {boosting ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
+        </button>
+        <button
+          onClick={async () => {
+            if (isUrgentActive) return;
+            if (!confirm("Mark this listing as Urgent for 3 days? Costs 2 credits.")) return;
+            setUrgenting(true);
+            setBoostError("");
+            try {
+              await markListingUrgent(shopId, listing.id, listing.title);
+              onRefresh();
+            } catch (err: any) {
+              setBoostError(err.message ?? "Failed to mark urgent.");
+              setTimeout(() => setBoostError(""), 4000);
+            } finally {
+              setUrgenting(false);
+            }
+          }}
+          disabled={urgenting || isUrgentActive}
+          title={isUrgentActive ? "Urgent badge active (3 days)" : "Mark urgent 3 days — 2 credits"}
+          className={`p-2 rounded-lg transition ${
+            isUrgentActive
+              ? "text-orange-300 dark:text-orange-600 opacity-50 cursor-default"
+              : "text-orange-400 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20"
+          }`}
+        >
+          {urgenting ? <Loader2 size={14} className="animate-spin" /> : <Clock size={14} />}
+        </button>
+        <button
+          onClick={() => {
+            if (listing.isReportHeld === true) {
+              setHoldModalAction("edit");
+              setShowHoldModal(true);
+              return;
+            }
+            onEdit();
+          }}
+          className="p-2 text-blue-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition"
+          title="Edit"
+        >
+          <Edit2 size={14} />
+        </button>
+        <button onClick={handleDelete} disabled={deleting} className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition disabled:opacity-40" title="Remove">
+          {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+        </button>
+        {showHoldModal && (
+          <ReportHoldModal action={holdModalAction} onClose={() => setShowHoldModal(false)} />
+        )}
       </div>
-      <button
-        onClick={() => {
-          if (listing.isReportHeld === true) {
-            setHoldModalAction("edit");
-            setShowHoldModal(true);
-            return;
-          }
-          onEdit();
-        }}
-        className="p-2 text-blue-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition"
-        title="Edit"
-      >
-        <Edit2 size={14} />
-      </button>
-      <button onClick={handleDelete} disabled={deleting} className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition disabled:opacity-40" title="Remove">
-        {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-      </button>
-      {showHoldModal && (
-        <ReportHoldModal action={holdModalAction} onClose={() => setShowHoldModal(false)} />
+      {boostError && (
+        <p className="text-xs text-red-500 dark:text-red-400 mt-1 px-1">{boostError}</p>
       )}
-    </div>
+    </>
   );
 }
 
@@ -751,6 +814,7 @@ function ListingsTab({ shopId, shop, listings, loading, showAdd, setShowAdd,
   const [listingAdded, setListingAdded] = useState(false);
   return (
     <div>
+      <CreditBalanceWidget shop={shop} />
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm font-semibold text-gray-700 dark:text-slate-300">{listings.length} listing{listings.length !== 1 ? "s" : ""}</p>
         <div className="flex items-center gap-2">
@@ -1242,10 +1306,10 @@ export default function ShopManagementPanel({
     });
   };
 
-  const TABS: { key: Tab; label: string; icon: React.ReactNode; badge?: number }[] = [
+  const TABS: { key: Tab; label: string; icon: React.ReactNode; badge?: string }[] = [
     { key: "listings",  label: "Listings",  icon: <Package size={15} /> },
     { key: "analytics", label: "Analytics", icon: <BarChart2 size={15} /> },
-    { key: "credits",   label: "Credits",   icon: <CreditCard size={15} /> },
+    { key: "credits",   label: "Credits",   icon: <CreditCard size={15} />, badge: (shop.creditBalance ?? 0) <= 2 ? "!" : undefined },
     { key: "settings",  label: "Settings",  icon: <Settings size={15} /> },
   ];
 
@@ -1387,7 +1451,7 @@ export default function ShopManagementPanel({
           >
             {t.icon}
             <span className="hidden sm:inline">{t.label}</span>
-            {t.badge ? <span className="ml-1 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none">{t.badge}</span> : null}
+            {t.badge ? <span className="ml-1 bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none">{t.badge}</span> : null}
           </button>
         ))}
       </div>
@@ -1418,12 +1482,15 @@ export default function ShopManagementPanel({
       )}
 
       {tab === "credits" && (
-        <div>
+        <div className="space-y-5">
           <CreditBalanceWidget shop={shop} />
-          <h3 className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-            <History size={13} /> Credit History
-          </h3>
-          <CreditHistoryTab shopId={shopId} />
+          <div>
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-slate-300 mb-3 flex items-center gap-1.5">
+              <History size={14} className="text-[#003366] dark:text-blue-400" />
+              Credit History
+            </h3>
+            <CreditHistoryTab shopId={shopId} />
+          </div>
         </div>
       )}
 
