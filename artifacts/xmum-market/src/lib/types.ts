@@ -45,6 +45,7 @@ export interface Shop {
   autoReplyMessage?: string;
   rating?: number;
   reviewCount?: number;
+  creditBalance?: number;
   orderQuestions?: ShopOrderQuestion[];
 }
 
@@ -90,6 +91,18 @@ export interface ShopReview {
   createdAt: number;
 }
 
+export interface ShopCreditLog {
+  id: string;
+  shopId: string;
+  shopName: string;
+  adminEmail: string;
+  amount: number;
+  reason: string;
+  balanceBefore: number;
+  balanceAfter: number;
+  createdAt: number;
+}
+
 export interface Review {
   id: string;
   buyerId: string;
@@ -121,6 +134,10 @@ export interface ShopListing {
   reviewCount?: number;
   isReportHeld?: boolean;
   reportHeldAt?: number;
+  isBoosted?: boolean;
+  boostedUntil?: number;
+  isUrgent?: boolean;
+  urgentUntil?: number;
 }
 
 export type InquiryStatus = "pending" | "replied";
@@ -261,7 +278,9 @@ export interface AppNotification {
     | "shop_rejected"
     | "shop_subscription_expiring"
     | "shop_subscription_expired"
-    | "shop_subscription_renewed";
+    | "shop_subscription_renewed"
+    | "shop_credit_topup"
+    | "shop_credit_low";
   title: string;
   body: string;
   createdAt: number;
