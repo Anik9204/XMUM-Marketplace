@@ -59,7 +59,7 @@ function CreditBalanceWidget({ shop }: { shop: Shop }) {
   const balance = shop.creditBalance ?? 0;
   const isLow = balance > 0 && balance <= 2;
   const isEmpty = balance === 0;
-  const adminWhatsApp = "60176562813";
+  const adminWhatsApp = "60142246554";
   const topUpMessage = encodeURIComponent(
     `Hi, I'd like to top up credits for my shop "${shop.name}" (ID: ${shop.id}). Please let me know the payment details.`
   );
