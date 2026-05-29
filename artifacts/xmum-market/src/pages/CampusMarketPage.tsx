@@ -154,7 +154,7 @@ function ShopCard({ shop }: { shop: Shop }) {
         </div>
         <div className="p-3">
           <p className="text-sm font-bold text-gray-900 dark:text-slate-100 truncate">{shop.name}</p>
-          <p className="text-xs text-gray-400 dark:text-slate-500 truncate mt-0.5">{shop.totalListings} Listing{shop.totalListings !== 1 ? "s" : ""}</p>
+          <p className="text-xs text-gray-400 dark:text-slate-500 truncate mt-0.5">{Math.max(0, shop.totalListings ?? 0)} Listing{Math.max(0, shop.totalListings ?? 0) !== 1 ? "s" : ""}</p>
           {(shop.reviewCount ?? 0) > 0 && (
             <p className="text-xs text-amber-500 font-semibold mt-0.5">★ {(shop.rating ?? 0).toFixed(1)}</p>
           )}

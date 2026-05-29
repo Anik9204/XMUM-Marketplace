@@ -1,0 +1,58 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it.
+2. Do NOT rewrite any file from scratch. Surgical edits only.
+3. Do NOT remove any existing function, state, prop, handler, or import.
+4. Never change any routing, Firebase, Firestore, or data-fetch logic.
+5. Confirm zero errors: pnpm --filter xmum-market run build
+
+---
+
+## TASK: Fix "-3 Listings" showing in Featured Shops on CampusMarketPage
+
+### ROOT CAUSE
+
+File: `artifacts/xmum-market/src/pages/CampusMarketPage.tsx`
+
+Inside the `ShopCard` component (around line 157), the listing count is rendered as:
+
+```tsx
+<p className="text-xs text-gray-400 dark:text-slate-500 truncate mt-0.5">
+  {shop.totalListings} Listing{shop.totalListings !== 1 ? "s" : ""}
+</p>
+```
+
+`shop.totalListings` is a denormalized counter on the Firestore `shops` document.
+This counter was corrupted (showing -3) because deletions happened through paths
+that bypassed the decrement logic. The same counter was already fixed in
+ShopPublicPage.tsx in a previous fix, but CampusMarketPage.tsx was missed.
+
+### THE FIX — ONE LINE CHANGE
+
+In `artifacts/xmum-market/src/pages/CampusMarketPage.tsx`, find this exact line
+inside the ShopCard component:
+
+```tsx
+<p className="text-xs text-gray-400 dark:text-slate-500 truncate mt-0.5">{shop.totalListings} Listing{shop.totalListings !== 1 ? "s" : ""}</p>
+```
+
+Replace it with:
+
+```tsx
+<p className="text-xs text-gray-400 dark:text-slate-500 truncate mt-0.5">{Math.max(0, shop.totalListings ?? 0)} Listing{Math.max(0, shop.totalListings ?? 0) !== 1 ? "s" : ""}</p>
+```
+
+`Math.max(0, ...)` ensures the count never displays as negative regardless of
+counter drift. The `?? 0` handles any shop documents that may be missing the field.
+
+### WHAT MUST NOT CHANGE
+
+- The `ShopCard` component's layout, styling, or any other fields
+- The `getAllShops()` fetch logic
+- Any other part of CampusMarketPage
+- Every other file in the project
+
+### BUILD VERIFICATION
+
+pnpm --filter xmum-market run build
+
+Must pass with zero errors. This is a single-line change with zero TypeScript risk.
