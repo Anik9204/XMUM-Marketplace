@@ -1,0 +1,165 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, read it fully and list every other file that imports it.
+2. Do NOT rewrite any file from scratch. Surgical edits only.
+3. Do NOT remove any existing function, import, or logic.
+4. After every change, verify nothing previously working is broken.
+5. Only touch the files explicitly listed in this prompt. Nothing else.
+6. Confirm zero build errors: pnpm --filter xmum-market run build
+
+---
+
+TASK: Implement boostScore sorting for the global Campus Market feed.
+
+This makes boosted and urgent listings appear at the top of the global shop listings
+feed (CampusMarketPage), sorted above all non-boosted listings automatically.
+
+---
+
+STEP 1 — Update types.ts
+
+File: artifacts/xmum-market/src/lib/types.ts
+
+In the ShopListing interface, add one field alongside the existing isBoosted/boostedUntil/isUrgent/urgentUntil fields added in the previous credit system work:
+
+  boostScore?: number;
+
+This field holds the expiry timestamp of the active boost. Higher = sorts higher.
+Non-boosted listings have boostScore = 0 or undefined.
+When boost expires (boostScore < Date.now()), listing naturally falls back to createdAt order.
+
+---
+
+STEP 2 — Update boostShopListing and markListingUrgent in shops.ts
+
+File: artifacts/xmum-market/src/lib/shops.ts
+
+Find the existing boostShopListing function (added in the credit system work).
+It currently writes: { isBoosted: true, boostedUntil }
+Change the updateDoc call to also write boostScore:
+
+  const boostedUntil = Date.now() + 24 * 60 * 60 * 1000;
+  await updateDoc(doc(db, "shopListings", listingId), {
+    isBoosted: true,
+    boostedUntil,
+    boostScore: boostedUntil,   // ADD THIS LINE
+  });
+
+Find the existing markListingUrgent function.
+It currently writes: { isUrgent: true, urgentUntil }
+Change to:
+
+  const urgentUntil = Date.now() + 3 * 24 * 60 * 60 * 1000;
+  await updateDoc(doc(db, "shopListings", listingId), {
+    isUrgent: true,
+    urgentUntil,
+    boostScore: urgentUntil,    // ADD THIS LINE — urgent score is higher than boost (72h vs 24h)
+  });
+
+Do NOT change anything else in either function.
+
+---
+
+STEP 3 — Update getAllShopListings sort in shops.ts
+
+File: artifacts/xmum-market/src/lib/shops.ts
+
+Find the getAllShopListings function. It currently ends with:
+
+  return listings
+    .filter((l) => shopStatuses[l.shopId] !== false)
+    .slice(0, limitCount);
+
+Change ONLY the final sort+filter chain to:
+
+  const now = Date.now();
+  return listings
+    .filter((l) => shopStatuses[l.shopId] !== false)
+    .sort((a, b) => {
+      const aScore = (a.boostScore && a.boostScore > now) ? a.boostScore : 0;
+      const bScore = (b.boostScore && b.boostScore > now) ? b.boostScore : 0;
+      if (bScore !== aScore) return bScore - aScore;   // boosted first
+      return b.createdAt - a.createdAt;                // then by recency
+    })
+    .slice(0, limitCount);
+
+---
+
+STEP 4 — Update getShopListingsByCategory sort in shops.ts
+
+File: artifacts/xmum-market/src/lib/shops.ts
+
+Find getShopListingsByCategory. It currently ends with:
+
+  return listings
+    .filter((l) => shopStatuses[l.shopId] !== false)
+    .slice(0, limitCount);
+
+Apply the same sort logic:
+
+  const now = Date.now();
+  return listings
+    .filter((l) => shopStatuses[l.shopId] !== false)
+    .sort((a, b) => {
+      const aScore = (a.boostScore && a.boostScore > now) ? a.boostScore : 0;
+      const bScore = (b.boostScore && b.boostScore > now) ? b.boostScore : 0;
+      if (bScore !== aScore) return bScore - aScore;
+      return b.createdAt - a.createdAt;
+    })
+    .slice(0, limitCount);
+
+---
+
+STEP 5 — Add a subtle "Boosted" / "Urgent" sort indicator on CampusMarketPage
+
+File: artifacts/xmum-market/src/pages/CampusMarketPage.tsx
+
+Find the listings grid where each ShopListing card is rendered (the visibleListings.map).
+Each listing renders as a Link to the shop listing detail page.
+
+In the listing card, find the photo block (the img element or placeholder div).
+Add "relative" to the parent Link's className if not already there.
+Then add this badge overlay INSIDE the Link, right after the photo block and before the price/title content div:
+
+  {(() => {
+    const now = Date.now();
+    const isBoosted = !!(l.isBoosted && l.boostedUntil && l.boostedUntil > now);
+    const isUrgent = !!(l.isUrgent && l.urgentUntil && l.urgentUntil > now);
+    if (!isBoosted && !isUrgent) return null;
+    return (
+      <div className="absolute top-2 left-2 flex flex-col gap-1 z-10 pointer-events-none">
+        {isUrgent && (
+          <span className="text-[9px] font-bold bg-orange-500 text-white px-1.5 py-0.5 rounded-full leading-none shadow-sm">
+            🔥 Urgent
+          </span>
+        )}
+        {isBoosted && !isUrgent && (
+          <span className="text-[9px] font-bold bg-blue-500 text-white px-1.5 py-0.5 rounded-full leading-none shadow-sm">
+            ⚡ Boosted
+          </span>
+        )}
+      </div>
+    );
+  })()}
+
+NOTE: If CampusMarketPage already has boost/urgent badges from the ShopPublicPage work
+(Part 6 of the previous credit system prompts), check carefully before adding —
+do NOT duplicate. Only add if the badges are not already there on the CampusMarketPage cards.
+ShopPublicPage.tsx and CampusMarketPage.tsx are different files — check both separately.
+
+---
+
+STEP 6 — Build verification
+
+Run: pnpm --filter xmum-market run build
+Fix any TypeScript errors. Do NOT ignore them.
+
+Self-check:
+[ ] ShopListing type has boostScore?: number
+[ ] boostShopListing writes boostScore: boostedUntil
+[ ] markListingUrgent writes boostScore: urgentUntil
+[ ] getAllShopListings sorts by boostScore desc then createdAt desc
+[ ] getShopListingsByCategory sorts by boostScore desc then createdAt desc
+[ ] CampusMarketPage shows Urgent/Boosted badge on cards (no duplicate if already there)
+[ ] Zero build errors
+
+Report each checklist item status and confirm build is clean.

@@ -247,8 +247,15 @@ export async function getAllShopListings(limitCount = 40): Promise<ShopListing[]
     })
   );
 
+  const now = Date.now();
   return listings
     .filter((l) => shopStatuses[l.shopId] !== false)
+    .sort((a, b) => {
+      const aScore = (a.boostScore && a.boostScore > now) ? a.boostScore : 0;
+      const bScore = (b.boostScore && b.boostScore > now) ? b.boostScore : 0;
+      if (bScore !== aScore) return bScore - aScore;
+      return b.createdAt - a.createdAt;
+    })
     .slice(0, limitCount);
 }
 
@@ -276,8 +283,15 @@ export async function getShopListingsByCategory(category: string, limitCount = 4
     })
   );
 
+  const now = Date.now();
   return listings
     .filter((l) => shopStatuses[l.shopId] !== false)
+    .sort((a, b) => {
+      const aScore = (a.boostScore && a.boostScore > now) ? a.boostScore : 0;
+      const bScore = (b.boostScore && b.boostScore > now) ? b.boostScore : 0;
+      if (bScore !== aScore) return bScore - aScore;
+      return b.createdAt - a.createdAt;
+    })
     .slice(0, limitCount);
 }
 
@@ -822,6 +836,7 @@ export async function boostShopListing(
   await updateDoc(doc(db, "shopListings", listingId), {
     isBoosted: true,
     boostedUntil,
+    boostScore: boostedUntil,
   });
 }
 
@@ -840,5 +855,6 @@ export async function markListingUrgent(
   await updateDoc(doc(db, "shopListings", listingId), {
     isUrgent: true,
     urgentUntil,
+    boostScore: urgentUntil,
   });
 }

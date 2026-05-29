@@ -167,7 +167,7 @@ function ListingCard({ listing }: { listing: ShopListing }) {
   return (
     <div
       onClick={() => navigate(`/shop-listing/${listing.id}`)}
-      className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden border border-gray-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow active:scale-[0.98] cursor-pointer"
+      className="relative bg-white dark:bg-slate-800 rounded-2xl overflow-hidden border border-gray-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow active:scale-[0.98] cursor-pointer"
     >
       {listing.photos[0] ? (
         <img src={listing.photos[0]} alt="" className="w-full aspect-square object-cover" />
@@ -176,6 +176,26 @@ function ListingCard({ listing }: { listing: ShopListing }) {
           <Package size={32} className="text-gray-300 dark:text-slate-500" />
         </div>
       )}
+      {(() => {
+        const now = Date.now();
+        const isBoosted = !!(listing.isBoosted && listing.boostedUntil && listing.boostedUntil > now);
+        const isUrgent = !!(listing.isUrgent && listing.urgentUntil && listing.urgentUntil > now);
+        if (!isBoosted && !isUrgent) return null;
+        return (
+          <div className="absolute top-2 left-2 flex flex-col gap-1 z-10 pointer-events-none">
+            {isUrgent && (
+              <span className="text-[9px] font-bold bg-orange-500 text-white px-1.5 py-0.5 rounded-full leading-none shadow-sm">
+                🔥 Urgent
+              </span>
+            )}
+            {isBoosted && !isUrgent && (
+              <span className="text-[9px] font-bold bg-blue-500 text-white px-1.5 py-0.5 rounded-full leading-none shadow-sm">
+                ⚡ Boosted
+              </span>
+            )}
+          </div>
+        );
+      })()}
       <div className="p-3">
         <p className="text-xs font-semibold text-gray-900 dark:text-slate-100 line-clamp-2 mb-1">{listing.title}</p>
         <PriceTag listing={listing} />

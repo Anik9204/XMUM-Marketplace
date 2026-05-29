@@ -138,6 +138,7 @@ export interface ShopListing {
   boostedUntil?: number;
   isUrgent?: boolean;
   urgentUntil?: number;
+  boostScore?: number;
 }
 
 export type InquiryStatus = "pending" | "replied";
