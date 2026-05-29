@@ -16,12 +16,13 @@ import { ref, deleteObject } from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
 import { notifyEditorAdded, notifyEditorRemoved } from "@/lib/notifications";
 import {
-  Shop, ShopListing, ShopCategory,
+  Shop, ShopListing, ShopCategory, ShopCreditLog,
 } from "@/lib/types";
+import { getShopCreditLogs } from "@/lib/credits";
 import {
   Loader2, Plus, Trash2, Edit2, CheckCircle2, Package, MessageSquare, Users,
   Settings, ImagePlus, X, Store, UserMinus, UserPlus, Camera, Send,
-  BarChart2, AlertCircle,
+  BarChart2, AlertCircle, Zap, Clock, CreditCard, TrendingUp, History,
 } from "lucide-react";
 import RichTextEditor from "@/components/RichTextEditor";
 import { stripRichText } from "@/lib/richText";
@@ -39,7 +40,7 @@ const SHOP_CATEGORIES: ShopCategory[] = [
 const inputCls = "w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition min-h-[44px]";
 const labelCls = "block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-1";
 
-type Tab = "listings" | "inquiries" | "analytics" | "settings";
+type Tab = "listings" | "inquiries" | "analytics" | "credits" | "settings";
 
 function relativeTime(ms: number): string {
   const diff = Date.now() - ms;
@@ -49,6 +50,139 @@ function relativeTime(ms: number): string {
   if (mins < 60) return mins <= 1 ? "just now" : `${mins}m ago`;
   if (hours < 24) return `${hours}h ago`;
   return `${days}d ago`;
+}
+
+// ── CreditBalanceWidget ────────────────────────────────────────────────────────
+
+function CreditBalanceWidget({ shop }: { shop: Shop }) {
+  const balance = shop.creditBalance ?? 0;
+  const isLow = balance > 0 && balance <= 2;
+  const isEmpty = balance === 0;
+  const adminWhatsApp = "60176562813";
+  const topUpMessage = encodeURIComponent(
+    `Hi, I'd like to top up credits for my shop "${shop.name}" (ID: ${shop.id}). Please let me know the payment details.`
+  );
+  return (
+    <div className={`rounded-2xl border p-4 mb-4 ${
+      isEmpty
+        ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800"
+        : isLow
+        ? "bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800"
+        : "bg-blue-50 dark:bg-blue-900/20 border-blue-100 dark:border-blue-800"
+    }`}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+            isEmpty ? "bg-red-100 dark:bg-red-900/40"
+            : isLow ? "bg-amber-100 dark:bg-amber-900/40"
+            : "bg-blue-100 dark:bg-blue-900/40"
+          }`}>
+            <CreditCard size={18} className={
+              isEmpty ? "text-red-500 dark:text-red-400"
+              : isLow ? "text-amber-500 dark:text-amber-400"
+              : "text-blue-500 dark:text-blue-400"
+            } />
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Credits</p>
+            <p className={`text-2xl font-bold leading-none mt-0.5 ${
+              isEmpty ? "text-red-600 dark:text-red-400"
+              : isLow ? "text-amber-600 dark:text-amber-400"
+              : "text-blue-700 dark:text-blue-300"
+            }`}>{balance}</p>
+          </div>
+        </div>
+        <a
+          href={`https://wa.me/${adminWhatsApp}?text=${topUpMessage}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1.5 bg-[#003366] dark:bg-blue-600 text-white text-xs font-semibold px-3 py-2 rounded-xl hover:brightness-110 transition shadow-sm shrink-0"
+        >
+          <TrendingUp size={13} /> Top Up
+        </a>
+      </div>
+      {isEmpty && (
+        <p className="text-xs text-red-600 dark:text-red-400 mt-2.5 leading-relaxed">
+          No credits left. Contact admin via WhatsApp to top up and unlock boost features.
+        </p>
+      )}
+      {isLow && (
+        <p className="text-xs text-amber-600 dark:text-amber-500 mt-2.5 leading-relaxed">
+          Running low! Top up soon to keep boosting your listings.
+        </p>
+      )}
+      <div className="mt-3 pt-3 border-t border-gray-200/60 dark:border-slate-700/60 grid grid-cols-2 gap-2 text-[11px] text-gray-500 dark:text-slate-400">
+        <span>⚡ Boost listing (24h) — <strong>1 credit</strong></span>
+        <span>🔥 Urgent badge (3 days) — <strong>2 credits</strong></span>
+      </div>
+    </div>
+  );
+}
+
+// ── CreditHistoryTab ───────────────────────────────────────────────────────────
+
+function CreditHistoryTab({ shopId }: { shopId: string }) {
+  const [logs, setLogs] = useState<ShopCreditLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    setLoading(true);
+    getShopCreditLogs(shopId)
+      .then(setLogs)
+      .catch(() => setLogs([]))
+      .finally(() => setLoading(false));
+  }, [shopId]);
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 size={22} className="animate-spin text-gray-400" />
+      </div>
+    );
+  }
+  if (logs.length === 0) {
+    return (
+      <div className="text-center py-12 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700">
+        <History size={32} className="mx-auto mb-2 text-gray-300 dark:text-slate-600" />
+        <p className="text-sm text-gray-400 dark:text-slate-500">No credit activity yet.</p>
+        <p className="text-xs text-gray-300 dark:text-slate-600 mt-0.5">Top up credits to start boosting your listings.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-2">
+      {logs.map((log) => {
+        const isTopUp = log.amount > 0;
+        return (
+          <div key={log.id} className="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 px-4 py-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                isTopUp ? "bg-green-100 dark:bg-green-900/30" : "bg-blue-100 dark:bg-blue-900/30"
+              }`}>
+                {isTopUp
+                  ? <TrendingUp size={14} className="text-green-600 dark:text-green-400" />
+                  : <Zap size={14} className="text-blue-500 dark:text-blue-400" />
+                }
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-gray-800 dark:text-slate-200 truncate">{log.reason}</p>
+                <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5">
+                  {new Date(log.createdAt).toLocaleDateString("en-MY", {
+                    day: "numeric", month: "short", year: "numeric",
+                    hour: "2-digit", minute: "2-digit",
+                  })}
+                </p>
+              </div>
+            </div>
+            <div className="text-right shrink-0">
+              <p className={`text-sm font-bold ${isTopUp ? "text-green-600 dark:text-green-400" : "text-blue-600 dark:text-blue-400"}`}>
+                {isTopUp ? "+" : ""}{log.amount}
+              </p>
+              <p className="text-[10px] text-gray-400 dark:text-slate-500">→ {log.balanceAfter}</p>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 // ── ListingRow ─────────────────────────────────────────────────────────────────
@@ -1111,6 +1245,7 @@ export default function ShopManagementPanel({
   const TABS: { key: Tab; label: string; icon: React.ReactNode; badge?: number }[] = [
     { key: "listings",  label: "Listings",  icon: <Package size={15} /> },
     { key: "analytics", label: "Analytics", icon: <BarChart2 size={15} /> },
+    { key: "credits",   label: "Credits",   icon: <CreditCard size={15} /> },
     { key: "settings",  label: "Settings",  icon: <Settings size={15} /> },
   ];
 
@@ -1280,6 +1415,16 @@ export default function ShopManagementPanel({
           shopId={shopId}
           listings={listings}
         />
+      )}
+
+      {tab === "credits" && (
+        <div>
+          <CreditBalanceWidget shop={shop} />
+          <h3 className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+            <History size={13} /> Credit History
+          </h3>
+          <CreditHistoryTab shopId={shopId} />
+        </div>
       )}
 
       {tab === "settings" && (
