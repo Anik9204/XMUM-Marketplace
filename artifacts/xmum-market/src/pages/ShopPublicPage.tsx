@@ -375,17 +375,34 @@ export default function ShopPublicPage() {
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
-                {listings.map((l) => (
+                {listings.map((l) => {
+                  const isBoostedActive = !!(l.isBoosted && l.boostedUntil && l.boostedUntil > Date.now());
+                  const isUrgentActive = !!(l.isUrgent && l.urgentUntil && l.urgentUntil > Date.now());
+                  return (
                   <Link
                     key={l.id}
                     href={`/shop-listing/${l.id}`}
-                    className="card-base overflow-hidden text-left hover:scale-[1.02] hover:shadow-md transition-all duration-200 active:scale-[0.98] block"
+                    className="card-base overflow-hidden text-left hover:scale-[1.02] hover:shadow-md transition-all duration-200 active:scale-[0.98] block relative"
                   >
                     {l.photos[0] ? (
                       <img src={l.photos[0]} alt="" className="w-full aspect-square object-cover" />
                     ) : (
                       <div className="w-full aspect-square bg-gradient-to-br from-gray-100 to-gray-200 dark:from-slate-700 dark:to-slate-600 flex items-center justify-center">
                         <Package size={28} className="text-gray-300 dark:text-slate-500" />
+                      </div>
+                    )}
+                    {(isBoostedActive || isUrgentActive) && (
+                      <div className="absolute top-2 left-2 flex flex-col gap-1 z-10">
+                        {isBoostedActive && (
+                          <span className="text-[9px] font-bold bg-blue-500 text-white px-1.5 py-0.5 rounded-full leading-none shadow-sm">
+                            ⚡ Boosted
+                          </span>
+                        )}
+                        {isUrgentActive && (
+                          <span className="text-[9px] font-bold bg-orange-500 text-white px-1.5 py-0.5 rounded-full leading-none shadow-sm">
+                            🔥 Urgent
+                          </span>
+                        )}
                       </div>
                     )}
                     <div className="p-3">
@@ -397,7 +414,8 @@ export default function ShopPublicPage() {
                       <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5 truncate">{shop.name}</p>
                     </div>
                   </Link>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

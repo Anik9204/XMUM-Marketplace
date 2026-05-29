@@ -1,0 +1,48 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Read artifacts/xmum-market/src/pages/ShopPublicPage.tsx fully before touching it.
+2. Parts 1–5 are complete. Do NOT touch any file modified in those parts.
+3. Do NOT rewrite ShopPublicPage.tsx. Surgical addition only.
+4. Do NOT change the existing card layout, grid structure, Link behavior, or any other JSX.
+5. Do NOT add any new imports unless strictly necessary (isBoosted/isUrgent/boostedUntil/urgentUntil are already on ShopListing from Part 1).
+6. Confirm zero build errors: pnpm --filter xmum-market run build
+
+---
+
+TASK: Add boost/urgent badges to listing cards in artifacts/xmum-market/src/pages/ShopPublicPage.tsx
+
+Find the listings grid map in the return JSX. Each listing renders as a Link with a photo block followed by a <div className="p-3"> content block.
+
+STEP 1 — Add "relative" to the Link's className if it is not already there.
+The Link currently has a className like:
+  "card-base overflow-hidden text-left hover:scale-[1.02] ..."
+Add "relative" to it. Do not change any other class.
+
+STEP 2 — After the photo/placeholder block (the img or the fallback div), and BEFORE the <div className="p-3">, insert this badge overlay:
+
+                  {(isBoostedActive || isUrgentActive) && (
+                    <div className="absolute top-2 left-2 flex flex-col gap-1 z-10">
+                      {isBoostedActive && (
+                        <span className="text-[9px] font-bold bg-blue-500 text-white px-1.5 py-0.5 rounded-full leading-none shadow-sm">
+                          ⚡ Boosted
+                        </span>
+                      )}
+                      {isUrgentActive && (
+                        <span className="text-[9px] font-bold bg-orange-500 text-white px-1.5 py-0.5 rounded-full leading-none shadow-sm">
+                          🔥 Urgent
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+Where isBoostedActive and isUrgentActive are computed per listing inside the map:
+  const isBoostedActive = !!(l.isBoosted && l.boostedUntil && l.boostedUntil > Date.now());
+  const isUrgentActive = !!(l.isUrgent && l.urgentUntil && l.urgentUntil > Date.now());
+
+Declare these two const lines at the TOP of the map callback, before the return/JSX.
+
+---
+
+Do NOT change any other part of ShopPublicPage.tsx.
+Do NOT change the grid layout, shop info card, sticky header, or any other section.
+Run pnpm --filter xmum-market run build and confirm zero errors.
+Report exactly what lines were added.
