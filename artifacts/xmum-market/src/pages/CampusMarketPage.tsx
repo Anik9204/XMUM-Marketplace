@@ -92,9 +92,6 @@ function HeroBanner({ ads }: { ads: ShopAd[] }) {
               </button>
             </Link>
           </div>
-          <div className="hidden lg:block lg:w-64 lg:h-40 rounded-xl overflow-hidden opacity-90 shrink-0 border border-white/20 bg-white/10">
-            <div className="w-full h-full flex items-center justify-center text-white/30 text-sm">Preview</div>
-          </div>
         </div>
         <div className="absolute right-4 bottom-0 opacity-10 text-[120px] leading-none select-none pointer-events-none">🛍️</div>
       </div>
