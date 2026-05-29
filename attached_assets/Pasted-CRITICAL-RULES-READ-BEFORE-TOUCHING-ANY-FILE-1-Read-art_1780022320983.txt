@@ -1,0 +1,58 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Read artifacts/xmum-market/src/lib/shops.ts fully before touching it.
+2. Do NOT rewrite shops.ts from scratch. Add only at the bottom of the file.
+3. Do NOT remove or modify any existing function in shops.ts.
+4. Do NOT touch types.ts or credits.ts — those are done and working.
+5. Do NOT touch any component files.
+6. Confirm zero build errors: pnpm --filter xmum-market run build
+
+---
+
+TASK: Add 2 new functions to the BOTTOM of artifacts/xmum-market/src/lib/shops.ts
+
+Add these two functions after the getAllShops function, at the very end of the file:
+
+// ── Credit-based listing boosts ───────────────────────────────────────────────
+
+/**
+ * Boost a shop listing to the top for 24 hours. Costs 1 credit.
+ * Uses atomic credit deduction — throws if insufficient balance.
+ */
+export async function boostShopListing(
+  shopId: string,
+  listingId: string,
+  listingTitle: string
+): Promise<void> {
+  const { spendShopCredits } = await import("@/lib/credits");
+  await spendShopCredits(shopId, 1, `Boost listing: ${listingTitle}`);
+  const boostedUntil = Date.now() + 24 * 60 * 60 * 1000;
+  await updateDoc(doc(db, "shopListings", listingId), {
+    isBoosted: true,
+    boostedUntil,
+  });
+}
+
+/**
+ * Mark a shop listing as Urgent for 3 days. Costs 2 credits.
+ * Uses atomic credit deduction — throws if insufficient balance.
+ */
+export async function markListingUrgent(
+  shopId: string,
+  listingId: string,
+  listingTitle: string
+): Promise<void> {
+  const { spendShopCredits } = await import("@/lib/credits");
+  await spendShopCredits(shopId, 2, `Urgent badge: ${listingTitle}`);
+  const urgentUntil = Date.now() + 3 * 24 * 60 * 60 * 1000;
+  await updateDoc(doc(db, "shopListings", listingId), {
+    isUrgent: true,
+    urgentUntil,
+  });
+}
+
+---
+
+NOTE: updateDoc and doc are already imported at the top of shops.ts. Do NOT add duplicate imports.
+Do NOT touch any other file.
+Run pnpm --filter xmum-market run build and confirm zero errors.
+Report the exact lines added and confirm the rest of shops.ts is untouched.

@@ -804,3 +804,41 @@ export async function getAllShops(limitCount = 50): Promise<Shop[]> {
     .filter((s) => s.isActive !== false && s.isSuspended !== true && s.subscriptionStatus !== "expired")
     .slice(0, limitCount);
 }
+
+// ── Credit-based listing boosts ───────────────────────────────────────────────
+
+/**
+ * Boost a shop listing to the top for 24 hours. Costs 1 credit.
+ * Uses atomic credit deduction — throws if insufficient balance.
+ */
+export async function boostShopListing(
+  shopId: string,
+  listingId: string,
+  listingTitle: string
+): Promise<void> {
+  const { spendShopCredits } = await import("@/lib/credits");
+  await spendShopCredits(shopId, 1, `Boost listing: ${listingTitle}`);
+  const boostedUntil = Date.now() + 24 * 60 * 60 * 1000;
+  await updateDoc(doc(db, "shopListings", listingId), {
+    isBoosted: true,
+    boostedUntil,
+  });
+}
+
+/**
+ * Mark a shop listing as Urgent for 3 days. Costs 2 credits.
+ * Uses atomic credit deduction — throws if insufficient balance.
+ */
+export async function markListingUrgent(
+  shopId: string,
+  listingId: string,
+  listingTitle: string
+): Promise<void> {
+  const { spendShopCredits } = await import("@/lib/credits");
+  await spendShopCredits(shopId, 2, `Urgent badge: ${listingTitle}`);
+  const urgentUntil = Date.now() + 3 * 24 * 60 * 60 * 1000;
+  await updateDoc(doc(db, "shopListings", listingId), {
+    isUrgent: true,
+    urgentUntil,
+  });
+}
