@@ -1,0 +1,497 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it.
+2. Do NOT rewrite any file from scratch. Surgical edits only.
+3. Do NOT remove any existing function, state, prop, handler, import, or JSX element.
+4. Never change routing logic, Firebase calls, auth logic, or any data-fetch logic.
+5. Never introduce framer-motion, GSAP, or any new npm package.
+6. Confirm zero errors: pnpm --filter xmum-market run build
+
+---
+
+## TASK: Add contextual onboarding via improved empty states + a /help page
+
+Two-part implementation:
+- Part A: Improve empty state messages on all major pages (teach users in context)
+- Part B: Create a /help page and link it from the app
+
+---
+
+## PART A: Improved Empty States
+
+### A1 — HomePage.tsx (empty listing grid)
+
+File: `artifacts/xmum-market/src/pages/HomePage.tsx`
+
+Find the empty state block that currently reads:
+```tsx
+<div className="flex flex-col items-center justify-center py-16 px-8 text-center">
+  <div className="text-5xl mb-4">{TAB_ICONS[activeTab]}</div>
+  <p className="font-display font-bold text-gray-700 dark:text-slate-300 text-lg mb-1">
+    Nothing here yet
+  </p>
+  <p className="text-sm text-gray-400 dark:text-slate-500">
+    Be the first to post in this category!
+  </p>
+  {categoryFilter !== "all" ? (
+    <button onClick={() => setCategoryFilter("all")} className="mt-4 text-[#003366] dark:text-blue-400 text-sm font-semibold underline">
+      Show all categories
+    </button>
+  ) : (
+    <Link href="/post" className="btn-primary mt-6 px-8">
+      {t.postItem}
+    </Link>
+  )}
+</div>
+```
+
+Replace with:
+```tsx
+<div className="flex flex-col items-center justify-center py-16 px-8 text-center">
+  <div className="text-5xl mb-4">{TAB_ICONS[activeTab]}</div>
+  <p className="font-display font-bold text-gray-700 dark:text-slate-300 text-lg mb-1">
+    {activeTab === "all" ? "No listings yet" :
+     activeTab === "buy-sell" ? "No buy & sell listings yet" :
+     activeTab === "lost-found" ? "No lost & found posts yet" :
+     activeTab === "jobs" ? "No job posts yet" :
+     activeTab === "assistance" ? "No assistance requests yet" :
+     "No rental listings yet"}
+  </p>
+  <p className="text-sm text-gray-400 dark:text-slate-500 max-w-xs">
+    {activeTab === "all" ? "XMUM Market is where students buy, sell, find lost items, post jobs, ask for help, and list rentals — all in one place." :
+     activeTab === "buy-sell" ? "Sell your old textbooks, electronics, clothes, and more to fellow XMUM students." :
+     activeTab === "lost-found" ? "Lost something on campus? Post here and your fellow students will help you find it." :
+     activeTab === "jobs" ? "Students post part-time jobs, tutoring gigs, and freelance work here. You can offer or seek." :
+     activeTab === "assistance" ? "Need help moving dorms? Looking for a study partner? Post a request — students help students." :
+     "List your car, motorcycle, or other rentals for fellow students to borrow."}
+  </p>
+  {categoryFilter !== "all" ? (
+    <button onClick={() => setCategoryFilter("all")} className="mt-4 text-[#003366] dark:text-blue-400 text-sm font-semibold underline">
+      Show all categories
+    </button>
+  ) : (
+    <div className="flex flex-col items-center gap-2 mt-6">
+      <Link href="/post" className="btn-primary px-8">
+        {t.postItem}
+      </Link>
+      <Link href="/help" className="text-xs text-gray-400 dark:text-slate-500 hover:text-[#003366] dark:hover:text-blue-400 transition-colors mt-1">
+        How does XMUM Market work? →
+      </Link>
+    </div>
+  )}
+</div>
+```
+
+---
+
+### A2 — MessagesPage.tsx (empty conversation list)
+
+File: `artifacts/xmum-market/src/pages/MessagesPage.tsx`
+
+Find the empty conversation list block:
+```tsx
+<div className="flex flex-col items-center py-12 text-center px-4">
+  <span className="text-4xl mb-3">💬</span>
+  <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+    {searchQuery ? "No matching conversations" : "No messages yet"}
+  </p>
+  {!searchQuery && (
+    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t.noMessages}</p>
+  )}
+</div>
+```
+
+Replace with:
+```tsx
+<div className="flex flex-col items-center py-12 text-center px-4">
+  <span className="text-4xl mb-3">💬</span>
+  <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+    {searchQuery ? "No matching conversations" : "No messages yet"}
+  </p>
+  {!searchQuery && (
+    <>
+      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-[200px]">
+        Messages appear here when you contact a seller or a buyer contacts you.
+      </p>
+      <Link href="/" className="mt-3 text-xs text-[#003366] dark:text-blue-400 font-semibold hover:underline">
+        Browse listings →
+      </Link>
+    </>
+  )}
+</div>
+```
+
+Make sure `Link` from `"wouter"` is already imported in MessagesPage.tsx — check the imports at the top. If it is already imported, do not add it again.
+
+Find the desktop right-panel empty state:
+```tsx
+const emptyState = (
+  <div className="flex flex-col items-center justify-center h-full text-center px-8">
+    <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4">
+      <MessageCircle size={32} className="text-slate-300 dark:text-slate-600" />
+    </div>
+    <p className="text-base font-semibold text-slate-600 dark:text-slate-300">Select a conversation</p>
+    <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">Choose a chat to start messaging</p>
+  </div>
+);
+```
+
+Replace with:
+```tsx
+const emptyState = (
+  <div className="flex flex-col items-center justify-center h-full text-center px-8">
+    <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4">
+      <MessageCircle size={32} className="text-slate-300 dark:text-slate-600" />
+    </div>
+    <p className="text-base font-semibold text-slate-600 dark:text-slate-300">Your messages</p>
+    <p className="text-sm text-slate-400 dark:text-slate-500 mt-1 max-w-xs">
+      Select a conversation on the left, or browse listings and tap a seller's contact button to start a chat.
+    </p>
+  </div>
+);
+```
+
+---
+
+### A3 — CampusMarketPage.tsx (empty shops + empty listings)
+
+File: `artifacts/xmum-market/src/pages/CampusMarketPage.tsx`
+
+Find the empty shops state:
+```tsx
+<div className="py-4 text-center text-xs text-gray-400 dark:text-slate-500">
+  No shops yet — be the first to open one!
+</div>
+```
+
+Replace with:
+```tsx
+<div className="py-6 text-center px-4">
+  <p className="text-sm font-semibold text-gray-500 dark:text-slate-400">No shops open yet</p>
+  <p className="text-xs text-gray-400 dark:text-slate-500 mt-1 max-w-xs mx-auto">
+    XMUM students can open a campus shop to sell food, services, handmade goods, and more.
+  </p>
+  <Link href="/create-shop" className="inline-block mt-3 text-xs font-semibold text-[#003366] dark:text-blue-400 hover:underline">
+    Open your shop →
+  </Link>
+</div>
+```
+
+Find the empty listings state (inside the All Listings section):
+```tsx
+<div className="text-center py-16">
+  <Package size={40} className="mx-auto text-gray-200 dark:text-slate-700 mb-3" />
+  <p className="text-sm font-semibold text-gray-500 dark:text-slate-400">No listings yet</p>
+  <p className="text-xs text-gray-400 dark:text-slate-500 mt-1 mb-4">Be the first to open a shop!</p>
+  <Link href="/create-shop">
+    <button className="btn-primary px-5">
+      Open Your Shop
+    </button>
+  </Link>
+</div>
+```
+
+Replace with:
+```tsx
+<div className="text-center py-16">
+  <Package size={40} className="mx-auto text-gray-200 dark:text-slate-700 mb-3" />
+  <p className="text-sm font-semibold text-gray-500 dark:text-slate-400">No shop listings yet</p>
+  <p className="text-xs text-gray-400 dark:text-slate-500 mt-1 mb-1 max-w-xs mx-auto">
+    Campus shops sell food, services, fashion, electronics, and more. Open a shop or check back soon.
+  </p>
+  <Link href="/create-shop">
+    <button className="btn-primary px-5 mt-4">
+      Open Your Shop
+    </button>
+  </Link>
+</div>
+```
+
+---
+
+### A4 — ProfilePage.tsx (no shop card)
+
+File: `artifacts/xmum-market/src/pages/ProfilePage.tsx`
+
+Find:
+```tsx
+<p className="text-xs text-gray-500 dark:text-slate-400 mb-3">You don't have a shop yet.</p>
+```
+
+Replace with:
+```tsx
+<p className="text-xs text-gray-500 dark:text-slate-400 mb-1">You don't have a shop yet.</p>
+<p className="text-xs text-gray-400 dark:text-slate-500 mb-3 max-w-[180px] mx-auto">
+  Open a campus shop to sell food, services, or products to XMUM students.
+</p>
+```
+
+---
+
+## PART B: Create the /help page
+
+### B1 — Create the HelpPage component
+
+Create a NEW file: `artifacts/xmum-market/src/pages/HelpPage.tsx`
+
+```tsx
+import { Link } from "wouter";
+import { useLang } from "@/contexts/LanguageContext";
+import {
+  ShoppingBag, Search, Store, MessageCircle, User,
+  Tag, HelpCircle, Briefcase, Car, BookOpen, ChevronRight
+} from "lucide-react";
+
+interface Section {
+  icon: React.ReactNode;
+  emoji: string;
+  title: string;
+  subtitle: string;
+  bullets: string[];
+  cta?: { label: string; href: string };
+}
+
+const sections: Section[] = [
+  {
+    icon: <ShoppingBag size={22} />,
+    emoji: "🏠",
+    title: "Home — Browse Listings",
+    subtitle: "The main marketplace feed for all XMUM students.",
+    bullets: [
+      "Browse Buy & Sell, Lost & Found, Jobs, Assistance, and Rental listings all in one place.",
+      "Filter by category using the tabs at the top.",
+      "Tap any listing to see details and contact the seller.",
+      "Tap the bookmark icon to save listings for later.",
+      "Use the Post button (or the + button on mobile) to create your own listing.",
+    ],
+    cta: { label: "Go to Home", href: "/" },
+  },
+  {
+    icon: <Search size={22} />,
+    emoji: "🔍",
+    title: "Search — Find Anything",
+    subtitle: "Search across all listings and shops on the platform.",
+    bullets: [
+      "Search by keyword, e.g. \"Calculus textbook\" or \"graphic design\".",
+      "Results include both marketplace listings and campus shop items.",
+      "Filter results by listing type or category.",
+    ],
+    cta: { label: "Go to Search", href: "/search" },
+  },
+  {
+    icon: <Store size={22} />,
+    emoji: "🏪",
+    title: "Shops — Campus Market",
+    subtitle: "Student-run shops selling food, services, fashion, and more.",
+    bullets: [
+      "Browse shops opened by XMUM students — food stalls, tutoring services, handmade goods, and more.",
+      "Tap a shop to see their full listing catalogue, contact options, and reviews.",
+      "Place orders and leave reviews after a transaction.",
+      "Want to sell regularly? Open your own shop — it takes just a few minutes.",
+    ],
+    cta: { label: "Browse Shops", href: "/campus-market" },
+  },
+  {
+    icon: <MessageCircle size={22} />,
+    emoji: "💬",
+    title: "Messages — Chat with Students",
+    subtitle: "Direct messaging between buyers and sellers.",
+    bullets: [
+      "When you contact a seller from a listing, a conversation starts here.",
+      "All your chats — both marketplace and shop — are in one place.",
+      "Messages are private and only visible to the two participants.",
+      "You'll get a notification badge when you have unread messages.",
+    ],
+    cta: { label: "Go to Messages", href: "/messages" },
+  },
+  {
+    icon: <User size={22} />,
+    emoji: "👤",
+    title: "Profile — Your Activity",
+    subtitle: "Manage your listings, saved items, and account.",
+    bullets: [
+      "View and manage all listings you've posted.",
+      "See items you've bookmarked under the Saved tab.",
+      "Track items you've marked as sold.",
+      "Manage your campus shop if you have one.",
+      "Update your profile photo and contact details in Settings.",
+    ],
+    cta: { label: "Go to Profile", href: "/profile" },
+  },
+  {
+    icon: <Tag size={22} />,
+    emoji: "📦",
+    title: "Posting a Listing",
+    subtitle: "Share what you're selling, offering, or looking for.",
+    bullets: [
+      "You must be signed in with a verified @xmu.edu.my email to post.",
+      "Choose the right type: Buy & Sell for items, Lost & Found for missing things, Jobs for work opportunities, Assistance for help requests, Rentals for vehicles or equipment.",
+      "Add up to 3 photos — good photos get more responses.",
+      "Your listing goes through an AI check before it's published.",
+      "Listings expire after a period of time — you'll get a reminder to renew.",
+    ],
+    cta: { label: "Post a Listing", href: "/post" },
+  },
+];
+
+export default function HelpPage() {
+  const { lang } = useLang();
+
+  return (
+    <div className="max-w-2xl mx-auto px-4 py-8 pb-24 md:pb-12">
+      {/* Header */}
+      <div className="mb-8">
+        <Link href="/" className="inline-flex items-center gap-1 text-xs text-gray-400 dark:text-slate-500 hover:text-[#003366] dark:hover:text-blue-400 transition-colors mb-4">
+          ← Back
+        </Link>
+        <div className="flex items-center gap-3 mb-2">
+          <div className="w-10 h-10 rounded-2xl bg-[#003366] dark:bg-blue-600 flex items-center justify-center shrink-0">
+            <HelpCircle size={20} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl font-display font-bold text-gray-900 dark:text-slate-100">
+              How to use XMUM Market
+            </h1>
+            <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+              A guide for XMUM students
+            </p>
+          </div>
+        </div>
+        <p className="text-sm text-gray-500 dark:text-slate-400 mt-3 leading-relaxed">
+          XMUM Market is a student-only marketplace exclusively for Xiamen University Malaysia students.
+          You need a verified <span className="font-semibold text-gray-700 dark:text-slate-300">@xmu.edu.my</span> email to post listings or contact sellers.
+        </p>
+      </div>
+
+      {/* Sections */}
+      <div className="space-y-4">
+        {sections.map((section) => (
+          <div
+            key={section.title}
+            className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-5 shadow-sm"
+          >
+            {/* Section header */}
+            <div className="flex items-start gap-3 mb-3">
+              <div className="w-9 h-9 rounded-xl bg-[#003366]/10 dark:bg-blue-500/15 flex items-center justify-center text-[#003366] dark:text-blue-400 shrink-0 mt-0.5">
+                {section.icon}
+              </div>
+              <div>
+                <h2 className="text-sm font-display font-bold text-gray-900 dark:text-slate-100">
+                  {section.title}
+                </h2>
+                <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+                  {section.subtitle}
+                </p>
+              </div>
+            </div>
+
+            {/* Bullets */}
+            <ul className="space-y-1.5 mb-4">
+              {section.bullets.map((bullet, i) => (
+                <li key={i} className="flex items-start gap-2">
+                  <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-[#003366]/40 dark:bg-blue-400/50 shrink-0" />
+                  <span className="text-xs text-gray-600 dark:text-slate-300 leading-relaxed">
+                    {bullet}
+                  </span>
+                </li>
+              ))}
+            </ul>
+
+            {/* CTA */}
+            {section.cta && (
+              <Link href={section.cta.href}>
+                <button className="flex items-center gap-1.5 text-xs font-semibold text-[#003366] dark:text-blue-400 hover:underline transition-colors">
+                  {section.cta.label}
+                  <ChevronRight size={12} />
+                </button>
+              </Link>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Footer note */}
+      <div className="mt-6 p-4 bg-amber-50 dark:bg-amber-900/20 rounded-2xl border border-amber-100 dark:border-amber-800/40">
+        <p className="text-xs text-amber-700 dark:text-amber-300 leading-relaxed">
+          <span className="font-semibold">Remember:</span> Only XMUM students with a verified @xmu.edu.my email can post listings or contact sellers. All content is subject to the{" "}
+          <Link href="/listing/guidelines" className="underline">Marketplace Guidelines</Link>.
+        </p>
+      </div>
+    </div>
+  );
+}
+```
+
+---
+
+### B2 — Register the /help route in App.tsx
+
+File: `artifacts/xmum-market/src/App.tsx`
+
+Add the lazy import (with the other lazy imports at the top):
+```tsx
+const HelpPage = lazy(() => import("@/pages/HelpPage"));
+```
+
+Add the route (before the `<Route component={NotFound} />` catch-all line):
+```tsx
+<Route path="/help" component={HelpPage} />
+```
+
+---
+
+### B3 — Add Help link to the Profile dropdown menu (desktop) and Profile page header
+
+File: `artifacts/xmum-market/src/components/Layout.tsx`
+
+In the desktop Profile dropdown menu, find the block with the Settings and Sign Out links:
+```tsx
+<Link href="/profile" onClick={() => setMenuOpen(false)} className="block px-4 py-2.5 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-t-xl">{t.myListings}</Link>
+<Link href="/settings" onClick={() => setMenuOpen(false)} className="block px-4 py-2.5 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700 border-t border-gray-100 dark:border-slate-700">{t.accountSettings}</Link>
+<button onClick={() => { logOut(); setMenuOpen(false); }} className="block w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-b-xl border-t border-gray-100 dark:border-slate-700">{t.signOut}</button>
+```
+
+Add a Help link between Settings and Sign Out:
+```tsx
+<Link href="/profile" onClick={() => setMenuOpen(false)} className="block px-4 py-2.5 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-t-xl">{t.myListings}</Link>
+<Link href="/settings" onClick={() => setMenuOpen(false)} className="block px-4 py-2.5 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700 border-t border-gray-100 dark:border-slate-700">{t.accountSettings}</Link>
+<Link href="/help" onClick={() => setMenuOpen(false)} className="block px-4 py-2.5 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700 border-t border-gray-100 dark:border-slate-700">How to use the app</Link>
+<button onClick={() => { logOut(); setMenuOpen(false); }} className="block w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-b-xl border-t border-gray-100 dark:border-slate-700">{t.signOut}</button>
+```
+
+---
+
+### B4 — Add Help link to mobile ProfilePage
+
+File: `artifacts/xmum-market/src/pages/ProfilePage.tsx`
+
+Find the Settings link in the ProfilePage (the one that navigates to /settings). It is likely near the top of the profile page header area, or in a settings button. Search for:
+```
+/settings
+```
+in ProfilePage.tsx to find it. Near that link, add a "How to use the app" link pointing to `/help`. Place it directly after the Settings link with consistent styling to whatever pattern is already there. Do not change any surrounding layout — just insert one additional link item following the exact same className pattern as the Settings link nearby.
+
+---
+
+## WHAT MUST NOT CHANGE
+
+- Every data fetch, Firebase call, auth check in all files
+- The Layout nav items — no new nav item added to the bottom bar or header nav
+- Every other empty state not listed above (sold items empty state, saved items empty state, etc.)
+- All existing routes
+- The t.noMessages i18n string usage — only add to it, never remove
+- Dark mode, responsive breakpoints, z-indexes
+- Any animation or transition
+
+---
+
+## BUILD VERIFICATION
+
+pnpm --filter xmum-market run build
+
+Must pass with zero TypeScript errors. Check:
+- HelpPage.tsx: all lucide-react icons used must be imported. The icons used are:
+  ShoppingBag, Search, Store, MessageCircle, User, Tag, HelpCircle, ChevronRight
+  (BookOpen and Briefcase and Car are imported but not used in the final JSX — remove
+  them from the import to keep the build clean)
+- App.tsx: HelpPage lazy import must be added before it is used in the Route
+- Layout.tsx: no new imports needed (Link is already imported from wouter)

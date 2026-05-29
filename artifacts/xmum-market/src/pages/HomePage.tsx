@@ -735,19 +735,34 @@ export default function HomePage() {
           <div className="flex flex-col items-center justify-center py-16 px-8 text-center">
             <div className="text-5xl mb-4">{TAB_ICONS[activeTab]}</div>
             <p className="font-display font-bold text-gray-700 dark:text-slate-300 text-lg mb-1">
-              Nothing here yet
+              {activeTab === "all" ? "No listings yet" :
+               activeTab === "buy-sell" ? "No buy & sell listings yet" :
+               activeTab === "lost-found" ? "No lost & found posts yet" :
+               activeTab === "jobs" ? "No job posts yet" :
+               activeTab === "assistance" ? "No assistance requests yet" :
+               "No rental listings yet"}
             </p>
-            <p className="text-sm text-gray-400 dark:text-slate-500">
-              Be the first to post in this category!
+            <p className="text-sm text-gray-400 dark:text-slate-500 max-w-xs">
+              {activeTab === "all" ? "XMUM Market is where students buy, sell, find lost items, post jobs, ask for help, and list rentals — all in one place." :
+               activeTab === "buy-sell" ? "Sell your old textbooks, electronics, clothes, and more to fellow XMUM students." :
+               activeTab === "lost-found" ? "Lost something on campus? Post here and your fellow students will help you find it." :
+               activeTab === "jobs" ? "Students post part-time jobs, tutoring gigs, and freelance work here. You can offer or seek." :
+               activeTab === "assistance" ? "Need help moving dorms? Looking for a study partner? Post a request — students help students." :
+               "List your car, motorcycle, or other rentals for fellow students to borrow."}
             </p>
             {categoryFilter !== "all" ? (
               <button onClick={() => setCategoryFilter("all")} className="mt-4 text-[#003366] dark:text-blue-400 text-sm font-semibold underline">
                 Show all categories
               </button>
             ) : (
-              <Link href="/post" className="btn-primary mt-6 px-8">
-                {t.postItem}
-              </Link>
+              <div className="flex flex-col items-center gap-2 mt-6">
+                <Link href="/post" className="btn-primary px-8">
+                  {t.postItem}
+                </Link>
+                <Link href="/help" className="text-xs text-gray-400 dark:text-slate-500 hover:text-[#003366] dark:hover:text-blue-400 transition-colors mt-1">
+                  How does XMUM Market work? →
+                </Link>
+              </div>
             )}
           </div>
         ) : (

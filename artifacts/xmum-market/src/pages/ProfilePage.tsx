@@ -14,7 +14,7 @@ import {
   User, CheckCircle, AlertCircle, CheckCircle2, Settings, Clock, X,
   Bookmark, Store, MessageSquare, Plus,
   Pencil, Trash2, Eye, Package, BarChart2, ChevronRight,
-  Tag, BadgeCheck,
+  Tag, BadgeCheck, HelpCircle,
 } from "lucide-react";
 import { logOut } from "@/lib/auth";
 import { auth } from "@/lib/firebase";
@@ -467,6 +467,9 @@ export default function ProfilePage() {
                 >
                   <Settings size={13} /> Settings
                 </button>
+                <Link href="/help" className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-400 border border-gray-200 dark:border-slate-600 px-3 py-2 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
+                  <HelpCircle size={13} /> Help
+                </Link>
               </div>
             </div>
 
@@ -524,7 +527,10 @@ export default function ProfilePage() {
           ) : myShops.length === 0 ? (
             <div className="bg-white dark:bg-slate-800 rounded-2xl border border-dashed border-gray-200 dark:border-slate-700 p-5 text-center">
               <Store size={28} className="mx-auto text-gray-200 dark:text-slate-600 mb-2" />
-              <p className="text-xs text-gray-500 dark:text-slate-400 mb-3">You don't have a shop yet.</p>
+              <p className="text-xs text-gray-500 dark:text-slate-400 mb-1">You don't have a shop yet.</p>
+              <p className="text-xs text-gray-400 dark:text-slate-500 mb-3 max-w-[180px] mx-auto">
+                Open a campus shop to sell food, services, or products to XMUM students.
+              </p>
               <Link href="/create-shop">
                 <button className="flex items-center gap-1.5 mx-auto bg-[#003366] dark:bg-blue-600 text-white text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-[#002244] transition">
                   <Plus size={12} /> {t.openYourShop}

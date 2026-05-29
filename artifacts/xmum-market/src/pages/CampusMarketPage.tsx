@@ -391,8 +391,14 @@ export default function CampusMarketPage() {
             ))}
           </div>
         ) : shops.length === 0 ? (
-          <div className="py-4 text-center text-xs text-gray-400 dark:text-slate-500">
-            No shops yet — be the first to open one!
+          <div className="py-6 text-center px-4">
+            <p className="text-sm font-semibold text-gray-500 dark:text-slate-400">No shops open yet</p>
+            <p className="text-xs text-gray-400 dark:text-slate-500 mt-1 max-w-xs mx-auto">
+              XMUM students can open a campus shop to sell food, services, handmade goods, and more.
+            </p>
+            <Link href="/create-shop" className="inline-block mt-3 text-xs font-semibold text-[#003366] dark:text-blue-400 hover:underline">
+              Open your shop →
+            </Link>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -419,10 +425,12 @@ export default function CampusMarketPage() {
         ) : visibleListings.length === 0 ? (
           <div className="text-center py-16">
             <Package size={40} className="mx-auto text-gray-200 dark:text-slate-700 mb-3" />
-            <p className="text-sm font-semibold text-gray-500 dark:text-slate-400">No listings yet</p>
-            <p className="text-xs text-gray-400 dark:text-slate-500 mt-1 mb-4">Be the first to open a shop!</p>
+            <p className="text-sm font-semibold text-gray-500 dark:text-slate-400">No shop listings yet</p>
+            <p className="text-xs text-gray-400 dark:text-slate-500 mt-1 mb-1 max-w-xs mx-auto">
+              Campus shops sell food, services, fashion, electronics, and more. Open a shop or check back soon.
+            </p>
             <Link href="/create-shop">
-              <button className="btn-primary px-5">
+              <button className="btn-primary px-5 mt-4">
                 Open Your Shop
               </button>
             </Link>

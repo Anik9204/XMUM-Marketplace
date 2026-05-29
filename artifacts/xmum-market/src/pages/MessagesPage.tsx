@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLang } from "@/contexts/LanguageContext";
 import { getProfile } from "@/lib/userProfile";
@@ -453,7 +453,14 @@ export default function MessagesPage() {
               {searchQuery ? "No matching conversations" : "No messages yet"}
             </p>
             {!searchQuery && (
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t.noMessages}</p>
+              <>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-[200px]">
+                  Messages appear here when you contact a seller or a buyer contacts you.
+                </p>
+                <Link href="/" className="mt-3 text-xs text-[#003366] dark:text-blue-400 font-semibold hover:underline">
+                  Browse listings →
+                </Link>
+              </>
             )}
           </div>
         ) : (
@@ -814,8 +821,10 @@ export default function MessagesPage() {
       <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4">
         <MessageCircle size={32} className="text-slate-300 dark:text-slate-600" />
       </div>
-      <p className="text-base font-semibold text-slate-600 dark:text-slate-300">Select a conversation</p>
-      <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">Choose a chat to start messaging</p>
+      <p className="text-base font-semibold text-slate-600 dark:text-slate-300">Your messages</p>
+      <p className="text-sm text-slate-400 dark:text-slate-500 mt-1 max-w-xs">
+        Select a conversation on the left, or browse listings and tap a seller's contact button to start a chat.
+      </p>
     </div>
   );
 
