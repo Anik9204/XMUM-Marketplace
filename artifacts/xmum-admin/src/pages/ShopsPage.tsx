@@ -1,9 +1,9 @@
 import { useEffect, useState, useRef } from "react";
 import {
   ExternalLink, Trash2, Search, PauseCircle, PlayCircle, RefreshCw,
-  ChevronDown, AlertTriangle, Clock, Ban, X,
+  ChevronDown, AlertTriangle, Clock, Ban, X, CreditCard, Loader2,
 } from "lucide-react";
-import { updateDoc, doc, getDoc } from "firebase/firestore";
+import { updateDoc, doc, getDoc, addDoc, collection } from "firebase/firestore";
 import { getShops, deleteShop, writeAuditLog, renewShopSubscription, db } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { AdminShop } from "../lib/types";
@@ -47,6 +47,13 @@ export default function ShopsPage() {
   // Deactivate typed confirmation
   const [deactivateModal, setDeactivateModal] = useState<AdminShop | null>(null);
   const [deactivateInput, setDeactivateInput] = useState("");
+
+  // Add credits modal
+  const [creditModal, setCreditModal]     = useState<AdminShop | null>(null);
+  const [creditAmount, setCreditAmount]   = useState("10");
+  const [creditReason, setCreditReason]   = useState("");
+  const [creditLoading, setCreditLoading] = useState(false);
+  const [creditError, setCreditError]     = useState("");
 
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -113,6 +120,57 @@ export default function ShopsPage() {
       alert("Failed to renew subscription. Check Firestore permissions.");
     } finally {
       setRenewing(null);
+    }
+  }
+
+  async function handleAddCredits() {
+    if (!creditModal) return;
+    const amount = parseInt(creditAmount, 10);
+    if (!amount || amount <= 0) { setCreditError("Enter a valid amount."); return; }
+    if (!creditReason.trim()) { setCreditError("Reason is required."); return; }
+    setCreditLoading(true);
+    setCreditError("");
+    try {
+      const shopRef = doc(db, "shops", creditModal.id);
+      const shopSnap = await getDoc(shopRef);
+      if (!shopSnap.exists()) throw new Error("Shop not found.");
+      const balanceBefore = (shopSnap.data().creditBalance as number) ?? 0;
+      const balanceAfter = balanceBefore + amount;
+      await updateDoc(shopRef, { creditBalance: balanceAfter });
+      await addDoc(collection(db, "shopCreditLogs"), {
+        shopId: creditModal.id,
+        shopName: creditModal.shopName,
+        adminEmail: adminUser?.email ?? "admin",
+        amount,
+        reason: creditReason.trim(),
+        balanceBefore,
+        balanceAfter,
+        createdAt: Date.now(),
+      });
+      void writeAuditLog({
+        actorUid: adminUser?.uid ?? "",
+        actorEmail: adminUser?.email ?? "",
+        action: "shop_credit_topup",
+        label: `Added ${amount} credits to "${creditModal.shopName}". Reason: ${creditReason.trim()}`,
+        targetId: creditModal.id,
+        targetType: "shop",
+        targetLabel: creditModal.shopName,
+        createdAt: Date.now(),
+      });
+      setShops((prev) =>
+        prev.map((s) =>
+          s.id === creditModal.id
+            ? { ...s, creditBalance: balanceAfter }
+            : s
+        )
+      );
+      setCreditModal(null);
+      setCreditAmount("10");
+      setCreditReason("");
+    } catch (err: any) {
+      setCreditError(err.message ?? "Failed to add credits.");
+    } finally {
+      setCreditLoading(false);
     }
   }
 
@@ -450,6 +508,82 @@ export default function ShopsPage() {
         </div>
       )}
 
+      {creditModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm p-6">
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h3 className="text-base font-bold text-gray-900 dark:text-slate-100">Add Credits</h3>
+                <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{creditModal.shopName}</p>
+              </div>
+              <button onClick={() => setCreditModal(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 transition">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide mb-1">Current Balance</p>
+                <p className="text-3xl font-bold text-[#003366] dark:text-blue-400">{creditModal.creditBalance ?? 0} <span className="text-base font-medium text-gray-400">credits</span></p>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-2">Credits to Add <span className="text-red-500">*</span></label>
+                <div className="grid grid-cols-4 gap-2 mb-2">
+                  {[5, 10, 20, 50].map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => setCreditAmount(String(n))}
+                      className={`py-2 rounded-xl text-xs font-bold border transition ${
+                        creditAmount === String(n)
+                          ? "bg-[#003366] text-white border-[#003366]"
+                          : "bg-gray-50 dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-200 dark:border-slate-600 hover:border-[#003366] dark:hover:border-blue-500"
+                      }`}
+                    >
+                      +{n}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="number" min="1" value={creditAmount}
+                  onChange={(e) => setCreditAmount(e.target.value)}
+                  className="w-full bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-xl px-3 py-2.5 text-sm text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#003366]/30"
+                  placeholder="Custom amount"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Payment Reference <span className="text-red-500">*</span></label>
+                <input
+                  type="text" value={creditReason}
+                  onChange={(e) => setCreditReason(e.target.value)}
+                  className="w-full bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-xl px-3 py-2.5 text-sm text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#003366]/30"
+                  placeholder="e.g. DuitNow RM10 from Ahmad"
+                />
+              </div>
+              {creditError && <p className="text-xs text-red-500 dark:text-red-400">{creditError}</p>}
+              <div className="pt-1">
+                <p className="text-xs text-gray-400 dark:text-slate-500 mb-3">
+                  New balance: <strong className="text-gray-700 dark:text-slate-200">
+                    {(creditModal.creditBalance ?? 0) + (parseInt(creditAmount, 10) || 0)} credits
+                  </strong>
+                </p>
+                <button
+                  onClick={handleAddCredits}
+                  disabled={creditLoading}
+                  className="w-full min-h-[44px] bg-[#003366] text-white font-semibold text-sm rounded-xl hover:bg-[#002244] disabled:opacity-50 transition flex items-center justify-center gap-2"
+                >
+                  {creditLoading
+                    ? <><Loader2 size={15} className="animate-spin" /> Adding…</>
+                    : <>
+                        <CreditCard size={15} />
+                        Add {parseInt(creditAmount, 10) > 0 ? creditAmount : "0"} Credits
+                      </>
+                  }
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between gap-3 mb-6">
         <div>
           <h1 className="text-xl font-bold text-slate-800 dark:text-slate-200">Campus Market Shops</h1>
@@ -590,7 +724,12 @@ export default function ShopsPage() {
                     <td className="px-4 py-3 text-xs text-slate-400">
                       {shop.createdAt ? new Date(shop.createdAt).toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "numeric" }) : "—"}
                     </td>
-                    <td className="px-4 py-3">{getSubscriptionBadge(shop)}</td>
+                    <td className="px-4 py-3">
+                      {getSubscriptionBadge(shop)}
+                      <span className="inline-flex items-center gap-1 text-xs text-gray-400 dark:text-slate-500 mt-0.5">
+                        <CreditCard size={10} /> {shop.creditBalance ?? 0} credits
+                      </span>
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-1" ref={openMenuId === shop.id ? menuRef : undefined}>
                         {import.meta.env.VITE_MAIN_APP_URL && shop.shopSlug && (
@@ -667,6 +806,18 @@ export default function ShopsPage() {
                             {openMenuId === shop.id && (
                               <div className="absolute right-0 top-full mt-1 z-20 w-48 bg-white dark:bg-slate-800
                                               border border-gray-100 dark:border-slate-700 rounded-xl shadow-lg py-1">
+                                <button
+                                  onClick={() => {
+                                    setCreditModal(shop);
+                                    setCreditAmount("10");
+                                    setCreditReason("");
+                                    setCreditError("");
+                                    setOpenMenuId(null);
+                                  }}
+                                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition whitespace-nowrap"
+                                >
+                                  <CreditCard size={14} /> Add Credits
+                                </button>
                                 {(shop.subscriptionStatus === "active" || shop.subscriptionStatus === "trial") && (
                                   <button
                                     onClick={() => { setOpenMenuId(null); handleForceExpire(shop); }}

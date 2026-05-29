@@ -98,6 +98,7 @@ export interface AdminShop {
   subscriptionExpiresAt?: number;
   reminderSentAt?: number;
   rejectionReason?: string;
+  creditBalance?: number;
 }
 
 export type ShopAdStatus = "pending" | "approved" | "rejected";
