@@ -295,5 +295,19 @@ service cloud.firestore {
         && request.resource.data.action.size() > 0;
       allow update, delete: if false;
     }
+
+    // ── Shop Credit Logs ──────────────────────────────────────────────────────
+    match /shopCreditLogs/{logId} {
+      // Shop owners can read their own shop's credit logs
+      // Admins (editor role) can read and write all logs
+      // No one can update or delete logs — they are append-only
+      allow read: if isEditorRole() || (
+        isSignedIn() &&
+        exists(/databases/$(database)/documents/shops/$(resource.data.shopId)) &&
+        get(/databases/$(database)/documents/shops/$(resource.data.shopId)).data.ownerId == request.auth.uid
+      );
+      allow create: if isEditorRole();
+      allow update, delete: if false;
+    }
   }
 }

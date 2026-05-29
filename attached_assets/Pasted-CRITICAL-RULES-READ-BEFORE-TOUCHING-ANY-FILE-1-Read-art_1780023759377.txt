@@ -1,0 +1,54 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Read artifacts/xmum-market/firestore.rules fully before touching it.
+2. Parts 1–7 are complete. Do NOT touch any file modified in those parts.
+3. Do NOT change any existing rule in firestore.rules. Only add the new collection rule.
+4. After rules change, confirm both apps still build cleanly.
+5. This is the final part. Do a full verification of everything.
+
+---
+
+TASK: Update Firestore rules + final build check
+
+STEP 1 — Add shopCreditLogs rule to artifacts/xmum-market/firestore.rules
+
+Find the end of the existing rules (before the final closing brace of match /databases/{database}/documents).
+Add this new match block:
+
+    match /shopCreditLogs/{logId} {
+      // Shop owners can read their own shop's credit logs
+      // Admins (editor role) can read and write all logs
+      // No one can update or delete logs — they are append-only
+      allow read: if isEditorRole() || (
+        isSignedIn() &&
+        exists(/databases/$(database)/documents/shops/$(resource.data.shopId)) &&
+        get(/databases/$(database)/documents/shops/$(resource.data.shopId)).data.ownerId == request.auth.uid
+      );
+      allow create: if isEditorRole();
+      allow update, delete: if false;
+    }
+
+STEP 2 — Final build verification.
+Run both:
+  pnpm --filter xmum-market run build
+  pnpm --filter xmum-admin run build
+
+Both must pass with zero TypeScript errors and zero build errors.
+
+STEP 3 — Self-audit checklist. Verify each of the following:
+[ ] types.ts has creditBalance on Shop, isBoosted/boostedUntil/isUrgent/urgentUntil on ShopListing, ShopCreditLog interface, credit notification types
+[ ] credits.ts exists with spendShopCredits and getShopCreditLogs
+[ ] shops.ts has boostShopListing and markListingUrgent at the bottom, all other functions untouched
+[ ] ShopManagementPanel.tsx has CreditBalanceWidget, CreditHistoryTab, boost/urgent buttons on ListingRow, Credits tab in TABS, credits tab content rendered
+[ ] ShopPublicPage.tsx has boosted/urgent badges on listing cards
+[ ] Admin ShopsPage.tsx has Add Credits modal, handleAddCredits, CreditCard button in dropdown, balance shown in list
+[ ] AdminShop type has creditBalance field
+[ ] firestore.rules has shopCreditLogs rule
+
+STEP 4 — After confirming everything builds:
+Deploy Firestore rules ONLY via:
+  firebase deploy --only firestore:rules --project xmum--market
+
+Do NOT run firebase deploy --only functions.
+Do NOT push to GitHub yet — let the developer review first.
+
+Report the full checklist status and confirm both build outputs are clean.
