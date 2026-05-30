@@ -352,7 +352,7 @@ export default function ShopPublicPage() {
           </div>
 
           {/* RIGHT COLUMN — listings grid */}
-          <div className="order-2 mt-6 lg:mt-0">
+          <div className="order-2 mt-6 lg:mt-0 isolate">
             <div className="flex items-center justify-between mb-4">
               <h2 className="section-header">
                 🛍️ Listings
