@@ -215,8 +215,15 @@ export async function getRecentShopListings(limitCount = 6): Promise<ShopListing
         }
       })
     );
+    const now = Date.now();
     return listings
       .filter((l) => shopStatuses[l.shopId] !== false)
+      .sort((a, b) => {
+        const aScore = (a.boostScore && a.boostScore > now) ? a.boostScore : 0;
+        const bScore = (b.boostScore && b.boostScore > now) ? b.boostScore : 0;
+        if (bScore !== aScore) return bScore - aScore;
+        return b.createdAt - a.createdAt;
+      })
       .slice(0, limitCount);
   } catch {
     return [];
