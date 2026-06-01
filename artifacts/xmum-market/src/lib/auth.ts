@@ -74,12 +74,12 @@ export async function logOut(): Promise<void> {
 }
 
 export async function resetPassword(email: string): Promise<void> {
-  await sendPasswordResetEmail(auth, email);
+  await sendPasswordResetEmail(auth, email, ACTION_CODE_SETTINGS);
 }
 
 export async function resetPasswordWithCheck(email: string): Promise<void> {
   const normalised = email.toLowerCase().trim();
-  await sendPasswordResetEmail(auth, normalised);
+  await sendPasswordResetEmail(auth, normalised, ACTION_CODE_SETTINGS);
 }
 
 export async function resendVerification(): Promise<void> {
