@@ -264,7 +264,15 @@ export default function ProfilePage() {
       orderBy("createdAt", "desc")
     );
     const unsub = onSnapshot(q, (snap) => {
-      const data = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Listing));
+      const data = snap.docs.map((d) => {
+        const raw = d.data();
+        const createdAt = raw.createdAt && typeof raw.createdAt.toMillis === "function"
+          ? raw.createdAt.toMillis()
+          : typeof raw.createdAt === "number"
+          ? raw.createdAt
+          : Date.now();
+        return { id: d.id, ...raw, createdAt } as Listing;
+      });
       const expired = data.filter(l => now - l.createdAt >= LISTING_EXPIRY_MS && l.status === "active");
       const active = data.filter(l => !(now - l.createdAt >= LISTING_EXPIRY_MS && l.status === "active"));
       if (initialRun && expired.length > 0) {
