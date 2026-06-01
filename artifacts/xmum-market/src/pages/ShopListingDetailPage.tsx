@@ -53,6 +53,7 @@ export default function ShopListingDetailPage() {
   const [showReport, setShowReport] = useState(false);
   const [showHoldModal, setShowHoldModal] = useState(false);
   const [holdModalAction, setHoldModalAction] = useState<"delete" | "edit">("delete");
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const overflowRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -167,7 +168,12 @@ export default function ShopListingDetailPage() {
           <div className="lg:sticky lg:top-[80px] lg:self-start">
             <div className="relative bg-white dark:bg-slate-900 rounded-2xl overflow-hidden border border-gray-100 dark:border-slate-800 shadow-sm aspect-square sm:aspect-[4/3]">
               {photos.length > 0 ? (
-                <img src={photos[photoIdx]} alt={listing.title} className="w-full h-full object-cover" />
+                <img
+                  src={photos[photoIdx]}
+                  alt={listing.title}
+                  className="w-full h-full object-cover cursor-pointer"
+                  onClick={() => setLightboxOpen(true)}
+                />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
                   <Package size={72} className="text-gray-200 dark:text-slate-700" />
@@ -324,6 +330,12 @@ export default function ShopListingDetailPage() {
                 </p>
               )}
 
+              {user && shop && !canManage && !shop.whatsapp && !shop.wechat && !shop.instagram && (
+                <p className="text-xs text-center text-gray-500 dark:text-slate-400 pt-1 border-t border-gray-100 dark:border-slate-800">
+                  This shop hasn't added contact details yet. Use <strong>Chat with Seller</strong> below to reach them.
+                </p>
+              )}
+
               {/* Chat CTA — desktop (hidden on mobile, shown in sticky bar) */}
               {!canManage && (
                 <div className="hidden lg:block pt-1">
@@ -464,6 +476,42 @@ export default function ShopListingDetailPage() {
       )}
       {showHoldModal && (
         <ReportHoldModal action={holdModalAction} onClose={() => setShowHoldModal(false)} />
+      )}
+      {lightboxOpen && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center"
+          onClick={() => setLightboxOpen(false)}
+        >
+          <button
+            onClick={() => setLightboxOpen(false)}
+            className="absolute top-4 right-4 text-white/70 hover:text-white text-3xl leading-none z-10"
+            aria-label="Close"
+          >
+            ✕
+          </button>
+          {photos.length > 1 && photoIdx > 0 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setPhotoIdx((i) => i - 1); }}
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-white/70 hover:text-white z-10 bg-black/40 rounded-full p-2"
+            >
+              <ChevronLeft size={28} />
+            </button>
+          )}
+          {photos.length > 1 && photoIdx < photos.length - 1 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setPhotoIdx((i) => i + 1); }}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-white/70 hover:text-white z-10 bg-black/40 rounded-full p-2"
+            >
+              <ChevronRight size={28} />
+            </button>
+          )}
+          <img
+            src={photos[photoIdx]}
+            alt={listing.title}
+            className="max-h-[90dvh] max-w-[95vw] object-contain rounded-lg"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
       )}
     </div>
   );
