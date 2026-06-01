@@ -1,0 +1,42 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+
+TASK: Make the user's own listings on ProfilePage update in real-time — so if they mark a listing sold, delete it, or an admin archives it, the profile listing list reflects this without a page refresh.
+
+FILE: artifacts/xmum-market/src/pages/ProfilePage.tsx
+
+First read the file fully. Identify the useEffect that fetches the user's listings (it calls getUserListings or equivalent getDocs-based fetch with the user's uid).
+
+THE FIX:
+Replace that one-time getDocs fetch for the user's own listings with an onSnapshot listener.
+
+Add these imports if not already present:
+  import { collection, query, where, orderBy, onSnapshot } from "firebase/firestore";
+  import { db } from "@/lib/firebase";
+  import { Listing } from "@/lib/types";
+
+Replace the useEffect that loads the user's listings with:
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    const q = query(
+      collection(db, "listings"),
+      where("userId", "==", user.uid),
+      orderBy("createdAt", "desc")
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Listing));
+      setUserListings(docs);
+    }, () => {});
+    return () => unsub();
+  }, [user?.uid]);
+
+IMPORTANT: Only replace the listings fetch useEffect. Do NOT touch the useEffect that loads the user profile, shop data, saved listings, or anything else. Do NOT change any state variable names — use whatever variable name the file already uses for the listings array (check what it is before writing the code).
+
+Confirm build passes: pnpm --filter xmum-market run build

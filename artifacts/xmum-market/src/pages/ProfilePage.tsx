@@ -17,7 +17,8 @@ import {
   Tag, BadgeCheck, HelpCircle,
 } from "lucide-react";
 import { logOut } from "@/lib/auth";
-import { auth } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
+import { collection, query, where, orderBy, onSnapshot } from "firebase/firestore";
 import { useLocation, Link } from "wouter";
 import { addNotification } from "@/lib/notifications";
 
@@ -253,32 +254,35 @@ export default function ProfilePage() {
   const now = useMemo(() => Date.now(), [listings, refreshCounter]);
 
   useEffect(() => {
-    if (!user) return;
-    let isMounted = true;
+    if (!user?.uid) return;
+    let initialRun = true;
     listingsCache.current = [];
     setLoading(true);
-    getUserListings(user.uid)
-      .then((data) => {
-        if (!isMounted) return;
-        const expired = data.filter(l => now - l.createdAt >= LISTING_EXPIRY_MS && l.status === "active");
-        const active = data.filter(l => !(now - l.createdAt >= LISTING_EXPIRY_MS && l.status === "active"));
-        if (expired.length > 0) {
-          Promise.allSettled(expired.map(l => deleteListing(l))).then((results) => {
-            if (!isMounted) return;
-            const actuallyDeleted = expired.filter((_, i) => results[i].status === "fulfilled");
-            if (actuallyDeleted.length === 0) return;
-            if (actuallyDeleted.length === 1) setSuccessToast(`"${actuallyDeleted[0].title}" has been automatically removed after 30 days.`);
-            else setSuccessToast(`${actuallyDeleted.length} listings have been automatically removed after 30 days.`);
-            actuallyDeleted.forEach(l => {
-              addNotification(user.uid, { type: "listing_deleted", title: "Listing Removed", body: `"${l.title}" was automatically removed after 30 days.`, listingId: l.id });
-            });
+    const q = query(
+      collection(db, "listings"),
+      where("userId", "==", user.uid),
+      orderBy("createdAt", "desc")
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      const data = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Listing));
+      const expired = data.filter(l => now - l.createdAt >= LISTING_EXPIRY_MS && l.status === "active");
+      const active = data.filter(l => !(now - l.createdAt >= LISTING_EXPIRY_MS && l.status === "active"));
+      if (initialRun && expired.length > 0) {
+        Promise.allSettled(expired.map(l => deleteListing(l))).then((results) => {
+          const actuallyDeleted = expired.filter((_, i) => results[i].status === "fulfilled");
+          if (actuallyDeleted.length === 0) return;
+          if (actuallyDeleted.length === 1) setSuccessToast(`"${actuallyDeleted[0].title}" has been automatically removed after 30 days.`);
+          else setSuccessToast(`${actuallyDeleted.length} listings have been automatically removed after 30 days.`);
+          actuallyDeleted.forEach(l => {
+            addNotification(user.uid, { type: "listing_deleted", title: "Listing Removed", body: `"${l.title}" was automatically removed after 30 days.`, listingId: l.id });
           });
-        }
-        listingsCache.current = active;
-        setListings(active);
+        });
+      }
+      listingsCache.current = active;
+      setListings(active);
+      if (initialRun) {
         sendDailyDigestIfDue(user.uid, active);
         getUserConversations(user.uid).then(convs => {
-          if (!isMounted) return;
           setTotalMessages(convs.reduce((sum, c) => sum + (c.unreadCount?.[user.uid] ?? 0), 0));
         }).catch(() => {});
         const expiringSoon = active.filter(l =>
@@ -287,10 +291,12 @@ export default function ProfilePage() {
           now - l.createdAt < LISTING_EXPIRY_MS
         );
         if (expiringSoon.length > 0) setExpiryReminders(expiringSoon);
-      })
-      .finally(() => { if (isMounted) setLoading(false); });
-    return () => { isMounted = false; };
-  }, [user, refreshCounter]);
+        setLoading(false);
+        initialRun = false;
+      }
+    }, () => { setLoading(false); });
+    return () => unsub();
+  }, [user?.uid]);
 
   useEffect(() => {
     if (!user) return;
