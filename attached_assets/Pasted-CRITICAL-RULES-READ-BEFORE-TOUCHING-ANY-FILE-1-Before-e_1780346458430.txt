@@ -1,0 +1,41 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+
+TASK: Fix the real-time new-items banner in HomePage so it also works on the "all" tab.
+
+FILE: artifacts/xmum-market/src/pages/HomePage.tsx
+
+CURRENT PROBLEM:
+The useEffect that sets up the onSnapshot new-items listener has this condition at the top:
+  if (activeTab === "all") return;
+This means the "all" tab never gets the new-items banner when a new listing is posted.
+
+THE FIX:
+Remove the early return guard `if (activeTab === "all") return;` from that useEffect.
+
+Then, inside the onSnapshot callback where it builds the query, handle the "all" tab case by removing the `where("type", "==", activeTab)` filter when activeTab is "all".
+
+Specifically, change the query construction inside that useEffect to:
+
+  const constraints: any[] = [
+    where("isArchived", "==", false),
+    where("createdAt", ">", pageLoadTsRef.current),
+    orderBy("createdAt", "desc"),
+    limit(20),
+  ];
+  if (activeTab !== "all") {
+    constraints.unshift(where("type", "==", activeTab));
+  }
+  const q = query(collection(db, "listings"), ...constraints);
+
+Do NOT change anything else in that useEffect. Do NOT change the onSnapshot callback body, the unsub cleanup, or any other useEffect. Do NOT change any JSX.
+
+After the fix, the banner "↑ X new listings — tap to show" must appear on the "all" tab when new listings are posted, exactly the same as it currently works on typed tabs.
+
+Confirm build passes: pnpm --filter xmum-market run build

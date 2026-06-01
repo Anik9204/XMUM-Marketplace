@@ -262,18 +262,19 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    if (activeTab === "all") return;
     pageLoadTsRef.current = Date.now();
     setNewItemsBuffer([]);
 
-    const q = query(
-      collection(db, "listings"),
-      where("type", "==", activeTab),
+    const constraints: any[] = [
       where("isArchived", "==", false),
       where("createdAt", ">", pageLoadTsRef.current),
       orderBy("createdAt", "desc"),
-      limit(20)
-    );
+      limit(20),
+    ];
+    if (activeTab !== "all") {
+      constraints.unshift(where("type", "==", activeTab));
+    }
+    const q = query(collection(db, "listings"), ...constraints);
 
     const unsub = onSnapshot(q, (snap) => {
       snap.docChanges().forEach((change) => {
