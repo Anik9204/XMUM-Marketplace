@@ -1,0 +1,35 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-admin run build
+
+TASK: Make the Admin Listings page real-time so new listings and changes appear automatically without refresh.
+
+FILE: artifacts/xmum-admin/src/pages/ListingsPage.tsx
+
+CURRENT BEHAVIOUR:
+The page uses getDocs inside a fetchPage() function called on mount and on filter change. It is entirely one-time fetch.
+
+THE FIX:
+Read the file fully first. Then replace the getDocs call inside fetchPage() with an onSnapshot listener. The listener must be rebuilt every time the filters (typeFilter, statusFilter) change, and the previous listener must be unsubscribed before the new one starts.
+
+Steps:
+1. Add a ref to hold the current unsubscribe function: const unsubRef = useRef<(() => void) | null>(null);
+2. Add onSnapshot to the firebase/firestore import line alongside the existing imports.
+3. In the fetchPage function (or replace it with a useEffect), build the same query constraints that are already there, but use onSnapshot instead of getDocs.
+4. Inside the onSnapshot callback, map snap.docs to the AdminListing array and call setListings with the result (reset mode only — remove pagination for now since real-time + pagination is complex; keep the existing PAGE_SIZE limit on the query).
+5. Store the unsub in unsubRef.current and call it at the start of each new subscription setup and in the useEffect cleanup.
+6. The useEffect dependency array must include [typeFilter, statusFilter].
+
+IMPORTANT CONSTRAINTS:
+- Keep the existing loading state (setLoading) — set it true before subscribing, false inside the first onSnapshot callback.
+- Keep the existing error handling — if onSnapshot errors, set the error state.
+- Keep the typeFilter and statusFilter UI and state variables completely intact.
+- Remove the "Load More" / pagination button if it exists, OR leave it in place but disable it (hasMore = false always) since real-time replaces pagination for this admin view. Do NOT remove the JSX — just set hasMore to always false.
+- Do NOT touch handleDelete, handleArchive, or any other action functions.
+
+Confirm build passes: pnpm --filter xmum-admin run build

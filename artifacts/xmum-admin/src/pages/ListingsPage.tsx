@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import {
   collection, query, orderBy, limit, getDocs, where,
   startAfter, deleteDoc, updateDoc, doc,
-  QueryDocumentSnapshot,
+  QueryDocumentSnapshot, onSnapshot,
 } from "firebase/firestore";
 import { ref, deleteObject } from "firebase/storage";
 import { db, storage, writeAuditLog } from "../lib/firebase";
@@ -48,6 +48,7 @@ export default function ListingsPage() {
   const [search, setSearch]       = useState("");
   const [fetchError, setFetchError] = useState<string | null>(null);
   const cursorRef = useRef<QueryDocumentSnapshot | null>(null);
+  const unsubRef = useRef<(() => void) | null>(null);
 
   async function fetchPage(reset = false, type = typeFilter, status = statusFilter) {
     if (reset) setLoading(true);
@@ -92,8 +93,52 @@ export default function ListingsPage() {
   }
 
   useEffect(() => {
+    if (unsubRef.current) {
+      unsubRef.current();
+      unsubRef.current = null;
+    }
     cursorRef.current = null;
-    fetchPage(true, typeFilter, statusFilter);
+    setLoading(true);
+    setFetchError(null);
+    setHasMore(false);
+
+    const constraints: any[] = [orderBy("createdAt", "desc"), limit(PAGE_SIZE)];
+    if (typeFilter !== "all") {
+      constraints.unshift(where("type", "==", typeFilter));
+    }
+    if (statusFilter === "active") {
+      constraints.unshift(where("isArchived", "==", false));
+    } else if (statusFilter === "archived") {
+      constraints.unshift(where("isArchived", "==", true));
+    } else if (statusFilter === "sold") {
+      constraints.unshift(where("status", "==", "sold"));
+    }
+
+    let firstSnapshot = true;
+    const unsub = onSnapshot(
+      query(collection(db, "listings"), ...constraints),
+      (snap) => {
+        const mapped = snap.docs.map((d) => ({ id: d.id, ...d.data() } as AdminListing));
+        setListings(mapped);
+        if (firstSnapshot) {
+          setLoading(false);
+          firstSnapshot = false;
+        }
+      },
+      (err: any) => {
+        console.error("[ListingsPage] fetch failed:", err);
+        const isIndexError = err?.code === "failed-precondition" || err?.message?.includes("index");
+        setFetchError(
+          isIndexError
+            ? "This filter combination requires a Firestore index that is not yet ready. Try a different filter."
+            : "Failed to load listings. Check the console for details."
+        );
+        setLoading(false);
+      }
+    );
+
+    unsubRef.current = unsub;
+    return () => { unsub(); unsubRef.current = null; };
   }, [typeFilter, statusFilter]);
 
   async function handleDelete(listing: AdminListing) {
