@@ -199,6 +199,7 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
             <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 text-left mb-5">
               <p className="text-xs text-blue-800 dark:text-blue-300 leading-relaxed">
                 Click the link in the email to verify your <strong>@xmu.edu.my</strong> address. Once verified, the app will update automatically.
+                {" "}Can't find it? Check your <strong>Junk / Spam folder</strong> — Outlook sometimes sends it there.
               </p>
             </div>
             {resendMsg && (
@@ -250,6 +251,11 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
               <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
                 Exclusive to XMUM students — @xmu.edu.my emails only
               </p>
+              {mode === "signin" && (
+                <p className="text-xs text-blue-600 dark:text-blue-300 mt-0.5">
+                  No account yet? Sign up with your @xmu.edu.my student email — takes only 2 minutes.
+                </p>
+              )}
             </div>
           )}
 

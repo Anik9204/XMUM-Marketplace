@@ -1,0 +1,44 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+8. DATA SAFETY — MANDATORY: If this change touches any code that reads from Firestore and then writes, deletes, or modifies documents based on that data — STOP before implementing. Explicitly tell me: what data operation will happen, on which collection, under what exact condition, and how many documents could be affected. Wait for my confirmation before proceeding.
+
+TASK: Two small text additions in artifacts/xmum-market/src/components/AuthModal.tsx
+
+FILE: artifacts/xmum-market/src/components/AuthModal.tsx
+
+CHANGE 1 — Sign-in nudge text:
+Find the existing blue banner that shows when mode !== "forgot":
+  <div className="bg-blue-50 dark:bg-blue-950 rounded-xl px-4 py-2.5 mb-4 flex items-center gap-2">
+    <span>🎓</span>
+    <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
+      Exclusive to XMUM students — @xmu.edu.my emails only
+    </p>
+  </div>
+
+When mode === "signin", add a second line below the existing <p> tag (inside the same <div>):
+  <p className="text-xs text-blue-600 dark:text-blue-300 mt-0.5">
+    No account yet? Sign up with your @xmu.edu.my student email — takes only 2 minutes.
+  </p>
+
+Only show this second line when mode === "signin". Do not show it when mode === "signup".
+
+CHANGE 2 — Verification pending junk folder hint:
+Find the verification pending view. Inside the blue info box:
+  <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 text-left mb-5">
+    <p className="text-xs text-blue-800 dark:text-blue-300 leading-relaxed">
+      Click the link in the email to verify your <strong>@xmu.edu.my</strong> address. Once verified, the app will update automatically.
+    </p>
+  </div>
+
+Add a second sentence after the existing text, inside the same <p> tag:
+  {" "}Can't find it? Check your <strong>Junk / Spam folder</strong> — Outlook sometimes sends it there.
+
+Do NOT change any other text, layout, className, or logic anywhere in this file.
+
+Confirm build passes: pnpm --filter xmum-market run build
