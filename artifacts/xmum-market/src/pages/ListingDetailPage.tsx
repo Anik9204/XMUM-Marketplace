@@ -4,7 +4,7 @@ import { useLang } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { getListing, markAsSold, getSimilarListings, deleteListing } from "@/lib/listings";
 import ReportHoldModal from "@/components/ReportHoldModal";
-import { doc, updateDoc, increment } from "firebase/firestore";
+import { doc, updateDoc, increment, onSnapshot, doc as fsDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { getProfile } from "@/lib/userProfile";
 import { Listing, UserProfile } from "@/lib/types";
@@ -177,6 +177,36 @@ export default function ListingDetailPage() {
     }, 5000);
     return () => clearTimeout(timer);
   }, [listing?.id]);
+
+  useEffect(() => {
+    if (!params?.id || loading || !listing) return;
+    const unsub = onSnapshot(
+      fsDoc(db, "listings", params.id),
+      (snap) => {
+        if (!snap.exists()) {
+          setListing(null);
+          return;
+        }
+        const data = snap.data();
+        setListing((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: data.status ?? prev.status,
+                title: data.title ?? prev.title,
+                price: data.price ?? prev.price,
+                description: data.description ?? prev.description,
+                photos: data.photos ?? prev.photos,
+                isArchived: data.isArchived ?? prev.isArchived,
+                isReportHeld: data.isReportHeld ?? prev.isReportHeld,
+              }
+            : prev
+        );
+      },
+      () => {}
+    );
+    return () => unsub();
+  }, [params?.id, loading]);
 
   if (loading) {
     return (
