@@ -1,0 +1,34 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. If fixing Issue X requires changing a shared component used by other pages, STOP and tell me what the impact will be before making the change. Ask for permission first.
+6. Never change any CSS class, layout structure, z-index, or responsive breakpoint unless it is directly part of the fix.
+7. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-admin run build
+
+TASK: Make the Shop Approvals page real-time so new pending shop applications appear automatically without refresh.
+
+FILE: artifacts/xmum-admin/src/pages/ShopApprovalsPage.tsx
+
+CURRENT BEHAVIOUR:
+The page calls getPendingShops(100) inside a load() function triggered by useEffect(()=>{ load(); }, []). This is a one-time fetch.
+
+THE FIX:
+Read the file fully. Identify which Firestore collection and query getPendingShops uses (check artifacts/xmum-admin/src/lib/firebase.ts to find getPendingShops implementation).
+
+Replace the load() call in the useEffect with a direct onSnapshot listener that mirrors the same query as getPendingShops.
+
+The new useEffect should:
+1. Import onSnapshot, collection, query, where, orderBy from "firebase/firestore" if not already imported — check the existing imports first.
+2. Build the same query as getPendingShops (check the implementation — it likely queries shops where approvalStatus == "pending" ordered by createdAt).
+3. Use onSnapshot to keep shops state live.
+4. Map snap.docs to AdminShop objects.
+5. Set loading to false after first snapshot.
+6. Return unsub for cleanup.
+
+Keep the existing load() function in the file — just stop calling it from the useEffect. Do NOT delete it in case it is referenced elsewhere. Simply replace the useEffect body.
+
+Do NOT touch handleApprove, handleReject, the approval modal, the search filter, or any other logic.
+
+Confirm build passes: pnpm --filter xmum-admin run build

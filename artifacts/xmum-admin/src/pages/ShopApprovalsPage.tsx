@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { CheckCircle, XCircle, Search, X } from "lucide-react";
-import { getPendingShops, approveShop, rejectShop, writeAuditLog, writePlatformActivity, ApprovalResult } from "../lib/firebase";
+import { getPendingShops, approveShop, rejectShop, writeAuditLog, writePlatformActivity, ApprovalResult, db } from "../lib/firebase";
+import { onSnapshot, collection, query, where, orderBy, limit } from "firebase/firestore";
 import { useAuth } from "../contexts/AuthContext";
 import { AdminShop } from "../lib/types";
 
@@ -23,6 +24,7 @@ export default function ShopApprovalsPage() {
   const [search, setSearch] = useState("");
   const [processing, setProcessing] = useState<string | null>(null);
   const [approvalModal, setApprovalModal] = useState<ApprovalModal | null>(null);
+  const unsubRef = useRef<(() => void) | null>(null);
 
   async function load() {
     setLoading(true);
@@ -36,7 +38,29 @@ export default function ShopApprovalsPage() {
     }
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    setLoading(true);
+    let firstSnapshot = true;
+    const q = query(
+      collection(db, "shops"),
+      where("approvalStatus", "==", "pending"),
+      orderBy("createdAt", "asc"),
+      limit(100)
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      const mapped = snap.docs.map((d) => ({ id: d.id, ...d.data() } as AdminShop));
+      setShops(mapped);
+      if (firstSnapshot) {
+        setLoading(false);
+        firstSnapshot = false;
+      }
+    }, (err) => {
+      console.error("[ShopApprovalsPage] snapshot failed:", err);
+      setLoading(false);
+    });
+    unsubRef.current = unsub;
+    return () => { unsub(); unsubRef.current = null; };
+  }, []);
 
   async function handleApprove(shop: AdminShop) {
     if (!window.confirm(`Approve shop "${shop.shopName}"?\n\nThis will make it live on Campus Market.`)) return;
