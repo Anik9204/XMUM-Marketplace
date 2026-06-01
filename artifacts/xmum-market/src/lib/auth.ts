@@ -6,12 +6,18 @@ import {
   sendPasswordResetEmail,
   onAuthStateChanged,
   User,
+  ActionCodeSettings,
 } from "firebase/auth";
 import { doc, setDoc, getDoc } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import { UserProfile } from "./types";
 
 export const XMU_DOMAIN = "@xmu.edu.my";
+
+const ACTION_CODE_SETTINGS: ActionCodeSettings = {
+  url: "https://www.xmummarket.com/__/auth/action",
+  handleCodeInApp: false,
+};
 
 export function isXmuEmail(email: string): boolean {
   return email.toLowerCase().endsWith(XMU_DOMAIN);
@@ -29,7 +35,7 @@ export async function signUp(
   }
   // Critical path: create account + send verification email
   const cred = await createUserWithEmailAndPassword(auth, email, password);
-  await sendEmailVerification(cred.user);
+  await sendEmailVerification(cred.user, ACTION_CODE_SETTINGS);
 
   try {
     await setDoc(doc(db, "users", cred.user.uid), {
@@ -78,7 +84,7 @@ export async function resetPasswordWithCheck(email: string): Promise<void> {
 
 export async function resendVerification(): Promise<void> {
   if (auth.currentUser) {
-    await sendEmailVerification(auth.currentUser);
+    await sendEmailVerification(auth.currentUser, ACTION_CODE_SETTINGS);
   }
 }
 
