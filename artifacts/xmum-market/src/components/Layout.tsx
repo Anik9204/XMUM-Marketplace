@@ -25,6 +25,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     const params = new URLSearchParams(window.location.search);
     if (params.get("signin") === "1") {
       setShowAuth(true);
+      // Clean the param from URL so refreshing doesn't re-open the modal
+      window.history.replaceState({}, "", window.location.pathname);
     }
   }, []);
   const [unreadMessages, setUnreadMessages] = useState(0);

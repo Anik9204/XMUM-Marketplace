@@ -1,0 +1,76 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it.
+2. Do NOT rewrite any file from scratch. Make surgical edits only.
+3. Do NOT remove any existing function, prop, import, or JSX element.
+4. After every change, mentally verify nothing existing breaks.
+5. Confirm the app builds with zero errors: pnpm --filter xmum-market run build
+
+---
+
+TASK: Fix two things in two separate files.
+
+---
+
+FIX 1 — File: artifacts/xmum-market/src/App.tsx
+
+ROOT CAUSE: When Firebase redirects to www.xmummarket.com/__/auth/action after 
+verifying email on their own page, there is no "mode" param in the URL. The 
+current handler does "if (!mode) return" which causes the app to render the 
+NotFound page because /__/auth/action has no wouter route.
+
+Find this exact block inside FirebaseActionHandler:
+
+    // No mode = normal navigation, do nothing
+    if (!mode) return;
+
+Replace it with:
+
+    // If on /__/auth/action with no mode, Firebase already handled verification.
+    // Redirect to homepage and open sign in modal.
+    if (!mode) {
+      if (window.location.pathname === "/__/auth/action") {
+        navigate("/?signin=1", { replace: true });
+      }
+      return;
+    }
+
+That is the only change in this file.
+
+---
+
+FIX 2 — File: artifacts/xmum-market/src/components/Layout.tsx
+
+ROOT CAUSE: The ?signin=1 param is read correctly and opens the AuthModal, but 
+the param is never cleaned from the URL. If the user refreshes the page while 
+the modal is open or after closing it, the modal opens again unexpectedly.
+
+Find this exact block in Layout.tsx:
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("signin") === "1") {
+      setShowAuth(true);
+    }
+  }, []);
+
+Replace it with:
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("signin") === "1") {
+      setShowAuth(true);
+      // Clean the param from URL so refreshing doesn't re-open the modal
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
+
+That is the only change in this file.
+
+---
+
+VERIFICATION AFTER CHANGES:
+1. Run: pnpm --filter xmum-market run build
+2. Confirm zero TypeScript errors and zero build errors.
+3. Do not change any other file.
+4. Do not change any other part of App.tsx or Layout.tsx beyond what is described.
+5. Report exactly which lines were changed in each file.

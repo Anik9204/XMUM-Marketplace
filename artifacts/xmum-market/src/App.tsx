@@ -42,8 +42,14 @@ function FirebaseActionHandler() {
     const mode = params.get("mode");
     const oobCode = params.get("oobCode");
 
-    // No mode = normal navigation, do nothing
-    if (!mode) return;
+    // If on /__/auth/action with no mode, Firebase already handled verification.
+    // Redirect to homepage and open sign in modal.
+    if (!mode) {
+      if (window.location.pathname === "/__/auth/action") {
+        navigate("/?signin=1", { replace: true });
+      }
+      return;
+    }
 
     if (mode === "resetPassword" && oobCode) {
       navigate(`/reset-password?oobCode=${encodeURIComponent(oobCode)}`, {
