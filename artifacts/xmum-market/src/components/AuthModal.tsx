@@ -196,10 +196,15 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
             <h2 className="text-lg font-display font-bold text-gray-900 dark:text-slate-100 mb-1">Check your inbox</h2>
             <p className="text-sm text-gray-500 dark:text-slate-400 mb-1">A verification link was sent to:</p>
             <p className="text-sm font-semibold text-[#003366] dark:text-blue-400 mb-4 break-all">{pendingEmail}</p>
-            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 text-left mb-5">
+            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 text-left mb-3">
               <p className="text-xs text-blue-800 dark:text-blue-300 leading-relaxed">
                 Click the link in the email to verify your <strong>@xmu.edu.my</strong> address. Once verified, the app will update automatically.
-                {" "}Can't find it? Check your <strong>Junk / Spam folder</strong> — Outlook sometimes sends it there.
+              </p>
+            </div>
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-3 text-left mb-5">
+              <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-1">⚠️ Email not in your inbox? Check Junk Email</p>
+              <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
+                Outlook sometimes automatically moves emails from new senders to the <strong>Junk Email</strong> folder. Look for "Junk Email" in the left sidebar of your Outlook app or webmail and check there. If you find it, mark it as <strong>"Not Junk"</strong>.
               </p>
             </div>
             {resendMsg && (

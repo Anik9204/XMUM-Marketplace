@@ -1,0 +1,47 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. Never change any CSS class, layout structure, or routing unless it is directly part of the fix.
+6. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+
+---
+
+TASK: In the "Check your inbox" verification pending screen inside AuthModal.tsx, replace the existing blue info box with two separate cards — the original blue info card on top, and a new amber/yellow warning card below it.
+
+FILE TO EDIT: artifacts/xmum-market/src/components/AuthModal.tsx
+
+---
+
+FIND this exact block:
+
+<div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 text-left mb-5">
+  <p className="text-xs text-blue-800 dark:text-blue-300 leading-relaxed">
+    Click the link in the email to verify your <strong>@xmu.edu.my</strong> address. Once verified, the app will update automatically.
+    {" "}Can't find it? Check your <strong>Junk / Spam folder</strong> — Outlook sometimes sends it there.
+  </p>
+</div>
+
+REPLACE it with:
+
+<div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 text-left mb-3">
+  <p className="text-xs text-blue-800 dark:text-blue-300 leading-relaxed">
+    Click the link in the email to verify your <strong>@xmu.edu.my</strong> address. Once verified, the app will update automatically.
+  </p>
+</div>
+<div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-3 text-left mb-5">
+  <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-1">⚠️ Email not in your inbox? Check Junk Email</p>
+  <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
+    Outlook sometimes automatically moves emails from new senders to the <strong>Junk Email</strong> folder. Look for "Junk Email" in the left sidebar of your Outlook app or webmail and check there. If you find it, mark it as <strong>"Not Junk"</strong>.
+  </p>
+</div>
+
+---
+
+VERIFICATION AFTER CHANGES:
+1. Run: pnpm --filter xmum-market run build
+2. Confirm zero TypeScript errors and zero build errors.
+3. Do not change any other file.
+4. Do not change any other part of AuthModal.tsx.
+5. Report exactly which lines were changed.
