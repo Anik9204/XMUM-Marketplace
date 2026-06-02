@@ -20,6 +20,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("signin") === "1") {
+      setShowAuth(true);
+    }
+  }, []);
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [shopPendingCount, setShopPendingCount] = useState(0);
   const [isOnline, setIsOnline] = useState(navigator.onLine);

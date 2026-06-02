@@ -1,0 +1,101 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed to fix the issue.
+3. Do NOT remove any existing function, prop, import, or JSX element unless I have explicitly told you to remove it.
+4. After every change, mentally verify: "Does this break anything that was working before?" If yes, do not proceed — find a different approach.
+5. Never change any CSS class, layout structure, or routing unless it is directly part of the fix.
+6. Confirm the app builds with zero errors before finishing: pnpm --filter xmum-market run build
+
+---
+
+TASK: Fix two issues related to the Firebase email verification flow when a user clicks the verification link on a different device.
+
+FILE TO EDIT: artifacts/xmum-market/src/App.tsx only.
+
+---
+
+BACKGROUND:
+When a student clicks the verification link on a different device (one where they are not signed in), Firebase redirects them to:
+  www.xmummarket.com/__/auth/action?continueUrl=...&mode=verifyEmail
+BUT by this point the oobCode has already been consumed by Firebase's own page.
+Our FirebaseActionHandler currently does nothing in this case, causing a "Page not found" error.
+
+We need to handle two scenarios in FirebaseActionHandler:
+
+SCENARIO 1 — mode=verifyEmail with a valid oobCode (user lands directly, not via Firebase's page):
+- Call applyActionCode, then reload, then navigate to "/" 
+- This already works correctly — DO NOT change this logic.
+
+SCENARIO 2 — mode=verifyEmail but NO oobCode, OR any unrecognised mode parameter (user came via Firebase's own verification page, oobCode already consumed):
+- Navigate to "/?signin=1" with replace: true
+- This signals the homepage to open the Sign In modal automatically.
+
+SCENARIO 3 — No mode parameter at all:
+- Do nothing. Return early. This is normal app navigation.
+
+---
+
+CHANGE 1 — Update FirebaseActionHandler in App.tsx:
+
+Find the existing FirebaseActionHandler function and replace only the useEffect body with this logic:
+
+useEffect(() => {
+  const params = new URLSearchParams(window.location.search);
+  const mode = params.get("mode");
+  const oobCode = params.get("oobCode");
+
+  // No mode = normal navigation, do nothing
+  if (!mode) return;
+
+  if (mode === "resetPassword" && oobCode) {
+    navigate(`/reset-password?oobCode=${encodeURIComponent(oobCode)}`, {
+      replace: true,
+    });
+    return;
+  }
+
+  if (mode === "verifyEmail" && oobCode) {
+    import("firebase/auth").then(({ applyActionCode }) => {
+      import("@/lib/firebase").then(({ auth }) => {
+        applyActionCode(auth, oobCode)
+          .then(() => auth.currentUser?.reload())
+          .catch(() => {})
+          .finally(() => {
+            navigate("/", { replace: true });
+          });
+      });
+    });
+    return;
+  }
+
+  // All other cases (mode=verifyEmail without oobCode, or unknown mode)
+  // User arrived via Firebase's own verification page — oobCode already consumed
+  // Open homepage with sign in modal
+  navigate("/?signin=1", { replace: true });
+}, []);
+
+---
+
+CHANGE 2 — Open Sign In modal when ?signin=1 is in the URL.
+
+Find where the AuthModal is rendered in App.tsx. There will be a state variable controlling whether AuthModal is open (something like showAuth, authOpen, or similar). 
+
+Add a useEffect at the top level of the Router or App component that checks for ?signin=1 on mount and opens the sign in modal if present:
+
+useEffect(() => {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("signin") === "1") {
+    setShowAuth(true); // use whatever the actual state setter is called
+  }
+}, []);
+
+IMPORTANT: Before writing this, read the existing App.tsx carefully and use the exact same state variable name that already controls the AuthModal visibility. Do not create a new state variable if one already exists.
+
+---
+
+VERIFICATION AFTER CHANGES:
+1. Run: pnpm --filter xmum-market run build
+2. Confirm zero TypeScript errors and zero build errors.
+3. Do not change any other file.
+4. Do not change any other part of App.tsx beyond what is described above.
+5. Report exactly which lines were changed.

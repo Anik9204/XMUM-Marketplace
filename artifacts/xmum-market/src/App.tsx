@@ -42,6 +42,9 @@ function FirebaseActionHandler() {
     const mode = params.get("mode");
     const oobCode = params.get("oobCode");
 
+    // No mode = normal navigation, do nothing
+    if (!mode) return;
+
     if (mode === "resetPassword" && oobCode) {
       navigate(`/reset-password?oobCode=${encodeURIComponent(oobCode)}`, {
         replace: true,
@@ -60,7 +63,13 @@ function FirebaseActionHandler() {
             });
         });
       });
+      return;
     }
+
+    // All other cases (mode=verifyEmail without oobCode, or unknown mode)
+    // User arrived via Firebase's own verification page — oobCode already consumed
+    // Open homepage with sign in modal
+    navigate("/?signin=1", { replace: true });
   }, []);
 
   return null;
