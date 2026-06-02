@@ -16,7 +16,7 @@ export const XMU_DOMAIN = "@xmu.edu.my";
 
 const VERIFICATION_CODE_SETTINGS: ActionCodeSettings = {
   url: "https://www.xmummarket.com/__/auth/action",
-  handleCodeInApp: false,
+  handleCodeInApp: true,
 };
 
 const RESET_CODE_SETTINGS: ActionCodeSettings = {

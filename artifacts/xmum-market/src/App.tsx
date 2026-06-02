@@ -46,6 +46,20 @@ function FirebaseActionHandler() {
       navigate(`/reset-password?oobCode=${encodeURIComponent(oobCode)}`, {
         replace: true,
       });
+      return;
+    }
+
+    if (mode === "verifyEmail" && oobCode) {
+      import("firebase/auth").then(({ applyActionCode }) => {
+        import("@/lib/firebase").then(({ auth }) => {
+          applyActionCode(auth, oobCode)
+            .then(() => auth.currentUser?.reload())
+            .catch(() => {})
+            .finally(() => {
+              navigate("/", { replace: true });
+            });
+        });
+      });
     }
   }, []);
 
