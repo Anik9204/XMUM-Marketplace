@@ -14,9 +14,14 @@ import { UserProfile } from "./types";
 
 export const XMU_DOMAIN = "@xmu.edu.my";
 
-const ACTION_CODE_SETTINGS: ActionCodeSettings = {
+const VERIFICATION_CODE_SETTINGS: ActionCodeSettings = {
   url: "https://www.xmummarket.com/__/auth/action",
   handleCodeInApp: false,
+};
+
+const RESET_CODE_SETTINGS: ActionCodeSettings = {
+  url: "https://www.xmummarket.com/__/auth/action",
+  handleCodeInApp: true,
 };
 
 export function isXmuEmail(email: string): boolean {
@@ -35,7 +40,7 @@ export async function signUp(
   }
   // Critical path: create account + send verification email
   const cred = await createUserWithEmailAndPassword(auth, email, password);
-  await sendEmailVerification(cred.user, ACTION_CODE_SETTINGS);
+  await sendEmailVerification(cred.user, VERIFICATION_CODE_SETTINGS);
 
   try {
     await setDoc(doc(db, "users", cred.user.uid), {
@@ -74,17 +79,17 @@ export async function logOut(): Promise<void> {
 }
 
 export async function resetPassword(email: string): Promise<void> {
-  await sendPasswordResetEmail(auth, email, ACTION_CODE_SETTINGS);
+  await sendPasswordResetEmail(auth, email, RESET_CODE_SETTINGS);
 }
 
 export async function resetPasswordWithCheck(email: string): Promise<void> {
   const normalised = email.toLowerCase().trim();
-  await sendPasswordResetEmail(auth, normalised, ACTION_CODE_SETTINGS);
+  await sendPasswordResetEmail(auth, normalised, RESET_CODE_SETTINGS);
 }
 
 export async function resendVerification(): Promise<void> {
   if (auth.currentUser) {
-    await sendEmailVerification(auth.currentUser, ACTION_CODE_SETTINGS);
+    await sendEmailVerification(auth.currentUser, VERIFICATION_CODE_SETTINGS);
   }
 }
 
