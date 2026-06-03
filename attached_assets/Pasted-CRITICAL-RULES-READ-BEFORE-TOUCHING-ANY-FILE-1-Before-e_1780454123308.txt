@@ -1,0 +1,89 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless I have explicitly told you to remove it.
+
+4. After every change, mentally verify: "Does this break anything that
+   was working before?" If yes, do not proceed — find a different approach.
+
+5. If fixing Issue X requires changing a shared component used by other
+   pages, STOP and tell me what the impact will be before making the change.
+   Ask for permission first.
+
+6. Never change any CSS class, layout structure, z-index, or responsive
+   breakpoint unless it is directly part of the fix.
+
+7. Confirm the app builds with zero TypeScript errors before finishing:
+   - Market changes: pnpm --filter xmum-market run build
+
+8. DATA SAFETY — MANDATORY: If this change touches any code that reads
+   from Firestore and then writes, deletes, or modifies documents based
+   on that data — STOP before implementing. Explicitly tell me:
+     • What data operation will happen
+     • On which Firestore collection
+     • Under what exact condition
+     • How many documents could be affected
+   Wait for my confirmation before proceeding.
+
+TASK: Replace all favicon and PWA icon assets with a new logo image
+I have a new logo image file. It is a PNG with a white background that needs to be removed to make it transparent before generating all icon sizes.
+The new logo file I will upload is called: Untitled_design__5_.png
+
+STEP 1 — Install the image processing tool
+Run this command to install sharp (for image processing):
+npm install sharp --save-dev
+inside artifacts/xmum-market/
+
+STEP 2 — Create a script to process the image
+Create a file at artifacts/xmum-market/scripts/generate-icons.mjs with the following logic:
+
+Load Untitled_design__5_.png from the project root or a location I specify
+Remove the white background — replace all pixels that are white or near-white (RGB all above 240) with transparent
+From the transparent PNG, generate and save the following files into artifacts/xmum-market/public/:
+
+Output fileSizeFormatNotesfavicon-96x96.png96×96PNGtransparent backgroundapple-touch-icon.png180×180PNGwhite background (Apple requires it)web-app-manifest-192x192.png192×192PNGtransparent backgroundweb-app-manifest-512x512.png512×512PNGtransparent backgroundfavicon.ico32×32 embeddedICOconvert from transparent PNG
+
+Also overwrite favicon.svg with an SVG that embeds the 96×96 PNG as a base64 data URI with viewBox="0 0 96 96" and no background rect.
+
+
+STEP 3 — Update manifest.json
+In artifacts/xmum-market/public/manifest.json, change both icon entries from:
+json"purpose": "maskable"
+to:
+json"purpose": "any"
+Reason: the icon has a transparent background. Maskable purpose requires safe-zone padding — using "any" ensures the full icon is shown without being cropped by the OS.
+
+STEP 4 — Run the script
+node artifacts/xmum-market/scripts/generate-icons.mjs
+Confirm all 6 output files were written successfully with correct file sizes (none should be 0 bytes).
+
+STEP 5 — Verify build still passes
+pnpm --filter xmum-market run build
+Must complete with zero TypeScript errors.
+
+STEP 6 — Cleanup
+Delete artifacts/xmum-market/scripts/generate-icons.mjs and uninstall sharp after the icons are generated:
+npm uninstall sharp
+The script is a one-time generation tool and must not be committed.
+
+Summary of files that will change:
+
+public/favicon.ico — replaced
+public/favicon-96x96.png — replaced
+public/favicon.svg — replaced
+public/apple-touch-icon.png — replaced (white bg for Apple)
+public/web-app-manifest-192x192.png — replaced
+public/web-app-manifest-512x512.png — replaced
+public/manifest.json — "purpose" changed from "maskable" to "any"
+
+Files that will NOT change:
+
+index.html — already references the correct filenames, no edits needed
+All source code files — zero changes
+All other public assets (opengraph.jpg, robots.txt, sitemap.xml, xmum-market-logo.png) — untouched
