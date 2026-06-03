@@ -1,0 +1,152 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless I have explicitly told you to remove it.
+
+4. After every change, mentally verify: "Does this break anything that
+   was working before?" If yes, do not proceed — find a different approach.
+
+5. If fixing Issue X requires changing a shared component used by other
+   pages, STOP and tell me what the impact will be before making the change.
+   Ask for permission first.
+
+6. Never change any CSS class, layout structure, z-index, or responsive
+   breakpoint unless it is directly part of the fix.
+
+7. Confirm the app builds with zero TypeScript errors before finishing:
+   pnpm --filter xmum-market run build
+
+8. DATA SAFETY — MANDATORY: If this change touches any code that reads
+   from Firestore and then writes, deletes, or modifies documents based
+   on that data — STOP before implementing. Explicitly tell me what
+   operation, on which collection, under what condition, how many documents
+   could be affected. Wait for my confirmation before proceeding.
+
+---
+
+TASK: Fix the RichTextEditor WYSIWYG editing experience.
+
+FILE TO EDIT: artifacts/xmum-market/src/components/RichTextEditor.tsx
+
+PROBLEM:
+When the user types inside the editor, the raw markdown markers (**bold**, *italic*, ++large++) are visible as plain text while editing. Clicking Bold/Italic/Large with a text selection should show the text formatted visually (bold, italic, larger) — not show the raw symbols.
+
+WHAT MUST NOT BREAK:
+- The storage format stays the same: markdown strings like **bold** *italic* ++large++ stored in Firestore. Do NOT change this.
+- The htmlToMarkdown() function that reads the DOM back to markdown must not be changed.
+- The markdownToHtml() function that converts stored markdown to display HTML must not be changed.
+- The handleInput() function that fires on every keystroke must not be changed.
+- The handlePaste() function must not be changed.
+- The scroll behaviour of the editor must not break.
+- Pressing Bold/Italic/Large with NOTHING selected must do nothing (no crash, no change).
+- The character counter (stripRichText(draft).length) in the parent pages is correct and must keep working.
+- All 5 places that use RichTextEditor (PostPage, EditListingPage, CreateShopPage, ShopManagementPanel x2) must continue to work identically.
+- All 3 places that use RichTextDisplay (ListingDetailPage, ShopListingDetailPage, ShopPublicPage) must continue to work identically.
+
+ROOT CAUSE:
+The applyFormat() function currently:
+1. Reads the DOM to raw markdown string
+2. Finds the selected text in that markdown string
+3. Injects ** or * or ++ markers around it as raw text
+4. Does el.innerHTML = markdownToHtml(newMd) — a full re-render
+
+This makes formatting work correctly for storage, but the full innerHTML replacement causes cursor/scroll disruption. More importantly, there is a subtle bug: when the user is typing INSIDE a formatted region (e.g. inside a <strong> tag), the htmlToMarkdown() serialiser correctly produces **text** in the output — but if the editor's innerHTML is not refreshed, the contentEditable is showing the <strong> tag content directly which is correct. The problem users see is raw markers appearing because the applyFormat approach injects raw text markers into the markdown string and re-renders — during the re-render itself the cursor position is lost.
+
+THE FIX — replace ONLY the applyFormat function:
+
+Instead of reading to markdown → injecting markers → re-rendering innerHTML, use document.execCommand() to apply formatting directly in the contentEditable DOM. The existing htmlToMarkdown() walker already correctly converts:
+  <strong> or <b>  →  **text**
+  <em> or <i>      →  *text*
+  <span class="rte-large">  →  ++text++
+
+So if we use execCommand('bold') and execCommand('italic') to toggle formatting in place, the DOM stays formatted, the user sees bold/italic text immediately, and the next handleInput() call will serialise it back to markdown correctly for storage.
+
+For the "large" style (++large++), execCommand does not support it, so we keep the manual approach but use insertHTML via execCommand instead of full innerHTML replacement — this preserves scroll and cursor better.
+
+HERE IS THE EXACT REPLACEMENT for the applyFormat function and the handleBold/handleItalic/handleLarge functions. Replace ONLY these parts, do not touch anything else in the file:
+
+Replace the entire applyFormat function and the three handler lines with this:
+
+```typescript
+  // ── Toolbar actions ────────────────────────────────────────────────────────
+  const handleBold = useCallback(() => {
+    const el = editorRef.current;
+    if (!el) return;
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.toString().trim()) return;
+    el.focus();
+    document.execCommand('bold', false);
+    // execCommand('bold') can insert <b> tags — htmlToMarkdown handles both <b> and <strong>
+    // Trigger handleInput to sync the new DOM state back to markdown
+    handleInput();
+  }, [handleInput]);
+
+  const handleItalic = useCallback(() => {
+    const el = editorRef.current;
+    if (!el) return;
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.toString().trim()) return;
+    el.focus();
+    document.execCommand('italic', false);
+    handleInput();
+  }, [handleInput]);
+
+  const handleLarge = useCallback(() => {
+    const el = editorRef.current;
+    if (!el) return;
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed) return;
+    const selectedText = sel.toString();
+    if (!selectedText.trim()) return;
+
+    // Read current markdown to check toggle state
+    const currentMd = readMarkdown(el);
+    const selIdx = currentMd.indexOf(selectedText);
+    if (selIdx === -1) return;
+
+    const before = currentMd.slice(0, selIdx);
+    const after = currentMd.slice(selIdx + selectedText.length);
+    const alreadyWrapped = before.endsWith('++') && after.startsWith('++');
+
+    let newMd: string;
+    if (alreadyWrapped) {
+      newMd =
+        before.slice(0, before.length - 2) +
+        selectedText +
+        after.slice(2);
+    } else {
+      newMd = before + '++' + selectedText + '++' + after;
+      if (newMd.length > maxLength) return;
+    }
+
+    lastSetValueRef.current = newMd;
+    el.innerHTML = markdownToHtml(newMd);
+    onChange(newMd);
+
+    el.focus();
+    const caretPos = alreadyWrapped
+      ? selIdx + selectedText.length
+      : selIdx + 2 + selectedText.length + 2;
+    try { placeCaretAt(el, caretPos); } catch { /* non-critical */ }
+  }, [onChange, maxLength, handleInput]);
+```
+
+IMPORTANT NOTES for Replit:
+- The old applyFormat() function and the old handleBold/handleItalic/handleLarge lines should be completely removed and replaced with the above three functions.
+- handleBold and handleItalic now use document.execCommand('bold') and document.execCommand('italic'). These insert <b> and <i> tags in the DOM which htmlToMarkdown() already handles correctly (it checks for both b/strong and i/em).
+- handleLarge keeps the innerHTML approach because execCommand has no 'large' command — but it only runs on the large button, not on every keystroke.
+- The ToolbarButton onClick handlers in the JSX must be updated to reference the new function names: handleBold, handleItalic, handleLarge (names are the same so the JSX does not need to change).
+- Do NOT remove the old applyFormat helper — just replace the three handler implementations.
+
+ACTUALLY: remove the entire old applyFormat() function and the three old one-liner const handleBold/handleItalic/handleLarge lines. Replace with the three new functions above.
+
+After making the change, verify the build passes:
+pnpm --filter xmum-market run build
+
+Tell me exactly what lines you changed and confirm zero TypeScript errors.
