@@ -53,3 +53,27 @@ id = "nXZFlcBKnlhUh5DYF8Vh8"
 uri = "file://artifacts/mockup-sandbox/public/images/airpods-case.jpg"
 type = "image"
 title = "Apple AirPods charging case on a table"
+
+[[outputs]]
+id = "pYx-pRBKRgqqL48YfhGJX"
+uri = "file://artifacts/xmum-market/public/apple-touch-icon.png"
+type = "image"
+title = "apple-touch-icon.png — 180×180"
+
+[[outputs]]
+id = "MW6R197sca49mDUi7obDH"
+uri = "file://artifacts/xmum-market/public/favicon-96x96.png"
+type = "image"
+title = "favicon-96x96.png — 96×96"
+
+[[outputs]]
+id = "D1INP29mjJMgR2yDRpqkc"
+uri = "file://artifacts/xmum-market/public/web-app-manifest-192x192.png"
+type = "image"
+title = "web-app-manifest-192x192.png — 192×192"
+
+[[outputs]]
+id = "bejcRByA1akP1uyPOiM21"
+uri = "file://artifacts/xmum-market/public/web-app-manifest-512x512.png"
+type = "image"
+title = "web-app-manifest-512x512.png — 512×512"
