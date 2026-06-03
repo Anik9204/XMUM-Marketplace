@@ -814,6 +814,18 @@ export default function PostPage() {
       <div className="flex items-center justify-between mb-4 md:mb-6">
         <div>
           <h1 className="text-xl md:text-2xl font-display font-bold text-gray-900 dark:text-slate-100">{t.postItem}</h1>
+          <p className={`text-xs font-medium mt-0.5 ${
+            realActiveCount === null
+              ? "text-gray-400 dark:text-slate-500"
+              : (realActiveCount !== null ? realActiveCount : activeListingCount) >= 6
+                ? "text-red-500 dark:text-red-400"
+                : "text-gray-400 dark:text-slate-500"
+          }`}>
+            {realActiveCount === null
+              ? "— / 6 listings used"
+              : `${realActiveCount !== null ? realActiveCount : activeListingCount} / 6 listings used`
+            }
+          </p>
           <p className="hidden md:block text-sm text-gray-500 dark:text-slate-400 mt-0.5">Reach thousands of students instantly.</p>
         </div>
         {/* FIX 2: Preview toggle */}

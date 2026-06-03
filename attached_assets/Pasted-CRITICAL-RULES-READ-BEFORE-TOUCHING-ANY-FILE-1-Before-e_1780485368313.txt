@@ -1,0 +1,111 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless I have explicitly told you to remove it.
+
+4. After every change, mentally verify: "Does this break anything that
+   was working before?" If yes, do not proceed — find a different approach.
+
+5. If fixing Issue X requires changing a shared component used by other
+   pages, STOP and tell me what the impact will be before making the change.
+   Ask for permission first.
+
+6. Never change any CSS class, layout structure, z-index, or responsive
+   breakpoint unless it is directly part of the fix.
+
+7. Confirm the app builds with zero TypeScript errors before finishing:
+   - Market changes: pnpm --filter xmum-market run build
+
+8. DATA SAFETY — MANDATORY: If this change touches any code that reads
+   from Firestore and then writes, deletes, or modifies documents based
+   on that data — STOP before implementing. Explicitly tell me:
+     • What data operation will happen
+     • On which Firestore collection
+     • Under what exact condition
+     • How many documents could be affected
+   Wait for my confirmation before proceeding.
+
+---
+
+TASK: Add a listing slot counter to PostPage.tsx only.
+
+FILE TO EDIT: artifacts/xmum-market/src/pages/PostPage.tsx
+
+WHAT TO ADD:
+Add a small counter line — "X / 6 listings used" — directly below the <h1> heading
+inside the existing header block. This is a display-only UI change.
+
+EXACT LOCATION:
+Find this block (around line 813):
+
+  {/* Header */}
+  <div className="flex items-center justify-between mb-4 md:mb-6">
+    <div>
+      <h1 className="text-xl md:text-2xl font-display font-bold text-gray-900 dark:text-slate-100">{t.postItem}</h1>
+      <p className="hidden md:block text-sm text-gray-500 dark:text-slate-400 mt-0.5">Reach thousands of students instantly.</p>
+    </div>
+
+Add the counter as a new line AFTER the <h1> and BEFORE the existing <p> tag.
+Do NOT remove or move any existing JSX.
+
+COUNTER LOGIC:
+These two variables already exist in the component — do NOT declare them again:
+  - realActiveCount  (type: number | null — null while the Firestore fetch is in flight)
+  - activeListingCount  (type: number — derived from userProfile?.activeListingCount ?? 0)
+
+Display logic:
+  - If realActiveCount is null (still loading): show "— / 6 listings used" in gray
+  - If realActiveCount is 0–5: show "{realActiveCount} / 6 listings used" in gray
+  - If realActiveCount is 6: show "6 / 6 listings used" in red/amber to warn the user
+
+Use realActiveCount as the primary display value.
+Fall back to activeListingCount only if realActiveCount is null.
+
+So the resolved display count is:
+  const displayCount = realActiveCount !== null ? realActiveCount : activeListingCount;
+
+DO NOT declare this as a new const at the top of the component.
+Compute it inline in the JSX expression to keep the change minimal.
+
+EXACT JSX TO INSERT (insert this after the <h1> line, before the <p> line):
+
+  <p className={`text-xs font-medium mt-0.5 ${
+    realActiveCount === null
+      ? "text-gray-400 dark:text-slate-500"
+      : (realActiveCount !== null ? realActiveCount : activeListingCount) >= 6
+        ? "text-red-500 dark:text-red-400"
+        : "text-gray-400 dark:text-slate-500"
+  }`}>
+    {realActiveCount === null
+      ? "— / 6 listings used"
+      : `${realActiveCount !== null ? realActiveCount : activeListingCount} / 6 listings used`
+    }
+  </p>
+
+WHAT NOT TO CHANGE:
+- Do NOT touch any state declarations
+- Do NOT touch the realActiveCount useEffect (the Firestore fetch)
+- Do NOT touch the handleSubmit function
+- Do NOT touch any imports
+- Do NOT touch any other JSX outside this one insertion point
+- Do NOT touch the existing <p className="hidden md:block ..."> subtitle line
+- Do NOT touch any other file
+
+VERIFICATION:
+After making the change, confirm:
+1. The <h1> line is unchanged
+2. The existing <p className="hidden md:block ..."> subtitle line is unchanged
+3. The Preview toggle button is unchanged
+4. The build passes: pnpm --filter xmum-market run build
+
+END SUMMARY REQUIRED:
+After completing the change, provide:
+- The exact lines added (copy-paste the final JSX block as inserted)
+- Confirmation that no other lines were modified
+- Confirmation that the build passed with zero TypeScript errors
