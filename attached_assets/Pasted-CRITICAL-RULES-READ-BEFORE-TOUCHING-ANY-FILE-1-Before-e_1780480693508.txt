@@ -1,0 +1,164 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless I have explicitly told you to remove it.
+
+4. After every change, mentally verify: "Does this break anything that
+   was working before?" If yes, do not proceed — find a different approach.
+
+5. If fixing Issue X requires changing a shared component used by other
+   pages, STOP and tell me what the impact will be before making the change.
+   Ask for permission first.
+
+6. Never change any CSS class, layout structure, z-index, or responsive
+   breakpoint unless it is directly part of the fix.
+
+7. Confirm the app builds with zero TypeScript errors before finishing:
+   pnpm --filter xmum-market run build
+
+8. DATA SAFETY — MANDATORY: If this change touches any code that reads
+   from Firestore and then writes, deletes, or modifies documents based
+   on that data — STOP before implementing. Explicitly tell me:
+     • What data operation will happen
+     • On which Firestore collection
+     • Under what exact condition
+     • How many documents could be affected
+   Wait for my confirmation before proceeding.
+
+TASK: Redesign CreateShopPage — desktop two-column layout + logo/banner upload
+File to edit: artifacts/xmum-market/src/pages/CreateShopPage.tsx
+Reference file (read-only, do not edit): artifacts/xmum-market/src/pages/PostPage.tsx
+Supporting file (read-only, do not edit): artifacts/xmum-market/src/lib/shops.ts
+
+BEFORE STARTING — read these files carefully:
+
+Read all of CreateShopPage.tsx — understand every existing state variable, handler, and JSX block
+Read the desktop layout section in PostPage.tsx starting at the comment {/* Desktop two-column layout */} — this is the exact layout pattern to mirror
+Read uploadShopBanner() and uploadShopLogo() in shops.ts (lines ~99–110) — these already exist and must be called
+Read updateShop() in shops.ts — this is how to write logoUrl/bannerUrl back to Firestore after upload
+
+
+CHANGE 1 — Desktop two-column layout
+The current form uses max-w-lg mx-auto which caps it at ~512px on all screen sizes. This looks wrong on desktop.
+Replace the outer wrapper and form structure to mirror PostPage's desktop pattern:
+
+Outer wrapper: max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-28 md:pb-8
+Inside the form, wrap content in: md:grid md:grid-cols-[280px_1fr] md:gap-8 md:items-start
+Left column (hidden md:block): sticky sidebar at sticky top-20 space-y-4
+
+A card (bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-4 shadow-sm) containing:
+
+A small label: "Shop Setup" in the same style as PostPage's "Category" label (uppercase, tracking-wide, xs, gray)
+Below it, a static info block showing:
+
+🏪 Shop name (live preview — shows name state value, or "Your shop name" placeholder)
+A small line showing the slug preview: xmummarket.com/shop/{slug}
+The selected category badge
+
+
+This gives the left column a live mini-preview feel without needing a separate component
+
+
+
+
+Right column: all existing form fields, wrapped in space-y-4
+
+Each form section (Shop Identity, Contact, Bio) should be a card exactly like PostPage's sections:
+bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-5 shadow-sm
+Each section has a numbered header exactly like PostPage:
+<span className="flex items-center justify-center w-6 h-6 rounded-full bg-[#003366] dark:bg-blue-600 text-white text-xs font-bold shrink-0">1</span>
+<h2 className="text-sm font-bold text-gray-800 dark:text-slate-200">Shop Identity</h2>
+Section breakdown:
+
+Section 1 — Shop Images (new — see Change 2 below)
+Section 2 — Shop Identity: Shop Name, Shop URL, Category (existing fields)
+Section 3 — Bio / Description: existing bio button + BioEditorModal (unchanged)
+Section 4 — Contact: WhatsApp, WeChat, Instagram (existing fields)
+
+The sticky submit button at the bottom stays the same on mobile. On desktop (md:) it sits inline below the right column — same pattern as PostPage.
+
+CHANGE 2 — Logo and Banner upload (Section 1)
+Add a new Section 1 card: "Shop Images" above the Shop Identity section.
+State variables to add:
+typescriptconst [logoFile, setLogoFile] = useState<File | null>(null);
+const [logoPreview, setLogoPreview] = useState<string>("");
+const [bannerFile, setBannerFile] = useState<File | null>(null);
+const [bannerPreview, setBannerPreview] = useState<string>("");
+Banner upload UI:
+
+A wide rectangular upload area: w-full h-32 rounded-xl border-2 border-dashed border-gray-200 dark:border-slate-600 overflow-hidden relative cursor-pointer
+Label above: "Shop Banner" with hint text "Recommended: 1200×400px · Max 3MB"
+If bannerPreview exists: show <img> filling the area with object-cover
+If empty: show centered upload icon (ImagePlus from lucide-react) + text "Click to upload banner"
+A hidden <input type="file" accept="image/*"> triggered on click
+If a banner is selected, show a small × remove button (top-right corner, same pattern as PostPage photo slots)
+File size validation: if file > 3MB show inline error "Banner must be under 3MB" and reject
+
+Logo upload UI (below banner):
+
+A square upload area: w-20 h-20 rounded-xl border-2 border-dashed border-gray-200 dark:border-slate-600 overflow-hidden relative cursor-pointer
+Label: "Shop Logo" with hint text "Square · Max 2MB"
+If logoPreview exists: show <img> filling the area with object-cover
+If empty: show centered ImagePlus icon + small text "Logo"
+Hidden <input type="file" accept="image/*"> triggered on click
+File size validation: if file > 2MB show inline error "Logo must be under 2MB" and reject
+
+Both inputs are optional — the form can be submitted without them.
+No AI moderation on images at this step. The moderateContent function already handles image URLs, but logo/banner URLs won't exist yet at moderation time (they get uploaded after shop creation). This matches how the existing flow works — skip image moderation for logo/banner in the create flow. The shop goes to admin approval anyway before going live.
+
+CHANGE 3 — Upload logo/banner after shop creation
+The current handleSubmit flow is:
+
+Validate → AI moderate text → createShop() → setSubmitted
+
+The new flow must be:
+
+Validate → AI moderate text → createShop() → (if logoFile) uploadShopLogo(shopId, logoFile) → (if bannerFile) uploadShopBanner(shopId, bannerFile) → if any URL returned, call updateShop(shopId, { logoUrl, bannerUrl }) → setSubmitted
+
+Wrap the upload + updateShop step in a try/catch. If it fails, do NOT block submission — the shop was already created successfully. Just swallow the error silently. The owner can upload images later from their shop dashboard.
+The import for updateShop is already exported from @/lib/shops — just add it to the existing import line.
+
+CHANGE 4 — inputCls consistency
+The current inputCls in CreateShopPage uses border-gray-300 and focus:ring-blue-500. PostPage uses border-gray-200 and focus:ring-[#003366]/30 focus:border-[#003366].
+Update inputCls and labelCls in CreateShopPage to exactly match PostPage:
+typescriptconst inputCls = "w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-200 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-[#003366]/30 dark:focus:ring-blue-400/30 focus:border-[#003366] dark:focus:border-blue-400 transition min-h-[44px] shadow-sm";
+
+const labelCls = "block text-sm font-display font-semibold text-gray-700 dark:text-slate-300 mb-1";
+Also update the <select> for Category to use:
+typescriptconst selectCls = "w-full bg-white text-gray-900 border border-gray-200 rounded-xl px-3 py-2.5 text-sm dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600 dark:[color-scheme:dark] focus:outline-none focus:ring-2 focus:ring-[#003366]/30 dark:focus:ring-blue-400/30 focus:border-[#003366] dark:focus:border-blue-400 transition min-h-[44px] shadow-sm";
+
+WHAT MUST NOT CHANGE:
+
+The BioEditorModal component — keep it exactly as is
+All existing state variables: name, slug, slugManual, slugAvailable, slugChecking, category, bio, showBioEditor, whatsapp, wechat, instagram, loading, error, submitted, createdShopId
+Both useEffect hooks (slug auto-generation + slug availability check)
+The handleSlugChange function
+The entire handleSubmit logic except the addition in Change 3
+The "not signed in" early return JSX
+The "submitted" success screen JSX
+The slug availability indicators (CheckCircle2, XCircle, Loader2)
+The WhatsApp/WeChat required warning text
+The slugify and isSlugAvailable imports and usage
+The AI moderation call and writeAiFlag call — keep them exactly as they are
+
+
+IMPORTS to add (surgical addition to the existing import line from shops.ts):
+typescriptimport { createShop, slugify, isSlugAvailable, uploadShopBanner, uploadShopLogo, updateShop } from "@/lib/shops";
+Add ImagePlus and X to the lucide-react import if not already present.
+
+After completing all changes:
+
+Run pnpm --filter xmum-market run build
+Confirm zero TypeScript errors
+State exactly:
+
+What was changed and in which files
+What was deliberately preserved
+What regression risks were considered and ruled out
+Build result
