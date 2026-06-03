@@ -85,6 +85,7 @@ export interface AdminShop {
   shopBio?: string;
   shopCategories?: string[];
   shopBannerUrl?: string;
+  shopLogoUrl?: string;
   activeListingCount?: number;
   rating?: number;
   totalReviews?: number;

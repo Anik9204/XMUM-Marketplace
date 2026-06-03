@@ -441,6 +441,7 @@ export async function getPendingShops(limitCount = 100) {
       shopBio:        data.bio       ?? data.shopBio  ?? "",
       shopCategories: data.category  ? [data.category] : (data.shopCategories ?? []),
       shopBannerUrl:  data.bannerUrl ?? data.shopBannerUrl ?? "",
+      shopLogoUrl:    data.logoUrl   ?? data.shopLogoUrl   ?? "",
       ownerEmail:     data.ownerEmail ?? "",
       ownerUid:       data.ownerId    ?? data.ownerUid ?? "",
       activeListingCount: data.totalListings ?? 0,

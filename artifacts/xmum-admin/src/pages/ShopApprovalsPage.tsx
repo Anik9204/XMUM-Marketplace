@@ -48,7 +48,23 @@ export default function ShopApprovalsPage() {
       limit(100)
     );
     const unsub = onSnapshot(q, (snap) => {
-      const mapped = snap.docs.map((d) => ({ id: d.id, ...d.data() } as AdminShop));
+      const mapped = snap.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          shopName:       data.name      ?? data.shopName ?? "",
+          shopSlug:       data.slug      ?? data.shopSlug ?? "",
+          shopBio:        data.bio       ?? data.shopBio  ?? "",
+          shopCategories: data.category  ? [data.category] : (data.shopCategories ?? []),
+          shopBannerUrl:  data.bannerUrl ?? data.shopBannerUrl ?? "",
+          shopLogoUrl:    data.logoUrl   ?? data.shopLogoUrl   ?? "",
+          ownerEmail:     data.ownerEmail ?? "",
+          ownerUid:       data.ownerId    ?? data.ownerUid ?? "",
+          createdAt:      data.createdAt ?? 0,
+          approvalStatus: data.approvalStatus ?? "pending",
+          rejectionReason: data.rejectionReason ?? "",
+        } as AdminShop;
+      });
       setShops(mapped);
       if (firstSnapshot) {
         setLoading(false);
@@ -260,15 +276,33 @@ export default function ShopApprovalsPage() {
               className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100
                          dark:border-slate-700 p-4"
             >
-              <div className="flex items-start gap-3">
-                {shop.shopBannerUrl && (
+              {/* Banner image — full width at top of card */}
+              {shop.shopBannerUrl && (
+                <div className="w-full h-28 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-700 mb-3">
                   <img
                     src={shop.shopBannerUrl}
-                    alt={shop.shopName}
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                    className="w-12 h-12 rounded-xl object-cover flex-shrink-0 bg-slate-100"
+                    alt="Shop banner"
+                    onError={(e) => { (e.target as HTMLImageElement).parentElement!.style.display = "none"; }}
+                    className="w-full h-full object-cover"
                   />
+                </div>
+              )}
+
+              <div className="flex items-start gap-3">
+                {/* Logo */}
+                {shop.shopLogoUrl ? (
+                  <img
+                    src={shop.shopLogoUrl}
+                    alt="Shop logo"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                    className="w-12 h-12 rounded-xl object-cover flex-shrink-0 bg-slate-100 dark:bg-slate-700 border border-gray-100 dark:border-slate-600"
+                  />
+                ) : (
+                  <div className="w-12 h-12 rounded-xl flex-shrink-0 bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-400 text-xs font-bold border border-gray-100 dark:border-slate-600">
+                    {shop.shopName?.charAt(0)?.toUpperCase() ?? "?"}
+                  </div>
                 )}
+
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="font-semibold text-slate-800 dark:text-slate-200 text-sm">
@@ -277,8 +311,7 @@ export default function ShopApprovalsPage() {
                     {shop.shopSlug && (
                       <span className="text-[10px] text-slate-400 font-mono">/{shop.shopSlug}</span>
                     )}
-                    <span className="text-[10px] font-semibold bg-amber-100 dark:bg-amber-900/30
-                                     text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-full">
+                    <span className="text-[10px] font-semibold bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-full">
                       Pending
                     </span>
                   </div>
@@ -288,10 +321,7 @@ export default function ShopApprovalsPage() {
                   {(shop.shopCategories ?? []).length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1.5">
                       {(shop.shopCategories ?? []).map((c) => (
-                        <span key={c}
-                              className="text-[10px] px-1.5 py-0.5 rounded-full
-                                         bg-blue-50 dark:bg-blue-900/30
-                                         text-blue-600 dark:text-blue-400 font-medium">
+                        <span key={c} className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium">
                           {c}
                         </span>
                       ))}
@@ -312,16 +342,12 @@ export default function ShopApprovalsPage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-50
-                              dark:border-slate-700/50">
+              {/* Action buttons — unchanged */}
+              <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-50 dark:border-slate-700/50">
                 {shop.ownerEmail && (
                   <a
                     href={`mailto:${shop.ownerEmail}`}
-                    className="flex items-center gap-1 text-[11px] text-slate-500
-                               dark:text-slate-400 border border-gray-200
-                               dark:border-slate-700 rounded-xl px-2.5 py-1.5
-                               hover:bg-slate-50 dark:hover:bg-slate-700/40
-                               transition-colors min-h-[34px]"
+                    className="flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400 border border-gray-200 dark:border-slate-700 rounded-xl px-2.5 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors min-h-[34px]"
                     title="Email shop owner"
                   >
                     Contact Owner
@@ -330,11 +356,7 @@ export default function ShopApprovalsPage() {
                 <button
                   onClick={() => handleApprove(shop)}
                   disabled={processing === shop.id}
-                  className="flex items-center gap-1 text-[11px] text-green-600
-                             dark:text-green-400 border border-green-200
-                             dark:border-green-800 rounded-xl px-3 py-1.5
-                             hover:bg-green-50 dark:hover:bg-green-900/20
-                             transition-colors min-h-[34px] disabled:opacity-50 font-medium"
+                  className="flex items-center gap-1 text-[11px] text-green-600 dark:text-green-400 border border-green-200 dark:border-green-800 rounded-xl px-3 py-1.5 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors min-h-[34px] disabled:opacity-50 font-medium"
                 >
                   <CheckCircle className="w-3.5 h-3.5" />
                   {processing === shop.id ? "…" : "Approve"}
@@ -342,10 +364,7 @@ export default function ShopApprovalsPage() {
                 <button
                   onClick={() => handleReject(shop)}
                   disabled={processing === shop.id}
-                  className="flex items-center gap-1 text-[11px] text-red-500
-                             border border-red-200 dark:border-red-800 rounded-xl
-                             px-3 py-1.5 hover:bg-red-50 dark:hover:bg-red-900/20
-                             transition-colors min-h-[34px] disabled:opacity-50"
+                  className="flex items-center gap-1 text-[11px] text-red-500 border border-red-200 dark:border-red-800 rounded-xl px-3 py-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors min-h-[34px] disabled:opacity-50"
                 >
                   <XCircle className="w-3.5 h-3.5" />
                   {processing === shop.id ? "…" : "Reject"}
