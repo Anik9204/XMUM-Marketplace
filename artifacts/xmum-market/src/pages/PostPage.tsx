@@ -553,7 +553,7 @@ export default function PostPage() {
 
     const countToCheck = realActiveCount !== null ? realActiveCount : (userProfile?.activeListingCount ?? 0);
     if (countToCheck >= 6) {
-      setError("You've reached the maximum of 6 active listings. Delete an existing listing to free up a slot.");
+      setError("You have 6 active listings — the maximum allowed per account on XMUM Market. Delete an existing listing to free up a slot. If you sell regularly, consider opening a Shop in the Shops tab, where you can post up to 30 listings.");
       setLoading(false);
       return;
     }
@@ -746,7 +746,14 @@ export default function PostPage() {
       if (msg.startsWith("timeout:token-refresh")) setError("Session refresh timed out. Please sign out and sign back in.");
       else if (msg.startsWith("timeout:photo-upload")) setError("A photo upload timed out. Try a smaller image or check your connection.");
       else if (msg.startsWith("timeout:create-listing")) setError("Post timed out. Please check your connection and try again.");
-      else if (code === "permission-denied") setError("Permission denied. Make sure your email is verified and the Firestore rules are published in Firebase Console.");
+      else if (code === "permission-denied") {
+        const activeCount = realActiveCount !== null ? realActiveCount : (userProfile?.activeListingCount ?? 0);
+        if (activeCount >= 6) {
+          setError("You have 6 active listings — the maximum allowed per account on XMUM Market. Delete an existing listing to free up a slot. If you sell regularly, consider opening a Shop in the Shops tab, where you can post up to 30 listings.");
+        } else {
+          setError("Permission denied. Make sure your email is verified and the Firestore rules are published in Firebase Console.");
+        }
+      }
       else if (code === "unauthenticated") setError("Your session expired. Please sign out and sign back in.");
       else if (msg) setError(`Error: ${msg}`);
       else setError(t.errorOccurred);
