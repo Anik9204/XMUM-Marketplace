@@ -1,0 +1,56 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+
+1. Before editing any file, list every other file that imports or uses it.
+2. Do NOT rewrite a file from scratch. Make surgical edits only.
+3. Do NOT remove any existing function, prop, import, or JSX element unless explicitly told.
+4. After every change, mentally verify: "Does this break anything that was working before?"
+5. Confirm the app builds with zero TypeScript errors: pnpm --filter xmum-market run build
+
+---
+
+TASK: Fix the description preview text in PostPage and EditListingPage to show formatted text instead of raw markdown markers.
+
+CONTEXT:
+After Part 1, the RichTextEditor now shows bold/italic visually during editing. But in PostPage.tsx and EditListingPage.tsx, there is a "button" that acts as a preview of the description text (users tap it to open the fullscreen editor). This preview currently shows the raw markdown string directly using {description} or {description || placeholder} — so users see **bold** instead of bold text in the preview button.
+
+FILES TO EDIT:
+1. artifacts/xmum-market/src/pages/PostPage.tsx — ONE surgical change only
+2. artifacts/xmum-market/src/pages/EditListingPage.tsx — ONE surgical change only
+
+WHAT MUST NOT BREAK:
+- Do not change any logic in PostPage or EditListingPage — only the display of the description preview text inside the button that opens the editor.
+- The description state variable, setDescription, all validation, all Firestore writes, all existing behaviour stays exactly the same.
+- The character counter lines that use stripRichText(draft).length — do not touch these.
+- The RichTextEditor component instance — do not touch.
+- All other pages (ListingDetailPage, ShopListingDetailPage, ShopPublicPage) already use RichTextDisplay from @/lib/richText — do not touch them.
+
+THE FIX:
+
+In PostPage.tsx, find this line (around line 1091):
+  <span className="line-clamp-3 leading-relaxed whitespace-pre-wrap">{description}</span>
+
+Replace it with:
+  <span className="line-clamp-3 leading-relaxed"><RichTextDisplay text={description} /></span>
+
+And add the import at the top of PostPage.tsx if not already present:
+  import { RichTextDisplay } from "@/lib/richText";
+
+In EditListingPage.tsx, find this line (around line 692-693):
+  <span className={description ? "text-gray-900 dark:text-slate-100 line-clamp-3 flex-1" : "text-gray-400 dark:text-slate-500 flex-1"}>
+    {description || t.descriptionPlaceholder}
+  </span>
+
+Replace it with:
+  <span className={description ? "text-gray-900 dark:text-slate-100 line-clamp-3 flex-1" : "text-gray-400 dark:text-slate-500 flex-1"}>
+    {description ? <RichTextDisplay text={description} /> : t.descriptionPlaceholder}
+  </span>
+
+And add the import at the top of EditListingPage.tsx if not already present:
+  import { RichTextDisplay } from "@/lib/richText";
+
+IMPORTANT: RichTextDisplay renders a <p> tag internally. The line-clamp-3 class on the wrapping <span> will still work correctly for truncation.
+
+After making both changes, verify the build passes:
+pnpm --filter xmum-market run build
+
+Tell me exactly what lines you changed in each file and confirm zero TypeScript errors.

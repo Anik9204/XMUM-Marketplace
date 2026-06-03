@@ -15,7 +15,7 @@ import { Sentry } from "@/lib/sentry";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { ImagePlus, X, AlertCircle, CheckCircle2, Lock, Edit2, Loader2, Wifi, WifiOff } from "lucide-react";
 import RichTextEditor from "@/components/RichTextEditor";
-import { stripRichText } from "@/lib/richText";
+import { stripRichText, RichTextDisplay } from "@/lib/richText";
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const MAX_PHOTOS = 3;
@@ -690,7 +690,7 @@ export default function EditListingPage() {
             }`}
           >
             <span className={description ? "text-gray-900 dark:text-slate-100 line-clamp-3 flex-1" : "text-gray-400 dark:text-slate-500 flex-1"}>
-              {description || t.descriptionPlaceholder}
+              {description ? <RichTextDisplay text={description} /> : t.descriptionPlaceholder}
             </span>
             <Edit2 size={15} className="text-gray-400 dark:text-slate-500 mt-0.5 shrink-0" />
           </button>

@@ -14,7 +14,7 @@ import { validateWhatsApp, suggestMalaysianFormat } from "@/lib/validation";
 import AuthModal from "@/components/AuthModal";
 import RentalTcModal from "@/components/RentalTcModal";
 import RichTextEditor from "@/components/RichTextEditor";
-import { stripRichText } from "@/lib/richText";
+import { stripRichText, RichTextDisplay } from "@/lib/richText";
 import ListingCard from "@/components/ListingCard";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import {
@@ -1088,7 +1088,7 @@ export default function PostPage() {
                   >
                     {description ? (
                       <div className="flex items-start justify-between gap-2">
-                        <span className="line-clamp-3 leading-relaxed whitespace-pre-wrap">{description}</span>
+                        <span className="line-clamp-3 leading-relaxed"><RichTextDisplay text={description} /></span>
                         <Edit2 size={14} className="text-gray-400 dark:text-slate-500 shrink-0 mt-0.5" />
                       </div>
                     ) : (
