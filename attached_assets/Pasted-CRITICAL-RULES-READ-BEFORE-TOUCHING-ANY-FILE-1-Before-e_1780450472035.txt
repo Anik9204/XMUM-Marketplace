@@ -1,0 +1,59 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+1. Before editing any file, list every other file that imports 
+   or uses it. Check all of those files before making changes.
+2. Do NOT rewrite a file from scratch. Make surgical edits only.
+3. Do NOT remove any existing function, prop, import, or JSX 
+   element unless I have explicitly told you to remove it.
+4. After every change, verify nothing that was working is broken.
+5. DATA SAFETY: No Firestore reads or writes in this task.
+
+---
+
+I have 4 new PNG files for the XMUM Market favicon set.
+Place them into the correct location. That is the ONLY task.
+
+TASK: Copy these 4 files into artifacts/xmum-market/public/
+overwriting the existing files with the same names:
+
+  apple-touch-icon.png         → artifacts/xmum-market/public/apple-touch-icon.png
+  web-app-manifest-192x192.png → artifacts/xmum-market/public/web-app-manifest-192x192.png
+  web-app-manifest-512x512.png → artifacts/xmum-market/public/web-app-manifest-512x512.png
+  favicon-96x96.png            → artifacts/xmum-market/public/favicon-96x96.png
+
+Then create ONE new file — favicon.svg — as actual SVG code.
+This is the flat simplified version (the bottom-left icon in 
+the design: flat blue bag, no swoosh, white XM text).
+
+favicon.svg must be:
+  viewBox="0 0 32 32"
+  Background: rounded square rx=7, fill="#003366", 32×32
+  Bag body: trapezoid shape
+    Top edge:    x=5  to x=27  at y=14  (width 22px)
+    Bottom edge: x=7  to x=25  at y=27  (width 18px)
+    Fill: #0055CC
+    Bottom corner radius: 2px
+  Bag handles: TWO separate arches (NOT one wide arc)
+    Left handle:  arc from x=9,y=14 peaking at x=12,y=8 to x=15,y=14
+    Right handle: arc from x=17,y=14 peaking at x=20,y=8 to x=23,y=14
+    Stroke: #003D99, stroke-width=1.8, fill=none, linecap=round
+  Bag cuff (top fold line):
+    rect x=5, y=14, width=22, height=3, fill=#003D99
+  XM text:
+    Centered on bag body at approximately x=16, y=23
+    Font: bold, white (#FFFFFF), font-size=7px
+    font-family: 'Nunito', 'Inter', sans-serif
+    font-weight: 800
+    text-anchor: middle
+
+Save favicon.svg to artifacts/xmum-market/public/favicon.svg
+
+DO NOT touch:
+  - favicon.ico (leave it as-is)
+  - index.html
+  - manifest.json
+  - vercel.json
+  - Any .tsx, .ts, or .css files
+
+After completing, confirm:
+  - All 5 files are in artifacts/xmum-market/public/
+  - Build passes: pnpm --filter xmum-market run build
