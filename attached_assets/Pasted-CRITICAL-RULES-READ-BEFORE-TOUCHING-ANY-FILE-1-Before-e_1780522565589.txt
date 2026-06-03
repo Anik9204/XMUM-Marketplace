@@ -1,0 +1,169 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+
+1. Before editing any file, list every other file that imports or uses it.
+2. Do NOT rewrite a file from scratch. Make surgical edits only — change the minimum number of lines needed.
+3. Do NOT remove any existing function, prop, import, or JSX element unless explicitly told.
+4. After every change, mentally verify: "Does this break anything that was working before?"
+5. Confirm the app builds with zero TypeScript errors: pnpm --filter xmum-market run build
+
+---
+
+THERE ARE 3 BUGS TO FIX. Fix them one file at a time, in order.
+
+═══════════════════════════════════════════════════════
+BUG 1 — Scroll broken in description editor modal
+FILE: artifacts/xmum-market/src/components/RichTextEditor.tsx
+═══════════════════════════════════════════════════════
+
+PROBLEM:
+When the RichTextEditor is inside the fullscreen modal (fixed inset-0 flex flex-col), the editor area does not scroll internally. Instead, the background page scrolls. This is because the contentEditable div has overflow-y-auto but no bounded height to scroll within — it just expands infinitely.
+
+THE FIX — ONE LINE CHANGE ONLY:
+
+Find the contentEditable div. It currently has this className:
+  "flex-1 w-full bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 text-sm leading-relaxed focus:outline-none px-3 py-3 min-h-[180px] rounded-b-xl overflow-y-auto rte-editor"
+
+Change ONLY the className by replacing "min-h-[180px]" with "min-h-[180px] max-h-[calc(100vh-160px)]":
+
+New className:
+  "flex-1 w-full bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 text-sm leading-relaxed focus:outline-none px-3 py-3 min-h-[180px] max-h-[calc(100vh-160px)] rounded-b-xl overflow-y-auto rte-editor"
+
+That is the only change to this file. Do not touch any other line.
+
+REASON: max-h gives the overflow-y-auto a ceiling to scroll within. 160px accounts for the modal header (~56px) and toolbar (~44px) and padding. On desktop where the editor is not fullscreen, the min-h-[180px] still applies as a floor, and the editor naturally expands with content since overflow-y-auto only activates when content exceeds max-h.
+
+═══════════════════════════════════════════════════════
+BUG 2 — "large text" button (TA button) shows ++ raw markers in editor
+FILE: artifacts/xmum-market/src/components/RichTextEditor.tsx (same file)
+═══════════════════════════════════════════════════════
+
+PROBLEM:
+The applyFormat("++") function works by:
+1. Reading the DOM to a raw markdown string
+2. Injecting ++ markers as raw text into that string
+3. Setting el.innerHTML = markdownToHtml(newMd)
+
+The bug: when applyFormat runs, it calls readMarkdown(el) which walks the DOM. At that moment, if the contentEditable already contains formatted <strong> or <em> nodes, the walk can fail to match the selectedText correctly because the selected text in the DOM is the display text but readMarkdown returns a string that includes ** or * markers. So currentMd.indexOf(selectedText) returns -1 and the function returns early without doing anything, or it finds the wrong position.
+
+Additionally, the innerHTML re-render loses scroll position.
+
+THE FIX — Replace the entire applyFormat function and handleBold / handleItalic / handleLarge lines.
+
+Find and remove these lines (the entire applyFormat function plus the three one-liners at the bottom of it):
+
+  const applyFormat = useCallback(
+    (marker: string) => {
+      ...entire function body...
+    },
+    [onChange, maxLength]
+  );
+
+  const handleBold   = () => applyFormat("**");
+  const handleItalic = () => applyFormat("*");
+  const handleLarge  = () => applyFormat("++");
+
+Replace the entire block with:
+
+  // ── Toolbar actions ────────────────────────────────────────────────────────
+  const handleBold = useCallback(() => {
+    const el = editorRef.current;
+    if (!el) return;
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.toString().trim()) return;
+    // execCommand('bold') toggles <strong>/<b> on the selection in-place.
+    // htmlToMarkdown already handles both <b> and <strong> → **text**
+    document.execCommand("bold", false);
+    handleInput();
+  }, [handleInput]);
+
+  const handleItalic = useCallback(() => {
+    const el = editorRef.current;
+    if (!el) return;
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.toString().trim()) return;
+    // execCommand('italic') toggles <em>/<i> on the selection in-place.
+    // htmlToMarkdown already handles both <i> and <em> → *text*
+    document.execCommand("italic", false);
+    handleInput();
+  }, [handleInput]);
+
+  const handleLarge = useCallback(() => {
+    const el = editorRef.current;
+    if (!el) return;
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.toString().trim()) return;
+
+    // Save the selected range before focus calls clear the selection
+    const range = sel.getRangeAt(0);
+    const selectedText = sel.toString();
+
+    // Check if the selection is already inside a .rte-large span
+    let container: Node | null = range.commonAncestorContainer;
+    while (container && container !== el) {
+      if (
+        container.nodeType === Node.ELEMENT_NODE &&
+        (container as Element).classList?.contains("rte-large")
+      ) {
+        // Already large — unwrap: replace the span with its text content
+        const span = container as HTMLElement;
+        const text = span.textContent ?? "";
+        const textNode = document.createTextNode(text);
+        span.parentNode?.replaceChild(textNode, span);
+        handleInput();
+        return;
+      }
+      container = container.parentNode;
+    }
+
+    // Not already large — wrap the selection in a .rte-large span
+    try {
+      const span = document.createElement("span");
+      span.className = "rte-large";
+      // surroundContents wraps the selection range in the new element
+      range.surroundContents(span);
+      handleInput();
+    } catch {
+      // surroundContents throws if selection crosses element boundaries.
+      // In that case, do nothing — safer than a corrupted re-render.
+    }
+  }, [handleInput]);
+
+IMPORTANT NOTES:
+- handleBold and handleItalic call handleInput() after execCommand so the markdown state syncs immediately.
+- handleLarge uses range.surroundContents() to wrap the selection in a <span class="rte-large"> directly in the DOM without any innerHTML replacement, so scroll position is never disrupted.
+- The "unwrap" path for handleLarge walks up the DOM to find a .rte-large parent and removes it.
+- Do NOT remove or change handleInput, handlePaste, markdownToHtml, htmlToMarkdown, readMarkdown, placeCaretAt, or any other function.
+- Do NOT change the JSX. The ToolbarButton onClick props already reference handleBold, handleItalic, handleLarge by name.
+
+═══════════════════════════════════════════════════════
+BUG 3 — Description preview button shows raw ++ markdown in PostPage
+FILE: artifacts/xmum-market/src/pages/PostPage.tsx
+═══════════════════════════════════════════════════════
+
+PROBLEM:
+The description preview button in PostPage renders the description state as raw text, so users see "++large text++" instead of formatted text.
+
+STEP 1 — Check the import on line ~20. It should look like:
+  import { stripRichText } from "@/lib/richText";
+or it may already include RichTextDisplay. Add RichTextDisplay to the import if it is not already there:
+  import { stripRichText, RichTextDisplay } from "@/lib/richText";
+
+STEP 2 — Find the preview button for the description (around line 1089-1092). It contains a span that renders {description} as raw text:
+  <span className="line-clamp-3 leading-relaxed whitespace-pre-wrap">{description}</span>
+
+Replace that span with:
+  <span className="line-clamp-3 leading-relaxed">
+    <RichTextDisplay text={description} />
+  </span>
+
+That is the ONLY change to PostPage.tsx. Do not touch any other line — not the validation, not the Firestore write, not the stripRichText counter, not the RichTextEditor instance, not any other JSX.
+
+═══════════════════════════════════════════════════════
+AFTER ALL 3 CHANGES — verify the build:
+pnpm --filter xmum-market run build
+
+Report exactly:
+- What line numbers changed in each file
+- That zero TypeScript errors occurred
+- Do not make any other changes beyond the 3 described above
+═══════════════════════════════════════════════════════

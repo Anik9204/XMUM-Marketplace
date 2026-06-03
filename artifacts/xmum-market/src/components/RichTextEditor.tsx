@@ -208,10 +208,9 @@ export default function RichTextEditor({
     if (!el) return;
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed || !sel.toString().trim()) return;
-    el.focus();
+    // execCommand('bold') toggles <strong>/<b> on the selection in-place.
+    // htmlToMarkdown already handles both <b> and <strong> → **text**
     document.execCommand("bold", false);
-    // execCommand('bold') can insert <b> tags — htmlToMarkdown handles both <b> and <strong>
-    // Trigger handleInput to sync the new DOM state back to markdown
     handleInput();
   }, [handleInput]);
 
@@ -220,7 +219,8 @@ export default function RichTextEditor({
     if (!el) return;
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed || !sel.toString().trim()) return;
-    el.focus();
+    // execCommand('italic') toggles <em>/<i> on the selection in-place.
+    // htmlToMarkdown already handles both <i> and <em> → *text*
     document.execCommand("italic", false);
     handleInput();
   }, [handleInput]);
@@ -229,42 +229,41 @@ export default function RichTextEditor({
     const el = editorRef.current;
     if (!el) return;
     const sel = window.getSelection();
-    if (!sel || sel.isCollapsed) return;
-    const selectedText = sel.toString();
-    if (!selectedText.trim()) return;
+    if (!sel || sel.isCollapsed || !sel.toString().trim()) return;
 
-    // Read current markdown to check toggle state
-    const currentMd = readMarkdown(el);
-    const selIdx = currentMd.indexOf(selectedText);
-    if (selIdx === -1) return;
+    // Save the selected range before focus calls clear the selection
+    const range = sel.getRangeAt(0);
 
-    const before = currentMd.slice(0, selIdx);
-    const after = currentMd.slice(selIdx + selectedText.length);
-    const alreadyWrapped = before.endsWith("++") && after.startsWith("++");
-
-    let newMd: string;
-    if (alreadyWrapped) {
-      newMd =
-        before.slice(0, before.length - 2) + selectedText + after.slice(2);
-    } else {
-      newMd = before + "++" + selectedText + "++" + after;
-      if (newMd.length > maxLength) return;
+    // Check if the selection is already inside a .rte-large span
+    let container: Node | null = range.commonAncestorContainer;
+    while (container && container !== el) {
+      if (
+        container.nodeType === Node.ELEMENT_NODE &&
+        (container as Element).classList?.contains("rte-large")
+      ) {
+        // Already large — unwrap: replace the span with its text content
+        const span = container as HTMLElement;
+        const text = span.textContent ?? "";
+        const textNode = document.createTextNode(text);
+        span.parentNode?.replaceChild(textNode, span);
+        handleInput();
+        return;
+      }
+      container = container.parentNode;
     }
 
-    lastSetValueRef.current = newMd;
-    el.innerHTML = markdownToHtml(newMd);
-    onChange(newMd);
-
-    el.focus();
-    const caretPos = alreadyWrapped
-      ? selIdx + selectedText.length
-      : selIdx + 2 + selectedText.length + 2;
+    // Not already large — wrap the selection in a .rte-large span
     try {
-      placeCaretAt(el, caretPos);
+      const span = document.createElement("span");
+      span.className = "rte-large";
+      // surroundContents wraps the selection range in the new element
+      range.surroundContents(span);
+      handleInput();
     } catch {
-      /* non-critical */
+      // surroundContents throws if selection crosses element boundaries.
+      // In that case, do nothing — safer than a corrupted re-render.
     }
-  }, [onChange, maxLength]);
+  }, [handleInput]);
 
   return (
     <div className={`flex flex-col gap-0 ${className}`}>
@@ -304,7 +303,7 @@ export default function RichTextEditor({
         onCompositionEnd={handleCompositionEnd}
         onPaste={handlePaste}
         data-placeholder={placeholder}
-        className="flex-1 w-full bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 text-sm leading-relaxed focus:outline-none px-3 py-3 min-h-[180px] rounded-b-xl overflow-y-auto whitespace-pre-wrap break-words empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400 empty:before:dark:text-slate-500 empty:before:pointer-events-none [&_.rte-large]:text-base [&_.rte-large]:font-medium"
+        className="flex-1 w-full bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 text-sm leading-relaxed focus:outline-none px-3 py-3 min-h-[180px] max-h-[calc(100vh-160px)] rounded-b-xl overflow-y-auto whitespace-pre-wrap break-words empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400 empty:before:dark:text-slate-500 empty:before:pointer-events-none [&_.rte-large]:text-base [&_.rte-large]:font-medium"
       />
     </div>
   );
