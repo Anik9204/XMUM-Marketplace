@@ -296,7 +296,9 @@ export default function PostPage() {
         const snap = await getCountFromServer(q);
         if (!cancelled) setRealActiveCount(snap.data().count);
       } catch {
-        if (!cancelled) setRealActiveCount(userProfile?.activeListingCount ?? 0);
+        // Do NOT set realActiveCount here — leave it as null so the pre-submit
+        // check falls back to userProfile?.activeListingCount at submit time,
+        // which is kept live by onSnapshot and will be correct by then.
       }
     }
     fetchRealCount();
@@ -747,8 +749,11 @@ export default function PostPage() {
       else if (msg.startsWith("timeout:photo-upload")) setError("A photo upload timed out. Try a smaller image or check your connection.");
       else if (msg.startsWith("timeout:create-listing")) setError("Post timed out. Please check your connection and try again.");
       else if (code === "permission-denied") {
-        const activeCount = realActiveCount !== null ? realActiveCount : (userProfile?.activeListingCount ?? 0);
-        if (activeCount >= 6) {
+        // userProfile is kept live by onSnapshot — activeListingCount is reliable here.
+        // Also check activeListingCount (the const derived at render time) as an additional fallback.
+        const profileCount = userProfile?.activeListingCount ?? activeListingCount ?? 0;
+        const liveCount = realActiveCount ?? 0;
+        if (profileCount >= 6 || liveCount >= 6) {
           setError("You have 6 active listings — the maximum allowed per account on XMUM Market. Delete an existing listing to free up a slot. If you sell regularly, consider opening a Shop in the Shops tab, where you can post up to 30 listings.");
         } else {
           setError("Permission denied. Make sure your email is verified and the Firestore rules are published in Firebase Console.");
