@@ -19,6 +19,7 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage
 import { db, storage, auth } from "./firebase";
 import { UserProfile } from "./types";
 import { deleteShopCompletely } from "./shops";
+import { backfillListingUserName } from "./listings";
 
 function deriveUserName(fullName: string): string {
   const parts = fullName.trim().split(/\s+/);
@@ -70,19 +71,7 @@ export async function updateProfile(
   // Skip report-held listings — Firestore rules block updates on them.
   if (typeof data.fullName === "string" && data.fullName.trim()) {
     const newUserName = deriveUserName(data.fullName);
-    try {
-      const snap = await getDocs(
-        query(collection(db, "listings"), where("userId", "==", uid))
-      );
-      await Promise.all(
-        snap.docs
-          .filter((d) => d.data().isReportHeld !== true)
-          .map((d) => updateDoc(d.ref, { userName: newUserName }).catch(() => {}))
-      );
-    } catch {
-      // Non-critical — profile save already succeeded; listing backfill
-      // failure is silent so the user is not shown a false error.
-    }
+    backfillListingUserName(uid, newUserName).catch(() => {});
   }
 }
 

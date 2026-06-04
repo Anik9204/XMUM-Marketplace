@@ -645,3 +645,26 @@ export async function getSimilarListings(
     return [];
   }
 }
+
+/**
+ * Backfills the userName field on all listings owned by a given user.
+ * Uses the REST layer (not the Firestore SDK) to avoid the stale-token
+ * issue that affects SDK writes through the persistent long-poll connection.
+ * Called by updateProfile() in userProfile.ts when fullName changes.
+ * Skips report-held listings (Firestore rules block their updates).
+ */
+export async function backfillListingUserName(
+  userId: string,
+  newUserName: string
+): Promise<void> {
+  const snap = await getDocs(
+    query(collection(db, "listings"), where("userId", "==", userId))
+  );
+  await Promise.all(
+    snap.docs
+      .filter((d) => d.data().isReportHeld !== true)
+      .map((d) =>
+        restUpdateDoc("listings", d.id, { userName: newUserName }).catch(() => {})
+      )
+  );
+}
