@@ -1,0 +1,88 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless I have explicitly told you to remove it.
+
+4. After every change, mentally verify: "Does this break anything that
+   was working before?" If yes, do not proceed — find a different approach.
+
+5. If fixing Issue X requires changing a shared component used by other
+   pages, STOP and tell me what the impact will be before making the change.
+   Ask for permission first.
+
+6. Never change any CSS class, layout structure, z-index, or responsive
+   breakpoint unless it is directly part of the fix.
+
+7. Confirm the app builds with zero TypeScript errors before finishing:
+   pnpm --filter xmum-market run build
+
+8. DATA SAFETY — MANDATORY: If this change touches any code that reads
+   from Firestore and then writes, deletes, or modifies documents based
+   on that data — STOP before implementing. Explicitly tell me what operation,
+   on which collection, under what condition, and how many documents could
+   be affected. Wait for my confirmation before proceeding.
+
+---
+
+FILE TO EDIT: artifacts/xmum-market/src/components/AuthModal.tsx
+
+PROBLEM:
+In the XMUM exclusive banner (shown when mode !== "forgot"), the "No account yet? Sign up with your @xmu.edu.my student email — takes only 2 minutes." text is currently placed as a second <p> tag inside the same blue banner flex row as "Exclusive to XMUM students — @xmu.edu.my emails only". This looks cramped and visually confusing — both texts are competing inside one banner with no visual separation.
+
+EXACT LOCATION in the file — find this block:
+          {/* XMUM exclusive banner */}
+          {mode !== "forgot" && (
+            <div className="bg-blue-50 dark:bg-blue-950 rounded-xl px-4 py-2.5 mb-4 flex items-center gap-2">
+              <span>🎓</span>
+              <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
+                Exclusive to XMUM students — @xmu.edu.my emails only
+              </p>
+              {mode === "signin" && (
+                <p className="text-xs text-blue-600 dark:text-blue-300 mt-0.5">
+                  No account yet? Sign up with your @xmu.edu.my student email — takes only 2 minutes.
+                </p>
+              )}
+            </div>
+          )}
+
+FIX — Replace that entire block with this:
+          {/* XMUM exclusive banner */}
+          {mode !== "forgot" && (
+            <div className="mb-4 space-y-2">
+              <div className="bg-blue-50 dark:bg-blue-950 rounded-xl px-4 py-2.5 flex items-center gap-2">
+                <span>🎓</span>
+                <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
+                  Exclusive to XMUM students — @xmu.edu.my emails only
+                </p>
+              </div>
+              {mode === "signin" && (
+                <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700/50 rounded-xl px-4 py-2.5 flex items-center gap-2">
+                  <span className="text-base shrink-0">✨</span>
+                  <p className="text-xs text-emerald-700 dark:text-emerald-300 font-medium leading-snug">
+                    No account yet?{" "}
+                    <span className="font-semibold">Sign up with your @xmu.edu.my student email</span>
+                    {" "}— takes only 2 minutes.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+WHAT THIS DOES:
+- Separates the two messages into two visually distinct cards, stacked vertically with a gap
+- The "Exclusive to XMUM students" banner stays exactly as it was (blue, same classes)
+- The "No account yet?" message gets its own green-tinted card with a border so it reads as a separate, highlighted callout — not a continuation of the blue banner
+- The key phrase "Sign up with your @xmu.edu.my student email" is bolded for emphasis
+- Uses shrink-0 on the emoji so it never wraps
+- Only renders on mode === "signin" — same condition as before
+- No other logic, state, or behaviour changes
+
+DO NOT change anything else in this file.
+After making the change, run: pnpm --filter xmum-market run build
+Confirm zero TypeScript errors, then report what changed and what was preserved.

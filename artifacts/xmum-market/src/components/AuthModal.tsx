@@ -251,15 +251,22 @@ export default function AuthModal({ onClose, defaultMode = "signin" }: Props) {
 
           {/* XMUM exclusive banner */}
           {mode !== "forgot" && (
-            <div className="bg-blue-50 dark:bg-blue-950 rounded-xl px-4 py-2.5 mb-4 flex items-center gap-2">
-              <span>🎓</span>
-              <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
-                Exclusive to XMUM students — @xmu.edu.my emails only
-              </p>
-              {mode === "signin" && (
-                <p className="text-xs text-blue-600 dark:text-blue-300 mt-0.5">
-                  No account yet? Sign up with your @xmu.edu.my student email — takes only 2 minutes.
+            <div className="mb-4 space-y-2">
+              <div className="bg-blue-50 dark:bg-blue-950 rounded-xl px-4 py-2.5 flex items-center gap-2">
+                <span>🎓</span>
+                <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
+                  Exclusive to XMUM students — @xmu.edu.my emails only
                 </p>
+              </div>
+              {mode === "signin" && (
+                <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700/50 rounded-xl px-4 py-2.5 flex items-center gap-2">
+                  <span className="text-base shrink-0">✨</span>
+                  <p className="text-xs text-emerald-700 dark:text-emerald-300 font-medium leading-snug">
+                    No account yet?{" "}
+                    <span className="font-semibold">Sign up with your @xmu.edu.my student email</span>
+                    {" "}— takes only 2 minutes.
+                  </p>
+                </div>
               )}
             </div>
           )}
