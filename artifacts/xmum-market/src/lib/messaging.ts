@@ -219,6 +219,7 @@ export async function getUserConversations(uid: string): Promise<Conversation[]>
 export async function clearConversation(convId: string, uid: string): Promise<void> {
   await updateDoc(doc(db, "conversations", convId), {
     [`clearedAt.${uid}`]: Date.now(),
+    [`unreadCount.${uid}`]: 0,
   });
 }
 
