@@ -1,0 +1,52 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless I have explicitly told you to remove it.
+
+4. After every change, mentally verify: "Does this break anything that
+   was working before?" If yes, do not proceed — find a different approach.
+
+5. Never change any CSS class, layout structure, z-index, or responsive
+   breakpoint unless it is directly part of the fix.
+
+7. Confirm the app builds with zero TypeScript errors before finishing:
+   pnpm --filter xmum-market run build
+
+---
+
+FILE TO EDIT: artifacts/xmum-market/src/pages/ProfilePage.tsx
+
+PROBLEM:
+On the My Listings / Profile page, the avatar image renders as a rounded
+square (rounded-2xl). The Account Settings page uses rounded-full (circle).
+They should both be circles for visual consistency.
+
+THE FIX — two class-only changes, nothing else:
+
+CHANGE 1 — the avatar <img> element.
+Find this exact className:
+  className="w-20 h-20 rounded-2xl object-cover ring-4 ring-white dark:ring-slate-800 shadow-lg"
+
+Replace it with:
+  className="w-20 h-20 rounded-full object-cover ring-4 ring-white dark:ring-slate-800 shadow-lg"
+
+CHANGE 2 — the fallback initial <div> (shown when no avatar photo exists).
+Find this exact className:
+  className="w-20 h-20 rounded-2xl bg-gradient-to-br from-[#003366] to-[#0055aa] flex items-center justify-center text-white font-bold text-2xl ring-4 ring-white dark:ring-slate-800 shadow-lg"
+
+Replace it with:
+  className="w-20 h-20 rounded-full bg-gradient-to-br from-[#003366] to-[#0055aa] flex items-center justify-center text-white font-bold text-2xl ring-4 ring-white dark:ring-slate-800 shadow-lg"
+
+WHAT CHANGES: rounded-2xl → rounded-full on both avatar elements only.
+WHAT IS PRESERVED: size (w-20 h-20), ring, shadow, object-cover, dark mode
+classes, the verified badge positioning (-bottom-1 -right-1) — all untouched.
+NO other classes, layout, logic, or files are changed.
+
+After making the changes, run: pnpm --filter xmum-market run build
+Confirm zero TypeScript errors, then report what changed and what was preserved.

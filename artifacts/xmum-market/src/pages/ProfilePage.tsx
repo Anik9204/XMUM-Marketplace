@@ -461,10 +461,10 @@ export default function ProfilePage() {
                   <img
                     src={avatarSrc}
                     alt="avatar"
-                    className="w-20 h-20 rounded-2xl object-cover ring-4 ring-white dark:ring-slate-800 shadow-lg"
+                    className="w-20 h-20 rounded-full object-cover ring-4 ring-white dark:ring-slate-800 shadow-lg"
                   />
                 ) : (
-                  <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-[#003366] to-[#0055aa] flex items-center justify-center text-white font-bold text-2xl ring-4 ring-white dark:ring-slate-800 shadow-lg">
+                  <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#003366] to-[#0055aa] flex items-center justify-center text-white font-bold text-2xl ring-4 ring-white dark:ring-slate-800 shadow-lg">
                     {(user.email ?? "?")[0].toUpperCase()}
                   </div>
                 )}
