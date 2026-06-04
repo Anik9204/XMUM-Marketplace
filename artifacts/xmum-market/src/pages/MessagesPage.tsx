@@ -102,10 +102,28 @@ export default function MessagesPage() {
   const [reportDone, setReportDone] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasOlderMessages, setHasOlderMessages] = useState(false);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Keyboard detection (mobile) — fixes dead space when virtual keyboard opens
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const handler = () => {
+      const isOpen = vv.height < window.innerHeight * 0.75;
+      setKeyboardOpen(isOpen);
+      if (isOpen) {
+        setTimeout(() => {
+          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }, 80);
+      }
+    };
+    vv.addEventListener('resize', handler);
+    return () => vv.removeEventListener('resize', handler);
+  }, []);
 
   // Auto-resize textarea — grows and shrinks with content
   const autoResizeTextarea = useCallback(() => {
@@ -794,8 +812,8 @@ export default function MessagesPage() {
               onBlur={handleInputBlur}
               placeholder={t.typeMessage}
               rows={1}
-              style={{ resize: "none", overscrollBehavior: "contain" }}
-              className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-2xl px-4 py-2.5 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 min-h-[44px] overflow-hidden transition pr-14 leading-relaxed overscroll-contain"
+              style={{ resize: "none", overscrollBehavior: "contain", userSelect: "text", WebkitUserSelect: "text" }}
+              className={`w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-2xl px-4 py-2.5 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 min-h-[44px] overflow-hidden transition ${inputText.length > 800 ? 'pr-14' : 'pr-4'} leading-relaxed overscroll-contain`}
             />
             {inputText.length > CHAR_WARN && (
               <span className={`absolute right-3 bottom-2.5 text-[10px] font-medium pointer-events-none ${inputText.length >= MAX_CHARS ? "text-red-500" : "text-slate-400"}`}>
@@ -844,7 +862,9 @@ export default function MessagesPage() {
       <div
         className="flex overflow-hidden overscroll-none md:[height:calc(100dvh_-_var(--header-h)_-_var(--verif-banner-h))]"
         style={{
-          height: 'calc(100dvh - var(--header-h) - var(--verif-banner-h) - var(--bottom-nav-h))',
+          height: keyboardOpen
+            ? 'calc(100dvh - var(--header-h) - var(--verif-banner-h))'
+            : 'calc(100dvh - var(--header-h) - var(--verif-banner-h) - var(--bottom-nav-h))',
         }}
       >
 
