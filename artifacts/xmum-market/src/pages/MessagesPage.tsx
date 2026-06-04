@@ -606,62 +606,84 @@ export default function MessagesPage() {
 
   const chatContent = activeConv ? (
     <div className="flex flex-col h-full overflow-hidden min-h-0">
-      {/* Chat header */}
-      <div className="flex items-center gap-3 px-3 py-2.5 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shrink-0 shadow-sm">
-        <button
-          onClick={closeConv}
-          className="md:hidden text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 p-1 min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0"
-        >
-          <ArrowLeft size={20} />
-        </button>
+      {/* Chat header — two-row mobile-optimised layout */}
+      <div className="shrink-0 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm">
+        {/* Row 1: back + avatar + name/email + action buttons */}
+        <div className="flex items-center gap-2 px-3 pt-2.5 pb-1">
+          <button
+            onClick={closeConv}
+            className="md:hidden text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 p-1 min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0"
+          >
+            <ArrowLeft size={20} />
+          </button>
 
-        <Avatar name={otherName} avatarUrl={otherProfile?.avatarUrl} size={40} />
+          <Avatar name={otherName} avatarUrl={otherProfile?.avatarUrl} size={38} />
 
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate leading-tight">{otherName}</p>
-          {otherEmail && <p className="text-xs text-slate-400 dark:text-slate-500 truncate">{otherEmail}</p>}
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate leading-tight">{otherName}</p>
+            {otherEmail && <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate">{otherEmail}</p>}
+          </div>
+
+          {/* Action buttons — always visible, no overflow */}
+          <button
+            onClick={() => { setReportDone(false); setReportReason("spam"); setShowReportModal(true); }}
+            title="Report user"
+            className="shrink-0 flex items-center justify-center w-9 h-9 rounded-xl text-slate-400 dark:text-slate-500 hover:text-amber-500 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
+          >
+            <Flag size={16} />
+          </button>
+
+          {confirmClearChat ? (
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                onClick={handleClear}
+                disabled={clearing}
+                className="text-[11px] font-semibold text-white bg-red-500 hover:bg-red-600 px-2.5 py-1.5 rounded-lg transition-colors min-h-[36px] disabled:opacity-50"
+              >
+                {clearing ? <Loader2 size={13} className="animate-spin" /> : "Delete"}
+              </button>
+              <button
+                onClick={() => setConfirmClearChat(false)}
+                className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 px-2 py-1.5 rounded-lg transition-colors min-h-[36px]"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmClearChat(true)}
+              disabled={clearing}
+              title="Clear conversation"
+              className="shrink-0 flex items-center justify-center w-9 h-9 rounded-xl text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-40"
+            >
+              {clearing ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+            </button>
+          )}
         </div>
 
-        {activeConv.listingPhoto && (
-          <div className="shrink-0 flex items-center gap-1.5 bg-slate-100 dark:bg-slate-700 rounded-xl px-2 py-1 max-w-[120px]">
-            <img src={activeConv.listingPhoto} className="w-6 h-6 rounded object-cover shrink-0" alt="" />
-            <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">{activeConv.listingTitle}</p>
-          </div>
-        )}
-
-        <button
-          onClick={() => { setReportDone(false); setReportReason("spam"); setShowReportModal(true); }}
-          title="Report user"
-          className="shrink-0 flex items-center justify-center w-9 h-9 rounded-xl text-slate-400 dark:text-slate-500 hover:text-amber-500 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
-        >
-          <Flag size={16} />
-        </button>
-        {confirmClearChat ? (
-          <div className="flex items-center gap-1 shrink-0">
-            <button
-              onClick={handleClear}
-              disabled={clearing}
-              className="text-[11px] font-semibold text-white bg-red-500 hover:bg-red-600 px-2.5 py-1.5 rounded-lg transition-colors min-h-[36px] disabled:opacity-50"
+        {/* Row 2: listing context chip — always visible, full width */}
+        <div className="flex items-center gap-2 px-3 pb-2.5">
+          {activeConv.listingPhoto ? (
+            <img src={activeConv.listingPhoto} className="w-7 h-7 rounded-lg object-cover border border-gray-200 dark:border-slate-600 shrink-0" alt="" />
+          ) : (
+            <div className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0">
+              <MessageCircle size={13} className="text-slate-400" />
+            </div>
+          )}
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate leading-tight">
+            <span className="font-medium text-slate-600 dark:text-slate-300">Re: </span>
+            {activeConv.listingTitle || "Listing"}
+          </p>
+          {activeConv.listingId && (
+            <a
+              href={`/listing/${activeConv.listingId}`}
+              className="ml-auto shrink-0 text-[10px] font-semibold text-[#003366] dark:text-blue-400 hover:underline whitespace-nowrap"
+              onClick={(e) => e.stopPropagation()}
             >
-              {clearing ? <Loader2 size={13} className="animate-spin" /> : "Delete"}
-            </button>
-            <button
-              onClick={() => setConfirmClearChat(false)}
-              className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 px-2 py-1.5 rounded-lg transition-colors min-h-[36px]"
-            >
-              Cancel
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={() => setConfirmClearChat(true)}
-            disabled={clearing}
-            title="Clear conversation"
-            className="shrink-0 flex items-center justify-center w-9 h-9 rounded-xl text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-40"
-          >
-            {clearing ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-          </button>
-        )}
+              View →
+            </a>
+          )}
+        </div>
       </div>
 
       {/* Report user modal */}

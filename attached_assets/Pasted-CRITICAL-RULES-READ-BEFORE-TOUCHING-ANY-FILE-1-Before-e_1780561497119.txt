@@ -1,0 +1,157 @@
+CRITICAL RULES — READ BEFORE TOUCHING ANY FILE:
+
+1. Before editing any file, list every other file that imports or uses it.
+   Check all of those files before making changes.
+
+2. Do NOT rewrite a file from scratch. Make surgical edits only —
+   change the minimum number of lines needed to fix the issue.
+
+3. Do NOT remove any existing function, prop, import, or JSX element
+   unless I have explicitly told you to remove it.
+
+4. After every change, mentally verify: "Does this break anything that
+   was working before?" If yes, do not proceed — find a different approach.
+
+5. If fixing Issue X requires changing a shared component used by other
+   pages, STOP and tell me what the impact will be before making the change.
+   Ask for permission first.
+
+6. Never change any CSS class, layout structure, z-index, or responsive
+   breakpoint unless it is directly part of the fix.
+
+7. Confirm the app builds with zero TypeScript errors before finishing:
+   pnpm --filter xmum-market run build
+
+8. DATA SAFETY — MANDATORY: If this change touches any code that reads
+   from Firestore and then writes, deletes, or modifies documents based
+   on that data — STOP before implementing. Explicitly tell me:
+     • What data operation will happen
+     • On which Firestore collection
+     • Under what exact condition
+     • How many documents could be affected
+   Wait for my confirmation before proceeding.
+
+---
+
+FILE TO EDIT: artifacts/xmum-market/src/pages/MessagesPage.tsx
+NO OTHER FILE SHOULD BE TOUCHED.
+
+---
+
+TASK: Restructure the chat header inside MessagesPage.tsx so users can clearly see who they're talking to and about which listing. This is a surgical replacement of only the chat header JSX block.
+
+---
+
+BACKGROUND:
+The current chat header is one row: [back] [avatar] [name/email] [listing chip] [flag] [delete]
+On a ~360px mobile screen this overflows — the listing title gets truncated to nothing and the user can't tell who they're messaging or about what listing.
+
+---
+
+THE FIX:
+Replace the current chat header JSX block entirely with the new version below.
+The current block starts with:
+  {/* Chat header */}
+  <div className="flex items-center gap-3 px-3 py-2.5 border-b ...">
+And ends just before:
+  {/* Report user modal */}
+
+Replace that entire block (from the {/* Chat header */} comment to just before {/* Report user modal */}) with this new version:
+
+{/* Chat header — two-row mobile-optimised layout */}
+<div className="shrink-0 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm">
+  {/* Row 1: back + avatar + name/email + action buttons */}
+  <div className="flex items-center gap-2 px-3 pt-2.5 pb-1">
+    <button
+      onClick={closeConv}
+      className="md:hidden text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 p-1 min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0"
+    >
+      <ArrowLeft size={20} />
+    </button>
+
+    <Avatar name={otherName} avatarUrl={otherProfile?.avatarUrl} size={38} />
+
+    <div className="flex-1 min-w-0">
+      <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate leading-tight">{otherName}</p>
+      {otherEmail && <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate">{otherEmail}</p>}
+    </div>
+
+    {/* Action buttons — always visible, no overflow */}
+    <button
+      onClick={() => { setReportDone(false); setReportReason("spam"); setShowReportModal(true); }}
+      title="Report user"
+      className="shrink-0 flex items-center justify-center w-9 h-9 rounded-xl text-slate-400 dark:text-slate-500 hover:text-amber-500 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
+    >
+      <Flag size={16} />
+    </button>
+
+    {confirmClearChat ? (
+      <div className="flex items-center gap-1 shrink-0">
+        <button
+          onClick={handleClear}
+          disabled={clearing}
+          className="text-[11px] font-semibold text-white bg-red-500 hover:bg-red-600 px-2.5 py-1.5 rounded-lg transition-colors min-h-[36px] disabled:opacity-50"
+        >
+          {clearing ? <Loader2 size={13} className="animate-spin" /> : "Delete"}
+        </button>
+        <button
+          onClick={() => setConfirmClearChat(false)}
+          className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 px-2 py-1.5 rounded-lg transition-colors min-h-[36px]"
+        >
+          Cancel
+        </button>
+      </div>
+    ) : (
+      <button
+        onClick={() => setConfirmClearChat(true)}
+        disabled={clearing}
+        title="Clear conversation"
+        className="shrink-0 flex items-center justify-center w-9 h-9 rounded-xl text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-40"
+      >
+        {clearing ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+      </button>
+    )}
+  </div>
+
+  {/* Row 2: listing context chip — always visible, full width */}
+  <div className="flex items-center gap-2 px-3 pb-2.5">
+    {activeConv.listingPhoto ? (
+      <img src={activeConv.listingPhoto} className="w-7 h-7 rounded-lg object-cover border border-gray-200 dark:border-slate-600 shrink-0" alt="" />
+    ) : (
+      <div className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0">
+        <MessageCircle size={13} className="text-slate-400" />
+      </div>
+    )}
+    <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate leading-tight">
+      <span className="font-medium text-slate-600 dark:text-slate-300">Re: </span>
+      {activeConv.listingTitle || "Listing"}
+    </p>
+    {activeConv.listingId && (
+      
+        href={`/listing/${activeConv.listingId}`}
+        className="ml-auto shrink-0 text-[10px] font-semibold text-[#003366] dark:text-blue-400 hover:underline whitespace-nowrap"
+        onClick={(e) => e.stopPropagation()}
+      >
+        View →
+      </a>
+    )}
+  </div>
+</div>
+
+---
+
+IMPORTANT NOTES:
+1. The Conversation type in messaging.ts has a `listingId` field — it is safe to use `activeConv.listingId` in the View link.
+2. The "View →" link uses a plain <a href="..."> tag (not wouter <Link>) because it's inside the chat and navigating away is intentional. This is correct — do not change it to <Link>.
+3. Do not remove or modify anything else in the file.
+4. The {/* Report user modal */} block and everything after it must remain completely untouched.
+
+---
+
+AFTER THE FIX:
+1. Verify the build: pnpm --filter xmum-market run build
+2. Report exactly:
+   - What was changed
+   - What was preserved
+   - That no other file was touched
+   - That the build passed with 0 TypeScript errors
