@@ -20,6 +20,11 @@ import { db, storage, auth } from "./firebase";
 import { UserProfile } from "./types";
 import { deleteShopCompletely } from "./shops";
 
+function deriveUserName(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/);
+  return parts[parts.length - 1] || fullName.trim();
+}
+
 // Extract the Firebase Storage path from a full https:// download URL.
 // ref(storage, fullUrl) only accepts gs:// or storage paths — passing a
 // download URL to it throws. This helper extracts the encoded path portion
@@ -58,6 +63,27 @@ export async function updateProfile(
   data: Partial<Omit<UserProfile, "uid" | "createdAt">>
 ): Promise<void> {
   await updateDoc(doc(db, "users", uid), data as Record<string, unknown>);
+
+  // If fullName changed, backfill userName on all of this user's listings.
+  // userName is a denormalized field on each listing document, derived as
+  // the last word of fullName (same logic used in PostPage at creation time).
+  // Skip report-held listings — Firestore rules block updates on them.
+  if (typeof data.fullName === "string" && data.fullName.trim()) {
+    const newUserName = deriveUserName(data.fullName);
+    try {
+      const snap = await getDocs(
+        query(collection(db, "listings"), where("userId", "==", uid))
+      );
+      await Promise.all(
+        snap.docs
+          .filter((d) => d.data().isReportHeld !== true)
+          .map((d) => updateDoc(d.ref, { userName: newUserName }).catch(() => {}))
+      );
+    } catch {
+      // Non-critical — profile save already succeeded; listing backfill
+      // failure is silent so the user is not shown a false error.
+    }
+  }
 }
 
 export async function uploadAvatar(file: File, uid: string): Promise<string> {
